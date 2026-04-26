@@ -16,21 +16,18 @@ from typing import (
     Any,
     Callable,
     Literal,
-    NamedTuple,
     Optional,
     TypeVar,
     Union,
     cast,
     overload,
 )
-from uuid import UUID
 
 from fastapi import Depends, Query, Request
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
-from typing_extensions import NotRequired, TypedDict
 
 from advanced_alchemy.extensions.fastapi.extension import AdvancedAlchemy
 from advanced_alchemy.filters import (
@@ -51,7 +48,7 @@ from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
-from advanced_alchemy.utils.singleton import SingletonMeta
+from advanced_alchemy.utils.dependencies import DependencyCache, FieldNameType, FilterConfig, make_hashable
 from advanced_alchemy.utils.text import camelize
 
 logger = logging.getLogger("advanced_alchemy.extensions.fastapi")
@@ -67,25 +64,21 @@ IntOrNone = Optional[int]
 BooleanOrNone = Optional[bool]
 SortOrder = Literal["asc", "desc"]
 SortOrderOrNone = Optional[SortOrder]
-FilterConfigValues = Union[
-    bool, str, list[str], type[Union[str, int]]
-]  # Simplified compared to Litestar's UUID/int flexibility for now
 AsyncServiceT_co = TypeVar("AsyncServiceT_co", bound=SQLAlchemyAsyncRepositoryService[Any, Any], covariant=True)
 SyncServiceT_co = TypeVar("SyncServiceT_co", bound=SQLAlchemySyncRepositoryService[Any, Any], covariant=True)
-HashableValue = Union[str, int, float, bool, None]
-HashableType = Union[HashableValue, tuple[Any, ...], tuple[tuple[str, Any], ...], tuple[HashableValue, ...]]
 
+__all__ = (
+    "DEPENDENCY_DEFAULTS",
+    "DependencyCache",
+    "DependencyDefaults",
+    "FieldNameType",
+    "FilterConfig",
+    "dep_cache",
+    "provide_filters",
+    "provide_service",
+)
 
-class FieldNameType(NamedTuple):
-    """Type for field name and associated type information.
-
-    This allows for specifying both the field name and the expected type for filter values.
-    """
-
-    name: str
-    """Name of the field to filter on."""
-    type_hint: type[Any] = str
-    """Type of the filter value. Defaults to str."""
+_CACHE_NAMESPACE = "advanced_alchemy.extensions.fastapi.providers"
 
 
 class DependencyDefaults:
@@ -110,49 +103,7 @@ class DependencyDefaults:
 DEPENDENCY_DEFAULTS = DependencyDefaults()
 
 
-class DependencyCache(metaclass=SingletonMeta):
-    """Simple dependency cache for the application.  This is used to help memoize dependencies that are generated dynamically."""
-
-    def __init__(self) -> None:
-        self.dependencies: dict[int, Callable[[Any], list[FilterTypes]]] = {}
-
-    def add_dependencies(self, key: int, dependencies: Callable[[Any], list[FilterTypes]]) -> None:
-        self.dependencies[key] = dependencies
-
-    def get_dependencies(self, key: int) -> Optional[Callable[[Any], list[FilterTypes]]]:
-        return self.dependencies.get(key)
-
-
 dep_cache = DependencyCache()
-
-
-class FilterConfig(TypedDict):
-    """Configuration for generating dynamic filters for FastAPI."""
-
-    id_filter: NotRequired[type[Union[UUID, int, str]]]
-    """Indicates that the id filter should be enabled."""
-    id_field: NotRequired[str]
-    """The field on the model that stored the primary key or identifier. Defaults to 'id'."""
-    sort_field: NotRequired[Union[str, set[str]]]
-    """The default field(s) to use for the sort filter."""
-    sort_order: NotRequired[SortOrder]
-    """The default order to use for the sort filter. Defaults to 'desc'."""
-    pagination_type: NotRequired[Literal["limit_offset"]]
-    """When set, pagination is enabled based on the type specified."""
-    pagination_size: NotRequired[int]
-    """The size of the pagination. Defaults to `DEFAULT_PAGINATION_SIZE`."""
-    search: NotRequired[Union[str, set[str]]]
-    """Fields to enable search on. Can be a comma-separated string or a set of field names."""
-    search_ignore_case: NotRequired[bool]
-    """When set, search is case insensitive by default. Defaults to False."""
-    created_at: NotRequired[bool]
-    """When set, created_at filter is enabled. Defaults to 'created_at' field."""
-    updated_at: NotRequired[bool]
-    """When set, updated_at filter is enabled. Defaults to 'updated_at' field."""
-    not_in_fields: NotRequired[Union[FieldNameType, set[FieldNameType]]]
-    """Fields that support not-in collection filters. Can be a single field or a set of fields with type information."""
-    in_fields: NotRequired[Union[FieldNameType, set[FieldNameType]]]
-    """Fields that support in-collection filters. Can be a single field or a set of fields with type information."""
 
 
 def _should_commit_for_status(status_code: int, commit_mode: str) -> bool:
@@ -172,6 +123,16 @@ def _should_commit_for_status(status_code: int, commit_mode: str) -> bool:
     if commit_mode == "autocommit_include_redirect":
         return 200 <= status_code < 400  # noqa: PLR2004
     return False
+
+
+def _normalize_field_name_types(
+    field_definitions: Union[str, FieldNameType, set[FieldNameType], list[Union[str, FieldNameType]]],
+) -> set[FieldNameType]:
+    raw_fields = {field_definitions} if isinstance(field_definitions, (str, FieldNameType)) else set(field_definitions)
+    return {
+        FieldNameType(name=field_definition, type_hint=str) if isinstance(field_definition, str) else field_definition
+        for field_definition in raw_fields
+    }
 
 
 @overload
@@ -400,47 +361,16 @@ def provide_filters(
         return list
 
     # Calculate cache key using hashable version of config
-    cache_key = hash(_make_hashable(config))
+    cache_key = hash((_CACHE_NAMESPACE, make_hashable(config)))
 
     # Check cache first
-    cached_dep = dep_cache.get_dependencies(cache_key)
+    cached_dep = cast("Optional[Callable[..., list[FilterTypes]]]", dep_cache.get_dependencies(cache_key))
     if cached_dep is not None:
         return cached_dep
 
     dep = _create_filter_aggregate_function_fastapi(config, dep_defaults)
     dep_cache.add_dependencies(cache_key, dep)
     return dep
-
-
-def _make_hashable(value: Any) -> HashableType:
-    """Convert a value into a hashable type.
-
-    This function converts any value into a hashable type by:
-    - Converting dictionaries to sorted tuples of (key, value) pairs
-    - Converting lists and sets to sorted tuples
-    - Preserving primitive types (str, int, float, bool, None)
-    - Converting any other type to its string representation
-
-    Args:
-        value: Any value that needs to be made hashable.
-
-    Returns:
-        A hashable version of the value.
-    """
-    if isinstance(value, dict):
-        # Convert dict to tuple of tuples with sorted keys
-        items = []
-        for k in sorted(value.keys()):  # pyright: ignore
-            v = value[k]  # pyright: ignore
-            items.append((str(k), _make_hashable(v)))  # pyright: ignore
-        return tuple(items)  # pyright: ignore
-    if isinstance(value, (list, set)):
-        hashable_items = [_make_hashable(item) for item in value]  # pyright: ignore
-        filtered_items = [item for item in hashable_items if item is not None]  # pyright: ignore
-        return tuple(sorted(filtered_items, key=str))
-    if isinstance(value, (str, int, float, bool, type(None))):
-        return value
-    return str(value)
 
 
 def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
@@ -649,7 +579,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 ),
             ] = config.get("search_ignore_case", False),
         ) -> SearchFilter:
-            field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else search_fields
+            field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else set(search_fields)
 
             return SearchFilter(
                 field_name=field_names,
@@ -703,8 +633,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 
     # Add not_in filter providers
     if not_in_fields := config.get("not_in_fields"):
-        not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
-        for field_def in not_in_fields:
+        for field_def in _normalize_field_name_types(not_in_fields):
             # Capture field_def by value to avoid Python closure late binding gotcha
             # Without default parameter, all closures would reference the loop variable's final value
             def create_not_in_filter_provider(  # pyright: ignore
@@ -736,8 +665,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 
     # Add in filter providers
     if in_fields := config.get("in_fields"):
-        in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
-        for field_def in in_fields:
+        for field_def in _normalize_field_name_types(in_fields):
             # Capture field_def by value to avoid Python closure late binding gotcha
             # Without default parameter, all closures would reference the loop variable's final value
             def create_in_filter_provider(  # pyright: ignore

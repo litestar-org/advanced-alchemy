@@ -20,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.fastapi.providers import (
+    _CACHE_NAMESPACE,  # pyright: ignore[reportPrivateUsage]
     DEPENDENCY_DEFAULTS,
     DependencyCache,
     DependencyDefaults,
@@ -39,6 +40,7 @@ from advanced_alchemy.filters import (
 )
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
+from advanced_alchemy.utils.dependencies import make_hashable
 from advanced_alchemy.utils.singleton import SingletonMeta
 
 
@@ -93,7 +95,7 @@ def test_create_filter_dependencies_cache_hit() -> None:
 def test_create_filter_dependencies_cache_miss() -> None:
     """Test create_filter_dependencies with cache miss."""
     config = cast(FilterConfig, {"created_at": True})
-    cache_key = hash(tuple(sorted(config.items())))
+    cache_key = hash((_CACHE_NAMESPACE, make_hashable(config)))
     mock_agg_func = lambda: [  # noqa: E731
         BeforeAfter(field_name="created_at", before=None, after=None)
     ]  # Dummy aggregate function
@@ -507,6 +509,25 @@ def test_openapi_schema_comprehensive() -> None:
     assert mock_limit_offset in result
     assert mock_search_filter in result
     assert mock_order_by in result
+
+
+def test_provide_filters_normalizes_list_field_config() -> None:
+    """Test list-based shared FilterConfig values are normalized for FastAPI."""
+    deps = provide_filters(
+        {
+            "search": ["name", "email"],
+            "not_in_fields": ["status", FieldNameType("category", str)],
+            "in_fields": ["tag"],
+        }
+    )
+
+    sig = inspect.signature(deps)
+    assert set(sig.parameters) == {
+        "search_filter",
+        "status_not_in_filter",
+        "category_not_in_filter",
+        "tag_in_filter",
+    }
 
 
 def test_openapi_schema_edge_cases() -> None:
