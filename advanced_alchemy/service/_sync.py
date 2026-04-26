@@ -27,7 +27,9 @@ from advanced_alchemy.repository import SQLAlchemySyncQueryRepository
 from advanced_alchemy.repository._util import LoadSpec, model_from_dict
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, SQLAlchemySyncRepositoryT
 from advanced_alchemy.service._util import ResultConverter
-from advanced_alchemy.service.typing import (
+from advanced_alchemy.utils.dataclass import Empty, EmptyType
+from advanced_alchemy.utils.deprecation import warn_deprecation
+from advanced_alchemy.utils.serializers import (
     UNSET,
     BulkModelDictT,
     ModelDictListT,
@@ -41,8 +43,6 @@ from advanced_alchemy.service.typing import (
     is_pydantic_model,
     is_sqlmodel_table_model,
 )
-from advanced_alchemy.utils.dataclass import Empty, EmptyType
-from advanced_alchemy.utils.deprecation import warn_deprecation
 
 
 class SQLAlchemySyncQueryService(ResultConverter):

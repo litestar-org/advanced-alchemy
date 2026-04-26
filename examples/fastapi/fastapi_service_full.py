@@ -24,7 +24,7 @@ from advanced_alchemy.extensions.fastapi import (
     repository,
     service,
 )
-from advanced_alchemy.service.typing import ModelDictT, is_dict, schema_dump
+from advanced_alchemy.utils.serializers import ModelDictT, is_dict, schema_dump
 
 alchemy_config = SQLAlchemyAsyncConfig(
     connection_string="sqlite+aiosqlite:///test.sqlite",

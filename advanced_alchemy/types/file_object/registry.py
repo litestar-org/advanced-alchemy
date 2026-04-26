@@ -1,9 +1,9 @@
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, overload
 
-from advanced_alchemy._serialization import decode_json, encode_json
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.utils.module_loader import import_string
+from advanced_alchemy.utils.serialization import decode_json, encode_json
 from advanced_alchemy.utils.singleton import SingletonMeta
 
 if TYPE_CHECKING:

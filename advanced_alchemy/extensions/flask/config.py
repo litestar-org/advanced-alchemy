@@ -12,13 +12,13 @@ from flask import g, has_request_context
 from sqlalchemy.exc import OperationalError
 from typing_extensions import Literal
 
-from advanced_alchemy._serialization import decode_json, encode_json
 from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config import EngineConfig as _EngineConfig
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig as _SQLAlchemySyncConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
-from advanced_alchemy.service import schema_dump
+from advanced_alchemy.utils.serialization import decode_json, encode_json
+from advanced_alchemy.utils.serializers import schema_dump
 
 if TYPE_CHECKING:
     from flask import Flask, Response

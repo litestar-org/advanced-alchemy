@@ -16,7 +16,7 @@ import pytest
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 from advanced_alchemy.repository._util import get_primary_key_info
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
-from advanced_alchemy.service.typing import ATTRS_INSTALLED, MSGSPEC_INSTALLED, PYDANTIC_INSTALLED, ModelDictT
+from advanced_alchemy.utils.serializers import ATTRS_INSTALLED, MSGSPEC_INSTALLED, PYDANTIC_INSTALLED, ModelDictT
 
 # Use real SQLAlchemy models from fixtures instead of mock
 # Import from test fixtures which have proper SQLAlchemy declarative models

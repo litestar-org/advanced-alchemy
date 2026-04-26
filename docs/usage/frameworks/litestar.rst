@@ -1080,6 +1080,61 @@ ambient credentials, such as IAM roles or workload identity.
 - **Memory**: For testing and temporary storage
 - **Custom backends**: Implement your own storage backend
 
+Custom JSON Serialization
+-------------------------
+
+Advanced Alchemy includes a flexible, protocol-based JSON serialization system that integrates seamlessly with Litestar. The ``SQLAlchemyPlugin`` automatically contributes built-in type encoders for database-specific types (like ``asyncpg`` and ``uuid_utils`` UUIDs) to the Litestar application configuration.
+
+Built-in Encoders
+^^^^^^^^^^^^^^^^^
+
+By default, the plugin registers encoders for:
+
+- ``datetime.datetime``, ``datetime.date``, ``datetime.time``, ``datetime.timedelta``
+- ``decimal.Decimal``
+- ``uuid.UUID``
+- ``pathlib.Path``, ``pathlib.PurePath``
+- Python ``Enum`` types
+- Backend-specific types: ``asyncpg.pgproto.pgproto.UUID`` and ``uuid_utils.UUID`` (if installed)
+
+Extending Serialization
+^^^^^^^^^^^^^^^^^^^^^^^
+
+You can extend or override these encoders at the application level by providing the ``type_encoders`` parameter to your Litestar configuration. User-defined encoders always take precedence over the built-in ones.
+
+.. code-block:: python
+
+    from litestar import Litestar
+    from advanced_alchemy.extensions.litestar import SQLAlchemyPlugin, SQLAlchemyAsyncConfig
+
+    class MyCustomType:
+        def __init__(self, name: str):
+            self.name = name
+
+    def encode_custom_type(obj: MyCustomType) -> str:
+        return f"Custom: {obj.name}"
+
+    app = Litestar(
+        route_handlers=[...],
+        plugins=[SQLAlchemyPlugin(config=SQLAlchemyAsyncConfig(...))],
+        type_encoders={MyCustomType: encode_custom_type},
+    )
+
+Manual Serialization
+^^^^^^^^^^^^^^^^^^^^
+
+If you need to serialize data manually using Advanced Alchemy's system (e.g., for logging or custom response bodies), you can use the ``encode_json`` and ``decode_json`` functions:
+
+.. code-block:: python
+
+    from advanced_alchemy import encode_json, decode_json
+
+    data = {"timestamp": datetime.now(), "custom": MyCustomType("example")}
+    json_string = encode_json(
+        data,
+        type_encoders={MyCustomType: encode_custom_type}
+    )
+
 Alternative Patterns
 --------------------
 

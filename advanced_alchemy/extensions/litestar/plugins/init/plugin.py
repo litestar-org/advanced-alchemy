@@ -34,8 +34,11 @@ from advanced_alchemy.filters import (
     StatementTypeT,
 )
 from advanced_alchemy.service import ModelDictListT, ModelDictT, ModelDTOT, ModelOrRowMappingT, ModelT, OffsetPagination
+from advanced_alchemy.utils.serialization import DEFAULT_TYPE_ENCODERS
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from click import Group
     from litestar.config.app import AppConfig
     from litestar.types import BeforeMessageSendHookHandler
@@ -43,6 +46,56 @@ if TYPE_CHECKING:
     from advanced_alchemy.extensions.litestar.plugins.init.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 
 __all__ = ("SQLAlchemyInitPlugin",)
+
+
+def _get_aa_type_encoders() -> dict[type, "Callable[[Any], Any]"]:
+    """Get Advanced Alchemy's built-in type encoders.
+
+    These encoders handle database-specific types that need special
+    serialization. They are added to Litestar's type_encoders with
+    lower precedence than user-defined encoders.
+
+    Returns:
+        Dictionary of type to encoder function mappings.
+    """
+    encoders: dict[type, Callable[[Any], Any]] = {**DEFAULT_TYPE_ENCODERS}
+
+    # asyncpg UUID type (PostgreSQL asyncpg driver)
+    with contextlib.suppress(ImportError):
+        from asyncpg.pgproto import pgproto  # pyright: ignore[reportMissingImports]
+
+        encoders[pgproto.UUID] = str
+
+    # uuid_utils UUID type (fast UUID implementation)
+    with contextlib.suppress(ImportError):
+        import uuid_utils  # pyright: ignore[reportMissingImports]
+
+        encoders[uuid_utils.UUID] = str  # pyright: ignore[reportUnknownMemberType]
+
+    return encoders
+
+
+def _get_aa_type_decoders() -> list[tuple["Callable[[Any], bool]", "Callable[[type, Any], Any]"]]:
+    """Get Advanced Alchemy's built-in type decoders.
+
+    These decoders handle database-specific types that need special
+    deserialization during request parsing.
+
+    Returns:
+        List of (predicate, decoder) tuples for Litestar's type_decoders.
+    """
+    decoders: list[tuple[Callable[[Any], bool], Callable[[type, Any], Any]]] = []
+
+    # uuid_utils UUID type decoder
+    with contextlib.suppress(ImportError):
+        import uuid_utils  # pyright: ignore[reportMissingImports]
+
+        decoders.append(
+            (lambda x: x is uuid_utils.UUID, lambda t, v: t(str(v)))  # pyright: ignore[reportUnknownMemberType]
+        )
+
+    return decoders
+
 
 signature_namespace_values: dict[str, Any] = {
     "BeforeAfter": BeforeAfter,
@@ -125,20 +178,24 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPlugin, _slots_base.SlotsBase)
             app_config: The :class:`AppConfig <.config.app.AppConfig>` instance.
         """
         self._validate_config()
+
+        # Add AA built-in type encoders/decoders
+        # These are added BEFORE user encoders so user config takes precedence
+        aa_encoders = _get_aa_type_encoders()
+        aa_decoders = _get_aa_type_decoders()
+
+        # Merge: AA built-ins first, then user encoders override
+        app_config.type_encoders = {**aa_encoders, **(app_config.type_encoders or {})}
+        app_config.type_decoders = [*aa_decoders, *(app_config.type_decoders or [])]
+
         with contextlib.suppress(ImportError):
             from asyncpg.pgproto import pgproto  # pyright: ignore[reportMissingImports]
 
             signature_namespace_values.update({"pgproto.UUID": pgproto.UUID})
-            app_config.type_encoders = {pgproto.UUID: str, **(app_config.type_encoders or {})}
         with contextlib.suppress(ImportError):
             import uuid_utils  # pyright: ignore[reportMissingImports]
 
             signature_namespace_values.update({"uuid_utils.UUID": uuid_utils.UUID})  # pyright: ignore[reportUnknownMemberType]
-            app_config.type_encoders = {uuid_utils.UUID: str, **(app_config.type_encoders or {})}  # pyright: ignore[reportUnknownMemberType]
-            app_config.type_decoders = [
-                (lambda x: x is uuid_utils.UUID, lambda t, v: t(str(v))),  # pyright: ignore[reportUnknownMemberType]
-                *(app_config.type_decoders or []),
-            ]
         configure_exception_handler = False
         for config in self.config:
             if config.set_default_exception_handler:

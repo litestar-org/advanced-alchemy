@@ -6,7 +6,7 @@ from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
-from advanced_alchemy.service.typing import ModelDictT, is_dict_with_field, is_dict_without_field, schema_dump
+from advanced_alchemy.utils.serializers import ModelDictT, is_dict_with_field, is_dict_without_field, schema_dump
 from tests.fixtures.bigint.models import (
     BigIntAuthor,
     BigIntBook,

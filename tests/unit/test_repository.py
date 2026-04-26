@@ -40,7 +40,7 @@ from advanced_alchemy.repository._util import (
     column_has_defaults,
     model_from_dict,
 )
-from advanced_alchemy.service.typing import (
+from advanced_alchemy.utils.serializers import (
     is_msgspec_struct,
     is_pydantic_model,
     is_schema,
