@@ -10,10 +10,10 @@ from unittest.mock import AsyncMock, MagicMock, Mock, PropertyMock, patch
 import pytest
 from sqlalchemy.orm import Session
 
-from advanced_alchemy.service.typing import PYDANTIC_INSTALLED, BaseModel
 from advanced_alchemy.types.file_object import FileObject
 from advanced_alchemy.types.file_object.base import StorageBackend
 from advanced_alchemy.types.file_object.session_tracker import FileObjectSessionTracker
+from advanced_alchemy.utils.serializers import PYDANTIC_INSTALLED, BaseModel
 
 if sys.version_info >= (3, 11):
     from builtins import ExceptionGroup

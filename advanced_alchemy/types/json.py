@@ -7,7 +7,7 @@ from sqlalchemy.engine import Dialect
 from sqlalchemy.types import JSON as _JSON
 from sqlalchemy.types import SchemaType, TypeDecorator, TypeEngine
 
-from advanced_alchemy._serialization import decode_json, encode_json
+from advanced_alchemy.utils.serialization import decode_json, encode_json
 
 __all__ = ("ORA_JSONB",)
 

@@ -18,7 +18,7 @@ from advanced_alchemy.repository import (
 from advanced_alchemy.service import SQLAlchemyAsyncQueryService, SQLAlchemySyncQueryService
 from advanced_alchemy.service._async import SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.service._sync import SQLAlchemySyncRepositoryService
-from advanced_alchemy.service.typing import (
+from advanced_alchemy.utils.serializers import (
     ATTRS_INSTALLED,
     is_attrs_instance,
     is_attrs_instance_with_field,

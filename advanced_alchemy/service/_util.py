@@ -15,7 +15,13 @@ from uuid import UUID
 from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.filters import LimitOffset, StatementFilter
 from advanced_alchemy.service.pagination import OffsetPagination
-from advanced_alchemy.service.typing import (
+from advanced_alchemy.typing import (
+    ATTRS_INSTALLED,
+    CATTRS_INSTALLED,
+    MSGSPEC_INSTALLED,
+    PYDANTIC_INSTALLED,
+)
+from advanced_alchemy.utils.serializers import (
     BaseModel,
     FilterTypeT,
     ModelDTOT,
@@ -26,12 +32,6 @@ from advanced_alchemy.service.typing import (
     is_attrs_schema,
     schema_dump,
     structure,
-)
-from advanced_alchemy.typing import (
-    ATTRS_INSTALLED,
-    CATTRS_INSTALLED,
-    MSGSPEC_INSTALLED,
-    PYDANTIC_INSTALLED,
 )
 
 if TYPE_CHECKING:
@@ -198,7 +198,7 @@ class ResultConverter:
               Type: :class:`~advanced_alchemy.repository.typing.ModelOrRowMappingT`
             total: The total number of rows in the data.
             filters: :class:`~advanced_alchemy.filters.StatementFilter`| :class:`sqlalchemy.sql.expression.ColumnElement` Collection of route filters.
-            schema_type: :class:`~advanced_alchemy.service.typing.ModelDTOT` Optional schema type to convert the data to
+            schema_type: :class:`~advanced_alchemy.utils.serializers.ModelDTOT` Optional schema type to convert the data to
 
         Raises:
             AdvancedAlchemyError: If `schema_type` is not a valid Pydantic, Msgspec, or attrs schema and all libraries are not installed.

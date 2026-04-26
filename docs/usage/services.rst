@@ -47,7 +47,7 @@ Let's build upon a blog example by creating services for posts:
         is_dict_without_field,
         schema_dump,
     )
-    from advanced_alchemy.service.typing import ModelDictT
+    from advanced_alchemy.utils.serializers import ModelDictT
     from advanced_alchemy.utils.text import slugify
 
     blog_post_tag = Table(

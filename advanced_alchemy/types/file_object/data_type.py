@@ -2,12 +2,12 @@ from typing import Any, Optional, Union, cast
 
 from sqlalchemy import TypeDecorator
 
-from advanced_alchemy._serialization import decode_json
 from advanced_alchemy.types.file_object.base import StorageBackend
 from advanced_alchemy.types.file_object.file import FileObject
 from advanced_alchemy.types.file_object.registry import storages
 from advanced_alchemy.types.json import JsonB
 from advanced_alchemy.types.mutables import MutableList
+from advanced_alchemy.utils.serialization import decode_json
 
 # Define the type hint for the value this TypeDecorator handles
 FileObjectOrList = Union[FileObject, list[FileObject], set[FileObject], MutableList[FileObject]]

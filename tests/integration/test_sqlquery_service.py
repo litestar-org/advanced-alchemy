@@ -17,7 +17,8 @@ from advanced_alchemy.repository import (
 from advanced_alchemy.service import SQLAlchemyAsyncQueryService, SQLAlchemySyncQueryService
 from advanced_alchemy.service._async import SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.service._sync import SQLAlchemySyncRepositoryService
-from advanced_alchemy.service.typing import (
+from advanced_alchemy.utils.fixtures import open_fixture, open_fixture_async
+from advanced_alchemy.utils.serializers import (
     is_msgspec_struct,
     is_msgspec_struct_with_field,
     is_msgspec_struct_without_field,
@@ -25,7 +26,6 @@ from advanced_alchemy.service.typing import (
     is_pydantic_model_with_field,
     is_pydantic_model_without_field,
 )
-from advanced_alchemy.utils.fixtures import open_fixture, open_fixture_async
 
 pytestmark = [  # type: ignore
     pytest.mark.integration,

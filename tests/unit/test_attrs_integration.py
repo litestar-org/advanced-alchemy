@@ -7,7 +7,7 @@ from typing import Any, Optional
 import pytest
 from attrs import define, field
 
-from advanced_alchemy.service.typing import (
+from advanced_alchemy.utils.serializers import (
     ATTRS_INSTALLED,
     AttrsInstance,
     is_attrs_instance,

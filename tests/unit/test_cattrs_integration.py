@@ -7,7 +7,7 @@ from typing import Optional
 
 import pytest
 
-from advanced_alchemy.service.typing import (
+from advanced_alchemy.utils.serializers import (
     ATTRS_INSTALLED,
     CATTRS_INSTALLED,
     schema_dump,
@@ -49,12 +49,11 @@ class TestCattrsIntegration:
 
     def test_schema_dump_with_cattrs_disabled(self) -> None:
         """Test schema_dump falls back to attrs.asdict when cattrs is disabled."""
-        from advanced_alchemy.service import typing as service_typing
 
         instance = SimpleAttrsModel(name="Jane", age=25)
 
         # Mock CATTRS_INSTALLED to be False
-        with mock.patch.object(service_typing, "CATTRS_INSTALLED", False):
+        with mock.patch("advanced_alchemy.utils.serializers.CATTRS_INSTALLED", False):
             result = schema_dump(instance)
 
         assert isinstance(result, dict)
@@ -79,8 +78,6 @@ class TestCattrsIntegration:
 
     def test_to_schema_attrs_fallback_when_cattrs_disabled(self) -> None:
         """Test that to_schema falls back to attrs when cattrs is disabled."""
-        from advanced_alchemy.service import _util
-        from advanced_alchemy.service import typing as service_typing
         from advanced_alchemy.service._util import ResultConverter
 
         converter = ResultConverter()
@@ -88,8 +85,8 @@ class TestCattrsIntegration:
 
         # Mock CATTRS_INSTALLED to be False in both modules
         with (
-            mock.patch.object(service_typing, "CATTRS_INSTALLED", False),
-            mock.patch.object(_util, "CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.utils.serializers.CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.service._util.CATTRS_INSTALLED", False),
         ):
             result = converter.to_schema(data, schema_type=SimpleAttrsModel)
 
@@ -100,8 +97,6 @@ class TestCattrsIntegration:
 
     def test_to_schema_sequence_with_cattrs_disabled(self) -> None:
         """Test that to_schema handles sequences correctly when cattrs is disabled."""
-        from advanced_alchemy.service import _util
-        from advanced_alchemy.service import typing as service_typing
         from advanced_alchemy.service._util import ResultConverter
         from advanced_alchemy.service.pagination import OffsetPagination
 
@@ -113,8 +108,8 @@ class TestCattrsIntegration:
 
         # Mock CATTRS_INSTALLED to be False in both modules
         with (
-            mock.patch.object(service_typing, "CATTRS_INSTALLED", False),
-            mock.patch.object(_util, "CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.utils.serializers.CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.service._util.CATTRS_INSTALLED", False),
         ):
             result = converter.to_schema(data, schema_type=SimpleAttrsModel)
 
@@ -127,7 +122,7 @@ class TestCattrsIntegration:
     @pytest.mark.skipif(not CATTRS_INSTALLED, reason="cattrs not installed")
     def test_cattrs_structure_direct_usage(self) -> None:
         """Test direct usage of cattrs structure function."""
-        from advanced_alchemy.service.typing import structure
+        from advanced_alchemy.utils.serializers import structure
 
         data = {"name": "Eve", "age": 33, "email": "eve@example.com"}
         result = structure(data, SimpleAttrsModel)
@@ -140,7 +135,7 @@ class TestCattrsIntegration:
     @pytest.mark.skipif(not CATTRS_INSTALLED, reason="cattrs not installed")
     def test_cattrs_unstructure_direct_usage(self) -> None:
         """Test direct usage of cattrs unstructure function."""
-        from advanced_alchemy.service.typing import unstructure
+        from advanced_alchemy.utils.serializers import unstructure
 
         instance = SimpleAttrsModel(name="Frank", age=28)
         result = unstructure(instance)
@@ -152,8 +147,6 @@ class TestCattrsIntegration:
 
     def test_performance_with_cached_field_names(self) -> None:
         """Test that field name caching improves performance."""
-        from advanced_alchemy.service import _util
-        from advanced_alchemy.service import typing as service_typing
         from advanced_alchemy.service._util import ResultConverter, _get_attrs_field_names
 
         converter = ResultConverter()
@@ -163,8 +156,8 @@ class TestCattrsIntegration:
 
         # Mock CATTRS_INSTALLED in both modules to be False to use attrs path
         with (
-            mock.patch.object(service_typing, "CATTRS_INSTALLED", False),
-            mock.patch.object(_util, "CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.utils.serializers.CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.service._util.CATTRS_INSTALLED", False),
         ):
             # First call should populate the cache
             data1 = {"name": "Grace", "age": 30}
@@ -210,8 +203,6 @@ class TestCattrsIntegration:
 
     def test_edge_case_missing_fields(self) -> None:
         """Test handling of missing fields in data."""
-        from advanced_alchemy.service import _util
-        from advanced_alchemy.service import typing as service_typing
         from advanced_alchemy.service._util import ResultConverter
 
         converter = ResultConverter()
@@ -220,8 +211,8 @@ class TestCattrsIntegration:
 
         # Mock CATTRS_INSTALLED to be False in both modules to test attrs path
         with (
-            mock.patch.object(service_typing, "CATTRS_INSTALLED", False),
-            mock.patch.object(_util, "CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.utils.serializers.CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.service._util.CATTRS_INSTALLED", False),
         ):
             # This should handle missing fields gracefully
             with pytest.raises(TypeError):  # attrs will complain about missing required field
@@ -229,8 +220,6 @@ class TestCattrsIntegration:
 
     def test_extra_fields_filtered_out(self) -> None:
         """Test that extra fields not in attrs schema are filtered out."""
-        from advanced_alchemy.service import _util
-        from advanced_alchemy.service import typing as service_typing
         from advanced_alchemy.service._util import ResultConverter
 
         converter = ResultConverter()
@@ -239,8 +228,8 @@ class TestCattrsIntegration:
 
         # Mock CATTRS_INSTALLED to be False in both modules to test attrs filtering path
         with (
-            mock.patch.object(service_typing, "CATTRS_INSTALLED", False),
-            mock.patch.object(_util, "CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.utils.serializers.CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.service._util.CATTRS_INSTALLED", False),
         ):
             result = converter.to_schema(data, schema_type=SimpleAttrsModel)
 

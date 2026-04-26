@@ -19,7 +19,7 @@ from sqlmodel import SQLModel  # noqa: E402
 from advanced_alchemy.base import ModelProtocol, model_to_dict  # noqa: E402
 from advanced_alchemy.repository import SQLAlchemySyncRepository  # noqa: E402
 from advanced_alchemy.repository._util import get_instrumented_attr, get_primary_key_info, model_from_dict  # noqa: E402
-from advanced_alchemy.service.typing import (  # noqa: E402
+from advanced_alchemy.utils.serializers import (  # noqa: E402
     is_pydantic_model,
     is_schema,
     is_schema_or_dict,

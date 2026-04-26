@@ -8,14 +8,14 @@ import pytest
 from sqlalchemy import LargeBinary, Numeric, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from advanced_alchemy._serialization import (
+from advanced_alchemy.cache.serializers import default_deserializer, default_serializer
+from advanced_alchemy.utils.serialization import (
     _decode_typed_marker,
     decode_complex_type,
     decode_json,
     encode_complex_type,
     encode_json,
 )
-from advanced_alchemy.cache.serializers import default_deserializer, default_serializer
 
 
 class CacheBase(DeclarativeBase):

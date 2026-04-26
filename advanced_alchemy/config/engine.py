@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Literal, Optional, Union
 
-from advanced_alchemy._serialization import decode_json, encode_json
 from advanced_alchemy.utils.dataclass import Empty
+from advanced_alchemy.utils.serialization import decode_json, encode_json
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

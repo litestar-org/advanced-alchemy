@@ -4,7 +4,7 @@ from typing import Any, TypeVar
 
 from sqlalchemy import inspect as sa_inspect
 
-from advanced_alchemy._serialization import (
+from advanced_alchemy.utils.serialization import (
     decode_complex_type,
     decode_json,
     encode_complex_type,
