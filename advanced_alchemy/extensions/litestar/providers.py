@@ -13,9 +13,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Literal,
-    NamedTuple,
     Optional,
-    TypedDict,
     TypeVar,
     Union,
     cast,
@@ -25,7 +23,6 @@ from uuid import UUID
 
 from litestar.di import Provide
 from litestar.params import Dependency, Parameter
-from typing_extensions import NotRequired
 
 from advanced_alchemy.filters import (
     BeforeAfter,
@@ -45,6 +42,7 @@ from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
+from advanced_alchemy.utils.dependencies import DependencyCache, FieldNameType, FilterConfig, make_hashable
 from advanced_alchemy.utils.singleton import SingletonMeta
 from advanced_alchemy.utils.text import camelize
 
@@ -65,8 +63,21 @@ SortOrder = Literal["asc", "desc"]
 SortOrderOrNone = Optional[SortOrder]
 AsyncServiceT_co = TypeVar("AsyncServiceT_co", bound=SQLAlchemyAsyncRepositoryService[Any, Any], covariant=True)
 SyncServiceT_co = TypeVar("SyncServiceT_co", bound=SQLAlchemySyncRepositoryService[Any, Any], covariant=True)
-HashableValue = Union[str, int, float, bool, None]
-HashableType = Union[HashableValue, tuple[Any, ...], tuple[tuple[str, Any], ...], tuple[HashableValue, ...]]
+
+__all__ = (
+    "DEPENDENCY_DEFAULTS",
+    "DependencyCache",
+    "DependencyDefaults",
+    "FieldNameType",
+    "FilterConfig",
+    "SingletonMeta",
+    "create_filter_dependencies",
+    "create_service_dependencies",
+    "create_service_provider",
+    "dep_cache",
+)
+
+_CACHE_NAMESPACE = "advanced_alchemy.extensions.litestar.providers"
 
 
 class DependencyDefaults:
@@ -89,60 +100,6 @@ class DependencyDefaults:
 
 
 DEPENDENCY_DEFAULTS = DependencyDefaults()
-
-
-class FieldNameType(NamedTuple):
-    """Type for field name and associated type information.
-
-    This allows for specifying both the field name and the expected type for filter values.
-    """
-
-    name: str
-    """Name of the field to filter on."""
-    type_hint: type[Any] = str
-    """Type of the filter value. Defaults to str."""
-
-
-class FilterConfig(TypedDict):
-    """Configuration for generating dynamic filters."""
-
-    id_filter: NotRequired[type[Union[UUID, int, str]]]
-    """Indicates that the id filter should be enabled.  When set, the type specified will be used for the :class:`CollectionFilter`."""
-    id_field: NotRequired[str]
-    """The field on the model that stored the primary key or identifier."""
-    sort_field: NotRequired[str]
-    """The default field to use for the sort filter."""
-    sort_order: NotRequired[SortOrder]
-    """The default order to use for the sort filter."""
-    pagination_type: NotRequired[Literal["limit_offset"]]
-    """When set, pagination is enabled based on the type specified."""
-    pagination_size: NotRequired[int]
-    """The size of the pagination. Defaults to `DEFAULT_PAGINATION_SIZE`."""
-    search: NotRequired[Union[str, set[str], list[str]]]
-    """Fields to enable search on. Can be a comma-separated string or a set of field names."""
-    search_ignore_case: NotRequired[bool]
-    """When set, search is case insensitive by default."""
-    created_at: NotRequired[bool]
-    """When set, created_at filter is enabled."""
-    updated_at: NotRequired[bool]
-    """When set, updated_at filter is enabled."""
-    not_in_fields: NotRequired[Union[FieldNameType, set[FieldNameType], list[Union[str, FieldNameType]]]]
-    """Fields that support not-in collection filters. Can be a single field or a set of fields with type information."""
-    in_fields: NotRequired[Union[FieldNameType, set[FieldNameType], list[Union[str, FieldNameType]]]]
-    """Fields that support in-collection filters. Can be a single field or a set of fields with type information."""
-
-
-class DependencyCache(metaclass=SingletonMeta):
-    """Simple dependency cache for the application.  This is used to help memoize dependencies that are generated dynamically."""
-
-    def __init__(self) -> None:
-        self.dependencies: dict[Union[int, str], dict[str, Provide]] = {}
-
-    def add_dependencies(self, key: Union[int, str], dependencies: dict[str, Provide]) -> None:
-        self.dependencies[key] = dependencies
-
-    def get_dependencies(self, key: Union[int, str]) -> Optional[dict[str, Provide]]:
-        return self.dependencies.get(key)
 
 
 dep_cache = DependencyCache()
@@ -350,44 +307,13 @@ def create_filter_dependencies(
     Returns:
         A dependency provider function for the combined filter function.
     """
-    cache_key = hash(_make_hashable(config))
-    deps = dep_cache.get_dependencies(cache_key)
+    cache_key = hash((_CACHE_NAMESPACE, make_hashable(config)))
+    deps = cast("Optional[dict[str, Provide]]", dep_cache.get_dependencies(cache_key))
     if deps is not None:
         return deps
     deps = _create_statement_filters(config, dep_defaults)
     dep_cache.add_dependencies(cache_key, deps)
     return deps
-
-
-def _make_hashable(value: Any) -> HashableType:
-    """Convert a value into a hashable type.
-
-    This function converts any value into a hashable type by:
-    - Converting dictionaries to sorted tuples of (key, value) pairs
-    - Converting lists and sets to sorted tuples
-    - Preserving primitive types (str, int, float, bool, None)
-    - Converting any other type to its string representation
-
-    Args:
-        value: Any value that needs to be made hashable.
-
-    Returns:
-        A hashable version of the value.
-    """
-    if isinstance(value, dict):
-        # Convert dict to tuple of tuples with sorted keys
-        items = []
-        for k in sorted(value.keys()):  # pyright: ignore
-            v = value[k]  # pyright: ignore
-            items.append((str(k), _make_hashable(v)))  # pyright: ignore
-        return tuple(items)  # pyright: ignore
-    if isinstance(value, (list, set)):
-        hashable_items = [_make_hashable(item) for item in value]  # pyright: ignore
-        filtered_items = [item for item in hashable_items if item is not None]  # pyright: ignore
-        return tuple(sorted(filtered_items, key=str))
-    if isinstance(value, (str, int, float, bool, type(None))):
-        return value
-    return str(value)
 
 
 def _create_statement_filters(  # noqa: C901
