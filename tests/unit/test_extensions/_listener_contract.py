@@ -10,7 +10,6 @@ Regression helpers for
 https://github.com/litestar-org/advanced-alchemy/issues/709.
 """
 
-
 from typing import Any
 from unittest.mock import MagicMock, patch
 
