@@ -202,7 +202,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """Get a session maker. If none exists yet, create one.
 
         Delegates to the base-class implementation so that listener
-        registration (file-object, timestamp, cache) runs. See issue #709.
+        registration (file-object, timestamp, cache) runs.
 
         Returns:
             Session factory used by the plugin.
