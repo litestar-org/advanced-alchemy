@@ -174,7 +174,6 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 
         Preserves ``engine_instance`` caching and then delegates to the
         base-class implementation so that listener registration runs.
-        See issue #709.
 
         Returns:
             Callable[[], AsyncSession]: Session factory used by the plugin.
