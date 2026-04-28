@@ -18,6 +18,7 @@ from advanced_alchemy.config import EngineConfig as _EngineConfig
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig as _SQLAlchemySyncConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.routing.maker import adispose_session_maker, dispose_session_maker
 from advanced_alchemy.service import schema_dump
 
 if TYPE_CHECKING:
@@ -141,6 +142,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         """
         if self.engine_instance is not None:
             self.engine_instance.dispose()
+        dispose_session_maker(self.session_maker)
 
     def create_all_metadata(self) -> None:  # pragma: no cover
         """Create all metadata tables in the database."""
@@ -243,6 +245,8 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """
         if self.engine_instance is not None:
             _ = portal.call(self.engine_instance.dispose)
+        if self.session_maker is not None:
+            _ = portal.call(adispose_session_maker, self.session_maker)
 
     async def create_all_metadata(self) -> None:  # pragma: no cover
         """Create all metadata tables in the database."""

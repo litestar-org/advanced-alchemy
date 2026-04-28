@@ -21,6 +21,7 @@ from advanced_alchemy.config import EngineConfig as _EngineConfig
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig as _SQLAlchemySyncConfig
 from advanced_alchemy.routing.context import reset_routing_context
+from advanced_alchemy.routing.maker import adispose_session_maker, dispose_session_maker
 from advanced_alchemy.service import schema_dump
 
 if TYPE_CHECKING:
@@ -333,6 +334,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """Close the engine."""
         if self.engine_instance is not None:
             await self.engine_instance.dispose()
+        await adispose_session_maker(self.session_maker)
 
     async def on_shutdown(self) -> None:  # pragma: no cover
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
@@ -495,6 +497,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         """Close the engines."""
         if self.engine_instance is not None:
             await run_in_threadpool(self.engine_instance.dispose)
+        await run_in_threadpool(dispose_session_maker, self.session_maker)
 
     async def on_shutdown(self) -> None:  # pragma: no cover
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
