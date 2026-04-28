@@ -65,6 +65,8 @@ if TYPE_CHECKING:
 
 __all__ = (
     "BeforeAfter",
+    "BooleanFilter",
+    "ChoicesFilter",
     "CollectionFilter",
     "ComparisonFilter",
     "ExistsFilter",
@@ -106,6 +108,8 @@ logger = logging.getLogger("advanced_alchemy")
 class FilterMap(TypedDict):
     before_after: "type[BeforeAfter]"
     on_before_after: "type[OnBeforeAfter]"
+    boolean: "type[BooleanFilter]"
+    choices: "type[ChoicesFilter[Any]]"
     collection: "type[CollectionFilter[Any]]"
     not_in_collection: "type[NotInCollectionFilter[Any]]"
     limit_offset: "type[LimitOffset]"
@@ -325,6 +329,31 @@ class CollectionFilter(InAnyFilter, Generic[T]):
         if prefer_any:
             return cast("StatementTypeT", statement.where(any_(self.values) == field))  # type: ignore[arg-type]
         return cast("StatementTypeT", statement.where(field.in_(self.values)))
+
+
+@dataclass
+class ChoicesFilter(CollectionFilter[T]):
+    """Filter records whose field matches one of a fixed set of choices."""
+
+
+@dataclass
+class BooleanFilter(StatementFilter):
+    """Filter records by a boolean field value.
+
+    If ``value`` is ``None``, the statement is returned unchanged.
+    """
+
+    field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
+    """Field name, model attribute, or func expression."""
+    value: Optional[bool]
+    """Boolean value to match. If None, no filter is applied."""
+
+    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
+        """Apply a boolean equality condition to the statement."""
+        if self.value is None:
+            return statement
+        field = self._get_instrumented_attr(model, self.field_name)
+        return cast("StatementTypeT", statement.where(field.is_(self.value)))
 
 
 @dataclass
