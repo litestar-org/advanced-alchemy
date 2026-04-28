@@ -22,6 +22,7 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.common import (
 )
 from advanced_alchemy.extensions.litestar.plugins.init.config.engine import EngineConfig
 from advanced_alchemy.routing.context import reset_routing_context
+from advanced_alchemy.routing.maker import adispose_session_maker
 
 logger = logging.getLogger("advanced_alchemy.extensions.litestar")
 
@@ -227,6 +228,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 engine = deps[self.engine_dependency_key]
                 if hasattr(engine, "dispose"):
                     await cast("AsyncEngine", engine).dispose()
+            await adispose_session_maker(self.session_maker)
 
     def provide_engine(self, state: "State") -> "AsyncEngine":
         """Create an engine instance.
