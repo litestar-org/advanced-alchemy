@@ -497,7 +497,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         """Close the engines."""
         if self.engine_instance is not None:
             await run_in_threadpool(self.engine_instance.dispose)
-        await run_in_threadpool(dispose_session_maker, self.session_maker)
+        await run_in_threadpool(lambda: dispose_session_maker(self.session_maker))
 
     async def on_shutdown(self) -> None:  # pragma: no cover
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
