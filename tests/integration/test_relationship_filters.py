@@ -225,21 +225,6 @@ def test_relationship_filter_invalid_relationship_raises(
         filter_.append_to_statement(stmt, item_model)
 
 
-def test_relationship_filter_join_negate_raises(
-    skip_unsupported_sync_engines: None,
-    uuid_test_session_sync: tuple[Session, dict[str, type]],
-) -> None:
-    _session, uuid_models = uuid_test_session_sync
-
-    book_model: Any = uuid_models["book"]
-
-    stmt = select(book_model)
-    filter_ = RelationshipFilter(relationship="author", filters=[], use_exists=False, negate=True)
-
-    with pytest.raises(ValueError, match="JOIN-based relationship filters do not support negate=True"):
-        filter_.append_to_statement(stmt, book_model)
-
-
 def test_collection_filter_relationship_composite_pk_raises() -> None:
     class Base(DeclarativeBase):
         pass

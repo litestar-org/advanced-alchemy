@@ -1179,9 +1179,6 @@ class RelationshipFilter(StatementFilter):
     negate: bool = False
     """If True, uses NOT EXISTS instead of EXISTS."""
 
-    use_exists: bool = True
-    """If True (default), uses EXISTS subquery. If False, uses JOIN with DISTINCT."""
-
     def _get_relationship_name(self) -> str:
         """Extract relationship name from string or InstrumentedAttribute."""
         if isinstance(self.relationship, str):
@@ -1287,46 +1284,6 @@ class RelationshipFilter(StatementFilter):
         # which will be handled by correlate() in _build_exists_subquery
         return subquery.where(join_condition)
 
-    def _build_join_query(
-        self,
-        statement: StatementTypeT,
-        model: type[ModelT],
-        rel_prop: "RelationshipProperty[Any]",
-    ) -> StatementTypeT:
-        """Build JOIN-based query (alternative to EXISTS).
-
-        Args:
-            statement: SQLAlchemy statement to modify
-            model: Parent model class
-            rel_prop: SQLAlchemy relationship property
-
-        Returns:
-            StatementTypeT: Modified statement with JOIN
-
-        Note:
-            This is a future enhancement for cases where JOIN
-            might be more efficient than EXISTS.
-        """
-        # Only support SELECT statements for JOIN pattern
-        if not isinstance(statement, Select):
-            return statement
-
-        related_model = rel_prop.mapper.class_
-
-        # Add JOIN (statement is verified to be Select here)
-        relationship_attr = getattr(model, rel_prop.key)
-        joined_stmt = statement.join(relationship_attr)
-
-        # Apply filters
-        for filter_ in self.filters:
-            if isinstance(filter_, ColumnElement):
-                joined_stmt = joined_stmt.where(filter_)
-            else:
-                joined_stmt = filter_.append_to_statement(joined_stmt, related_model)
-
-        # Add DISTINCT to avoid duplicates and return
-        return joined_stmt.distinct()
-
     def append_to_statement(
         self,
         statement: StatementTypeT,
@@ -1345,18 +1302,8 @@ class RelationshipFilter(StatementFilter):
             ValueError: If relationship not found on model
         """
         rel_prop = self._get_relationship_property(model)
-
-        if not self.use_exists and self.negate:
-            msg = "JOIN-based relationship filters do not support negate=True. Use the default EXISTS strategy instead."
-            raise ValueError(msg)
-
-        if self.use_exists:
-            # EXISTS pattern (default, more efficient)
-            exists_clause = self._build_exists_subquery(model, rel_prop)
-            return cast("StatementTypeT", statement.where(exists_clause))
-
-        # JOIN pattern (for future use cases)
-        return self._build_join_query(statement, model, rel_prop)
+        exists_clause = self._build_exists_subquery(model, rel_prop)
+        return cast("StatementTypeT", statement.where(exists_clause))
 
 
 @dataclass
@@ -1512,7 +1459,6 @@ class MultiFilter(StatementFilter):
             relationship=relationship,
             filters=nested_filters,
             negate=bool(condition.get("negate", False)),
-            use_exists=bool(condition.get("use_exists", True)),
         )
 
     def _create_filter(self, condition: dict[str, Any]) -> Optional[StatementFilter]:
