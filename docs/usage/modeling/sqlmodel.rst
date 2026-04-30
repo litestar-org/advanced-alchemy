@@ -44,11 +44,11 @@ Repositories automatically detect SQLModel classes and handle them correctly dur
             async with async_session_factory() as session:
                 repo = HeroRepository(session=session)
 
-                hero = Hero(name="Deadpond", secret_name="Dive Wilson")
+                hero = Hero(name="Deadpool", secret_name="Dive Wilson")
                 await repo.add(hero)
                 await session.commit()
 
-                return await repo.list()
+                return await repo.get_many()
         finally:
             await engine.dispose()
 

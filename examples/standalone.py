@@ -50,7 +50,7 @@ def run_script() -> None:
         pprint.pp(f"Created {len(objs)} new objects.")
 
         # 2) Select paginated data and total row count.
-        created_objs, total_objs = repo.list_and_count(LimitOffset(limit=10, offset=0))
+        created_objs, total_objs = repo.get_many_and_count(LimitOffset(limit=10, offset=0))
         pprint.pp(f"Selected {len(created_objs)} records out of a total of {total_objs}.")
 
         # 3) Let's remove the batch of records selected.

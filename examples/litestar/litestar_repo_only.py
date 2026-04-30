@@ -123,7 +123,7 @@ class AuthorController(Controller):
         limit_offset: LimitOffset,
     ) -> OffsetPagination[Author]:
         """List authors."""
-        results, total = await authors_repo.list_and_count(limit_offset)
+        results, total = await authors_repo.get_many_and_count(limit_offset)
         type_adapter = TypeAdapter(list[Author])
         return OffsetPagination[Author](
             items=type_adapter.validate_python(results),

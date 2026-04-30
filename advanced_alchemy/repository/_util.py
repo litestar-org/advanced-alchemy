@@ -135,7 +135,7 @@ def _canonicalize_cache_key_value(value: Any) -> Any:
     return value
 
 
-def _build_list_cache_key(  # pyright: ignore[reportUnusedFunction]
+def _build_cache_key(  # pyright: ignore[reportUnusedFunction]
     *,
     model_name: str,
     version_token: str,
