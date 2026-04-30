@@ -1,13 +1,22 @@
 import logging
-from typing import TYPE_CHECKING, Any
-from uuid import UUID, uuid4
+import sys
+from typing import TYPE_CHECKING, Any, Callable
+from uuid import UUID
 
 from sqlalchemy.orm import Mapped, declarative_mixin, mapped_column
 
 from advanced_alchemy.mixins.sentinel import SentinelMixin
 from advanced_alchemy.types import UUID_UTILS_INSTALLED
 
-if UUID_UTILS_INSTALLED and not TYPE_CHECKING:
+_PYTHON_SUPPORTS_UUID6_7 = sys.version_info >= (3, 14)
+
+if _PYTHON_SUPPORTS_UUID6_7:
+    from uuid import uuid4, uuid6, uuid7  # type: ignore[attr-defined]
+
+    uuid6: Callable[[], UUID]  # type: ignore[no-redef]
+    uuid7: Callable[[], UUID]  # type: ignore[no-redef]
+
+elif UUID_UTILS_INSTALLED and not TYPE_CHECKING:
     from uuid_utils.compat import (  # type: ignore[no-redef,unused-ignore]  # pyright: ignore[reportMissingImports]
         uuid4,
         uuid6,
@@ -36,10 +45,14 @@ class UUIDv6PrimaryKey(SentinelMixin):
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        if not UUID_UTILS_INSTALLED and not cls.__module__.startswith("advanced_alchemy"):  # pragma: no cover
+        if (
+            not _PYTHON_SUPPORTS_UUID6_7
+            and not UUID_UTILS_INSTALLED
+            and not cls.__module__.startswith("advanced_alchemy")
+        ):  # pragma: no cover
             logger.warning("`uuid-utils` not installed, falling back to `uuid4` for UUID v6 generation.")
 
-    id: Mapped[UUID] = mapped_column(default=uuid6, primary_key=True, sort_order=-100)
+    id: Mapped[UUID] = mapped_column(default=uuid6, primary_key=True, sort_order=-100)  # pyright: ignore[reportUnknownArgumentType]
     """UUID Primary key column."""
 
 
@@ -49,8 +62,12 @@ class UUIDv7PrimaryKey(SentinelMixin):
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        if not UUID_UTILS_INSTALLED and not cls.__module__.startswith("advanced_alchemy"):  # pragma: no cover
+        if (
+            not _PYTHON_SUPPORTS_UUID6_7
+            and not UUID_UTILS_INSTALLED
+            and not cls.__module__.startswith("advanced_alchemy")
+        ):  # pragma: no cover
             logger.warning("`uuid-utils` not installed, falling back to `uuid4` for UUID v7 generation.")
 
-    id: Mapped[UUID] = mapped_column(default=uuid7, primary_key=True, sort_order=-100)
+    id: Mapped[UUID] = mapped_column(default=uuid7, primary_key=True, sort_order=-100)  # pyright: ignore[reportUnknownArgumentType]
     """UUID Primary key column."""
