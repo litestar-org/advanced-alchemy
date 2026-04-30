@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import Engine, ForeignKey, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
@@ -17,8 +18,14 @@ pytestmark = [
 
 # Skip unsupported engines at fixture setup time (before schema creation)
 @pytest.fixture
-def skip_unsupported_sync_engines(engine: Engine) -> None:
-    """Skip tests for engines that don't support UNIQUE constraints or have schema issues."""
+def skip_unsupported_sync_engines(engine: Engine, uuid_models_dba: dict[str, type]) -> None:
+    """Skip unsupported engines and ensure UUID schema exists on the test connection.
+
+    SchemaManager caches schema-creation state per process, but with session-scoped
+    aiosqlite/sqlite engines the cached "done" can drift from on-disk reality across
+    fixture handoffs. checkfirst=True makes the defensive create_all a cheap no-op
+    when tables already exist.
+    """
     dialect_name = getattr(engine.dialect, "name", "")
 
     # Skip Spanner - doesn't support direct UNIQUE constraints (used by Tag model)
@@ -29,10 +36,13 @@ def skip_unsupported_sync_engines(engine: Engine) -> None:
     if dialect_name.startswith("oracle"):
         pytest.skip("Oracle has schema isolation issues with relationship filter tests")
 
+    if dialect_name != "mock":
+        uuid_models_dba["base"].metadata.create_all(engine, checkfirst=True)
 
-@pytest.fixture
-def skip_unsupported_async_engines(async_engine: AsyncEngine) -> None:
-    """Skip async tests for engines that don't support UNIQUE constraints."""
+
+@pytest_asyncio.fixture(loop_scope="function")
+async def skip_unsupported_async_engines(async_engine: AsyncEngine, uuid_models_dba: dict[str, type]) -> None:
+    """Async counterpart to ``skip_unsupported_sync_engines``; see its docstring."""
     dialect_name = getattr(async_engine.dialect, "name", "")
 
     # Skip Spanner - doesn't support direct UNIQUE constraints
@@ -42,6 +52,10 @@ def skip_unsupported_async_engines(async_engine: AsyncEngine) -> None:
     # Skip Oracle - has schema isolation issues with xdist groups
     if dialect_name.startswith("oracle"):
         pytest.skip("Oracle has schema isolation issues with relationship filter tests")
+
+    if dialect_name != "mock":
+        async with async_engine.begin() as conn:
+            await conn.run_sync(uuid_models_dba["base"].metadata.create_all, checkfirst=True)
 
 
 def _seed_item_tag_data_sync(session: Session, item_model: Any, tag_model: Any) -> tuple[Any, Any]:
