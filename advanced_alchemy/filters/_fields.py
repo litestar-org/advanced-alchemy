@@ -7,19 +7,29 @@ compile a ``(path, lookup, value)`` triple into a Tier 1 leaf
 elsewhere (Phase 5 compilation).
 """
 
+import uuid
+from dataclasses import dataclass
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
+    cast,
 )
 
+from sqlalchemy import ColumnElement, extract
+
+from advanced_alchemy.filters._base import ModelT, StatementFilter, StatementTypeT
 from advanced_alchemy.filters._columns import (
+    VALID_OPERATORS,
     CollectionFilter,
     ComparisonFilter,
     NotInCollectionFilter,
     NotNullFilter,
     NullFilter,
+    operators_map,
 )
 from advanced_alchemy.filters._filterset import UNSET, BaseFieldFilter
 from advanced_alchemy.filters._search import SearchFilter
@@ -28,13 +38,18 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Optional, Union
 
-    from advanced_alchemy.filters._base import StatementFilter
+    from sqlalchemy.orm import InstrumentedAttribute
 
 
 __all__ = (
     "BooleanFilter",
+    "DateFilter",
+    "DatePartFilter",
+    "DateTimeFilter",
+    "EnumFilter",
     "NumberFilter",
     "StringFilter",
+    "UUIDFilter",
 )
 
 
@@ -296,4 +311,296 @@ class BooleanFilter(BaseFieldFilter):
         if lookup == "isnull":
             return _null_leaf(field_name, bool(value))
         msg = f"BooleanFilter has no compile rule for lookup {lookup!r}."
+        raise ValueError(msg)
+
+
+@dataclass
+class DatePartFilter(StatementFilter):
+    """Apply ``EXTRACT(part FROM column) <op> value`` as a WHERE clause.
+
+    Backs the ``year``/``month``/``day``/``hour``/``minute``/``second``
+    lookups on ``DateFilter`` and ``DateTimeFilter``. Stays a Tier 1
+    primitive — relationship-traversal wrapping happens elsewhere.
+    """
+
+    field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
+    """Field name, model attribute, or column expression."""
+    part: str
+    """Datetime component to extract (``year``, ``month``, ``day``, ``hour``, ``minute``, ``second``)."""
+    operator: str
+    """Comparison operator key from ``operators_map`` (``eq``, ``gt``, ``ge``, …)."""
+    value: Any
+    """Right-hand side passed to the comparison operator."""
+
+    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
+        field = self._get_instrumented_attr(model, self.field_name)
+        op_func = operators_map.get(self.operator)
+        if op_func is None:
+            msg = f"Invalid operator '{self.operator}'. Must be one of: {sorted(VALID_OPERATORS)}"
+            raise ValueError(msg)
+        condition = op_func(extract(self.part, field), self.value)
+        return cast("StatementTypeT", statement.where(condition))
+
+
+_DATE_NUMERIC_LOOKUP_TO_OPERATOR: dict[str, str] = {
+    "exact": "eq",
+    "gt": "gt",
+    "gte": "ge",
+    "lt": "lt",
+    "lte": "le",
+    "between": "between",
+}
+
+
+class DateFilter(BaseFieldFilter):
+    """Field filter for ISO-8601 ``date`` columns.
+
+    Supports comparison lookups (exact/gt/gte/lt/lte/between), date-part
+    lookups (year/month/day) backed by ``EXTRACT``, set membership
+    (in/not_in), and null checks. Values are parsed via
+    :meth:`datetime.date.fromisoformat`.
+    """
+
+    supported_lookups: ClassVar[frozenset[str]] = frozenset(
+        {
+            "exact",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "between",
+            "year",
+            "month",
+            "day",
+            "in",
+            "not_in",
+            "isnull",
+        },
+    )
+
+    _DATE_PART_LOOKUPS: ClassVar[frozenset[str]] = frozenset({"year", "month", "day"})
+
+    def _coerce_date(self, raw: str) -> Any:
+        token = raw.strip()
+        try:
+            return date.fromisoformat(token)
+        except ValueError as exc:
+            msg = f"Cannot parse {raw!r} as ISO-8601 date: {exc}"
+            raise ValueError(msg) from exc
+
+    @staticmethod
+    def _coerce_int(raw: "Union[str, Sequence[str]]") -> int:
+        if isinstance(raw, str):
+            token = raw
+        elif raw:
+            token = raw[0]
+        else:
+            msg = "Date-part lookup requires a value."
+            raise ValueError(msg)
+        try:
+            return int(token.strip())
+        except ValueError as exc:
+            msg = f"Cannot coerce {token!r} to int: {exc}"
+            raise ValueError(msg) from exc
+
+    def coerce(self, raw: "Union[str, Sequence[str]]", lookup: str) -> Any:
+        if lookup == "isnull":
+            return _parse_bool(raw)
+        if lookup in self._DATE_PART_LOOKUPS:
+            return self._coerce_int(raw)
+        if lookup == "between":
+            tokens = _split_csv(raw)
+            if len(tokens) != _BETWEEN_PAIR_LENGTH:
+                msg = f"between requires exactly two values, got {len(tokens)}."
+                raise ValueError(msg)
+            return (self._coerce_date(tokens[0]), self._coerce_date(tokens[1]))
+        if lookup in {"in", "not_in"}:
+            tokens = _split_csv(raw)
+            if not tokens:
+                msg = f"Lookup '{lookup}' requires at least one value."
+                raise ValueError(msg)
+            return [self._coerce_date(token) for token in tokens]
+        if isinstance(raw, str):
+            return self._coerce_date(raw)
+        msg = f"Lookup '{lookup}' expects a single value."
+        raise ValueError(msg)
+
+    def compile(
+        self,
+        path: tuple[str, ...],
+        lookup: str,
+        value: Any,
+    ) -> "StatementFilter":
+        field_name = path[-1]
+        if lookup in self._DATE_PART_LOOKUPS:
+            return DatePartFilter(field_name=field_name, part=lookup, operator="eq", value=value)
+        operator = _DATE_NUMERIC_LOOKUP_TO_OPERATOR.get(lookup)
+        if operator is not None:
+            return ComparisonFilter(field_name=field_name, operator=operator, value=value)
+        if lookup == "in":
+            return CollectionFilter(field_name=field_name, values=value)
+        if lookup == "not_in":
+            return NotInCollectionFilter(field_name=field_name, values=value)
+        if lookup == "isnull":
+            return _null_leaf(field_name, bool(value))
+        msg = f"DateFilter has no compile rule for lookup {lookup!r}."
+        raise ValueError(msg)
+
+
+class DateTimeFilter(DateFilter):
+    """Field filter for ISO-8601 ``datetime`` columns.
+
+    Superset of :class:`DateFilter` adding ``hour``/``minute``/``second``
+    extraction. Values are parsed via :meth:`datetime.datetime.fromisoformat`,
+    which accepts both date-only and datetime tokens.
+    """
+
+    supported_lookups: ClassVar[frozenset[str]] = frozenset(
+        {
+            "exact",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "between",
+            "year",
+            "month",
+            "day",
+            "hour",
+            "minute",
+            "second",
+            "in",
+            "not_in",
+            "isnull",
+        },
+    )
+
+    _DATE_PART_LOOKUPS: ClassVar[frozenset[str]] = frozenset(
+        {"year", "month", "day", "hour", "minute", "second"},
+    )
+
+    def _coerce_date(self, raw: str) -> Any:
+        token = raw.strip()
+        try:
+            return datetime.fromisoformat(token)
+        except ValueError as exc:
+            msg = f"Cannot parse {raw!r} as ISO-8601 datetime: {exc}"
+            raise ValueError(msg) from exc
+
+
+class UUIDFilter(BaseFieldFilter):
+    """Field filter for UUID columns.
+
+    Supports exact/in/not_in/isnull lookups; rejects malformed UUID
+    strings via :class:`uuid.UUID`'s parser.
+    """
+
+    supported_lookups: ClassVar[frozenset[str]] = frozenset({"exact", "in", "not_in", "isnull"})
+
+    @staticmethod
+    def _coerce_uuid(raw: str) -> uuid.UUID:
+        try:
+            return uuid.UUID(raw.strip())
+        except (ValueError, AttributeError, TypeError) as exc:
+            msg = f"Cannot parse {raw!r} as UUID: {exc}"
+            raise ValueError(msg) from exc
+
+    def coerce(self, raw: "Union[str, Sequence[str]]", lookup: str) -> Any:
+        if lookup == "isnull":
+            return _parse_bool(raw)
+        if lookup in {"in", "not_in"}:
+            tokens = _split_csv(raw)
+            if not tokens:
+                msg = f"Lookup '{lookup}' requires at least one value."
+                raise ValueError(msg)
+            return [self._coerce_uuid(token) for token in tokens]
+        if isinstance(raw, str):
+            return self._coerce_uuid(raw)
+        msg = f"Lookup '{lookup}' expects a single value."
+        raise ValueError(msg)
+
+    def compile(
+        self,
+        path: tuple[str, ...],
+        lookup: str,
+        value: Any,
+    ) -> "StatementFilter":
+        field_name = path[-1]
+        if lookup == "exact":
+            return ComparisonFilter(field_name=field_name, operator="eq", value=value)
+        if lookup == "in":
+            return CollectionFilter(field_name=field_name, values=value)
+        if lookup == "not_in":
+            return NotInCollectionFilter(field_name=field_name, values=value)
+        if lookup == "isnull":
+            return _null_leaf(field_name, bool(value))
+        msg = f"UUIDFilter has no compile rule for lookup {lookup!r}."
+        raise ValueError(msg)
+
+
+class EnumFilter(BaseFieldFilter):
+    """Field filter for columns backed by a Python ``enum.Enum``.
+
+    Coercion accepts either the enum member's value (``"red"``) or its
+    name (``"RED"``); rejects unknown tokens with ``ValueError``.
+    """
+
+    supported_lookups: ClassVar[frozenset[str]] = frozenset({"exact", "in", "not_in", "isnull"})
+
+    def __init__(
+        self,
+        *,
+        enum: Any,
+        lookups: "Optional[Sequence[str]]" = None,
+        default: Any = UNSET,
+    ) -> None:
+        if not isinstance(enum, type) or not issubclass(enum, Enum):
+            msg = f"EnumFilter requires an Enum subclass, got {enum!r}."
+            raise TypeError(msg)
+        self.enum: type[Enum] = enum
+        super().__init__(lookups=lookups, default=default)
+
+    def _coerce_member(self, raw: str) -> Enum:
+        token = raw.strip()
+        try:
+            return self.enum(token)
+        except ValueError:
+            pass
+        try:
+            return self.enum[token]
+        except KeyError as exc:
+            members = sorted(member.name for member in self.enum)
+            msg = f"{token!r} is not a valid {self.enum.__name__} member (by value or name). Known members: {members}."
+            raise ValueError(msg) from exc
+
+    def coerce(self, raw: "Union[str, Sequence[str]]", lookup: str) -> Any:
+        if lookup == "isnull":
+            return _parse_bool(raw)
+        if lookup in {"in", "not_in"}:
+            tokens = _split_csv(raw)
+            if not tokens:
+                msg = f"Lookup '{lookup}' requires at least one value."
+                raise ValueError(msg)
+            return [self._coerce_member(token) for token in tokens]
+        if isinstance(raw, str):
+            return self._coerce_member(raw)
+        msg = f"Lookup '{lookup}' expects a single value."
+        raise ValueError(msg)
+
+    def compile(
+        self,
+        path: tuple[str, ...],
+        lookup: str,
+        value: Any,
+    ) -> "StatementFilter":
+        field_name = path[-1]
+        if lookup == "exact":
+            return ComparisonFilter(field_name=field_name, operator="eq", value=value)
+        if lookup == "in":
+            return CollectionFilter(field_name=field_name, values=value)
+        if lookup == "not_in":
+            return NotInCollectionFilter(field_name=field_name, values=value)
+        if lookup == "isnull":
+            return _null_leaf(field_name, bool(value))
+        msg = f"EnumFilter has no compile rule for lookup {lookup!r}."
         raise ValueError(msg)

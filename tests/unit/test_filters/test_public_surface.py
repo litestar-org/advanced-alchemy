@@ -50,8 +50,13 @@ EXPECTED_SUBMODULE_LOCATIONS: "dict[str, str]" = {
     "BaseFieldFilter": "advanced_alchemy.filters._filterset",
     "FieldSpec": "advanced_alchemy.filters._filterset",
     "BooleanFilter": "advanced_alchemy.filters._fields",
+    "DateFilter": "advanced_alchemy.filters._fields",
+    "DatePartFilter": "advanced_alchemy.filters._fields",
+    "DateTimeFilter": "advanced_alchemy.filters._fields",
+    "EnumFilter": "advanced_alchemy.filters._fields",
     "NumberFilter": "advanced_alchemy.filters._fields",
     "StringFilter": "advanced_alchemy.filters._fields",
+    "UUIDFilter": "advanced_alchemy.filters._fields",
     "FilterTypes": "advanced_alchemy.filters",
 }
 
