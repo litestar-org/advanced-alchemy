@@ -52,6 +52,39 @@ __all__ = (
 )
 
 
+def _compile_path(path: "tuple[str, ...]", leaf: "StatementFilter") -> "StatementFilter":
+    """Wrap a Tier 1 leaf filter for relationship traversal.
+
+    For depth-0 paths (length 1), the leaf is returned unchanged. For
+    deeper paths, every relationship segment in ``path[:-1]`` is wrapped
+    around the leaf right-to-left so that ``("author", "org", "code")``
+    with a ``CollectionFilter`` leaf produces
+    ``RelationshipFilter("author", [RelationshipFilter("org", [leaf])])``.
+
+    Args:
+        path: The resolved field path. ``path[-1]`` is the column on the
+            terminal model and is already encoded into the leaf filter's
+            ``field_name``; ``path[:-1]`` is the relationship chain.
+        leaf: The filter produced by a field filter's ``compile``.
+
+    Returns:
+        Either ``leaf`` itself (no relationships) or a
+        :class:`RelationshipFilter` chain wrapping it.
+
+    Raises:
+        ValueError: If ``path`` is empty.
+    """
+    if not path:
+        msg = "_compile_path requires a non-empty path."
+        raise ValueError(msg)
+    from advanced_alchemy.filters._relationship import RelationshipFilter
+
+    result = leaf
+    for relationship_name in reversed(path[:-1]):
+        result = RelationshipFilter(relationship=relationship_name, filters=[result])
+    return result
+
+
 class _UnsetSentinel:
     """Type for the :data:`UNSET` singleton.
 
@@ -448,6 +481,33 @@ class FilterSet:
         Phase 5 compilation pass walks this list to emit Tier 1 filters.
         """
         return list(self._invocations)
+
+    def to_filters(self) -> "list[StatementFilter]":
+        """Compile parsed invocations into Tier 1 :class:`StatementFilter` instances.
+
+        Walks ``self._invocations`` in declaration order, calls each
+        field filter's :meth:`BaseFieldFilter.compile`, and wraps the
+        result for relationship traversal via :func:`_compile_path`. The
+        :class:`OrderingFilter` invocation (if any) is appended last so
+        the ``WHERE`` clause stays stable across calls.
+
+        Returns:
+            A list of statement filters ready to apply to a SQLAlchemy
+            statement, e.g. via the existing ``MultiFilter`` machinery.
+        """
+        from advanced_alchemy.filters._fields import OrderingFilter
+
+        where_filters: list[StatementFilter] = []
+        ordering_filters: list[StatementFilter] = []
+        for name, lookup, value in self._invocations:
+            spec = self._field_specs[name]
+            leaf = spec.filter.compile(spec.path, lookup, value)
+            wrapped = _compile_path(spec.path, leaf)
+            if isinstance(spec.filter, OrderingFilter):
+                ordering_filters.append(wrapped)
+            else:
+                where_filters.append(wrapped)
+        return [*where_filters, *ordering_filters]
 
     @classmethod
     def from_query_params(
