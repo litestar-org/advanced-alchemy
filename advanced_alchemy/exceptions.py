@@ -1,5 +1,5 @@
 import re
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from typing import Any, Callable, Optional, TypedDict, Union, cast
 
@@ -11,6 +11,7 @@ __all__ = (
     "AdvancedAlchemyError",
     "DuplicateKeyError",
     "ErrorMessages",
+    "FilterValidationError",
     "ForeignKeyError",
     "ImproperConfigurationError",
     "IntegrityError",
@@ -159,6 +160,25 @@ class SerializationError(AdvancedAlchemyError):
         *args: Variable length argument list passed to parent class.
         detail: Detailed error message.
     """
+
+
+class FilterValidationError(AdvancedAlchemyError):
+    """Aggregated coercion failures from a declarative filter facade.
+
+    Raised at request time when one or more query parameters fail to
+    coerce. Carries a per-field ``errors`` mapping so callers can report
+    every problem in one pass instead of fixing them serially.
+
+    Args:
+        errors: Mapping of field name to error message.
+    """
+
+    errors: dict[str, str]
+
+    def __init__(self, errors: Mapping[str, str]) -> None:
+        self.errors = dict(errors)
+        joined = "; ".join(f"{name}: {msg}" for name, msg in self.errors.items())
+        super().__init__(detail=joined)
 
 
 class RepositoryError(AdvancedAlchemyError):

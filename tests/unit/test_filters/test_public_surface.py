@@ -13,8 +13,6 @@ The submodule expectations live in ``EXPECTED_SUBMODULE_LOCATIONS`` below; if
 a public name is missing from that map, the test only checks the public path.
 """
 
-from __future__ import annotations
-
 import importlib
 
 import pytest
@@ -24,7 +22,7 @@ import advanced_alchemy.filters as filters_pkg
 PUBLIC_NAMES = tuple(filters_pkg.__all__)
 
 
-EXPECTED_SUBMODULE_LOCATIONS: dict[str, str] = {
+EXPECTED_SUBMODULE_LOCATIONS: "dict[str, str]" = {
     "StatementFilter": "advanced_alchemy.filters._base",
     "InAnyFilter": "advanced_alchemy.filters._base",
     "PaginationFilter": "advanced_alchemy.filters._base",
@@ -48,6 +46,9 @@ EXPECTED_SUBMODULE_LOCATIONS: dict[str, str] = {
     "NotExistsFilter": "advanced_alchemy.filters._logical",
     "FilterGroup": "advanced_alchemy.filters._logical",
     "MultiFilter": "advanced_alchemy.filters._logical",
+    "UNSET": "advanced_alchemy.filters._filterset",
+    "BaseFieldFilter": "advanced_alchemy.filters._filterset",
+    "FieldSpec": "advanced_alchemy.filters._filterset",
     "FilterTypes": "advanced_alchemy.filters",
 }
 

@@ -41,6 +41,7 @@ from advanced_alchemy.filters._columns import (
     NullFilter,
     OnBeforeAfter,
 )
+from advanced_alchemy.filters._filterset import UNSET, BaseFieldFilter, FieldSpec
 from advanced_alchemy.filters._logical import (
     ExistsFilter,
     FilterGroup,
@@ -52,10 +53,13 @@ from advanced_alchemy.filters._relationship import RelationshipFilter
 from advanced_alchemy.filters._search import NotInSearchFilter, SearchFilter
 
 __all__ = (
+    "UNSET",
+    "BaseFieldFilter",
     "BeforeAfter",
     "CollectionFilter",
     "ComparisonFilter",
     "ExistsFilter",
+    "FieldSpec",
     "FilterGroup",
     "FilterMap",
     "FilterTypes",
