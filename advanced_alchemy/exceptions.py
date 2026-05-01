@@ -180,6 +180,15 @@ class FilterValidationError(AdvancedAlchemyError):
         joined = "; ".join(f"{name}: {msg}" for name, msg in self.errors.items())
         super().__init__(detail=joined)
 
+    def to_dict(self) -> "dict[str, Any]":
+        """Render an HTTP-friendly payload.
+
+        Frameworks can dump this to JSON directly. Shape::
+
+            {"type": "filter_validation", "errors": {"field": "message", ...}}
+        """
+        return {"type": "filter_validation", "errors": dict(self.errors)}
+
 
 class RepositoryError(AdvancedAlchemyError):
     """Base repository exception type.

@@ -30,7 +30,10 @@ from typing import (
 from sqlalchemy.orm import class_mapper
 from typing_extensions import Self
 
-from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.exceptions import (
+    FilterValidationError,
+    ImproperConfigurationError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -333,6 +336,33 @@ def _filter_for_column(column: "Column[Any]") -> "BaseFieldFilter":
     return StringFilter()
 
 
+def _coerce_or_passthrough(
+    field_filter: "BaseFieldFilter",
+    raw_value: Any,
+    lookup: str,
+    *,
+    allow_typed: bool,
+) -> Any:
+    """Run ``coerce()`` if the raw value looks like an HTTP token.
+
+    When ``allow_typed`` is ``True`` (the :meth:`FilterSet.from_dict`
+    path), values that are neither a string nor a list/tuple of strings
+    are returned verbatim — the caller has already supplied typed input.
+    """
+    if allow_typed and not _looks_like_query_value(raw_value):
+        return raw_value
+    return field_filter.coerce(raw_value, lookup)
+
+
+def _looks_like_query_value(value: Any) -> bool:
+    """True if ``value`` should be passed through ``coerce()``."""
+    if isinstance(value, str):
+        return True
+    if isinstance(value, (list, tuple)):
+        return all(isinstance(item, str) for item in value)
+    return False
+
+
 def _validate_unbound_filter(
     model: "type[DeclarativeBase]",
     name: str,
@@ -406,6 +436,103 @@ class FilterSet:
     Meta: ClassVar[type] = _FilterSetMeta
     _field_specs: ClassVar["Mapping[str, FieldSpec]"] = MappingProxyType({})
     _lookup_index: ClassVar["Mapping[tuple[str, str], FieldSpec]"] = MappingProxyType({})
+
+    def __init__(self) -> None:
+        self._invocations: list[tuple[str, str, Any]] = []
+
+    @property
+    def invocations(self) -> "list[tuple[str, str, Any]]":
+        """Parsed ``(field_name, lookup, coerced_value)`` triples.
+
+        Populated by :meth:`from_query_params` / :meth:`from_dict`. The
+        Phase 5 compilation pass walks this list to emit Tier 1 filters.
+        """
+        return list(self._invocations)
+
+    @classmethod
+    def from_query_params(
+        cls,
+        params: "Mapping[str, Union[str, Sequence[str]]]",
+    ) -> Self:
+        """Build an instance from an HTTP query-parameter mapping.
+
+        Each value is expected to be a string (single key) or a sequence
+        of strings (repeated key); both shapes are passed through to the
+        relevant field filter's :meth:`BaseFieldFilter.coerce`.
+
+        Raises:
+            FilterValidationError: If any value fails coercion or, when
+                ``Meta.strict`` is ``True``, any key fails to match a
+                declared field.
+        """
+        return cls._parse(params, allow_typed=False)
+
+    @classmethod
+    def from_dict(cls, data: "Mapping[str, Any]") -> Self:
+        """Build an instance from a native Python mapping.
+
+        Same key-resolution semantics as :meth:`from_query_params`. The
+        difference is value handling: anything that is not a string or
+        a sequence-of-strings is accepted verbatim, since callers
+        passing native types (a ``date``, a list of ``int``) have
+        already done the typing work the field filter would otherwise
+        do.
+        """
+        return cls._parse(data, allow_typed=True)
+
+    @classmethod
+    def _resolve_query_key(
+        cls,
+        key: str,
+    ) -> "Optional[tuple[str, FieldSpec, str]]":
+        """Match a raw query key against the declared field surface.
+
+        Returns ``(field_name, FieldSpec, lookup)`` or ``None`` when the
+        key matches no declared field.
+        """
+        specs = cls._field_specs
+        if key in specs:
+            spec = specs[key]
+            return key, spec, spec.filter.effective_default_lookup
+        prefix, sep, last = key.rpartition("__")
+        if not sep or prefix not in specs:
+            return None
+        spec = specs[prefix]
+        if last not in spec.filter.lookups:
+            return None
+        return prefix, spec, last
+
+    @classmethod
+    def _parse(
+        cls,
+        params: "Mapping[str, Any]",
+        *,
+        allow_typed: bool,
+    ) -> Self:
+        instance = cls()
+        errors: dict[str, str] = {}
+        invocations: list[tuple[str, str, Any]] = []
+        strict = bool(getattr(cls.Meta, "strict", False))
+
+        for raw_key, raw_value in params.items():
+            match = cls._resolve_query_key(raw_key)
+            if match is None:
+                if strict:
+                    errors[raw_key] = f"Unknown filter key {raw_key!r}."
+                continue
+            name, spec, lookup = match
+            try:
+                value = _coerce_or_passthrough(spec.filter, raw_value, lookup, allow_typed=allow_typed)
+            except ValueError as exc:
+                errors[name] = str(exc)
+                continue
+            invocations.append((name, lookup, value))
+
+        if errors:
+            raise FilterValidationError(errors)
+
+        instance._invocations = invocations
+        return instance
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
