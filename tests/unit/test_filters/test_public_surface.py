@@ -49,6 +49,9 @@ EXPECTED_SUBMODULE_LOCATIONS: "dict[str, str]" = {
     "UNSET": "advanced_alchemy.filters._filterset",
     "BaseFieldFilter": "advanced_alchemy.filters._filterset",
     "FieldSpec": "advanced_alchemy.filters._filterset",
+    "BooleanFilter": "advanced_alchemy.filters._fields",
+    "NumberFilter": "advanced_alchemy.filters._fields",
+    "StringFilter": "advanced_alchemy.filters._fields",
     "FilterTypes": "advanced_alchemy.filters",
 }
 

@@ -402,7 +402,7 @@ operators_map: dict[str, Callable[[Any, Any], ColumnElement[bool]]] = {
     "startswith": op.startswith_op,
     "istartswith": lambda c, v: c.ilike(v + "%"),
     "endswith": op.endswith_op,
-    "iendswith": lambda c, v: c.ilike(v + "%"),
+    "iendswith": lambda c, v: c.ilike("%" + v),
     "dateeq": lambda c, v: cast("Date", c) == v,
 }
 

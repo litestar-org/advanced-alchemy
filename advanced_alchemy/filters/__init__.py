@@ -41,6 +41,7 @@ from advanced_alchemy.filters._columns import (
     NullFilter,
     OnBeforeAfter,
 )
+from advanced_alchemy.filters._fields import BooleanFilter, NumberFilter, StringFilter
 from advanced_alchemy.filters._filterset import UNSET, BaseFieldFilter, FieldSpec
 from advanced_alchemy.filters._logical import (
     ExistsFilter,
@@ -56,6 +57,7 @@ __all__ = (
     "UNSET",
     "BaseFieldFilter",
     "BeforeAfter",
+    "BooleanFilter",
     "CollectionFilter",
     "ComparisonFilter",
     "ExistsFilter",
@@ -72,6 +74,7 @@ __all__ = (
     "NotInSearchFilter",
     "NotNullFilter",
     "NullFilter",
+    "NumberFilter",
     "OnBeforeAfter",
     "OrderBy",
     "PaginationFilter",
@@ -80,6 +83,7 @@ __all__ = (
     "StatementFilter",
     "StatementFilterT",
     "StatementTypeT",
+    "StringFilter",
 )
 
 
