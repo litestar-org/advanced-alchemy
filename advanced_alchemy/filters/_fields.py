@@ -644,6 +644,7 @@ class OrderingFilter(BaseFieldFilter):
 
     supported_lookups: ClassVar[frozenset[str]] = frozenset({"exact"})
     default_lookup: ClassVar[str] = "exact"
+    binds_to_column: ClassVar[bool] = False
 
     def __init__(
         self,

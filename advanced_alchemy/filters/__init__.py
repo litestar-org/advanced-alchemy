@@ -53,7 +53,12 @@ from advanced_alchemy.filters._fields import (
     StringFilter,
     UUIDFilter,
 )
-from advanced_alchemy.filters._filterset import UNSET, BaseFieldFilter, FieldSpec
+from advanced_alchemy.filters._filterset import (
+    UNSET,
+    BaseFieldFilter,
+    FieldSpec,
+    FilterSet,
+)
 from advanced_alchemy.filters._logical import (
     ExistsFilter,
     FilterGroup,
@@ -79,6 +84,7 @@ __all__ = (
     "FieldSpec",
     "FilterGroup",
     "FilterMap",
+    "FilterSet",
     "FilterTypes",
     "InAnyFilter",
     "LimitOffset",
