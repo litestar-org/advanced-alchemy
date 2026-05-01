@@ -14,6 +14,7 @@ Covers:
   pass.
 """
 
+import enum
 from datetime import date, datetime
 from decimal import Decimal
 from typing import ClassVar
@@ -28,6 +29,7 @@ from advanced_alchemy.filters import (
     BooleanFilter,
     DateFilter,
     DateTimeFilter,
+    EnumFilter,
     FilterSet,
     NumberFilter,
     OrderingFilter,
@@ -313,3 +315,100 @@ class TestNumericTypes:
     def test_decimal_coerced(self) -> None:
         fs = _MoneyFilter.from_query_params({"amount__gt": "10.50"})
         assert fs.invocations == [("amount", "gt", Decimal("10.50"))]
+
+
+class _Status(enum.Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+
+
+class _StatusBase(DeclarativeBase):
+    pass
+
+
+class _Ticket(_StatusBase):
+    __tablename__ = "_fsp_ticket"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    status: Mapped[str] = mapped_column(String(10))
+    ref: Mapped[str] = mapped_column(String(36))
+    when: Mapped[date] = mapped_column()
+
+
+class _TicketFilter(FilterSet):
+    status = EnumFilter(enum=_Status, lookups=["exact", "in"])
+    ref = UUIDFilter(lookups=["exact"])
+    when = DateFilter(lookups=["exact", "year"])
+
+    class Meta:
+        model = _Ticket
+
+
+class TestEdgeCases:
+    def test_malformed_uuid_aggregates_under_field_name(self) -> None:
+        with pytest.raises(FilterValidationError) as ei:
+            _TicketFilter.from_query_params({"ref": "not-a-uuid"})
+        assert "ref" in ei.value.errors
+        assert "uuid" in ei.value.errors["ref"].lower()
+
+    def test_malformed_date_aggregates(self) -> None:
+        with pytest.raises(FilterValidationError) as ei:
+            _TicketFilter.from_query_params({"when": "march"})
+        assert "when" in ei.value.errors
+
+    def test_malformed_year_aggregates(self) -> None:
+        with pytest.raises(FilterValidationError) as ei:
+            _TicketFilter.from_query_params({"when__year": "abc"})
+        assert "when" in ei.value.errors
+
+    def test_enum_by_value(self) -> None:
+        fs = _TicketFilter.from_query_params({"status": "open"})
+        assert fs.invocations == [("status", "exact", _Status.OPEN)]
+
+    def test_enum_by_name(self) -> None:
+        fs = _TicketFilter.from_query_params({"status": "OPEN"})
+        assert fs.invocations == [("status", "exact", _Status.OPEN)]
+
+    def test_enum_unknown_aggregates(self) -> None:
+        with pytest.raises(FilterValidationError) as ei:
+            _TicketFilter.from_query_params({"status": "purple"})
+        assert "status" in ei.value.errors
+
+    def test_enum_in_csv(self) -> None:
+        fs = _TicketFilter.from_query_params({"status__in": "open,closed"})
+        assert fs.invocations == [("status", "in", [_Status.OPEN, _Status.CLOSED])]
+
+    def test_uppercase_lookup_falls_through_to_default(self) -> None:
+        """Lookups are case-sensitive — ``ICONTAINS`` is not the same as ``icontains``.
+
+        The trailing token doesn't match a known lookup, so the entire
+        key is treated as a candidate field name. Since no such field
+        exists, the key is silently ignored under the default
+        non-strict mode.
+        """
+        fs = PostFilter.from_query_params({"title__ICONTAINS": "py"})
+        assert fs.invocations == []
+
+    def test_unsupported_lookup_treated_as_unknown_key(self) -> None:
+        """A field declared with a subset of lookups won't match the rest.
+
+        ``title`` here only enables ``exact`` / ``icontains`` / ``in``;
+        ``startswith`` is unsupported, so the trailing token cannot
+        attach to the field. The key is silently ignored.
+        """
+        fs = PostFilter.from_query_params({"title__startswith": "py"})
+        assert fs.invocations == []
+
+    def test_unsupported_lookup_strict_mode_reports(self) -> None:
+        with pytest.raises(FilterValidationError) as ei:
+            StrictPostFilter.from_query_params({"title__startswith": "py"})
+        assert "title__startswith" in ei.value.errors
+
+    def test_empty_value_for_in_lookup_aggregates(self) -> None:
+        with pytest.raises(FilterValidationError) as ei:
+            PostFilter.from_query_params({"title__in": ""})
+        assert "title" in ei.value.errors
+
+    def test_to_filters_index_consistency_under_subclassing(self) -> None:
+        """Subclasses inherit parent invocations parsing too."""
+        fs = StrictPostFilter.from_query_params({"title": "x"})
+        assert fs.invocations == [("title", "exact", "x")]
