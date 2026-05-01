@@ -32,6 +32,8 @@ from advanced_alchemy.filters._fields import (
     DateTimeFilter,
     EnumFilter,
     NumberFilter,
+    OrderingApply,
+    OrderingFilter,
     StringFilter,
     UUIDFilter,
 )
@@ -604,6 +606,117 @@ class TestPhase33ReExports:
         ["DateFilter", "DateTimeFilter", "UUIDFilter", "EnumFilter"],
     )
     def test_field_filter_importable_from_package(self, name: str) -> None:
+        from advanced_alchemy import filters
+
+        assert getattr(filters, name) is not None
+
+
+class TestOrderingFilter:
+    def test_requires_allowed_argument(self) -> None:
+        with pytest.raises(TypeError):
+            OrderingFilter()  # type: ignore[call-arg]
+
+    def test_stores_allowed_fields(self) -> None:
+        flt = OrderingFilter(allowed=["created_at", "title"])
+        assert flt.allowed == ("created_at", "title")
+
+    def test_coerce_single_ascending(self) -> None:
+        flt = OrderingFilter(allowed=["created_at"])
+        assert flt.coerce("created_at", "exact") == [("created_at", "asc")]
+
+    def test_coerce_single_descending(self) -> None:
+        flt = OrderingFilter(allowed=["created_at"])
+        assert flt.coerce("-created_at", "exact") == [("created_at", "desc")]
+
+    def test_coerce_mixed_direction_list(self) -> None:
+        flt = OrderingFilter(allowed=["created_at", "title"])
+        result = flt.coerce("-created_at,title", "exact")
+        assert result == [("created_at", "desc"), ("title", "asc")]
+
+    def test_coerce_strips_whitespace(self) -> None:
+        flt = OrderingFilter(allowed=["created_at", "title"])
+        assert flt.coerce(" -created_at , title ", "exact") == [
+            ("created_at", "desc"),
+            ("title", "asc"),
+        ]
+
+    def test_coerce_repeated_keys_supported(self) -> None:
+        flt = OrderingFilter(allowed=["created_at", "title"])
+        assert flt.coerce(["-created_at", "title"], "exact") == [
+            ("created_at", "desc"),
+            ("title", "asc"),
+        ]
+
+    def test_coerce_rejects_disallowed_field(self) -> None:
+        flt = OrderingFilter(allowed=["created_at"])
+        with pytest.raises(ValueError) as ei:
+            flt.coerce("password", "exact")
+        assert "password" in str(ei.value)
+
+    def test_coerce_rejects_empty(self) -> None:
+        flt = OrderingFilter(allowed=["created_at"])
+        with pytest.raises(ValueError):
+            flt.coerce("", "exact")
+
+    def test_compile_returns_ordering_apply(self) -> None:
+        flt = OrderingFilter(allowed=["created_at", "title"])
+        result = flt.compile(("order_by",), "exact", [("created_at", "desc"), ("title", "asc")])
+        assert isinstance(result, OrderingApply)
+        assert result.orderings == [("created_at", "desc"), ("title", "asc")]
+
+    def test_compile_path_irrelevant(self) -> None:
+        flt = OrderingFilter(allowed=["created_at"])
+        result = flt.compile(("anything",), "exact", [("created_at", "asc")])
+        assert isinstance(result, OrderingApply)
+
+
+class TestOrderingApplySQL:
+    """Verify ``OrderingApply`` chains ``ORDER BY`` clauses correctly."""
+
+    def test_single_field_ascending(self) -> None:
+        from sqlalchemy import Integer, String, select
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+        class Base(DeclarativeBase):
+            pass
+
+        class Post(Base):
+            __tablename__ = "_oa_posts_single"
+            id: Mapped[int] = mapped_column(Integer, primary_key=True)
+            title: Mapped[str] = mapped_column(String)
+
+        flt = OrderingApply(orderings=[("title", "asc")])
+        stmt = flt.append_to_statement(select(Post), Post)
+        rendered = str(stmt.compile())
+        assert "ORDER BY" in rendered.upper()
+        assert "title" in rendered
+
+    def test_multi_field_chained(self) -> None:
+        from sqlalchemy import Integer, String, select
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+        class Base(DeclarativeBase):
+            pass
+
+        class Post(Base):
+            __tablename__ = "_oa_posts_multi"
+            id: Mapped[int] = mapped_column(Integer, primary_key=True)
+            title: Mapped[str] = mapped_column(String)
+            created_at: Mapped[int] = mapped_column(Integer)
+
+        flt = OrderingApply(orderings=[("created_at", "desc"), ("title", "asc")])
+        stmt = flt.append_to_statement(select(Post), Post)
+        rendered = str(stmt.compile())
+        assert "ORDER BY" in rendered.upper()
+        assert rendered.lower().count("order by") == 1
+        assert "created_at" in rendered.lower()
+        assert "desc" in rendered.lower()
+        assert "title" in rendered.lower()
+
+
+class TestPhase34ReExports:
+    @pytest.mark.parametrize("name", ["OrderingFilter", "OrderingApply"])
+    def test_filter_importable_from_package(self, name: str) -> None:
         from advanced_alchemy import filters
 
         assert getattr(filters, name) is not None

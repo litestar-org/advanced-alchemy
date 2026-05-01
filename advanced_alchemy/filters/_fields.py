@@ -8,7 +8,7 @@ elsewhere (Phase 5 compilation).
 """
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from enum import Enum
@@ -16,10 +16,11 @@ from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
+    Literal,
     cast,
 )
 
-from sqlalchemy import ColumnElement, extract
+from sqlalchemy import ColumnElement, Select, extract
 
 from advanced_alchemy.filters._base import ModelT, StatementFilter, StatementTypeT
 from advanced_alchemy.filters._columns import (
@@ -48,6 +49,8 @@ __all__ = (
     "DateTimeFilter",
     "EnumFilter",
     "NumberFilter",
+    "OrderingApply",
+    "OrderingFilter",
     "StringFilter",
     "UUIDFilter",
 )
@@ -604,3 +607,87 @@ class EnumFilter(BaseFieldFilter):
             return _null_leaf(field_name, bool(value))
         msg = f"EnumFilter has no compile rule for lookup {lookup!r}."
         raise ValueError(msg)
+
+
+@dataclass
+class OrderingApply(StatementFilter):
+    """Apply a chain of ``ORDER BY`` clauses to a SELECT statement.
+
+    The ``orderings`` list is preserved in order; SQLAlchemy collapses
+    repeated ``.order_by()`` calls into one ``ORDER BY`` clause with the
+    columns in declaration order, which is what callers want.
+    """
+
+    orderings: list[tuple[str, Literal["asc", "desc"]]] = field(default_factory=list)
+    """Sequence of ``(field_name, direction)`` pairs to apply."""
+
+    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
+        if not isinstance(statement, Select) or not self.orderings:
+            return statement
+        select_stmt: Select[Any] = statement
+        for field_name, direction in self.orderings:
+            column = self._get_instrumented_attr(model, field_name)
+            select_stmt = select_stmt.order_by(
+                column.desc() if direction == "desc" else column.asc(),
+            )
+        return cast("StatementTypeT", select_stmt)
+
+
+class OrderingFilter(BaseFieldFilter):
+    """Field filter for declarative ``ORDER BY`` declarations.
+
+    Special-case Tier 2 filter — does not participate in the standard
+    lookup catalog. Coerces a comma-separated value (with ``-`` prefix
+    for descending) into a list of ``(field, direction)`` pairs and
+    compiles them into a single :class:`OrderingApply` instance.
+    """
+
+    supported_lookups: ClassVar[frozenset[str]] = frozenset({"exact"})
+    default_lookup: ClassVar[str] = "exact"
+
+    def __init__(
+        self,
+        *,
+        allowed: "Sequence[str]",
+        default: Any = UNSET,
+    ) -> None:
+        if not allowed:
+            msg = "OrderingFilter requires a non-empty 'allowed' list."
+            raise ValueError(msg)
+        self.allowed: tuple[str, ...] = tuple(allowed)
+        self._allowed_set: frozenset[str] = frozenset(self.allowed)
+        super().__init__(lookups=None, default=default)
+
+    def coerce(
+        self,
+        raw: "Union[str, Sequence[str]]",
+        lookup: str,
+    ) -> list[tuple[str, Literal["asc", "desc"]]]:
+        tokens = _split_csv(raw)
+        if not tokens:
+            msg = "OrderingFilter requires at least one field."
+            raise ValueError(msg)
+        result: list[tuple[str, Literal["asc", "desc"]]] = []
+        for token in tokens:
+            if token.startswith("-"):
+                name = token[1:].strip()
+                direction: Literal["asc", "desc"] = "desc"
+            else:
+                name = token.strip()
+                direction = "asc"
+            if not name:
+                msg = "OrderingFilter received an empty field name."
+                raise ValueError(msg)
+            if name not in self._allowed_set:
+                msg = f"{name!r} is not in OrderingFilter.allowed: {sorted(self.allowed)}."
+                raise ValueError(msg)
+            result.append((name, direction))
+        return result
+
+    def compile(
+        self,
+        path: tuple[str, ...],
+        lookup: str,
+        value: Any,
+    ) -> "StatementFilter":
+        return OrderingApply(orderings=list(value))

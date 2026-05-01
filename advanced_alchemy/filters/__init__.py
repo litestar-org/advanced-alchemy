@@ -48,6 +48,8 @@ from advanced_alchemy.filters._fields import (
     DateTimeFilter,
     EnumFilter,
     NumberFilter,
+    OrderingApply,
+    OrderingFilter,
     StringFilter,
     UUIDFilter,
 )
@@ -90,6 +92,8 @@ __all__ = (
     "NumberFilter",
     "OnBeforeAfter",
     "OrderBy",
+    "OrderingApply",
+    "OrderingFilter",
     "PaginationFilter",
     "RelationshipFilter",
     "SearchFilter",
