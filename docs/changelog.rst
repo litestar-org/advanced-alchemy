@@ -3,6 +3,49 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.10.0
+    :date: Unreleased
+
+    .. change:: declarative ``FilterSet`` and correlated relationship filtering
+        :type: feature
+        :issue: 364 505 564
+
+        Adds two complementary filter surfaces. ``RelationshipFilter`` is a
+        new engine-level primitive that emits a correlated ``EXISTS`` subquery
+        for one-to-many, many-to-many (via ``secondary``), and arbitrarily
+        nested relationship paths; pass ``negate=True`` for ``NOT EXISTS``.
+        ``CollectionFilter`` now detects relationship attributes and delegates
+        to ``RelationshipFilter`` over the related primary key, so M2M
+        membership filters compile to correct SQL (closes #505).
+        ``MultiFilter`` accepts a new ``"relationship"`` filter type so the
+        JSON payload format can express relationship correlation.
+
+        ``FilterSet`` is a class-based declarative facade. Subclass it,
+        declare filter fields with ``StringFilter``/``NumberFilter``/
+        ``BooleanFilter``/``DateFilter``/``DateTimeFilter``/``UUIDFilter``/
+        ``EnumFilter``/``OrderingFilter``, and parse a query-parameter
+        mapping with ``FilterSet.from_query_params`` / ``from_dict``. The
+        same instance produces compiled Tier 1 filters via ``.to_filters()``
+        and OpenAPI 3 parameter objects via ``.to_openapi_parameters()``.
+        Relationship traversal uses double-underscore lookup syntax
+        (``author__name__iexact``); ``Meta.allowed_relationships`` and
+        ``Meta.max_relationship_depth`` bound the surface, and
+        ``Meta.strict`` toggles unknown-key handling. Both Tier 1 and
+        Tier 2 are additive — existing imperative use of ``CollectionFilter``,
+        ``SearchFilter``, ``ComparisonFilter``, and ``MultiFilter`` is
+        unchanged. Closes #364, #505; resolves the design proposed in
+        the #564 comment by ``MortezaKarimi77``.
+
+    .. change:: re-organise ``advanced_alchemy.filters`` into a package
+        :type: feature
+
+        ``advanced_alchemy/filters.py`` becomes ``advanced_alchemy/filters/``
+        with focused submodules (``_base``, ``_columns``, ``_search``,
+        ``_pagination``, ``_logical``, ``_relationship``, ``_fields``,
+        ``_filterset``). Every previously public name is re-exported from
+        ``advanced_alchemy.filters`` so existing imports are unaffected.
+
+
 .. changelog:: 1.9.3
     :date: 2026-04-08
 
