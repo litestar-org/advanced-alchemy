@@ -26,6 +26,7 @@ NON_EXECUTABLE_DOCS = (
     "usage/frameworks/litestar.rst",
     "usage/frameworks/sanic.rst",
     "usage/frameworks/starlette.rst",
+    "usage/repositories/relationship-filtering.rst",
     "usage/routing.rst",
 )
 

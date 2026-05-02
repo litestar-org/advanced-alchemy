@@ -13,7 +13,7 @@ resolution-markers = [
 [options]
 
 [options.exclude-newer-package]
-mysql-connector-python = "2026-01-21T05:00:00Z"
+mysql-connector-python = "2026-01-21T00:00:00Z"
 
 [[package]]
 name = "accessible-pygments"
