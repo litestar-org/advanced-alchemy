@@ -308,6 +308,56 @@ def test_filterset_e2e_two_level_relationship_path_sqlite() -> None:
     _FsBase.metadata.drop_all(engine)
 
 
+def test_filterset_e2e_two_level_relationship_emits_single_select_sqlite() -> None:
+    """A depth-2 traversal must still compile to one ``SELECT``.
+
+    Companion to the depth-1 assertion in
+    ``test_filterset_emits_single_select_sync``. Confirms nested
+    ``RelationshipFilter`` wrapping does not introduce extra round trips.
+    """
+    from sqlalchemy import create_engine, event
+    from sqlalchemy.orm import Session as OrmSession
+
+    engine = create_engine("sqlite:///:memory:")
+    _FsBase.metadata.create_all(engine)
+
+    try:
+        with OrmSession(engine) as session:
+            usa = _FsCountry(id=1, code="US")
+            org = _FsOrg(id=1, name="A", country=usa)
+            author = _FsAuthor(id=1, name="X", org=org)
+            session.add_all(
+                [usa, org, author, _FsPost(id=1, title="hello", views=10, author=author)],
+            )
+            session.commit()
+
+            instance = _PostFilter.from_query_params(
+                {"author__org__country__code__in": "US"},
+            )
+            statement_filters = instance.to_filters()
+
+            stmt = select(_FsPost)
+            for sf in statement_filters:
+                stmt = sf.append_to_statement(stmt, _FsPost)
+
+            statements: list[str] = []
+
+            def _record_select(_conn: Any, _cursor: Any, sql: str, *_args: Any, **_kwargs: Any) -> None:
+                if sql.lstrip().upper().startswith("SELECT"):
+                    statements.append(sql)
+
+            event.listen(engine, "before_cursor_execute", _record_select)
+            try:
+                rows = session.execute(stmt).scalars().all()
+            finally:
+                event.remove(engine, "before_cursor_execute", _record_select)
+
+            assert {p.title for p in rows} == {"hello"}
+            assert len(statements) == 1, statements
+    finally:
+        _FsBase.metadata.drop_all(engine)
+
+
 def test_filterset_e2e_unfiltered_yields_full_table_sqlite() -> None:
     """Empty query params → no filters → unfiltered SELECT returns all rows."""
     from sqlalchemy import create_engine
