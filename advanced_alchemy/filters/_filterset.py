@@ -472,7 +472,7 @@ def _looks_like_query_value(value: Any) -> bool:
     if isinstance(value, str):
         return True
     if isinstance(value, (list, tuple)):
-        return all(isinstance(item, str) for item in value)
+        return all(isinstance(item, str) for item in cast("Sequence[Any]", value))
     return False
 
 

@@ -87,6 +87,7 @@ def _split_csv(raw: "Union[str, Sequence[str]]") -> list[str]:
     of values from repeated keys (``?x=a&x=b``); returns the union with
     blank tokens dropped so trailing commas don't produce empty entries.
     """
+    items: list[str]
     if isinstance(raw, str):
         items = [piece.strip() for piece in raw.split(",")]
     else:
@@ -691,7 +692,9 @@ class OrderingApply(StatementFilter):
     columns in declaration order, which is what callers want.
     """
 
-    orderings: list[tuple[str, Literal["asc", "desc"]]] = field(default_factory=list)
+    orderings: "list[tuple[str, Literal['asc', 'desc']]]" = field(
+        default_factory=list["tuple[str, Literal['asc', 'desc']]"],
+    )
     """Sequence of ``(field_name, direction)`` pairs to apply."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
