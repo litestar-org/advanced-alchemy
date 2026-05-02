@@ -80,6 +80,7 @@ def test_public_name_resolves_to_same_object_via_submodule(name: str) -> None:
     expected_module = EXPECTED_SUBMODULE_LOCATIONS.get(name)
     if expected_module is None:
         pytest.skip(f"No expected submodule location declared for {name}")
+    assert expected_module is not None
     if expected_module == "advanced_alchemy.filters":
         return
     submodule = importlib.import_module(expected_module)

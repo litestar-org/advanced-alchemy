@@ -12,10 +12,10 @@ covered separately in ``test_field_filters.py``.
 """
 
 from dataclasses import FrozenInstanceError
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import pytest
-from sqlalchemy import Integer
+from sqlalchemy import Column, Integer
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from advanced_alchemy.exceptions import (
@@ -105,7 +105,7 @@ class TestFieldSpec:
     def test_is_frozen(self) -> None:
         spec = FieldSpec(
             path=("id",),
-            column=_Thing.__table__.c.id,
+            column=cast("Column[Any]", _Thing.__table__.c.id),
             filter=_ConcreteFilter(),
         )
         with pytest.raises(FrozenInstanceError):
@@ -113,14 +113,18 @@ class TestFieldSpec:
 
     def test_carries_path_column_filter(self) -> None:
         flt = _ConcreteFilter()
-        column = _Thing.__table__.c.id
+        column = cast("Column[Any]", _Thing.__table__.c.id)
         spec = FieldSpec(path=("id",), column=column, filter=flt)
         assert spec.path == ("id",)
         assert spec.column is column
         assert spec.filter is flt
 
     def test_path_must_be_tuple(self) -> None:
-        spec = FieldSpec(path=("a", "b"), column=_Thing.__table__.c.id, filter=_ConcreteFilter())
+        spec = FieldSpec(
+            path=("a", "b"),
+            column=cast("Column[Any]", _Thing.__table__.c.id),
+            filter=_ConcreteFilter(),
+        )
         assert isinstance(spec.path, tuple)
 
 

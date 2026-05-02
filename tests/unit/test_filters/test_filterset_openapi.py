@@ -259,7 +259,7 @@ def _param_named(instance: FilterSet, name: str) -> dict:
     for param in instance.to_openapi_parameters():
         if param["name"] == name:
             return param
-    pytest.fail(f"No parameter named {name!r} in {instance!r}")
+    raise AssertionError(f"No parameter named {name!r} in {instance!r}")
 
 
 class _GoldenStatus(enum.Enum):
