@@ -233,6 +233,86 @@ class BaseFieldFilter(ABC):
             wrapping is handled by the FilterSet's compilation pass.
         """
 
+    def openapi_parameters(self, *, name: str) -> "list[dict[str, Any]]":
+        """Build OpenAPI 3 parameter objects for this filter.
+
+        Emits one parameter per enabled lookup. The default lookup uses
+        the bare ``name``; non-default lookups use ``name__lookup``. The
+        produced parameter is suitable for direct inclusion in an
+        operation's ``parameters: [...]`` list.
+
+        Subclasses whose declarative shape is not "one parameter per
+        lookup" (e.g. :class:`OrderingFilter`) override this method
+        wholesale.
+        """
+        default = self.effective_default_lookup
+        params: list[dict[str, Any]] = []
+        for lookup in sorted(self.lookups):
+            param_name = name if lookup == default else f"{name}__{lookup}"
+            params.append(self._build_openapi_parameter(name=param_name, lookup=lookup))
+        return params
+
+    def _build_openapi_parameter(self, *, name: str, lookup: str) -> "dict[str, Any]":
+        """Wrap the per-lookup schema with name, location, and array hints."""
+        schema = self._openapi_schema(lookup)
+        base_name = name.removesuffix(f"__{lookup}")
+        description = _describe_lookup(field_name=base_name, lookup=lookup)
+        param: dict[str, Any] = {
+            "name": name,
+            "in": "query",
+            "required": False,
+            "description": description,
+            "schema": schema,
+        }
+        if schema.get("type") == "array":
+            param["style"] = "form"
+            param["explode"] = False
+        return param
+
+    def _openapi_schema(self, lookup: str) -> "dict[str, Any]":
+        """Return the OpenAPI ``schema`` value for ``lookup``.
+
+        Concrete subclasses implement this; the base raises so a missing
+        override is loud rather than silent. Overridden top-to-bottom by
+        :class:`OrderingFilter`, which bypasses the per-lookup loop.
+        """
+        msg = f"{type(self).__name__} does not implement _openapi_schema."
+        raise NotImplementedError(msg)
+
+
+_LOOKUP_DESCRIPTIONS: "Mapping[str, str]" = MappingProxyType(
+    {
+        "exact": "equals the given value.",
+        "iexact": "equals the given value (case-insensitive).",
+        "contains": "contains the given substring.",
+        "icontains": "contains the given substring (case-insensitive).",
+        "startswith": "starts with the given prefix.",
+        "istartswith": "starts with the given prefix (case-insensitive).",
+        "endswith": "ends with the given suffix.",
+        "iendswith": "ends with the given suffix (case-insensitive).",
+        "in": "is in the comma-separated list of values.",
+        "not_in": "is not in the comma-separated list of values.",
+        "isnull": "is null when true, not null when false.",
+        "gt": "is greater than the given value.",
+        "gte": "is greater than or equal to the given value.",
+        "lt": "is less than the given value.",
+        "lte": "is less than or equal to the given value.",
+        "between": "is between the two comma-separated values (inclusive).",
+        "year": "year-part equals the given integer.",
+        "month": "month-part equals the given integer.",
+        "day": "day-part equals the given integer.",
+        "hour": "hour-part equals the given integer.",
+        "minute": "minute-part equals the given integer.",
+        "second": "second-part equals the given integer.",
+    }
+)
+
+
+def _describe_lookup(*, field_name: str, lookup: str) -> str:
+    """Format a one-line description for a (field, lookup) pair."""
+    detail = _LOOKUP_DESCRIPTIONS.get(lookup, "matches the given value.")
+    return f"Filter where `{field_name}` {detail}"
+
 
 _DEFAULT_MAX_RELATIONSHIP_DEPTH = 2
 
@@ -449,10 +529,10 @@ class FilterSet:
     declared path against ``Meta.model`` at import time and raises
     :class:`ImproperConfigurationError` on any inconsistency.
 
-    The instance methods ``from_query_params`` / ``from_dict`` /
-    ``to_filters`` / ``to_openapi_parameters`` are provided by later
-    phases of the FilterSet roadmap; only the class-creation surface is
-    implemented here.
+    Instances expose :meth:`from_query_params` / :meth:`from_dict` for
+    parsing, :meth:`to_filters` for compilation into Tier 1 statement
+    filters, and :meth:`to_openapi_parameters` for OpenAPI schema
+    generation.
 
     Example::
 
@@ -481,6 +561,25 @@ class FilterSet:
         Phase 5 compilation pass walks this list to emit Tier 1 filters.
         """
         return list(self._invocations)
+
+    def to_openapi_parameters(self) -> "list[dict[str, Any]]":
+        """Build the OpenAPI 3 parameter fragment for this FilterSet.
+
+        Walks ``_field_specs`` in declaration order and concatenates each
+        field filter's contribution from
+        :meth:`BaseFieldFilter.openapi_parameters`. The result is suitable
+        for direct inclusion in an operation's ``parameters: [...]`` list.
+
+        Returns:
+            A list of OpenAPI 3 parameter objects, one per declared
+            ``(field, lookup)`` combination — except :class:`OrderingFilter`,
+            which emits a single parameter whose schema enumerates every
+            allowed ordering value plus the ``-``-prefixed counterpart.
+        """
+        parameters: list[dict[str, Any]] = []
+        for name, spec in self._field_specs.items():
+            parameters.extend(spec.filter.openapi_parameters(name=name))
+        return parameters
 
     def to_filters(self) -> "list[StatementFilter]":
         """Compile parsed invocations into Tier 1 :class:`StatementFilter` instances.

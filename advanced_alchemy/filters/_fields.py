@@ -183,6 +183,13 @@ class StringFilter(BaseFieldFilter):
         msg = f"StringFilter has no compile rule for lookup {lookup!r}."
         raise ValueError(msg)
 
+    def _openapi_schema(self, lookup: str) -> "dict[str, Any]":
+        if lookup == "isnull":
+            return {"type": "boolean"}
+        if lookup in {"in", "not_in"}:
+            return {"type": "array", "items": {"type": "string"}}
+        return {"type": "string"}
+
 
 _NUMERIC_TYPES: tuple[type, ...] = (int, float, Decimal)
 
@@ -283,6 +290,27 @@ class NumberFilter(BaseFieldFilter):
         msg = f"NumberFilter has no compile rule for lookup {lookup!r}."
         raise ValueError(msg)
 
+    def _number_item_schema(self) -> "dict[str, Any]":
+        if self.type_ is int:
+            return {"type": "integer"}
+        if self.type_ is float:
+            return {"type": "number", "format": "double"}
+        return {"type": "number", "format": "decimal"}
+
+    def _openapi_schema(self, lookup: str) -> "dict[str, Any]":
+        if lookup == "isnull":
+            return {"type": "boolean"}
+        if lookup == "between":
+            return {
+                "type": "array",
+                "items": self._number_item_schema(),
+                "minItems": _BETWEEN_PAIR_LENGTH,
+                "maxItems": _BETWEEN_PAIR_LENGTH,
+            }
+        if lookup in {"in", "not_in"}:
+            return {"type": "array", "items": self._number_item_schema()}
+        return self._number_item_schema()
+
 
 class BooleanFilter(BaseFieldFilter):
     """Field filter for boolean columns.
@@ -315,6 +343,9 @@ class BooleanFilter(BaseFieldFilter):
             return _null_leaf(field_name, bool(value))
         msg = f"BooleanFilter has no compile rule for lookup {lookup!r}."
         raise ValueError(msg)
+
+    def _openapi_schema(self, lookup: str) -> "dict[str, Any]":
+        return {"type": "boolean"}
 
 
 @dataclass
@@ -382,6 +413,7 @@ class DateFilter(BaseFieldFilter):
     )
 
     _DATE_PART_LOOKUPS: ClassVar[frozenset[str]] = frozenset({"year", "month", "day"})
+    _OPENAPI_FORMAT: ClassVar[str] = "date"
 
     def _coerce_date(self, raw: str) -> Any:
         token = raw.strip()
@@ -449,6 +481,23 @@ class DateFilter(BaseFieldFilter):
         msg = f"DateFilter has no compile rule for lookup {lookup!r}."
         raise ValueError(msg)
 
+    def _openapi_schema(self, lookup: str) -> "dict[str, Any]":
+        if lookup == "isnull":
+            return {"type": "boolean"}
+        if lookup in self._DATE_PART_LOOKUPS:
+            return {"type": "integer"}
+        item: dict[str, Any] = {"type": "string", "format": self._OPENAPI_FORMAT}
+        if lookup == "between":
+            return {
+                "type": "array",
+                "items": item,
+                "minItems": _BETWEEN_PAIR_LENGTH,
+                "maxItems": _BETWEEN_PAIR_LENGTH,
+            }
+        if lookup in {"in", "not_in"}:
+            return {"type": "array", "items": item}
+        return item
+
 
 class DateTimeFilter(DateFilter):
     """Field filter for ISO-8601 ``datetime`` columns.
@@ -481,6 +530,7 @@ class DateTimeFilter(DateFilter):
     _DATE_PART_LOOKUPS: ClassVar[frozenset[str]] = frozenset(
         {"year", "month", "day", "hour", "minute", "second"},
     )
+    _OPENAPI_FORMAT: ClassVar[str] = "date-time"
 
     def _coerce_date(self, raw: str) -> Any:
         token = raw.strip()
@@ -539,6 +589,14 @@ class UUIDFilter(BaseFieldFilter):
             return _null_leaf(field_name, bool(value))
         msg = f"UUIDFilter has no compile rule for lookup {lookup!r}."
         raise ValueError(msg)
+
+    def _openapi_schema(self, lookup: str) -> "dict[str, Any]":
+        if lookup == "isnull":
+            return {"type": "boolean"}
+        item = {"type": "string", "format": "uuid"}
+        if lookup in {"in", "not_in"}:
+            return {"type": "array", "items": item}
+        return item
 
 
 class EnumFilter(BaseFieldFilter):
@@ -607,6 +665,21 @@ class EnumFilter(BaseFieldFilter):
             return _null_leaf(field_name, bool(value))
         msg = f"EnumFilter has no compile rule for lookup {lookup!r}."
         raise ValueError(msg)
+
+    def _openapi_schema(self, lookup: str) -> "dict[str, Any]":
+        if lookup == "isnull":
+            return {"type": "boolean"}
+        values: list[Any] = [member.value for member in self.enum]
+        sample = values[0] if values else None
+        if isinstance(sample, bool):
+            item: dict[str, Any] = {"type": "boolean", "enum": values}
+        elif isinstance(sample, int):
+            item = {"type": "integer", "enum": values}
+        else:
+            item = {"type": "string", "enum": values}
+        if lookup in {"in", "not_in"}:
+            return {"type": "array", "items": item}
+        return item
 
 
 @dataclass
@@ -692,3 +765,22 @@ class OrderingFilter(BaseFieldFilter):
         value: Any,
     ) -> "StatementFilter":
         return OrderingApply(orderings=list(value))
+
+    def openapi_parameters(self, *, name: str) -> "list[dict[str, Any]]":
+        signed_values: list[str] = []
+        for entry in self.allowed:
+            signed_values.extend((entry, f"-{entry}"))
+        return [
+            {
+                "name": name,
+                "in": "query",
+                "required": False,
+                "description": ("Order results by one or more allowed fields. Prefix a field with '-' for descending."),
+                "schema": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": signed_values},
+                },
+                "style": "form",
+                "explode": False,
+            },
+        ]
