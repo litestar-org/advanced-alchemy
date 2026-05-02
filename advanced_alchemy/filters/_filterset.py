@@ -115,21 +115,21 @@ class FieldSpec:
 
     Built once per ``FilterSet`` subclass at class-creation time and
     frozen so subsequent reads are cheap and tamper-proof.
-
-    Attributes:
-        path: Tuple of attribute names from the FilterSet's ``Meta.model``
-            to the leaf column. A single-element tuple for column fields;
-            longer tuples encode relationship traversal. Empty for
-            special filters that do not bind to a column path.
-        column: The terminal SQLAlchemy ``Column`` reached by ``path``,
-            or ``None`` for filters whose binding is not column-based
-            (e.g. :class:`OrderingFilter`, which validates its own list).
-        filter: The :class:`BaseFieldFilter` instance declared on the class.
     """
 
     path: tuple[str, ...]
+    """Attribute names from the FilterSet's ``Meta.model`` to the leaf
+    column. A single-element tuple for column fields; longer tuples encode
+    relationship traversal. Empty for special filters that do not bind to a
+    column path."""
+
     column: "Optional[Column[Any]]"
+    """The terminal SQLAlchemy ``Column`` reached by ``path``, or ``None``
+    for filters whose binding is not column-based (e.g. :class:`OrderingFilter`,
+    which validates its own list)."""
+
     filter: "BaseFieldFilter"
+    """The :class:`BaseFieldFilter` instance declared on the class."""
 
 
 class BaseFieldFilter(ABC):

@@ -1,6 +1,6 @@
-============================================
+====================================================
 Relationship Filtering and Declarative ``FilterSet``
-============================================
+====================================================
 
 .. versionadded:: 1.10
 
@@ -215,36 +215,66 @@ Query parameters use double-underscore (``__``) to separate the field path
 from the trailing lookup. The bare form (no trailing lookup) uses the field
 filter's default lookup.
 
-================================  ================================  ================================================
-Query parameter                   Compiles to                       SQL effect
-================================  ================================  ================================================
-``?title=hello``                  ``ComparisonFilter("title","eq")``  ``WHERE title = 'hello'``
-``?title__icontains=py``          ``SearchFilter`` (case-insensitive) ``WHERE LOWER(title) LIKE LOWER('%py%')``
-``?views__gt=10``                 ``ComparisonFilter("views","gt")``  ``WHERE views > 10``
-``?views__between=10,99``         ``ComparisonFilter`` (between)      ``WHERE views BETWEEN 10 AND 99``
-``?status__in=draft,published``   ``CollectionFilter``                ``WHERE status IN ('draft','published')``
-``?author__name__iexact=ada``     ``RelationshipFilter`` + ILIKE      ``WHERE EXISTS (... ILIKE 'ada')``
-``?order_by=-views,title``        :class:`OrderingApply`              ``ORDER BY views DESC, title ASC``
-================================  ================================  ================================================
+.. list-table::
+   :header-rows: 1
+   :widths: 30 35 45
+
+   * - Query parameter
+     - Compiles to
+     - SQL effect
+   * - ``?title=hello``
+     - ``ComparisonFilter("title", "eq")``
+     - ``WHERE title = 'hello'``
+   * - ``?title__icontains=py``
+     - ``SearchFilter`` (case-insensitive)
+     - ``WHERE LOWER(title) LIKE LOWER('%py%')``
+   * - ``?views__gt=10``
+     - ``ComparisonFilter("views", "gt")``
+     - ``WHERE views > 10``
+   * - ``?views__between=10,99``
+     - ``ComparisonFilter`` (between)
+     - ``WHERE views BETWEEN 10 AND 99``
+   * - ``?status__in=draft,published``
+     - ``CollectionFilter``
+     - ``WHERE status IN ('draft', 'published')``
+   * - ``?author__name__iexact=ada``
+     - ``RelationshipFilter`` + ILIKE
+     - ``WHERE EXISTS (... ILIKE 'ada')``
+   * - ``?order_by=-views,title``
+     - :class:`OrderingApply`
+     - ``ORDER BY views DESC, title ASC``
 
 Built-in field filters
 ----------------------
 
-================================  ===============================================================
-Filter class                      Lookups
-================================  ===============================================================
-:class:`StringFilter`             ``exact, iexact, contains, icontains, startswith, istartswith,
-                                  endswith, iendswith, in, not_in, isnull``
-:class:`NumberFilter`             ``exact, gt, gte, lt, lte, between, in, not_in, isnull``
-:class:`BooleanFilter`            ``exact, isnull``
-:class:`DateFilter`               ``exact, gt, gte, lt, lte, between, year, month, day, in,
-                                  not_in, isnull``
-:class:`DateTimeFilter`           Adds ``hour, minute, second`` to ``DateFilter``.
-:class:`UUIDFilter`               ``exact, in, not_in, isnull``
-:class:`EnumFilter`               ``exact, in, not_in, isnull`` (accepts member name or value)
-:class:`OrderingFilter`           Comma-separated, ``-`` prefix is descending; restricted by
-                                  ``allowed=[...]``.
-================================  ===============================================================
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - Filter class
+     - Lookups
+   * - :class:`StringFilter`
+     - ``exact``, ``iexact``, ``contains``, ``icontains``, ``startswith``,
+       ``istartswith``, ``endswith``, ``iendswith``, ``in``, ``not_in``,
+       ``isnull``
+   * - :class:`NumberFilter`
+     - ``exact``, ``gt``, ``gte``, ``lt``, ``lte``, ``between``, ``in``,
+       ``not_in``, ``isnull``
+   * - :class:`BooleanFilter`
+     - ``exact``, ``isnull``
+   * - :class:`DateFilter`
+     - ``exact``, ``gt``, ``gte``, ``lt``, ``lte``, ``between``, ``year``,
+       ``month``, ``day``, ``in``, ``not_in``, ``isnull``
+   * - :class:`DateTimeFilter`
+     - Adds ``hour``, ``minute``, ``second`` to :class:`DateFilter`.
+   * - :class:`UUIDFilter`
+     - ``exact``, ``in``, ``not_in``, ``isnull``
+   * - :class:`EnumFilter`
+     - ``exact``, ``in``, ``not_in``, ``isnull`` (accepts member name or
+       value)
+   * - :class:`OrderingFilter`
+     - Comma-separated, ``-`` prefix is descending; restricted by
+       ``allowed=[...]``.
 
 By default a field filter accepts every lookup in its catalog. Pass
 ``lookups=[...]`` to constrain the surface — values outside the explicit list
@@ -267,23 +297,31 @@ Coercion rules:
 Meta options
 ------------
 
-================================  ===============================================================
-``Meta.model``                    *(required)* The :class:`DeclarativeBase` model the FilterSet
-                                  resolves field paths against.
-``Meta.allowed_relationships``    Iterable of relationship segment names that may appear in field
-                                  paths. Empty by default — fields without relationship segments
-                                  always work; declaring ``author__name`` requires ``"author"``
-                                  here.
-``Meta.max_relationship_depth``   Cap on the number of relationship segments in any field path.
-                                  Defaults to ``3`` to bound query plan complexity.
-``Meta.strict``                   When ``True``, any unknown query-parameter key raises
-                                  :class:`FilterValidationError`. Default ``False`` (silently
-                                  ignored).
-``Meta.auto_fields``              Iterable of column names to auto-declare with
-                                  ``auto_lookups`` (saves declaring every column individually).
-``Meta.auto_lookups``             Mapping from column name (or ``"*"``) to a sequence of allowed
-                                  lookups for the ``auto_fields`` declarations.
-================================  ===============================================================
+.. list-table::
+   :header-rows: 0
+   :widths: 35 65
+
+   * - ``Meta.model``
+     - *(required)* The :class:`DeclarativeBase` model the FilterSet
+       resolves field paths against.
+   * - ``Meta.allowed_relationships``
+     - Iterable of relationship segment names that may appear in field
+       paths. Empty by default — fields without relationship segments
+       always work; declaring ``author__name`` requires ``"author"``
+       here.
+   * - ``Meta.max_relationship_depth``
+     - Cap on the number of relationship segments in any field path.
+       Defaults to ``3`` to bound query plan complexity.
+   * - ``Meta.strict``
+     - When ``True``, any unknown query-parameter key raises
+       :class:`FilterValidationError`. Default ``False`` (silently
+       ignored).
+   * - ``Meta.auto_fields``
+     - Iterable of column names to auto-declare with ``auto_lookups``
+       (saves declaring every column individually).
+   * - ``Meta.auto_lookups``
+     - Mapping from column name (or ``"*"``) to a sequence of allowed
+       lookups for the ``auto_fields`` declarations.
 
 Validation runs at import time. The most common errors:
 
