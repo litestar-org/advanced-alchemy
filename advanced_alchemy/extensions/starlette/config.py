@@ -21,6 +21,7 @@ from advanced_alchemy.config import EngineConfig as _EngineConfig
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig as _SQLAlchemySyncConfig
 from advanced_alchemy.routing.context import reset_routing_context
+from advanced_alchemy.routing.maker import adispose_session_maker, dispose_session_maker
 from advanced_alchemy.service import schema_dump
 
 if TYPE_CHECKING:
@@ -245,19 +246,18 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
     def create_session_maker(self) -> Callable[[], "AsyncSession"]:
         """Get a session maker. If none exists yet, create one.
 
+        Preserves ``engine_instance`` caching and then delegates to the
+        base-class implementation so that listener registration
+        (file-object, timestamp, cache) runs. See issue #709.
+
         Returns:
             Callable[[], Session]: Session factory used by the plugin.
         """
         if self.session_maker:
             return self.session_maker
-
-        session_kws = self.session_config_dict
         if self.engine_instance is None:
             self.engine_instance = self.get_engine()
-        if session_kws.get("bind") is None:
-            session_kws["bind"] = self.engine_instance
-        self.session_maker = self.session_maker_class(**session_kws)
-        return self.session_maker
+        return super().create_session_maker()
 
     async def session_handler(
         self, session: "AsyncSession", request: "Request", response: "Response"
@@ -334,6 +334,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """Close the engine."""
         if self.engine_instance is not None:
             await self.engine_instance.dispose()
+        await adispose_session_maker(self.session_maker)
 
     async def on_shutdown(self) -> None:  # pragma: no cover
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
@@ -408,19 +409,18 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     def create_session_maker(self) -> Callable[[], "Session"]:
         """Get a session maker. If none exists yet, create one.
 
+        Preserves ``engine_instance`` caching and then delegates to the
+        base-class implementation so that listener registration runs.
+        See issue #709.
+
         Returns:
             Callable[[], Session]: Session factory used by the plugin.
         """
         if self.session_maker:
             return self.session_maker
-
-        session_kws = self.session_config_dict
         if self.engine_instance is None:
             self.engine_instance = self.get_engine()
-        if session_kws.get("bind") is None:
-            session_kws["bind"] = self.engine_instance
-        self.session_maker = self.session_maker_class(**session_kws)
-        return self.session_maker
+        return super().create_session_maker()
 
     async def session_handler(
         self, session: "Session", request: "Request", response: "Response"
@@ -497,6 +497,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         """Close the engines."""
         if self.engine_instance is not None:
             await run_in_threadpool(self.engine_instance.dispose)
+        await run_in_threadpool(lambda: dispose_session_maker(self.session_maker))
 
     async def on_shutdown(self) -> None:  # pragma: no cover
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
