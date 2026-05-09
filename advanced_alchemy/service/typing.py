@@ -553,6 +553,7 @@ __all__ = (
     "MSGSPEC_INSTALLED",
     "PYDANTIC_INSTALLED",
     "PYDANTIC_USE_FAILFAST",
+    "SQLMODEL_INSTALLED",
     "UNSET",
     "AttrsInstance",
     "AttrsLike",
