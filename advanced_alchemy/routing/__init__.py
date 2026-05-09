@@ -44,8 +44,8 @@ from advanced_alchemy.routing.context import (
 from advanced_alchemy.routing.maker import (
     RoutingAsyncSessionMaker,
     RoutingSyncSessionMaker,
-    adispose_session_maker,
-    dispose_session_maker,
+    dispose_session_maker_async,
+    dispose_session_maker_sync,
 )
 from advanced_alchemy.routing.selectors import RandomSelector, ReplicaSelector, RoundRobinSelector
 from advanced_alchemy.routing.session import RoutingAsyncSession, RoutingSyncSession
@@ -58,8 +58,8 @@ __all__ = (
     "RoutingAsyncSessionMaker",
     "RoutingSyncSession",
     "RoutingSyncSessionMaker",
-    "adispose_session_maker",
-    "dispose_session_maker",
+    "dispose_session_maker_async",
+    "dispose_session_maker_sync",
     "force_primary_var",
     "primary_context",
     "replica_context",

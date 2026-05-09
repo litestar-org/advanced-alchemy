@@ -22,7 +22,7 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.common import (
 )
 from advanced_alchemy.extensions.litestar.plugins.init.config.engine import EngineConfig
 from advanced_alchemy.routing.context import reset_routing_context
-from advanced_alchemy.routing.maker import dispose_session_maker
+from advanced_alchemy.routing.maker import dispose_session_maker_sync
 
 logger = logging.getLogger("advanced_alchemy.extensions.litestar")
 
@@ -230,7 +230,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 engine = deps[self.engine_dependency_key]
                 if hasattr(engine, "dispose"):
                     cast("Engine", engine).dispose()
-            dispose_session_maker(self.session_maker)
+            dispose_session_maker_sync(self.session_maker)
 
     def provide_engine(self, state: "State") -> "Engine":
         """Create an engine instance.

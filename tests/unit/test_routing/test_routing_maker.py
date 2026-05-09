@@ -14,8 +14,8 @@ from advanced_alchemy.config.routing import RoutingConfig, RoutingStrategy
 from advanced_alchemy.routing.maker import (
     RoutingAsyncSessionMaker,
     RoutingSyncSessionMaker,
-    adispose_session_maker,
-    dispose_session_maker,
+    dispose_session_maker_async,
+    dispose_session_maker_sync,
 )
 from advanced_alchemy.routing.selectors import RandomSelector, RoundRobinSelector
 from advanced_alchemy.routing.session import RoutingSyncSession
@@ -456,10 +456,10 @@ def test_async_session_maker_stores_session_config(
     assert maker._session_config == session_config
 
 
-def test_dispose_session_maker_disposes_routing_sync_maker(
+def test_dispose_session_maker_sync_disposes_routing_sync_maker(
     routing_config: RoutingConfig,
 ) -> None:
-    """dispose_session_maker calls close_all on a sync routing maker."""
+    """dispose_session_maker_sync calls close_all on a sync routing maker."""
     mock_engines: list[Any] = []
 
     def create_mock_engine(url: str, **kwargs: Any) -> Engine:
@@ -472,30 +472,30 @@ def test_dispose_session_maker_disposes_routing_sync_maker(
         create_engine_callable=create_mock_engine,
     )
 
-    dispose_session_maker(maker)
+    dispose_session_maker_sync(maker)
 
     assert len(mock_engines) == 3
     for engine in mock_engines:
         engine.dispose.assert_called_once()
 
 
-def test_dispose_session_maker_noop_for_non_routing_maker() -> None:
-    """dispose_session_maker is a no-op for non-routing makers."""
+def test_dispose_session_maker_sync_noop_for_non_routing_maker() -> None:
+    """dispose_session_maker_sync is a no-op for non-routing makers."""
     plain = MagicMock()
-    dispose_session_maker(plain)
+    dispose_session_maker_sync(plain)
     plain.close_all.assert_not_called()
 
 
-def test_dispose_session_maker_noop_for_none() -> None:
-    """dispose_session_maker handles a None session maker without raising."""
-    dispose_session_maker(None)
+def test_dispose_session_maker_sync_noop_for_none() -> None:
+    """dispose_session_maker_sync handles a None session maker without raising."""
+    dispose_session_maker_sync(None)
 
 
 @pytest.mark.asyncio
-async def test_adispose_session_maker_disposes_routing_async_maker(
+async def test_dispose_session_maker_async_disposes_routing_async_maker(
     routing_config: RoutingConfig,
 ) -> None:
-    """adispose_session_maker calls close_all on an async routing maker."""
+    """dispose_session_maker_async calls close_all on an async routing maker."""
     mock_engines: list[Any] = []
 
     def create_mock_async_engine(url: str, **kwargs: Any) -> AsyncEngine:
@@ -514,7 +514,7 @@ async def test_adispose_session_maker_disposes_routing_async_maker(
         create_engine_callable=create_mock_async_engine,
     )
 
-    await adispose_session_maker(maker)
+    await dispose_session_maker_async(maker)
 
     assert len(mock_engines) == 3
     for engine in mock_engines:
@@ -522,14 +522,14 @@ async def test_adispose_session_maker_disposes_routing_async_maker(
 
 
 @pytest.mark.asyncio
-async def test_adispose_session_maker_noop_for_non_routing_maker() -> None:
-    """adispose_session_maker is a no-op for non-routing makers."""
+async def test_dispose_session_maker_async_noop_for_non_routing_maker() -> None:
+    """dispose_session_maker_async is a no-op for non-routing makers."""
     plain = MagicMock()
-    await adispose_session_maker(plain)
+    await dispose_session_maker_async(plain)
     plain.close_all.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_adispose_session_maker_noop_for_none() -> None:
-    """adispose_session_maker handles a None session maker without raising."""
-    await adispose_session_maker(None)
+async def test_dispose_session_maker_async_noop_for_none() -> None:
+    """dispose_session_maker_async handles a None session maker without raising."""
+    await dispose_session_maker_async(None)

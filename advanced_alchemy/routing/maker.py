@@ -17,8 +17,8 @@ from advanced_alchemy.routing.session import RoutingAsyncSession, RoutingSyncSes
 __all__ = (
     "RoutingAsyncSessionMaker",
     "RoutingSyncSessionMaker",
-    "adispose_session_maker",
-    "dispose_session_maker",
+    "dispose_session_maker_async",
+    "dispose_session_maker_sync",
 )
 
 
@@ -355,7 +355,7 @@ class RoutingAsyncSessionMaker:
                 await engine.dispose()
 
 
-def dispose_session_maker(session_maker: Any) -> None:
+def dispose_session_maker_sync(session_maker: Any) -> None:
     """Dispose all engines owned by a sync routing session maker.
 
     No-op for non-routing session makers; the framework is responsible for
@@ -369,7 +369,7 @@ def dispose_session_maker(session_maker: Any) -> None:
         session_maker.close_all()
 
 
-async def adispose_session_maker(session_maker: Any) -> None:
+async def dispose_session_maker_async(session_maker: Any) -> None:
     """Dispose all engines owned by an async routing session maker.
 
     No-op for non-routing session makers; the framework is responsible for
