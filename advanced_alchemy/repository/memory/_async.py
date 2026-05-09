@@ -52,6 +52,7 @@ from advanced_alchemy.repository.memory.base import (
 )
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
+from advanced_alchemy.utils.deprecation import warn_deprecation
 from advanced_alchemy.utils.text import slugify
 
 
@@ -503,20 +504,20 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
             match_fields = [match_fields]
         return match_fields
 
-    async def _list_and_count_basic(
+    async def _get_many_and_count_basic(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
-        result = await self.list(*filters, **kwargs)
+        result = await self.get_many(*filters, **kwargs)
         return result, len(result)
 
-    async def _list_and_count_window(
+    async def _get_many_and_count_window(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
-        return await self._list_and_count_basic(*filters, **kwargs)
+        return await self._get_many_and_count_basic(*filters, **kwargs)
 
     def _find_or_raise_not_found(self, id_: PrimaryKeyType) -> ModelT:
         """Find an item by primary key or raise NotFoundError.
@@ -599,7 +600,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Union[ModelT, None]:
-        result = self._filter_result_by_kwargs(self.__collection__().list(), kwargs)
+        result = self._filter_result_by_kwargs(self.__collection__().get_all(), kwargs)
         if len(result) > 1:
             msg = "Multiple objects when one was expected"
             raise IntegrityError(msg)
@@ -696,7 +697,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> int:
-        result = self._apply_filters(self.__collection__().list(), *filters)
+        result = self._apply_filters(self.__collection__().get_all(), *filters)
         return len(self._filter_result_by_kwargs(result, kwargs))
 
     async def add(
@@ -817,7 +818,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> List[ModelT]:
-        result = self.__collection__().list()
+        result = self.__collection__().get_all()
         result = self._apply_filters(result, *filters)
         models = self._filter_result_by_kwargs(result, kwargs)
         item_ids: list[PrimaryKeyType] = [self.get_primary_key_value(model) for model in models]
@@ -860,6 +861,23 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
     ) -> List[ModelT]:
         return [await self.upsert(item) for item in data]
 
+    async def get_many_and_count(
+        self,
+        *filters: Union[StatementFilter, ColumnElement[bool]],
+        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
+        auto_expunge: Optional[bool] = None,
+        count_with_window_function: Optional[bool] = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
+        **kwargs: Any,
+    ) -> tuple[List[ModelT], int]:
+        return await self._get_many_and_count_basic(*filters, **kwargs)
+
     async def list_and_count(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
@@ -875,7 +893,29 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
-        return await self._list_and_count_basic(*filters, **kwargs)
+        """.. deprecated:: 1.10.0
+        Use :meth:`get_many_and_count` instead.
+        """
+        warn_deprecation(
+            version="1.10.0",
+            deprecated_name="list_and_count",
+            kind="method",
+            removal_in="2.0.0",
+            alternative="get_many_and_count",
+        )
+        return await self.get_many_and_count(*filters, **kwargs)
+
+    async def get_many(
+        self,
+        *filters: Union[StatementFilter, ColumnElement[bool]],
+        uniquify: Optional[bool] = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
+        **kwargs: Any,
+    ) -> List[ModelT]:
+        result = self.__collection__().get_all()
+        result = self._apply_filters(result, *filters)
+        return self._filter_result_by_kwargs(result, kwargs)
 
     async def list(
         self,
@@ -885,9 +925,17 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> List[ModelT]:
-        result = self.__collection__().list()
-        result = self._apply_filters(result, *filters)
-        return self._filter_result_by_kwargs(result, kwargs)
+        """.. deprecated:: 1.10.0
+        Use :meth:`get_many` instead.
+        """
+        warn_deprecation(
+            version="1.10.0",
+            deprecated_name="list",
+            kind="method",
+            removal_in="2.0.0",
+            alternative="get_many",
+        )
+        return await self.get_many(*filters, **kwargs)
 
 
 class SQLAlchemyAsyncMockSlugRepository(

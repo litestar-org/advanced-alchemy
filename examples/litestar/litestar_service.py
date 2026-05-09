@@ -87,7 +87,7 @@ class AuthorController(Controller):
         filters: Annotated[list[filters.FilterTypes], Dependency(skip_validation=True)],
     ) -> service.OffsetPagination[Author]:
         """List authors."""
-        results, total = await authors_service.list_and_count(*filters)
+        results, total = await authors_service.get_many_and_count(*filters)
         return authors_service.to_schema(results, total, filters=filters, schema_type=Author)
 
     @post(path="/authors")

@@ -66,7 +66,7 @@ def list_authors():
     page, page_size = request.args.get("currentPage", 1, type=int), request.args.get("pageSize", 10, type=int)
     limit_offset = filters.LimitOffset(limit=page_size, offset=page_size * (page - 1))
     service = AuthorService(session=alchemy.get_sync_session())
-    results, total = service.list_and_count(limit_offset)
+    results, total = service.get_many_and_count(limit_offset)
     response = service.to_schema(results, total, filters=[limit_offset], schema_type=AuthorSchema)
     return service.jsonify(response)
 

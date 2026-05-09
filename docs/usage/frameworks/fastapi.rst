@@ -151,7 +151,7 @@ Create controllers using the service:
         limit_offset: Annotated[filters.LimitOffset, Depends(provide_limit_offset_pagination)],
     ) -> filters.OffsetPagination[Author]:
         """List authors."""
-        results, total = await authors_service.list_and_count(limit_offset)
+        results, total = await authors_service.get_many_and_count(limit_offset)
         return authors_service.to_schema(results, total, filters=[limit_offset], schema_type=Author)
 
     @author_router.post(path="/authors", response_model=Author)

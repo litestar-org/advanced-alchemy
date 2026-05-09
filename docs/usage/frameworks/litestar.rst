@@ -188,7 +188,7 @@ Create a controller class to handle HTTP endpoints. The controller uses dependen
             filters: Annotated[list[filters.FilterTypes], Dependency(skip_validation=True)],
         ) -> service.OffsetPagination[Author]:
             """List all authors with pagination."""
-            results, total = await authors_service.list_and_count(*filters)
+            results, total = await authors_service.get_many_and_count(*filters)
             return authors_service.to_schema(results, total, filters=filters, schema_type=Author)
 
         @post(path="/authors")
@@ -987,7 +987,7 @@ The pattern below mirrors ``examples/litestar/litestar_fileobject.py``:
             documents_service: DocumentService,
             filters: Annotated[list[filters.FilterTypes], Dependency(skip_validation=True)],
         ) -> service.OffsetPagination[Document]:
-            results, total = await documents_service.list_and_count(*filters)
+            results, total = await documents_service.get_many_and_count(*filters)
             return documents_service.to_schema(results, total, filters=filters, schema_type=Document)
 
         @post(path="/")
@@ -1177,7 +1177,7 @@ Alternative Patterns
                 limit_offset: LimitOffset,
             ) -> OffsetPagination[Author]:
                 """List authors with pagination."""
-                results, total = await authors_repo.list_and_count(limit_offset)
+                results, total = await authors_repo.get_many_and_count(limit_offset)
                 type_adapter = TypeAdapter(list[Author])
                 return OffsetPagination[Author](
                     items=type_adapter.validate_python(results),

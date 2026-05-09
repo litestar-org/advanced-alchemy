@@ -120,11 +120,11 @@ Advanced Alchemy's repositories work seamlessly with inheritance. You can create
 
     async def list_employees(db_session: AsyncSession) -> list[Employee]:
         repository = EmployeeRepository(session=db_session)
-        return await repository.list()
+        return await repository.get_many()
 
     class ManagerRepository(SQLAlchemyAsyncRepository[Manager]):
         model_type = Manager
 
     async def list_managers(db_session: AsyncSession) -> list[Manager]:
         repository = ManagerRepository(session=db_session)
-        return await repository.list()
+        return await repository.get_many()

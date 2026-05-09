@@ -208,7 +208,7 @@ def test_sync_attrs_service_basic_operations(engine: Engine, attrs_test_tables: 
         assert not is_attrs_instance_without_field(person_attrs, "name")
 
         # Test list conversion to attrs
-        all_people = service.list()
+        all_people = service.get_many()
         people_paginated = service.to_schema(all_people, schema_type=PersonAttrs)
         assert len(people_paginated.items) == 3
         assert all(isinstance(person, PersonAttrs) for person in people_paginated.items)
@@ -262,7 +262,7 @@ def test_sync_query_service_with_attrs(engine: Engine, attrs_test_tables: None) 
         state_service.create_many(states_data)
 
         # Query and convert to attrs
-        query_results, count = query_service.repository.list_and_count(statement=select(StateQuery))
+        query_results, count = query_service.repository.get_many_and_count(statement=select(StateQuery))
         assert count >= 3
 
         # Test single item conversion
@@ -323,7 +323,7 @@ async def test_async_attrs_service_basic_operations(async_engine: AsyncEngine, a
         assert person_attrs.age == 28
 
         # Test list conversion to attrs
-        all_people = await service.list()
+        all_people = await service.get_many()
         people_paginated = service.to_schema(all_people, schema_type=PersonAttrs)
         assert len(people_paginated.items) == 3
         assert all(isinstance(person, PersonAttrs) for person in people_paginated.items)
@@ -350,7 +350,7 @@ async def test_async_query_service_with_attrs(async_engine: AsyncEngine, attrs_t
         await state_service.create_many(states_data)
 
         # Query and convert to attrs
-        query_results, count = await query_service.repository.list_and_count(statement=select(StateQuery))
+        query_results, count = await query_service.repository.get_many_and_count(statement=select(StateQuery))
         assert count >= 3
 
         # Test single item conversion

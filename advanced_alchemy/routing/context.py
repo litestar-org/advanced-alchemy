@@ -56,7 +56,7 @@ def primary_context() -> Generator[None, None, None]:
 
             with primary_context():
                 user = await repo.get(user_id)
-                orders = await order_repo.list()
+                orders = await order_repo.get_many()
 
     Yields:
         None
@@ -89,7 +89,7 @@ def replica_context() -> Generator[None, None, None]:
             user = await repo.get(user_id)
 
             with replica_context():
-                users = await repo.list()
+                users = await repo.get_many()
 
     Yields:
         None
@@ -116,7 +116,7 @@ def use_bind_group(name: str) -> Generator[None, None, None]:
             from advanced_alchemy.routing import use_bind_group
 
             with use_bind_group("analytics"):
-                data = await repo.list()
+                data = await repo.get_many()
 
     Args:
         name: Name of the bind group to use.

@@ -54,7 +54,7 @@ from advanced_alchemy.repository._util import (
     FilterableRepository,
     FilterableRepositoryProtocol,
     LoadSpec,
-    _build_list_cache_key,  # pyright: ignore
+    _build_cache_key,  # pyright: ignore
     column_has_defaults,
     compare_values,
     extract_pk_value_from_instance,
@@ -69,6 +69,7 @@ from advanced_alchemy.repository._util import (
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, T
 from advanced_alchemy.service.typing import schema_dump
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
+from advanced_alchemy.utils.deprecation import warn_deprecation
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
@@ -360,7 +361,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         bind_group: Optional[str] = None,
     ) -> List[ModelT]: ...
 
-    async def list_and_count(
+    async def get_many_and_count(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
@@ -375,7 +376,27 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]: ...
 
-    async def list(
+    async def list_and_count(
+        self,
+        *filters: Union[StatementFilter, ColumnElement[bool]],
+        auto_expunge: Optional[bool] = None,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        count_with_window_function: Optional[bool] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
+        **kwargs: Any,
+    ) -> tuple[List[ModelT], int]:
+        """Use :meth:`get_many_and_count` instead.
+
+        .. deprecated:: 1.10.0
+        """
+        ...
+
+    async def get_many(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
@@ -388,6 +409,25 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> List[ModelT]: ...
+
+    async def list(
+        self,
+        *filters: Union[StatementFilter, ColumnElement[bool]],
+        auto_expunge: Optional[bool] = None,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
+        **kwargs: Any,
+    ) -> List[ModelT]:
+        """Use :meth:`get_many` instead.
+
+        .. deprecated:: 1.10.0
+        """
+        ...
 
     @classmethod
     async def check_health(cls, session: Union[AsyncSession, async_scoped_session[AsyncSession]]) -> bool: ...
@@ -1281,7 +1321,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 instances.extend(await self.session.scalars(statement.returning(model_type)))
             else:
                 instances.extend(
-                    await self.list(
+                    await self.get_many(
                         *filters,
                         load=load,
                         execution_options=execution_options,
@@ -1512,7 +1552,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         await self._cache_manager.set_entity_async(model_name, item_id, instance, bind_group=bind_group)
         return instance
 
-    async def _list_from_db(
+    async def _get_many_from_db(
         self,
         *,
         filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
@@ -1554,7 +1594,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 self._expunge(instance, auto_expunge=auto_expunge)
             return cast("List[ModelT]", instances)
 
-    async def _list_cached_creator(
+    async def _get_many_cached_creator(
         self,
         cache_key: str,
         *,
@@ -1571,7 +1611,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     ) -> List[ModelT]:
         """Singleflight creator for list caching (async)."""
         if self._cache_manager is None:
-            return await self._list_from_db(
+            return await self._get_many_from_db(
                 filters=filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
@@ -1584,11 +1624,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 bind_group=bind_group,
             )
 
-        existing = await self._cache_manager.get_list_async(cache_key, self.model_type)
+        existing = await self._cache_manager.get_many_async(cache_key, self.model_type)
         if existing is not None:
             return existing
 
-        instances = await self._list_from_db(
+        instances = await self._get_many_from_db(
             filters=filters,
             auto_expunge=auto_expunge,
             statement=statement,
@@ -1600,10 +1640,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             uniquify=uniquify,
             bind_group=bind_group,
         )
-        await self._cache_manager.set_list_async(cache_key, list(instances))
+        await self._cache_manager.set_many_async(cache_key, list(instances))
         return list(instances)
 
-    async def _list_and_count_from_db(
+    async def _get_many_and_count_from_db(
         self,
         *,
         filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
@@ -1625,7 +1665,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             execution_options = dict(execution_options) if execution_options else {}
             execution_options["bind_group"] = resolved_bind_group
         if self._dialect.name in {"spanner", "spanner+spanner"} or not count_with_window_function:
-            return await self._list_and_count_basic(
+            return await self._get_many_and_count_basic(
                 *filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
@@ -1635,7 +1675,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 error_messages=error_messages,
                 **kwargs,
             )
-        return await self._list_and_count_window(
+        return await self._get_many_and_count_window(
             *filters,
             auto_expunge=auto_expunge,
             statement=statement,
@@ -1646,7 +1686,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             **kwargs,
         )
 
-    async def _list_and_count_cached_creator(
+    async def _get_many_and_count_cached_creator(
         self,
         cache_key: str,
         *,
@@ -1664,7 +1704,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     ) -> tuple[List[ModelT], int]:
         """Singleflight creator for list_and_count caching (async)."""
         if self._cache_manager is None:
-            return await self._list_and_count_from_db(
+            return await self._get_many_and_count_from_db(
                 filters=filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
@@ -1678,11 +1718,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 bind_group=bind_group,
             )
 
-        existing = await self._cache_manager.get_list_and_count_async(cache_key, self.model_type)
+        existing = await self._cache_manager.get_many_and_count_async(cache_key, self.model_type)
         if existing is not None:
             return existing
 
-        instances, count = await self._list_and_count_from_db(
+        instances, count = await self._get_many_and_count_from_db(
             filters=filters,
             auto_expunge=auto_expunge,
             statement=statement,
@@ -1695,7 +1735,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             uniquify=uniquify,
             bind_group=bind_group,
         )
-        await self._cache_manager.set_list_and_count_async(cache_key, list(instances), count)
+        await self._cache_manager.set_many_and_count_async(cache_key, list(instances), count)
         return list(instances), count
 
     async def get(
@@ -2397,7 +2437,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 for item in data_to_update:
                     pk_tuple = tuple(item[attr] for attr in self._pk_attr_names)
                     pk_filters.append(and_(*[col == val for col, val in zip(self._pk_columns, pk_tuple)]))
-                updated_instances = await self.list(
+                updated_instances = await self.get_many(
                     or_(*pk_filters),
                     load=loader_options,
                     execution_options=execution_options,
@@ -2405,7 +2445,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 )
             else:
                 updated_ids: List[Any] = [item[self.id_attribute] for item in data_to_update]
-                updated_instances = await self.list(
+                updated_instances = await self.get_many(
                     getattr(self.model_type, self.id_attribute).in_(updated_ids),
                     load=loader_options,
                     execution_options=execution_options,
@@ -2433,7 +2473,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         return statement
 
-    async def list_and_count(
+    async def get_many_and_count(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         statement: Optional[Select[tuple[ModelT]]] = None,
@@ -2448,7 +2488,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
-        """List records with total count.
+        """Get records with total count.
 
         Args:
             *filters: Types for specific filtering operations.
@@ -2490,7 +2530,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             and load is None
             and not self._default_loader_options
         ):
-            return await self._list_and_count_from_db(
+            return await self._get_many_and_count_from_db(
                 filters=filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
@@ -2506,10 +2546,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
         version_token = await cache_manager.get_model_version_async(model_name)
-        cache_key = _build_list_cache_key(
+        cache_key = _build_cache_key(
             model_name=model_name,
             version_token=version_token,
-            method="list_and_count",
+            method="get_many_and_count",
             filters=filters,
             kwargs=kwargs,
             order_by=resolved_order_by,
@@ -2518,7 +2558,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             count_with_window_function=count_with_window_function,
         )
         if cache_key is None:
-            return await self._list_and_count_from_db(
+            return await self._get_many_and_count_from_db(
                 filters=filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
@@ -2532,14 +2572,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 bind_group=bind_group,
             )
 
-        cached = await cache_manager.get_list_and_count_async(cache_key, self.model_type)
+        cached = await cache_manager.get_many_and_count_async(cache_key, self.model_type)
         if cached is not None:
             return cached
 
         return await cache_manager.singleflight_async(
             cache_key,
             partial(
-                self._list_and_count_cached_creator,
+                self._get_many_and_count_cached_creator,
                 cache_key,
                 filters=filters,
                 auto_expunge=auto_expunge,
@@ -2612,7 +2652,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             else None
         )
 
-    async def _list_and_count_window(
+    async def _get_many_and_count_window(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
@@ -2676,7 +2716,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                     count = count_value
             return instances, count
 
-    async def _list_and_count_basic(
+    async def _get_many_and_count_basic(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
@@ -2923,7 +2963,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
-            existing_objs = await self.list(
+            existing_objs = await self.get_many(
                 *match_filter,
                 load=load,
                 execution_options=execution_options,
@@ -3006,7 +3046,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                         setattr(datum, pk_attr, getattr(existing_datum, pk_attr))
         return data
 
-    async def list(
+    async def get_many(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
@@ -3058,7 +3098,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             and load is None
             and not self._default_loader_options
         ):
-            return await self._list_from_db(
+            return await self._get_many_from_db(
                 filters=filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
@@ -3073,10 +3113,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
 
         model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
         version_token = await cache_manager.get_model_version_async(model_name)
-        cache_key = _build_list_cache_key(
+        cache_key = _build_cache_key(
             model_name=model_name,
             version_token=version_token,
-            method="list",
+            method="get_many",
             filters=filters,
             kwargs=kwargs,
             order_by=resolved_order_by,
@@ -3084,7 +3124,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             uniquify=self._uniquify,
         )
         if cache_key is None:
-            return await self._list_from_db(
+            return await self._get_many_from_db(
                 filters=filters,
                 auto_expunge=auto_expunge,
                 statement=statement,
@@ -3097,14 +3137,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 bind_group=bind_group,
             )
 
-        cached = await cache_manager.get_list_async(cache_key, self.model_type)
+        cached = await cache_manager.get_many_async(cache_key, self.model_type)
         if cached is not None:
             return cached
 
         return await cache_manager.singleflight_async(
             cache_key,
             partial(
-                self._list_cached_creator,
+                self._get_many_cached_creator,
                 cache_key,
                 filters=filters,
                 auto_expunge=auto_expunge,
@@ -3117,6 +3157,88 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 uniquify=uniquify,
                 bind_group=bind_group,
             ),
+        )
+
+    async def list_and_count(
+        self,
+        *filters: Union[StatementFilter, ColumnElement[bool]],
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        auto_expunge: Optional[bool] = None,
+        count_with_window_function: Optional[bool] = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
+        **kwargs: Any,
+    ) -> tuple[List[ModelT], int]:
+        """Get records with total count.
+
+        .. deprecated:: 1.10.0
+            Use :meth:`get_many_and_count` instead.
+        """
+        warn_deprecation(
+            version="1.10.0",
+            deprecated_name="list_and_count",
+            kind="method",
+            removal_in="2.0.0",
+            alternative="get_many_and_count",
+        )
+        return await self.get_many_and_count(
+            *filters,
+            statement=statement,
+            auto_expunge=auto_expunge,
+            count_with_window_function=count_with_window_function,
+            order_by=order_by,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            uniquify=uniquify,
+            use_cache=use_cache,
+            bind_group=bind_group,
+            **kwargs,
+        )
+
+    async def list(
+        self,
+        *filters: Union[StatementFilter, ColumnElement[bool]],
+        auto_expunge: Optional[bool] = None,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
+        **kwargs: Any,
+    ) -> List[ModelT]:
+        """Get a list of instances, optionally filtered.
+
+        .. deprecated:: 1.10.0
+            Use :meth:`get_many` instead.
+        """
+        warn_deprecation(
+            version="1.10.0",
+            deprecated_name="list",
+            kind="method",
+            removal_in="2.0.0",
+            alternative="get_many",
+        )
+        return await self.get_many(
+            *filters,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            order_by=order_by,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            uniquify=uniquify,
+            use_cache=use_cache,
+            bind_group=bind_group,
+            **kwargs,
         )
 
     @classmethod
@@ -3343,14 +3465,14 @@ class SQLAlchemyAsyncQueryRepository:
             results = await self.execute(statement, execution_options=execution_options)
             return results.scalar_one()  # type: ignore
 
-    async def list_and_count(
+    async def get_many_and_count(
         self,
         statement: Select[Any],
         count_with_window_function: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[List[Row[Any]], int]:
-        """List records with total count.
+        """Get records with total count.
 
         Args:
             statement: To facilitate customization of the underlying select query.
@@ -3362,10 +3484,36 @@ class SQLAlchemyAsyncQueryRepository:
             Count of records returned by query, ignoring pagination.
         """
         if self._dialect.name in {"spanner", "spanner+spanner"} or count_with_window_function:
-            return await self._list_and_count_basic(statement=statement, bind_group=bind_group, **kwargs)
-        return await self._list_and_count_window(statement=statement, bind_group=bind_group, **kwargs)
+            return await self._get_many_and_count_basic(statement=statement, bind_group=bind_group, **kwargs)
+        return await self._get_many_and_count_window(statement=statement, bind_group=bind_group, **kwargs)
 
-    async def _list_and_count_window(
+    async def list_and_count(
+        self,
+        statement: Select[Any],
+        count_with_window_function: Optional[bool] = None,
+        bind_group: Optional[str] = None,
+        **kwargs: Any,
+    ) -> tuple[List[Row[Any]], int]:
+        """Get records with total count.
+
+        .. deprecated:: 1.10.0
+            Use :meth:`get_many_and_count` instead.
+        """
+        warn_deprecation(
+            version="1.10.0",
+            deprecated_name="list_and_count",
+            kind="method",
+            removal_in="2.0.0",
+            alternative="get_many_and_count",
+        )
+        return await self.get_many_and_count(
+            statement=statement,
+            count_with_window_function=count_with_window_function,
+            bind_group=bind_group,
+            **kwargs,
+        )
+
+    async def _get_many_and_count_window(
         self,
         statement: Select[Any],
         bind_group: Optional[str] = None,
@@ -3400,7 +3548,7 @@ class SQLAlchemyAsyncQueryRepository:
     def _get_count_stmt(statement: Select[Any]) -> Select[Any]:
         return statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(None)  # pyright: ignore[reportUnknownVariable]
 
-    async def _list_and_count_basic(
+    async def _get_many_and_count_basic(
         self,
         statement: Select[Any],
         bind_group: Optional[str] = None,
@@ -3430,7 +3578,7 @@ class SQLAlchemyAsyncQueryRepository:
                 instances.append(instance)
             return instances, count
 
-    async def list(self, statement: Select[Any], bind_group: Optional[str] = None, **kwargs: Any) -> List[Row[Any]]:
+    async def get_many(self, statement: Select[Any], bind_group: Optional[str] = None, **kwargs: Any) -> List[Row[Any]]:
         """Get a list of instances, optionally filtered.
 
         Args:
@@ -3446,6 +3594,21 @@ class SQLAlchemyAsyncQueryRepository:
             execution_options = {"bind_group": bind_group} if bind_group else None
             result = await self.execute(statement, execution_options=execution_options)
             return list(result.all())
+
+    async def list(self, statement: Select[Any], bind_group: Optional[str] = None, **kwargs: Any) -> List[Row[Any]]:
+        """Get a list of instances, optionally filtered.
+
+        .. deprecated:: 1.10.0
+            Use :meth:`get_many` instead.
+        """
+        warn_deprecation(
+            version="1.10.0",
+            deprecated_name="list",
+            kind="method",
+            removal_in="2.0.0",
+            alternative="get_many",
+        )
+        return await self.get_many(statement=statement, bind_group=bind_group, **kwargs)
 
     def _filter_statement_by_kwargs(
         self,

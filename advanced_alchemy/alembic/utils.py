@@ -115,7 +115,7 @@ async def dump_tables(
                     (SQLAlchemySyncRepository,),
                     exec_body=lambda ns, model=model: ns.setdefault("model_type", model),  # type: ignore[misc]
                 )
-                json_path.write_text(encode_json([model_to_dict(row) for row in repo(session=_session).list()]))
+                json_path.write_text(encode_json([model_to_dict(row) for row in repo(session=_session).get_many()]))
 
     async def _dump_table_async(session: "AbstractAsyncContextManager[AsyncSession]") -> None:
         from advanced_alchemy.repository import SQLAlchemyAsyncRepository
@@ -133,7 +133,9 @@ async def dump_tables(
                     (SQLAlchemyAsyncRepository,),
                     exec_body=lambda ns, model=model: ns.setdefault("model_type", model),  # type: ignore[misc]
                 )
-                json_path.write_text(encode_json([model_to_dict(row) for row in await repo(session=_session).list()]))
+                json_path.write_text(
+                    encode_json([model_to_dict(row) for row in await repo(session=_session).get_many()])
+                )
 
     await async_(dump_dir.mkdir)(exist_ok=True)
 

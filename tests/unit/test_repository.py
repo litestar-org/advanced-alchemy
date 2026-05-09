@@ -35,7 +35,7 @@ from advanced_alchemy.repository import (
     SQLAlchemySyncRepository,
 )
 from advanced_alchemy.repository._util import (
-    _build_list_cache_key,
+    _build_cache_key,
     _normalize_cache_key_value,
     column_has_defaults,
     model_from_dict,
@@ -121,7 +121,7 @@ def mock_session_execute(  # pyright: ignore[reportUnknownParameterType]
 def mock_repo_list(  # pyright: ignore[reportUnknownParameterType]
     mock_repo: SQLAlchemyAsyncRepository[MagicMock], mocker: MockerFixture
 ) -> Generator[AnyMock, None, None]:
-    yield mocker.patch.object(mock_repo, "list")
+    yield mocker.patch.object(mock_repo, "get_many")
 
 
 @pytest.fixture()
@@ -293,7 +293,7 @@ async def test_sqlalchemy_repo_upsert_many(
     mock_instances = [MagicMock(), MagicMock(), MagicMock()]
     monkeypatch.setattr(mock_repo, "model_type", UUIDModel)
     mocker.patch.object(mock_repo.session, "scalars", return_value=mock_instances)
-    mocker.patch.object(mock_repo, "list", return_value=mock_instances)
+    mocker.patch.object(mock_repo, "get_many", return_value=mock_instances)
     mocker.patch.object(mock_repo, "add_many", return_value=mock_instances)
     mocker.patch.object(mock_repo, "update_many", return_value=mock_instances)
 
@@ -606,7 +606,7 @@ async def test_sqlalchemy_repo_get_one_or_none_not_found(
     mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
-async def test_sqlalchemy_repo_list(
+async def test_sqlalchemy_repo_get_many(
     mock_repo: SQLAlchemyAsyncRepository[Any],
     monkeypatch: MonkeyPatch,
     mock_repo_execute: AnyMock,
@@ -615,7 +615,7 @@ async def test_sqlalchemy_repo_list(
     mock_instances = [MagicMock(), MagicMock()]
     mock_repo_execute.return_value = MagicMock(scalars=MagicMock(return_value=mock_instances))
 
-    instances = await maybe_async(mock_repo.list())
+    instances = await maybe_async(mock_repo.get_many())
 
     assert instances == mock_instances
     mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
@@ -626,9 +626,9 @@ async def test_sqlalchemy_repo_list_and_count(mock_repo: SQLAlchemyAsyncReposito
     """Test expected method calls for list operation."""
     mock_instances = [MagicMock(), MagicMock()]
     mock_count = len(mock_instances)
-    mocker.patch.object(mock_repo, "_list_and_count_window", return_value=(mock_instances, mock_count))
+    mocker.patch.object(mock_repo, "_get_many_and_count_window", return_value=(mock_instances, mock_count))
 
-    instances, instance_count = await maybe_async(mock_repo.list_and_count())
+    instances, instance_count = await maybe_async(mock_repo.get_many_and_count())
 
     assert instances == mock_instances
     assert instance_count == mock_count
@@ -643,9 +643,9 @@ async def test_sqlalchemy_repo_list_and_count_basic(
     """Test expected method calls for list operation."""
     mock_instances = [MagicMock(), MagicMock()]
     mock_count = len(mock_instances)
-    mocker.patch.object(mock_repo, "_list_and_count_basic", return_value=(mock_instances, mock_count))
+    mocker.patch.object(mock_repo, "_get_many_and_count_basic", return_value=(mock_instances, mock_count))
 
-    instances, instance_count = await maybe_async(mock_repo.list_and_count(count_with_window_function=False))
+    instances, instance_count = await maybe_async(mock_repo.get_many_and_count(count_with_window_function=False))
 
     assert instances == mock_instances
     assert instance_count == mock_count
@@ -710,7 +710,7 @@ async def test_sqlalchemy_repo_list_with_pagination(
     mock_repo_execute.return_value = MagicMock()
     mocker.patch.object(LimitOffset, "append_to_statement", return_value=statement)
     mock_repo_execute.return_value = MagicMock()
-    await maybe_async(mock_repo.list(LimitOffset(2, 3)))
+    await maybe_async(mock_repo.get_many(LimitOffset(2, 3)))
     mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -725,7 +725,7 @@ async def test_sqlalchemy_repo_list_with_before_after_filter(
     mocker.patch.object(mock_repo.model_type.updated_at, "__gt__", return_value="gt")
     mocker.patch.object(BeforeAfter, "append_to_statement", return_value=statement)
     mock_repo_execute.return_value = MagicMock()
-    await maybe_async(mock_repo.list(BeforeAfter("updated_at", datetime.datetime.max, datetime.datetime.min)))
+    await maybe_async(mock_repo.get_many(BeforeAfter("updated_at", datetime.datetime.max, datetime.datetime.min)))
     mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -742,7 +742,7 @@ async def test_sqlalchemy_repo_list_with_on_before_after_filter(
     mocker.patch.object(OnBeforeAfter, "append_to_statement", return_value=statement)
 
     mock_repo_execute.return_value = MagicMock()
-    await maybe_async(mock_repo.list(OnBeforeAfter("updated_at", datetime.datetime.max, datetime.datetime.min)))
+    await maybe_async(mock_repo.get_many(OnBeforeAfter("updated_at", datetime.datetime.max, datetime.datetime.min)))
     mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -758,7 +758,7 @@ async def test_sqlalchemy_repo_list_with_collection_filter(
     mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
     mocker.patch.object(CollectionFilter, "append_to_statement", return_value=mock_repo.statement)
     values = [1, 2, 3]
-    await maybe_async(mock_repo.list(CollectionFilter(field_name, values)))
+    await maybe_async(mock_repo.get_many(CollectionFilter(field_name, values)))
     mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -777,7 +777,7 @@ async def test_sqlalchemy_repo_list_with_null_collection_filter(
         "append_to_statement",
         MagicMock(return_value=mock_repo.statement),
     )
-    await maybe_async(mock_repo.list(CollectionFilter(field_name, None)))  # pyright: ignore[reportFunctionMemberAccess,reportUnknownArgumentType]
+    await maybe_async(mock_repo.get_many(CollectionFilter(field_name, None)))  # pyright: ignore[reportFunctionMemberAccess,reportUnknownArgumentType]
     mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -792,13 +792,13 @@ async def test_sqlalchemy_repo_empty_list_with_collection_filter(
     mock_repo_execute.return_value = MagicMock()
     mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
     values: Collection[Any] = []
-    await maybe_async(mock_repo.list(CollectionFilter(field_name, values)))
+    await maybe_async(mock_repo.get_many(CollectionFilter(field_name, values)))
     monkeypatch.setattr(
         CollectionFilter,
         "append_to_statement",
         MagicMock(return_value=mock_repo.statement),
     )
-    await maybe_async(mock_repo.list(CollectionFilter(field_name, values)))
+    await maybe_async(mock_repo.get_many(CollectionFilter(field_name, values)))
     mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -818,7 +818,7 @@ async def test_sqlalchemy_repo_list_with_not_in_collection_filter(
         MagicMock(return_value=mock_repo.statement),
     )
     values = [1, 2, 3]
-    await maybe_async(mock_repo.list(NotInCollectionFilter(field_name, values)))
+    await maybe_async(mock_repo.get_many(NotInCollectionFilter(field_name, values)))
     mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -837,14 +837,14 @@ async def test_sqlalchemy_repo_list_with_null_not_in_collection_filter(
         "append_to_statement",
         MagicMock(return_value=mock_repo.statement),
     )
-    await maybe_async(mock_repo.list(NotInCollectionFilter[str](field_name, None)))  # pyright: ignore[reportFunctionMemberAccess]
+    await maybe_async(mock_repo.get_many(NotInCollectionFilter[str](field_name, None)))  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
 async def test_sqlalchemy_repo_unknown_filter_type_raises(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
     """Test that repo raises exception if list receives unknown filter type."""
     with pytest.raises(RepositoryError):
-        await maybe_async(mock_repo.list("not a filter"))  # type: ignore
+        await maybe_async(mock_repo.get_many("not a filter"))  # type: ignore
 
 
 async def test_sqlalchemy_repo_update(
@@ -1493,23 +1493,23 @@ def test_normalize_cache_key_value_handles_structures() -> None:
     assert "__repr__" in _normalize_cache_key_value(object())
 
 
-def test_build_list_cache_key_stable_for_unordered_inputs() -> None:
+def test_build_cache_key_stable_for_unordered_inputs() -> None:
     """Cache keys should remain stable for unordered inputs."""
     filters = [CollectionFilter(field_name="id", values={2, 1})]
-    key_a = _build_list_cache_key(
+    key_a = _build_cache_key(
         model_name="CacheModel",
         version_token="v1",
-        method="list",
+        method="get_many",
         filters=filters,
         kwargs={"meta": {"b": 2, "a": 1}},
         order_by=[("name", False)],
         execution_options={"stream_results": True},
         uniquify=True,
     )
-    key_b = _build_list_cache_key(
+    key_b = _build_cache_key(
         model_name="CacheModel",
         version_token="v1",
-        method="list",
+        method="get_many",
         filters=[CollectionFilter(field_name="id", values={1, 2})],
         kwargs={"meta": {"a": 1, "b": 2}},
         order_by=[("name", False)],
@@ -1521,12 +1521,12 @@ def test_build_list_cache_key_stable_for_unordered_inputs() -> None:
     assert key_a == key_b
 
 
-def test_build_list_cache_key_returns_none_for_raw_filters() -> None:
+def test_build_cache_key_returns_none_for_raw_filters() -> None:
     """Raw SQLAlchemy expressions should skip caching."""
-    key = _build_list_cache_key(
+    key = _build_cache_key(
         model_name="CacheModel",
         version_token="v1",
-        method="list",
+        method="get_many",
         filters=[column("id") == 1],
         kwargs={},
         order_by=None,
@@ -1572,7 +1572,7 @@ def test_normalize_cache_key_value_none_and_primitives() -> None:
     assert _normalize_cache_key_value(True) is True
 
 
-def test_build_list_cache_key_with_unary_expression() -> None:
+def test_build_cache_key_with_unary_expression() -> None:
     """UnaryExpression in order_by is serialized as string expression."""
     from sqlalchemy import UnaryExpression, desc
 
@@ -1580,10 +1580,10 @@ def test_build_list_cache_key_with_unary_expression() -> None:
     unary_expr = desc(column("name"))  # type: ignore[var-annotated]
     assert isinstance(unary_expr, UnaryExpression)
 
-    key = _build_list_cache_key(
+    key = _build_cache_key(
         model_name="CacheModel",
         version_token="v1",
-        method="list",
+        method="get_many",
         filters=[],
         kwargs={},
         order_by=[unary_expr],  # type: ignore[list-item]
@@ -1592,15 +1592,15 @@ def test_build_list_cache_key_with_unary_expression() -> None:
     )
 
     assert key is not None
-    assert key.startswith("CacheModel:list:")
+    assert key.startswith("CacheModel:get_many:")
 
 
-def test_build_list_cache_key_with_count_window_function() -> None:
+def test_build_cache_key_with_count_window_function() -> None:
     """count_with_window_function param is included in cache key."""
-    key_with = _build_list_cache_key(
+    key_with = _build_cache_key(
         model_name="CacheModel",
         version_token="v1",
-        method="list_and_count",
+        method="get_many_and_count",
         filters=[],
         kwargs={},
         order_by=None,
@@ -1608,10 +1608,10 @@ def test_build_list_cache_key_with_count_window_function() -> None:
         uniquify=False,
         count_with_window_function=True,
     )
-    key_without = _build_list_cache_key(
+    key_without = _build_cache_key(
         model_name="CacheModel",
         version_token="v1",
-        method="list_and_count",
+        method="get_many_and_count",
         filters=[],
         kwargs={},
         order_by=None,
@@ -1619,10 +1619,10 @@ def test_build_list_cache_key_with_count_window_function() -> None:
         uniquify=False,
         count_with_window_function=False,
     )
-    key_default = _build_list_cache_key(
+    key_default = _build_cache_key(
         model_name="CacheModel",
         version_token="v1",
-        method="list_and_count",
+        method="get_many_and_count",
         filters=[],
         kwargs={},
         order_by=None,

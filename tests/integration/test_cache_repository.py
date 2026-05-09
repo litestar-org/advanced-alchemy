@@ -324,12 +324,12 @@ async def test_async_repository_list_uses_cache_and_invalidates_on_commit(
             version_before = memory_cache_manager.get_model_version_sync(model_name)
 
             query_count = 0
-            authors_1 = await repo.list()
+            authors_1 = await repo.get_many()
             assert len(authors_1) == 1
             assert query_count > 0
 
             query_count = 0
-            authors_2 = await repo.list()
+            authors_2 = await repo.get_many()
             assert len(authors_2) == 1
             assert query_count == 0
 
@@ -349,7 +349,7 @@ async def test_async_repository_list_uses_cache_and_invalidates_on_commit(
             assert version_after != version_before
 
             query_count = 0
-            authors_3 = await repo.list()
+            authors_3 = await repo.get_many()
             assert len(authors_3) == 1
             assert query_count > 0
 
@@ -400,13 +400,13 @@ async def test_async_repository_list_and_count_uses_cache(
             await session.commit()
 
             query_count = 0
-            items_1, count_1 = await repo.list_and_count()
+            items_1, count_1 = await repo.get_many_and_count()
             assert count_1 == 2
             assert len(items_1) == 2
             assert query_count > 0
 
             query_count = 0
-            items_2, count_2 = await repo.list_and_count()
+            items_2, count_2 = await repo.get_many_and_count()
             assert count_2 == 2
             assert len(items_2) == 2
             assert query_count == 0

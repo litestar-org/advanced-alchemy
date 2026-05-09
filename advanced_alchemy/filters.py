@@ -397,7 +397,7 @@ class NullFilter(StatementFilter):
 
             # Find records where email_verified_at is NULL
             null_filter = NullFilter("email_verified_at")
-            unverified = await repo.list(null_filter)
+            unverified = await repo.get_many(null_filter)
 
         With multiple filters::
 
@@ -411,7 +411,7 @@ class NullFilter(StatementFilter):
                 NullFilter("email_verified_at"),
                 CollectionFilter("role", ["admin", "moderator"]),
             ]
-            results = await repo.list(*filters)
+            results = await repo.get_many(*filters)
 
     See Also:
         - :class:`NotNullFilter`: Filter for NOT NULL values
@@ -450,7 +450,7 @@ class NotNullFilter(StatementFilter):
 
             # Find records where email_verified_at is NOT NULL
             not_null_filter = NotNullFilter("email_verified_at")
-            verified = await repo.list(not_null_filter)
+            verified = await repo.get_many(not_null_filter)
 
         With multiple filters::
 
@@ -464,7 +464,7 @@ class NotNullFilter(StatementFilter):
                 NotNullFilter("email_verified_at"),
                 CollectionFilter("role", ["admin", "moderator"]),
             ]
-            results = await repo.list(*filters)
+            results = await repo.get_many(*filters)
 
     See Also:
         - :class:`NullFilter`: Filter for NULL values

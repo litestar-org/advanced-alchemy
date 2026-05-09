@@ -42,6 +42,7 @@ from advanced_alchemy.service.typing import (
     is_sqlmodel_table_model,
 )
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
+from advanced_alchemy.utils.deprecation import warn_deprecation
 
 
 class SQLAlchemySyncQueryService(ResultConverter):
@@ -522,7 +523,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
         return cast("ModelT", data)
 
-    def list_and_count(
+    def get_many_and_count(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         statement: Optional[Select[tuple[ModelT]]] = None,
@@ -559,7 +560,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         """
         return cast(
             "tuple[Sequence[ModelT], int]",
-            self.repository.list_and_count(
+            self.repository.get_many_and_count(
                 *filters,
                 statement=statement,
                 auto_expunge=auto_expunge,
@@ -573,6 +574,48 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 bind_group=bind_group,
                 **kwargs,
             ),
+        )
+
+    def list_and_count(
+        self,
+        *filters: Union[StatementFilter, ColumnElement[bool]],
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        auto_expunge: Optional[bool] = None,
+        count_with_window_function: Optional[bool] = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
+        **kwargs: Any,
+    ) -> tuple[Sequence[ModelT], int]:
+        """List of records and total count returned by query.
+
+        .. deprecated:: 1.10.0
+            Use :meth:`get_many_and_count` instead.
+        """
+        warn_deprecation(
+            version="1.10.0",
+            deprecated_name="list_and_count",
+            kind="method",
+            removal_in="2.0.0",
+            alternative="get_many_and_count",
+        )
+        return self.get_many_and_count(
+            *filters,
+            statement=statement,
+            auto_expunge=auto_expunge,
+            count_with_window_function=count_with_window_function,
+            order_by=order_by,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            uniquify=uniquify,
+            use_cache=use_cache,
+            bind_group=bind_group,
+            **kwargs,
         )
 
     @classmethod
@@ -623,7 +666,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                     count_with_window_function=count_with_window_function,
                 )
 
-    def list(
+    def get_many(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         statement: Optional[Select[tuple[ModelT]]] = None,
@@ -658,7 +701,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         """
         return cast(
             "Sequence[ModelT]",
-            self.repository.list(
+            self.repository.get_many(
                 *filters,
                 statement=statement,
                 auto_expunge=auto_expunge,
@@ -671,6 +714,46 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 bind_group=bind_group,
                 **kwargs,
             ),
+        )
+
+    def list(
+        self,
+        *filters: Union[StatementFilter, ColumnElement[bool]],
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        auto_expunge: Optional[bool] = None,
+        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Sequence[ModelT]:
+        """Wrap repository scalars operation.
+
+        .. deprecated:: 1.10.0
+            Use :meth:`get_many` instead.
+        """
+        warn_deprecation(
+            version="1.10.0",
+            deprecated_name="list",
+            kind="method",
+            removal_in="2.0.0",
+            alternative="get_many",
+        )
+        return self.get_many(
+            *filters,
+            statement=statement,
+            auto_expunge=auto_expunge,
+            order_by=order_by,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            uniquify=uniquify,
+            use_cache=use_cache,
+            bind_group=bind_group,
+            **kwargs,
         )
 
 

@@ -41,7 +41,7 @@ Basic configuration with a single replica:
     # Use with repository - reads automatically go to replica
     async with session_maker() as session:
         repo = UserRepository(session=session)
-        users = await repo.list()  # Routes to replica
+        users = await repo.get_many()  # Routes to replica
 
 Configuration
 -------------
@@ -107,7 +107,7 @@ all subsequent reads use the primary database until the transaction is committed
         repo = UserRepository(session=session)
 
         # Read routes to replica
-        users = await repo.list()
+        users = await repo.get_many()
 
         # Write routes to primary
         new_user = await repo.add(User(name="Alice"))
@@ -119,7 +119,7 @@ all subsequent reads use the primary database until the transaction is committed
         await session.commit()
 
         # Read can use replica again
-        users = await repo.list()
+        users = await repo.get_many()
 
 To disable sticky-after-write:
 
@@ -218,7 +218,7 @@ Use ``use_bind_group`` to route all operations within a block to a specific grou
 
         # Route to reporting group (load balanced if multiple engines)
         with use_bind_group("reporting"):
-            report = await repo.list()
+            report = await repo.get_many()
 
 **Explicit Parameter**
 
@@ -227,7 +227,7 @@ All repository methods accept a ``bind_group`` parameter:
 .. code-block:: python
 
     # Query directly from analytics group
-    users = await repo.list(bind_group="analytics")
+    users = await repo.get_many(bind_group="analytics")
 
     # Count from reporting group
     count = await repo.count(bind_group="reporting")
@@ -267,7 +267,7 @@ Force operations to use the read group. This is an alias for ``use_bind_group("r
 
         # Force read from replica (even if sticky-primary is active)
         with replica_context():
-            users = await repo.list()
+            users = await repo.get_many()
 
 Temporarily Disable Routing
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -334,7 +334,7 @@ FastAPI
         session: Annotated[AsyncSession, Depends(alchemy.provide_session())],
     ):
         repo = UserRepository(session=session)
-        return await repo.list()  # Routes to replica
+        return await repo.get_many()  # Routes to replica
 
 Flask
 ~~~~~
