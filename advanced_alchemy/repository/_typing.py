@@ -1,10 +1,13 @@
 """Repository typing utilities for optional dependency support.
 
-Provides stubs and detection functions for numpy arrays to support
-pgvector and other array-based types when numpy is not installed.
+Provides stub and real implementations for numpy array detection and
+equality comparison, used by repository update routines to detect
+changes in pgvector and other array-based columns.
 """
 
 from typing import Any
+
+from advanced_alchemy.typing import NUMPY_INSTALLED
 
 # Always define stub functions for type checking and fallback behavior
 
@@ -73,12 +76,10 @@ try:
 
     is_numpy_array = is_numpy_array_real
     arrays_equal = arrays_equal_real
-    NUMPY_INSTALLED = True  # pyright: ignore[reportConstantRedefinition]
 
 except ImportError:  # pragma: no cover
     is_numpy_array = is_numpy_array_stub
     arrays_equal = arrays_equal_stub
-    NUMPY_INSTALLED = False  # pyright: ignore[reportConstantRedefinition]
 
 
 __all__ = (
