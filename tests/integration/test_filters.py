@@ -4,7 +4,7 @@ from typing import Optional
 
 import pytest
 from pytest import FixtureRequest
-from sqlalchemy import Engine, String, func, select
+from sqlalchemy import Engine, String, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
@@ -24,8 +24,6 @@ from advanced_alchemy.filters import (
     OnBeforeAfter,
     OrderBy,
     SearchFilter,
-    and_,
-    or_,
 )
 from tests.integration.helpers import get_worker_id
 
