@@ -6,8 +6,8 @@ async/sync config overrides ``create_session_maker``; these helpers patch
 the base class's ``create_session_maker`` and ``sqlalchemy.event.listen``,
 then assert the middle-layer listener-registration contract per subclass.
 
-Regression helpers for
-https://github.com/litestar-org/advanced-alchemy/issues/709.
+They keep each framework extension aligned with the shared listener
+registration behavior.
 """
 
 from typing import Any

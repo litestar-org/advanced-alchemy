@@ -203,8 +203,9 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     def create_session_maker(self) -> "Callable[[], Session]":
         """Get a session maker. If none exists yet, create one.
 
-        Delegates to the base-class implementation so that listener
-        registration (file-object, timestamp, cache) runs. See issue #709.
+        Delegates to the base-class implementation so configured session
+        listeners for file objects, timestamps, and cache invalidation are
+        registered.
 
         Returns:
             Session factory used by the plugin.

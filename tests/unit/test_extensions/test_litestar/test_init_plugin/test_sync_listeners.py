@@ -1,6 +1,5 @@
 """Unit tests for Litestar SQLAlchemySyncConfig listener registration.
 
-Regression tests for https://github.com/litestar-org/advanced-alchemy/issues/709.
 Sync variant: listeners are attached directly to the session_maker, not to a
 synthetic sync_maker, so there is no sync_sessionmaker patch.
 """

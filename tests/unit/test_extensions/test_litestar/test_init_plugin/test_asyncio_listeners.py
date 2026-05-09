@@ -1,6 +1,5 @@
 """Unit tests for Litestar SQLAlchemyAsyncConfig listener registration.
 
-Regression tests for https://github.com/litestar-org/advanced-alchemy/issues/709.
 The Litestar subclass of SQLAlchemyAsyncConfig must register the base-class
 listener set (file-object, timestamp, cache) when create_session_maker() is
 called. Previously the subclass overrode create_session_maker without

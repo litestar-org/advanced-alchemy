@@ -1,10 +1,8 @@
 """Unit tests for FastAPI SQLAlchemy config listener registration.
 
-Regression tests for https://github.com/litestar-org/advanced-alchemy/issues/709.
-
 The FastAPI extension re-exports ``SQLAlchemyAsyncConfig`` /
 ``SQLAlchemySyncConfig`` from the Starlette extension, so it inherits the
-listener-registration fix for free. This module pins that claim so a
+listener-registration behavior. This module pins that claim so a
 future FastAPI-specific override cannot silently drop listeners again.
 
 Shared assertions live in ``tests/unit/test_extensions/_listener_contract.py``.

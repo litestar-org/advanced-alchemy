@@ -216,8 +216,8 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         """Get a session maker. If none exists yet, create one.
 
         Preserves ``engine_instance`` caching and then delegates to the
-        base-class implementation so that listener registration
-        (file-object, timestamp, cache) runs. See issue #709.
+        base-class implementation so configured session listeners for file
+        objects, timestamps, and cache invalidation are registered.
 
         Returns:
             Callable[[], Session]: Session factory used by the plugin.
@@ -429,8 +429,8 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         """Get a session maker. If none exists yet, create one.
 
         Preserves ``engine_instance`` caching and then delegates to the
-        base-class implementation so that listener registration runs.
-        See issue #709.
+        base-class implementation so configured session listeners are
+        registered.
 
         Returns:
             Callable[[], Session]: Session factory used by the plugin.

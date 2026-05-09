@@ -1,6 +1,5 @@
 """Unit tests for Starlette SQLAlchemy config listener registration.
 
-Regression tests for https://github.com/litestar-org/advanced-alchemy/issues/709.
 Both Starlette async and sync configs override ``create_session_maker``
 without delegating to ``super()``, silently dropping the listener
 registration performed by the base class. These tests lock the contract
