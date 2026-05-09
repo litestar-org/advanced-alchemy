@@ -22,7 +22,6 @@ from advanced_alchemy.service._sync import (
 from advanced_alchemy.service._util import ResultConverter, find_filter
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.service.typing import (
-    ATTRS_INSTALLED,
     AttrsInstance,
     FilterTypeT,
     ModelDictListT,
@@ -53,6 +52,7 @@ from advanced_alchemy.service.typing import (
     is_sqlmodel_table_model,
     schema_dump,
 )
+from advanced_alchemy.typing import ATTRS_INSTALLED
 
 __all__ = (
     "ATTRS_INSTALLED",
