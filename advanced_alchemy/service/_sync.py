@@ -6,7 +6,7 @@ RepositoryService object is generic on the domain model type which
 should be a SQLAlchemy model.
 """
 
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Generator, Iterable, Sequence
 from contextlib import contextmanager
 from functools import cached_property
 from typing import Any, ClassVar, Generic, List, Optional, Union, cast
@@ -70,7 +70,7 @@ class SQLAlchemySyncQueryService(ResultConverter):
         cls,
         session: Optional[Union[Session, scoped_session[Session]]] = None,
         config: Optional[SQLAlchemySyncConfig] = None,
-    ) -> Iterator[Self]:
+    ) -> Generator[Self, None, None]:
         """Context manager that returns instance of service object.
 
         Handles construction of the database session._create_select_for_model
@@ -630,7 +630,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
-    ) -> Iterator[Self]:
+    ) -> Generator[Self, None, None]:
         """Context manager that returns instance of service object.
 
         Handles construction of the database session._create_select_for_model
