@@ -4,7 +4,7 @@ RepositoryService object is generic on the domain model type which
 should be a SQLAlchemy model.
 """
 
-from collections.abc import AsyncIterator, Iterable, Sequence
+from collections.abc import AsyncGenerator, Iterable, Sequence
 from contextlib import asynccontextmanager
 from functools import cached_property
 from typing import Any, ClassVar, Generic, List, Optional, Union, cast
@@ -71,7 +71,7 @@ class SQLAlchemyAsyncQueryService(ResultConverter):
         cls,
         session: Optional[Union[AsyncSession, async_scoped_session[AsyncSession]]] = None,
         config: Optional[SQLAlchemyAsyncConfig] = None,
-    ) -> AsyncIterator[Self]:
+    ) -> AsyncGenerator[Self, None]:
         """Context manager that returns instance of service object.
 
         Handles construction of the database session._create_select_for_model
@@ -631,7 +631,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
-    ) -> AsyncIterator[Self]:
+    ) -> AsyncGenerator[Self, None]:
         """Context manager that returns instance of service object.
 
         Handles construction of the database session._create_select_for_model

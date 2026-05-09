@@ -46,7 +46,7 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "docs/PYPI_README.md"
 requires-python = ">=3.9"
-version = "1.9.3"
+version = "1.10.0"
 
 [project.urls]
 Changelog = "https://advanced-alchemy.litestar.dev/latest/changelog"
@@ -119,7 +119,7 @@ fastapi = ["fastapi[all]>=0.115.3", "starlette"]
 flask = ["flask-sqlalchemy>=3.1.1", "flask[async]"]
 fsspec = ["fsspec>=2024.10.0"]
 lint = [
-  "mypy>=1.13.0",
+  "mypy>=1.13.0,<2.0.0",
   "pre-commit>=3.5.0",
   "pyright>=1.1.386",
   "ruff>=0.7.1",
@@ -178,7 +178,7 @@ test = [
 allow_dirty = true
 commit = false
 commit_args = "--no-verify"
-current_version = "1.9.3"
+current_version = "1.10.0"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"
@@ -212,7 +212,7 @@ search = 'version = "{current_version}"'
 # NOTE: mysql-connector-python 9.6.0 (released 2026-01-21) removed Python 3.12+ wheels.
 # This is an Oracle packaging bug. Pinning to versions before that date until fixed.
 # Check https://pypi.org/project/mysql-connector-python/#files for updates.
-exclude-newer-package = { mysql-connector-python = "2026-01-20" }
+exclude-newer-package = { mysql-connector-python = "2026-01-20T00:00:00Z" }
 
 [build-system]
 build-backend = "hatchling.build"

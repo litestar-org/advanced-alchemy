@@ -22,6 +22,7 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.common import (
 )
 from advanced_alchemy.extensions.litestar.plugins.init.config.engine import EngineConfig
 from advanced_alchemy.routing.context import reset_routing_context
+from advanced_alchemy.routing.maker import dispose_session_maker_sync
 
 logger = logging.getLogger("advanced_alchemy.extensions.litestar")
 
@@ -202,16 +203,16 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     def create_session_maker(self) -> "Callable[[], Session]":
         """Get a session maker. If none exists yet, create one.
 
+        Delegates to the base-class implementation so configured session
+        listeners for file objects, timestamps, and cache invalidation are
+        registered.
+
         Returns:
             Session factory used by the plugin.
         """
         if self.session_maker:
             return self.session_maker
-
-        session_kws = self.session_config_dict
-        if session_kws.get("bind") is None:
-            session_kws["bind"] = self.get_engine()
-        return self.session_maker_class(**session_kws)
+        return super().create_session_maker()
 
     @asynccontextmanager
     async def lifespan(
@@ -229,6 +230,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 engine = deps[self.engine_dependency_key]
                 if hasattr(engine, "dispose"):
                     cast("Engine", engine).dispose()
+            dispose_session_maker_sync(self.session_maker)
 
     def provide_engine(self, state: "State") -> "Engine":
         """Create an engine instance.

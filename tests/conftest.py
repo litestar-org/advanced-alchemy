@@ -232,7 +232,7 @@ def spanner_url(
     """Use the running spanner service to return a URL for connecting using spanner."""
     monkeypatch_session.setenv("SPANNER_EMULATOR_HOST", f"{spanner_service.host}:{spanner_service.port}")
     monkeypatch_session.setenv("GOOGLE_CLOUD_PROJECT", spanner_service.project)
-    instance = spanner_connection.instance(spanner_service.instance_name)  # pyright: ignore
+    instance = spanner_connection.instance(spanner_service.instance_name)  # type: ignore[no-untyped-call]  # pyright: ignore
     with contextlib.suppress(Exception):
         instance.create()
 

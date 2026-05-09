@@ -8,7 +8,7 @@ from typing_extensions import Self
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, Iterator
+    from collections.abc import Generator, Hashable
 
     from sqlalchemy import Select
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +31,7 @@ class UniqueMixin:
     def _prevent_autoflush(
         cls,
         session: "Union[AsyncSession, async_scoped_session[AsyncSession], Session, scoped_session[Session]]",
-    ) -> "Iterator[None]":
+    ) -> "Generator[None, None, None]":
         with session.no_autoflush, wrap_sqlalchemy_exception():
             yield
 
