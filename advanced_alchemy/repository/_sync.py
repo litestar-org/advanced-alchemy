@@ -70,7 +70,7 @@ from advanced_alchemy.repository._util import (
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, T
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.deprecation import warn_deprecation
-from advanced_alchemy.utils.serializers import schema_dump
+from advanced_alchemy.utils.serialization import schema_dump
 from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:

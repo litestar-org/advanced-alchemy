@@ -21,7 +21,7 @@ from advanced_alchemy.typing import (
     MSGSPEC_INSTALLED,
     PYDANTIC_INSTALLED,
 )
-from advanced_alchemy.utils.serializers import (
+from advanced_alchemy.utils.serialization import (
     BaseModel,
     FilterTypeT,
     ModelDTOT,
@@ -198,7 +198,7 @@ class ResultConverter:
               Type: :class:`~advanced_alchemy.repository.typing.ModelOrRowMappingT`
             total: The total number of rows in the data.
             filters: :class:`~advanced_alchemy.filters.StatementFilter`| :class:`sqlalchemy.sql.expression.ColumnElement` Collection of route filters.
-            schema_type: :class:`~advanced_alchemy.utils.serializers.ModelDTOT` Optional schema type to convert the data to
+            schema_type: :class:`~advanced_alchemy.utils.serialization.ModelDTOT` Optional schema type to convert the data to
 
         Raises:
             AdvancedAlchemyError: If `schema_type` is not a valid Pydantic, Msgspec, or attrs schema and all libraries are not installed.

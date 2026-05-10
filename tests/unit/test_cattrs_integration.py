@@ -7,7 +7,7 @@ from typing import Optional
 
 import pytest
 
-from advanced_alchemy.utils.serializers import (
+from advanced_alchemy.utils.serialization import (
     ATTRS_INSTALLED,
     CATTRS_INSTALLED,
     schema_dump,
@@ -53,7 +53,7 @@ class TestCattrsIntegration:
         instance = SimpleAttrsModel(name="Jane", age=25)
 
         # Mock CATTRS_INSTALLED to be False
-        with mock.patch("advanced_alchemy.utils.serializers.CATTRS_INSTALLED", False):
+        with mock.patch("advanced_alchemy.utils.serialization.CATTRS_INSTALLED", False):
             result = schema_dump(instance)
 
         assert isinstance(result, dict)
@@ -85,7 +85,7 @@ class TestCattrsIntegration:
 
         # Mock CATTRS_INSTALLED to be False in both modules
         with (
-            mock.patch("advanced_alchemy.utils.serializers.CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.utils.serialization.CATTRS_INSTALLED", False),
             mock.patch("advanced_alchemy.service._util.CATTRS_INSTALLED", False),
         ):
             result = converter.to_schema(data, schema_type=SimpleAttrsModel)
@@ -108,7 +108,7 @@ class TestCattrsIntegration:
 
         # Mock CATTRS_INSTALLED to be False in both modules
         with (
-            mock.patch("advanced_alchemy.utils.serializers.CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.utils.serialization.CATTRS_INSTALLED", False),
             mock.patch("advanced_alchemy.service._util.CATTRS_INSTALLED", False),
         ):
             result = converter.to_schema(data, schema_type=SimpleAttrsModel)
@@ -122,7 +122,7 @@ class TestCattrsIntegration:
     @pytest.mark.skipif(not CATTRS_INSTALLED, reason="cattrs not installed")
     def test_cattrs_structure_direct_usage(self) -> None:
         """Test direct usage of cattrs structure function."""
-        from advanced_alchemy.utils.serializers import structure
+        from advanced_alchemy.utils.serialization import structure
 
         data = {"name": "Eve", "age": 33, "email": "eve@example.com"}
         result = structure(data, SimpleAttrsModel)
@@ -135,7 +135,7 @@ class TestCattrsIntegration:
     @pytest.mark.skipif(not CATTRS_INSTALLED, reason="cattrs not installed")
     def test_cattrs_unstructure_direct_usage(self) -> None:
         """Test direct usage of cattrs unstructure function."""
-        from advanced_alchemy.utils.serializers import unstructure
+        from advanced_alchemy.utils.serialization import unstructure
 
         instance = SimpleAttrsModel(name="Frank", age=28)
         result = unstructure(instance)
@@ -156,7 +156,7 @@ class TestCattrsIntegration:
 
         # Mock CATTRS_INSTALLED in both modules to be False to use attrs path
         with (
-            mock.patch("advanced_alchemy.utils.serializers.CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.utils.serialization.CATTRS_INSTALLED", False),
             mock.patch("advanced_alchemy.service._util.CATTRS_INSTALLED", False),
         ):
             # First call should populate the cache
@@ -211,7 +211,7 @@ class TestCattrsIntegration:
 
         # Mock CATTRS_INSTALLED to be False in both modules to test attrs path
         with (
-            mock.patch("advanced_alchemy.utils.serializers.CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.utils.serialization.CATTRS_INSTALLED", False),
             mock.patch("advanced_alchemy.service._util.CATTRS_INSTALLED", False),
         ):
             # This should handle missing fields gracefully
@@ -228,7 +228,7 @@ class TestCattrsIntegration:
 
         # Mock CATTRS_INSTALLED to be False in both modules to test attrs filtering path
         with (
-            mock.patch("advanced_alchemy.utils.serializers.CATTRS_INSTALLED", False),
+            mock.patch("advanced_alchemy.utils.serialization.CATTRS_INSTALLED", False),
             mock.patch("advanced_alchemy.service._util.CATTRS_INSTALLED", False),
         ):
             result = converter.to_schema(data, schema_type=SimpleAttrsModel)

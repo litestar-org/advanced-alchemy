@@ -4,7 +4,7 @@
 This module re-exports the public surface that lived here in v1.x from
 its new locations under :mod:`advanced_alchemy.typing` (foundational
 optional-dependency stubs and feature-detection flags) and
-:mod:`advanced_alchemy.utils.serializers` (schema/dict/attrs type guards
+:mod:`advanced_alchemy.utils.serialization` (schema/dict/attrs type guards
 and ``schema_dump``).  Importing any name from this module emits a
 :class:`DeprecationWarning`.
 
@@ -41,7 +41,7 @@ _TYPING_NAMES = (
     "convert",
 )
 
-# Names that moved to advanced_alchemy.utils.serializers
+# Names that moved to advanced_alchemy.utils.serialization
 _SERIALIZERS_NAMES = (
     "AttrsInstance",
     "BulkModelDictT",
@@ -87,11 +87,11 @@ _SERIALIZERS_NAMES = (
     "has",
 )
 
-# Source module for each renamed symbol. ``utils.serializers`` wins for any
+# Source module for each renamed symbol. ``utils.serialization`` wins for any
 # name present in both lists.
 _RENAMES: "dict[str, str]" = {
     **dict.fromkeys(_TYPING_NAMES, "advanced_alchemy.typing"),
-    **dict.fromkeys(_SERIALIZERS_NAMES, "advanced_alchemy.utils.serializers"),
+    **dict.fromkeys(_SERIALIZERS_NAMES, "advanced_alchemy.utils.serialization"),
 }
 
 # Constants that never moved — kept here for backwards compatibility.

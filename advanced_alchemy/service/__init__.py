@@ -22,7 +22,7 @@ from advanced_alchemy.service._sync import (
 from advanced_alchemy.service._util import ResultConverter, find_filter
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.typing import ATTRS_INSTALLED
-from advanced_alchemy.utils.serializers import (
+from advanced_alchemy.utils.serialization import (
     AttrsInstance,
     FilterTypeT,
     ModelDictListT,

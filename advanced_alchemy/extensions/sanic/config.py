@@ -34,8 +34,7 @@ from advanced_alchemy.config import EngineConfig as _EngineConfig
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemyAsyncConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig as _SQLAlchemySyncConfig
 from advanced_alchemy.routing.maker import dispose_session_maker_async, dispose_session_maker_sync
-from advanced_alchemy.utils.serialization import decode_json, encode_json
-from advanced_alchemy.utils.serializers import schema_dump
+from advanced_alchemy.utils.serialization import decode_json, encode_json, schema_dump
 
 logger = logging.getLogger("advanced_alchemy.extensions.sanic")
 

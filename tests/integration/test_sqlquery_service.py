@@ -18,7 +18,7 @@ from advanced_alchemy.service import SQLAlchemyAsyncQueryService, SQLAlchemySync
 from advanced_alchemy.service._async import SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.service._sync import SQLAlchemySyncRepositoryService
 from advanced_alchemy.utils.fixtures import open_fixture, open_fixture_async
-from advanced_alchemy.utils.serializers import (
+from advanced_alchemy.utils.serialization import (
     is_msgspec_struct,
     is_msgspec_struct_with_field,
     is_msgspec_struct_without_field,

@@ -18,8 +18,7 @@ from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemy
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig as _SQLAlchemySyncConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.routing.maker import dispose_session_maker_async, dispose_session_maker_sync
-from advanced_alchemy.utils.serialization import decode_json, encode_json
-from advanced_alchemy.utils.serializers import schema_dump
+from advanced_alchemy.utils.serialization import decode_json, encode_json, schema_dump
 
 if TYPE_CHECKING:
     from flask import Flask, Response
