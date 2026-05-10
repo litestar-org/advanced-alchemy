@@ -1131,7 +1131,7 @@ If you need to serialize data manually using Advanced Alchemy's system (e.g., fo
 
 .. code-block:: python
 
-    from advanced_alchemy import encode_json, decode_json
+    from advanced_alchemy.utils.serialization import decode_json, encode_json
 
     data = {"timestamp": datetime.now(), "custom": MyCustomType("example")}
     json_string = encode_json(
