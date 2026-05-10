@@ -1083,7 +1083,7 @@ ambient credentials, such as IAM roles or workload identity.
 Custom JSON Serialization
 -------------------------
 
-Advanced Alchemy includes a flexible, protocol-based JSON serialization system that integrates seamlessly with Litestar. The ``SQLAlchemyPlugin`` automatically contributes built-in type encoders for database-specific types (like ``asyncpg`` and ``uuid_utils`` UUIDs) to the Litestar application configuration.
+Advanced Alchemy includes a flexible, protocol-based JSON serialization system that integrates seamlessly with Litestar. The ``SQLAlchemyPlugin`` automatically contributes built-in type encoders for database-specific types (like ``asyncpg`` and ``uuid_utils`` UUIDs) to the Litestar application configuration. It also contributes request-side decoders for supported database-specific types.
 
 Built-in Encoders
 ^^^^^^^^^^^^^^^^^
@@ -1100,7 +1100,7 @@ By default, the plugin registers encoders for:
 Extending Serialization
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-You can extend or override these encoders at the application level by providing the ``type_encoders`` parameter to your Litestar configuration. User-defined encoders always take precedence over the built-in ones.
+You can extend or override these encoders at the application level by providing the ``type_encoders`` parameter to your Litestar configuration. User-defined encoders and decoders always take precedence over the built-in ones.
 
 .. code-block:: python
 
@@ -1114,10 +1114,14 @@ You can extend or override these encoders at the application level by providing 
     def encode_custom_type(obj: MyCustomType) -> str:
         return f"Custom: {obj.name}"
 
+    def decode_custom_type(type_: type[MyCustomType], value: str) -> MyCustomType:
+        return type_(value.removeprefix("Custom: "))
+
     app = Litestar(
         route_handlers=[...],
         plugins=[SQLAlchemyPlugin(config=SQLAlchemyAsyncConfig(...))],
         type_encoders={MyCustomType: encode_custom_type},
+        type_decoders=[(lambda type_: type_ is MyCustomType, decode_custom_type)],
     )
 
 Manual Serialization

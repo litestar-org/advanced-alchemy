@@ -70,7 +70,7 @@ class SQLAlchemySerializationPlugin(SerializationPlugin, InitPluginProtocol, _sl
         aa_encoders = _get_aa_type_encoders()
         aa_decoders = _get_aa_type_decoders()
         app_config.type_encoders = {**aa_encoders, **(app_config.type_encoders or {})}
-        app_config.type_decoders = [*aa_decoders, *(app_config.type_decoders or [])]
+        app_config.type_decoders = [*(app_config.type_decoders or []), *aa_decoders]
         return app_config
 
     def supports_type(self, field_definition: FieldDefinition) -> bool:

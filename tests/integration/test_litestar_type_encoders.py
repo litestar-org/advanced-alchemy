@@ -109,12 +109,15 @@ async def test_aa_type_decoders_merging_logic() -> None:
     ):
         plugin = SQLAlchemySerializationPlugin()
 
-        # User decoders ordered FIRST (higher precedence in Litestar's resolution).
+        # User decoders must be ordered FIRST because Litestar uses the first
+        # matching predicate when resolving decoders.
         app_config = AppConfig(type_decoders=[(user_predicate, user_decoder)])
         plugin.on_app_init(app_config)
         assert app_config.type_decoders is not None
-        assert (user_predicate, user_decoder) in app_config.type_decoders
-        assert (fake_predicate, fake_decoder) in app_config.type_decoders
+        assert app_config.type_decoders == [
+            (user_predicate, user_decoder),
+            (fake_predicate, fake_decoder),
+        ]
 
 
 @pytest.mark.anyio
