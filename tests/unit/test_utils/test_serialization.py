@@ -6,6 +6,7 @@ import datetime
 import importlib
 import json
 import threading
+import time
 from decimal import Decimal
 from enum import Enum
 from ipaddress import IPv4Address, IPv4Interface, IPv4Network, IPv6Address, IPv6Interface, IPv6Network
@@ -212,6 +213,36 @@ def test_msgspec_mro_lookup() -> None:
     assert serializer.encode({"obj": ChildCustomType("child")}) == '{"obj":"parent:child"}'
 
 
+@pytest.mark.skipif(not MSGSPEC_INSTALLED, reason="msgspec not installed")
+def test_msgspec_custom_type_encoders_override_native_values() -> None:
+    serializer = MsgspecSerializer(
+        type_encoders={
+            Decimal: lambda _: "custom-decimal",
+            UUID: lambda _: "custom-uuid",
+            bytes: lambda _: "custom-bytes",
+            datetime.datetime: lambda _: "custom-datetime",
+        }
+    )
+
+    result = json.loads(
+        serializer.encode(
+            {
+                "decimal": Decimal("1.2"),
+                "uuid": UUID("12345678-1234-5678-1234-567812345678"),
+                "bytes": b"abc",
+                "datetime": datetime.datetime(2026, 1, 2, 3, 4, 5, tzinfo=datetime.timezone.utc),
+            }
+        )
+    )
+
+    assert result == {
+        "decimal": "custom-decimal",
+        "uuid": "custom-uuid",
+        "bytes": "custom-bytes",
+        "datetime": "custom-datetime",
+    }
+
+
 # ----------------------------------------------------------------------
 # Orjson serializer
 # ----------------------------------------------------------------------
@@ -384,6 +415,40 @@ def test_get_serializer_thread_safety() -> None:
     assert all(r is results[0] for r in results)
 
 
+def test_get_serializer_default_initialization_is_locked(monkeypatch: pytest.MonkeyPatch) -> None:
+    import advanced_alchemy.utils.serialization as serialization_module
+
+    created: list[JSONSerializer] = []
+    creation_lock = threading.Lock()
+    start_barrier = threading.Barrier(20)
+    monkeypatch.setattr(serialization_module, "_default_serializer", None)
+
+    def create_default_serializer() -> JSONSerializer:
+        time.sleep(0.01)
+        serializer = StandardLibSerializer()
+        with creation_lock:
+            created.append(serializer)
+        return serializer
+
+    monkeypatch.setattr(serialization_module, "_create_default_serializer", create_default_serializer)
+
+    results: list[JSONSerializer] = []
+
+    def worker() -> None:
+        start_barrier.wait()
+        results.append(serialization_module.get_serializer())
+
+    threads = [threading.Thread(target=worker) for _ in range(20)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(created) == 1
+    assert len(results) == 20
+    assert all(result is created[0] for result in results)
+
+
 # ----------------------------------------------------------------------
 # Public API
 # ----------------------------------------------------------------------
@@ -398,6 +463,11 @@ def test_encode_json_default() -> None:
 def test_encode_json_with_type_encoders() -> None:
     result = encode_json({"obj": CustomType("test")}, type_encoders={CustomType: lambda x: x.value})
     assert result == '{"obj":"test"}'
+
+
+def test_encode_json_custom_encoder_overrides_backend_native_type() -> None:
+    result = encode_json({"x": Decimal("1.2")}, type_encoders={Decimal: lambda _: "custom"})
+    assert result == '{"x":"custom"}'
 
 
 def test_encode_json_as_bytes() -> None:

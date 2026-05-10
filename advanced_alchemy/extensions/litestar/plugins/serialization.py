@@ -24,6 +24,13 @@ def _get_aa_type_encoders() -> "dict[type, Callable[[Any], Any]]":
     precedence than user-supplied encoders.
     """
     encoders: dict[type, Callable[[Any], Any]] = {**DEFAULT_TYPE_ENCODERS}
+    encoders.update(_get_aa_litestar_type_encoders())
+    return encoders
+
+
+def _get_aa_litestar_type_encoders() -> "dict[type, Callable[[Any], Any]]":
+    """Return Litestar-only compatibility encoders for database UUID types."""
+    encoders: dict[type, Callable[[Any], Any]] = {}
 
     with contextlib.suppress(ImportError):
         from asyncpg.pgproto import pgproto  # pyright: ignore[reportMissingImports]
@@ -38,6 +45,18 @@ def _get_aa_type_encoders() -> "dict[type, Callable[[Any], Any]]":
     return encoders
 
 
+def _is_uuid_utils_uuid_type(value: Any) -> bool:
+    with contextlib.suppress(ImportError):
+        import uuid_utils  # pyright: ignore[reportMissingImports]
+
+        return value is uuid_utils.UUID  # pyright: ignore[reportUnknownMemberType]
+    return False
+
+
+def _decode_uuid_utils_uuid(target_type: type, value: Any) -> Any:
+    return target_type(str(value))
+
+
 def _get_aa_type_decoders() -> "list[tuple[Callable[[Any], bool], Callable[[type, Any], Any]]]":
     """Return Advanced Alchemy's built-in Litestar type decoders.
 
@@ -50,11 +69,28 @@ def _get_aa_type_decoders() -> "list[tuple[Callable[[Any], bool], Callable[[type
     with contextlib.suppress(ImportError):
         import uuid_utils  # pyright: ignore[reportMissingImports]
 
-        decoders.append(
-            (lambda x: x is uuid_utils.UUID, lambda t, v: t(str(v)))  # pyright: ignore[reportUnknownMemberType]
-        )
+        if uuid_utils is not None:
+            decoders.append((_is_uuid_utils_uuid_type, _decode_uuid_utils_uuid))
 
     return decoders
+
+
+def merge_aa_litestar_type_encoders(app_config: "AppConfig", *, include_default_encoders: bool) -> None:
+    """Merge AA's Litestar encoders/decoders into app config.
+
+    User-supplied encoders and decoders keep precedence.  ``include_default_encoders``
+    is enabled by ``SQLAlchemySerializationPlugin``; ``SQLAlchemyInitPlugin`` uses
+    the UUID-only path to preserve its released direct-registration behavior.
+    """
+    aa_encoders = _get_aa_type_encoders() if include_default_encoders else _get_aa_litestar_type_encoders()
+    aa_decoders = _get_aa_type_decoders()
+    app_config.type_encoders = {**aa_encoders, **(app_config.type_encoders or {})}
+
+    type_decoders = list(app_config.type_decoders or [])
+    for decoder in aa_decoders:
+        if decoder not in type_decoders:
+            type_decoders.append(decoder)
+    app_config.type_decoders = type_decoders
 
 
 class SQLAlchemySerializationPlugin(SerializationPlugin, InitPluginProtocol, _slots_base.SlotsBase):
@@ -67,10 +103,7 @@ class SQLAlchemySerializationPlugin(SerializationPlugin, InitPluginProtocol, _sl
         AA encoders/decoders are added with lower precedence so user-supplied
         ``type_encoders`` / ``type_decoders`` on the application config win.
         """
-        aa_encoders = _get_aa_type_encoders()
-        aa_decoders = _get_aa_type_decoders()
-        app_config.type_encoders = {**aa_encoders, **(app_config.type_encoders or {})}
-        app_config.type_decoders = [*(app_config.type_decoders or []), *aa_decoders]
+        merge_aa_litestar_type_encoders(app_config, include_default_encoders=True)
         return app_config
 
     def supports_type(self, field_definition: FieldDefinition) -> bool:

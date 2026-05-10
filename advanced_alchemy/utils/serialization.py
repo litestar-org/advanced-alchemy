@@ -627,7 +627,7 @@ class BaseJSONSerializer(ABC):
     type encoder merging and enc_hook creation.
     """
 
-    __slots__ = ("_type_encoders",)
+    __slots__ = ("_custom_type_encoders", "_type_encoders")
 
     def __init__(self, type_encoders: "Optional[TypeEncodersMap]" = None) -> None:
         """Initialize serializer with optional custom type encoders.
@@ -636,10 +636,63 @@ class BaseJSONSerializer(ABC):
             type_encoders: Custom type encoders to merge with defaults.
                 User-provided encoders take precedence over defaults.
         """
+        self._custom_type_encoders: dict[type, Callable[[Any], Any]] = dict(type_encoders or {})
         self._type_encoders: dict[type, Callable[[Any], Any]] = {
             **DEFAULT_TYPE_ENCODERS,
             **(type_encoders or {}),
         }
+
+    @staticmethod
+    def _get_type_encoder(
+        value: Any,
+        type_encoders: Mapping[type, Callable[[Any], Any]],
+    ) -> "Optional[Callable[[Any], Any]]":
+        """Return the encoder matching ``value`` by exact type or MRO."""
+        for base in value.__class__.__mro__[:-1]:
+            encoder = type_encoders.get(base)
+            if encoder is not None:
+                return encoder
+        return None
+
+    def _encode_mapping_key_with_custom_type_encoder(self, key: Any) -> Any:
+        encoder = self._get_type_encoder(key, self._custom_type_encoders)
+        return encoder(key) if encoder is not None else key
+
+    def _apply_custom_type_encoders_to_mapping(self, value: Mapping[object, object]) -> dict[Any, Any]:
+        return {
+            self._encode_mapping_key_with_custom_type_encoder(key): self._apply_custom_type_encoders(item)
+            for key, item in value.items()
+        }
+
+    def _apply_custom_type_encoders_to_list(self, value: list[object]) -> list[Any]:
+        return [self._apply_custom_type_encoders(item) for item in value]
+
+    def _apply_custom_type_encoders_to_tuple(self, value: tuple[object, ...]) -> tuple[Any, ...]:
+        return tuple(self._apply_custom_type_encoders(item) for item in value)
+
+    def _apply_custom_type_encoders_to_set(self, value: Union[set[object], frozenset[object]]) -> list[Any]:
+        return [self._apply_custom_type_encoders(item) for item in value]
+
+    def _apply_custom_type_encoders(self, value: Any) -> Any:
+        """Apply user-provided type encoders before backend-native encoding."""
+        encoder = self._get_type_encoder(value, self._custom_type_encoders)
+        if encoder is not None:
+            return encoder(value)
+
+        if isinstance(value, Mapping):
+            return self._apply_custom_type_encoders_to_mapping(cast("Mapping[object, object]", value))
+        if isinstance(value, list):
+            return self._apply_custom_type_encoders_to_list(cast("list[object]", value))
+        if isinstance(value, tuple):
+            return self._apply_custom_type_encoders_to_tuple(cast("tuple[object, ...]", value))
+        if isinstance(value, (set, frozenset)):
+            return self._apply_custom_type_encoders_to_set(cast("Union[set[object], frozenset[object]]", value))
+        return value
+
+    def _prepare_data_for_encode(self, data: Any) -> Any:
+        if not self._custom_type_encoders:
+            return data
+        return self._apply_custom_type_encoders(data)
 
     def _create_enc_hook(self) -> "Callable[[Any], Any]":
         """Create an encoding hook function from type_encoders.
@@ -653,11 +706,9 @@ class BaseJSONSerializer(ABC):
         type_encoders = self._type_encoders
 
         def enc_hook(value: Any) -> Any:
-            # Walk MRO to find encoder for value's type or parent class
-            for base in value.__class__.__mro__[:-1]:
-                encoder = type_encoders.get(base)
-                if encoder is not None:
-                    return encoder(value)
+            encoder = self._get_type_encoder(value, type_encoders)
+            if encoder is not None:
+                return encoder(value)
             # Fallback: try string conversion
             try:
                 return str(value)
@@ -728,7 +779,7 @@ class MsgspecSerializer(BaseJSONSerializer):
         """
         from msgspec.json import Decoder, Encoder
 
-        super().__init__(type_encoders)
+        super().__init__(None if enc_hook is not None else type_encoders)
 
         self._enc_hook = enc_hook if enc_hook is not None else self._create_enc_hook()
         self._encoder: Final = Encoder(enc_hook=self._enc_hook)
@@ -753,7 +804,7 @@ class MsgspecSerializer(BaseJSONSerializer):
         Returns:
             JSON representation as string or bytes.
         """
-        result = self._encoder.encode(data)
+        result = self._encoder.encode(self._prepare_data_for_encode(data))
         return result if as_bytes else result.decode("utf-8")
 
     def decode(self, data: "Union[str, bytes]", *, decode_bytes: bool = True) -> Any:
@@ -822,7 +873,7 @@ class OrjsonSerializer(BaseJSONSerializer):
         if NUMPY_INSTALLED:
             options |= orjson_module.OPT_SERIALIZE_NUMPY
 
-        result: bytes = orjson_module.dumps(data, default=self._enc_hook, option=options)
+        result: bytes = orjson_module.dumps(self._prepare_data_for_encode(data), default=self._enc_hook, option=options)
         return result if as_bytes else result.decode("utf-8")
 
     def decode(self, data: "Union[str, bytes]", *, decode_bytes: bool = True) -> Any:
@@ -885,7 +936,7 @@ class StandardLibSerializer(BaseJSONSerializer):
         Returns:
             JSON representation as string or bytes.
         """
-        result = json.dumps(data, default=self._enc_hook)
+        result = json.dumps(self._prepare_data_for_encode(data), default=self._enc_hook)
         return result.encode("utf-8") if as_bytes else result
 
     def decode(self, data: "Union[str, bytes]", *, decode_bytes: bool = True) -> Any:
@@ -976,9 +1027,10 @@ def get_serializer(type_encoders: "Optional[TypeEncodersMap]" = None) -> "JSONSe
     global _default_serializer  # noqa: PLW0603
 
     if type_encoders is None:
-        if _default_serializer is None:
-            _default_serializer = _create_default_serializer()
-        return _default_serializer
+        with _cache_lock:
+            if _default_serializer is None:
+                _default_serializer = _create_default_serializer()
+            return _default_serializer
 
     # Create hashable cache key using type and function id
     # Note: Different lambda objects create different keys even if equivalent

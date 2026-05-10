@@ -135,6 +135,9 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPlugin, _slots_base.SlotsBase)
             import uuid_utils  # pyright: ignore[reportMissingImports]
 
             signature_namespace_values.update({"uuid_utils.UUID": uuid_utils.UUID})  # pyright: ignore[reportUnknownMemberType]
+        from advanced_alchemy.extensions.litestar.plugins.serialization import merge_aa_litestar_type_encoders
+
+        merge_aa_litestar_type_encoders(app_config, include_default_encoders=False)
         configure_exception_handler = False
         for config in self.config:
             if config.set_default_exception_handler:
