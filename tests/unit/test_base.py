@@ -1,15 +1,64 @@
 # pyright: reportUnusedImport=false
 from __future__ import annotations
 
+import importlib
+import sys
+import types
+import uuid as uuid_module
 import warnings
 from typing import cast
 
+import pytest
 from sqlalchemy import Table, create_engine
 from sqlalchemy.dialects import mssql, oracle, postgresql
 from sqlalchemy.orm import declarative_mixin
 from sqlalchemy.schema import CreateTable
 
 from tests.helpers import purge_module
+
+_MISSING = object()
+
+
+def _reload_uuid_mixin(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    uuid_utils_installed: bool,
+    fake_uuid_utils_compat: types.ModuleType | None = None,
+    version_info: tuple[int, int, int, str, int] = (3, 14, 0, "final", 0),
+) -> types.ModuleType:
+    import advanced_alchemy.types as alchemy_types
+
+    module_names = ("advanced_alchemy.mixins.uuid", "uuid_utils.compat", "uuid_utils")
+    previous_modules = {name: sys.modules.get(name, _MISSING) for name in module_names}
+    mixins_package = sys.modules.get("advanced_alchemy.mixins")
+    previous_uuid_attr = getattr(mixins_package, "uuid", _MISSING) if mixins_package is not None else _MISSING
+
+    monkeypatch.setattr(sys, "version_info", version_info)
+    monkeypatch.setattr(alchemy_types, "UUID_UTILS_INSTALLED", object() if uuid_utils_installed else None)
+
+    try:
+        for name in module_names:
+            sys.modules.pop(name, None)
+        if mixins_package is not None and hasattr(mixins_package, "uuid"):
+            delattr(mixins_package, "uuid")
+        if fake_uuid_utils_compat is not None:
+            fake_uuid_utils = types.ModuleType("uuid_utils")
+            fake_uuid_utils.__path__ = []  # type: ignore[attr-defined]
+            sys.modules["uuid_utils"] = fake_uuid_utils
+            sys.modules["uuid_utils.compat"] = fake_uuid_utils_compat
+        return importlib.import_module("advanced_alchemy.mixins.uuid")
+    finally:
+        for name, previous_module in previous_modules.items():
+            if previous_module is _MISSING:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = cast(types.ModuleType, previous_module)
+        if mixins_package is not None:
+            if previous_uuid_attr is _MISSING:
+                if hasattr(mixins_package, "uuid"):
+                    delattr(mixins_package, "uuid")
+            else:
+                setattr(mixins_package, "uuid", previous_uuid_attr)
 
 
 def test_deprecated_classes_functionality() -> None:
@@ -47,6 +96,80 @@ def test_deprecated_classes_functionality() -> None:
     assert hasattr(nanoid_pk, "_sentinel")
     assert hasattr(audit, "created_at")
     assert hasattr(audit, "updated_at")
+
+
+def test_uuid_utils_generators_are_preferred_when_installed_on_python_314(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that installing uuid-utils keeps uuid generation on uuid-utils."""
+
+    def native_uuid6() -> uuid_module.UUID:
+        return uuid_module.uuid4()
+
+    def native_uuid7() -> uuid_module.UUID:
+        return uuid_module.uuid4()
+
+    def uuid_utils_uuid4() -> uuid_module.UUID:
+        return uuid_module.uuid4()
+
+    def uuid_utils_uuid6() -> uuid_module.UUID:
+        return uuid_module.uuid4()
+
+    def uuid_utils_uuid7() -> uuid_module.UUID:
+        return uuid_module.uuid4()
+
+    monkeypatch.setattr(uuid_module, "uuid6", native_uuid6, raising=False)
+    monkeypatch.setattr(uuid_module, "uuid7", native_uuid7, raising=False)
+
+    fake_compat = types.ModuleType("uuid_utils.compat")
+    fake_compat.uuid4 = uuid_utils_uuid4  # type: ignore[attr-defined]
+    fake_compat.uuid6 = uuid_utils_uuid6  # type: ignore[attr-defined]
+    fake_compat.uuid7 = uuid_utils_uuid7  # type: ignore[attr-defined]
+
+    uuid_mixin = _reload_uuid_mixin(
+        monkeypatch,
+        uuid_utils_installed=True,
+        fake_uuid_utils_compat=fake_compat,
+    )
+
+    assert uuid_mixin.uuid4 is uuid_utils_uuid4
+    assert uuid_mixin.uuid6 is uuid_utils_uuid6
+    assert uuid_mixin.uuid7 is uuid_utils_uuid7
+
+
+def test_native_uuid_generators_are_used_on_python_314_without_uuid_utils(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that Python 3.14 native UUID generators are used without uuid-utils."""
+
+    def native_uuid6() -> uuid_module.UUID:
+        return uuid_module.uuid4()
+
+    def native_uuid7() -> uuid_module.UUID:
+        return uuid_module.uuid4()
+
+    monkeypatch.setattr(uuid_module, "uuid6", native_uuid6, raising=False)
+    monkeypatch.setattr(uuid_module, "uuid7", native_uuid7, raising=False)
+
+    uuid_mixin = _reload_uuid_mixin(monkeypatch, uuid_utils_installed=False)
+
+    assert uuid_mixin.uuid6 is native_uuid6
+    assert uuid_mixin.uuid7 is native_uuid7
+
+
+def test_uuid_generators_fall_back_to_uuid4_before_python_314_without_uuid_utils(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that UUID6/7 generators fall back to UUID4 before Python 3.14."""
+
+    uuid_mixin = _reload_uuid_mixin(
+        monkeypatch,
+        uuid_utils_installed=False,
+        version_info=(3, 13, 0, "final", 0),
+    )
+
+    assert uuid_mixin.uuid6 is uuid_mixin.uuid4
+    assert uuid_mixin.uuid7 is uuid_mixin.uuid4
 
 
 def test_identity_primary_key_generates_identity_ddl() -> None:
