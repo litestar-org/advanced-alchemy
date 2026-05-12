@@ -3,11 +3,10 @@ import sys
 from collections.abc import AsyncGenerator, Generator
 from contextlib import suppress
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import pytest
 import pytest_asyncio
-from minio import Minio  # type: ignore[import-untyped]
 from pytest_databases.docker.minio import MinioService
 from sqlalchemy import Engine, String, event
 from sqlalchemy.exc import InvalidRequestError
@@ -57,6 +56,33 @@ def remove_listeners() -> None:
 
     # Reset async context flag to ensure clean state
     set_async_context(False)
+
+
+def create_s3_filesystem(minio_service: "MinioService", *, asynchronous: bool = False) -> Any:
+    try:
+        import s3fs
+    except ImportError:
+        pytest.skip("s3fs not installed")
+
+    return s3fs.S3FileSystem(
+        anon=False,
+        key=minio_service.access_key,
+        secret=minio_service.secret_key,
+        endpoint_url=f"http://{minio_service.endpoint}",
+        client_kwargs={
+            "verify": False,
+            "use_ssl": False,
+        },
+        asynchronous=asynchronous,
+        loop=None,
+        skip_instance_cache=True,
+    )
+
+
+def ensure_minio_bucket(minio_service: "MinioService", bucket_name: str) -> None:
+    fs = create_s3_filesystem(minio_service)
+    with suppress(FileExistsError):
+        fs.mkdir(bucket_name, exist_ok=True)
 
 
 # --- Fixtures ---
@@ -229,31 +255,15 @@ async def async_session(
 )
 async def test_fsspec_s3_basic_operations_async(
     storage_registry: StorageRegistry,
-    minio_client: "Minio",
     minio_service: "MinioService",
     minio_default_bucket_name: str,
 ) -> None:
     """Test basic save, get_content, delete via backend and FileObject with prefix."""
     remove_listeners()
-    try:
-        import s3fs
-    except ImportError:
-        pytest.skip("s3fs not installed")
-
-    assert minio_client.bucket_exists(minio_default_bucket_name)
-    _ = minio_client
+    ensure_minio_bucket(minio_service, minio_default_bucket_name)
 
     # Create s3fs filesystem instance without bucket info
-    fs = s3fs.S3FileSystem(
-        anon=False,
-        key=minio_service.access_key,
-        secret=minio_service.secret_key,
-        endpoint_url=f"http://{minio_service.endpoint}",
-        client_kwargs={
-            "verify": False,
-            "use_ssl": False,
-        },
-    )
+    fs = create_s3_filesystem(minio_service)
 
     # Initialize backend with prefix
     backend = FSSpecBackend(
@@ -311,33 +321,15 @@ async def test_fsspec_s3_basic_operations_async(
 )
 def test_fsspec_s3_basic_operations_sync(
     storage_registry: StorageRegistry,
-    minio_client: "Minio",
     minio_service: "MinioService",
     minio_default_bucket_name: str,
 ) -> None:
     """Test basic save, get_content, delete via backend and FileObject with prefix."""
     remove_listeners()
-    try:
-        import s3fs
-    except ImportError:
-        pytest.skip("s3fs not installed")
-
-    assert minio_client.bucket_exists(minio_default_bucket_name)
-    _ = minio_client
+    ensure_minio_bucket(minio_service, minio_default_bucket_name)
 
     # Create s3fs filesystem instance without bucket info
-    fs = s3fs.S3FileSystem(
-        anon=False,
-        key=minio_service.access_key,
-        secret=minio_service.secret_key,
-        endpoint_url=f"http://{minio_service.endpoint}",
-        client_kwargs={
-            "verify": False,
-            "use_ssl": False,
-        },
-        asynchronous=False,
-        loop=None,
-    )
+    fs = create_s3_filesystem(minio_service)
 
     # Initialize backend with prefix
     backend = FSSpecBackend(
@@ -391,14 +383,12 @@ def test_fsspec_s3_basic_operations_sync(
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_s3_basic_operations_async(
     storage_registry: StorageRegistry,
-    minio_client: "Minio",
     minio_service: "MinioService",
     minio_default_bucket_name: str,
 ) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
     remove_listeners()
-    assert minio_client.bucket_exists(minio_default_bucket_name)
-    _ = minio_client
+    ensure_minio_bucket(minio_service, minio_default_bucket_name)
     backend = ObstoreBackend(
         key="s3_test_store",
         fs=f"s3://{minio_default_bucket_name}/",
@@ -456,14 +446,12 @@ async def test_obstore_s3_basic_operations_async(
 @pytest.mark.xdist_group("file_object")
 def test_obstore_s3_basic_operations_sync(
     storage_registry: StorageRegistry,
-    minio_client: "Minio",
     minio_service: "MinioService",
     minio_default_bucket_name: str,
 ) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
     remove_listeners()
-    assert minio_client.bucket_exists(minio_default_bucket_name)
-    _ = minio_client
+    ensure_minio_bucket(minio_service, minio_default_bucket_name)
     backend = ObstoreBackend(
         key="s3_test_store",
         fs=f"s3://{minio_default_bucket_name}/",

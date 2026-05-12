@@ -34,7 +34,6 @@ from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from sqlalchemy.sql.elements import Label
 from typing_extensions import TypeAlias
 
-from advanced_alchemy._serialization import encode_complex_type, encode_json
 from advanced_alchemy.base import ModelProtocol
 from advanced_alchemy.exceptions import ErrorMessages
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception as _wrap_sqlalchemy_exception
@@ -46,6 +45,7 @@ from advanced_alchemy.filters import (
 )
 from advanced_alchemy.repository._typing import arrays_equal, is_numpy_array
 from advanced_alchemy.repository.typing import ModelT, OrderingPair, PrimaryKeyType
+from advanced_alchemy.utils.serialization import encode_complex_type, encode_json
 
 DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
     int,

@@ -186,7 +186,7 @@ def test_cache_manager_make_key_adds_prefix(memory_config: CacheConfig) -> None:
 @pytest.mark.skipif(not DOGPILE_CACHE_INSTALLED, reason="dogpile.cache not installed")
 def test_cache_manager_get_entity(memory_config: CacheConfig) -> None:
     """Test get_entity retrieves and deserializes cached entity."""
-    from advanced_alchemy._serialization import encode_json
+    from advanced_alchemy.utils.serialization import encode_json
 
     manager = CacheManager(memory_config)
 

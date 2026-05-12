@@ -13,12 +13,15 @@ from advanced_alchemy import (
     types,
     utils,
 )
+from advanced_alchemy.utils.serialization import decode_json, encode_json
 
 __all__ = (
     "alembic",
     "base",
     "cli",
     "config",
+    "decode_json",
+    "encode_json",
     "exceptions",
     "extensions",
     "filters",
