@@ -615,6 +615,53 @@ async def test_async_config_cache_config_repo_auto_pickup(
             await conn.run_sync(CachedAuthor.metadata.drop_all)
 
 
+@pytest.mark.asyncio
+@pytest.mark.aiosqlite
+@pytest.mark.skipif(not DOGPILE_CACHE_INSTALLED, reason="dogpile.cache not installed")
+async def test_async_config_cache_config_same_session_double_get(
+    aiosqlite_engine: AsyncEngine,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Documented example: two consecutive get() calls in one session — second is a cache hit.
+
+    Cache hit serves a freshly deserialized instance, so identity differs from the first call.
+    """
+    from advanced_alchemy.config import SQLAlchemyAsyncConfig
+
+    worker_id = get_worker_id(request)
+    CachedAuthor = get_cached_author_model("aiosqlite_same_session", worker_id)
+
+    async with aiosqlite_engine.begin() as conn:
+        await conn.run_sync(CachedAuthor.metadata.create_all)
+
+    try:
+        config = SQLAlchemyAsyncConfig(
+            engine_instance=aiosqlite_engine,
+            cache_config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300, key_prefix="same:"),
+        )
+
+        class CachedAuthorRepository(SQLAlchemyAsyncRepository[Any]):
+            model_type = CachedAuthor
+
+        async with config.get_session() as session:
+            repo = CachedAuthorRepository(session=session, auto_expunge=True)
+            author = CachedAuthor(name="Same Session Async")
+            await repo.add(author)
+            await session.commit()
+            author_id = author.id
+
+        async with config.get_session() as session:
+            repo = CachedAuthorRepository(session=session, auto_expunge=True)
+            first = await repo.get(author_id)
+            second = await repo.get(author_id)
+            assert first.name == second.name == "Same Session Async"
+            # Cache hit returns a freshly deserialized instance, not the same Python object.
+            assert first is not second
+    finally:
+        async with aiosqlite_engine.begin() as conn:
+            await conn.run_sync(CachedAuthor.metadata.drop_all)
+
+
 @pytest.mark.sqlite
 @pytest.mark.skipif(not DOGPILE_CACHE_INSTALLED, reason="dogpile.cache not installed")
 def test_sync_config_cache_config_repo_auto_pickup(
@@ -663,5 +710,45 @@ def test_sync_config_cache_config_repo_auto_pickup(
             repo = CachedAuthorRepository(session=session, auto_expunge=True)
             from_cache = repo.get(author_id)
             assert from_cache.name == "Cfg Sync"
+    finally:
+        CachedAuthor.metadata.drop_all(sqlite_engine)
+
+
+@pytest.mark.sqlite
+@pytest.mark.skipif(not DOGPILE_CACHE_INSTALLED, reason="dogpile.cache not installed")
+def test_sync_config_cache_config_same_session_double_get(
+    sqlite_engine: Engine,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Documented example: two consecutive get() calls in one session — second is a cache hit."""
+    from advanced_alchemy.config import SQLAlchemySyncConfig
+
+    worker_id = get_worker_id(request)
+    CachedAuthor = get_cached_author_model("sqlite_same_session", worker_id)
+
+    CachedAuthor.metadata.create_all(sqlite_engine)
+
+    try:
+        config = SQLAlchemySyncConfig(
+            engine_instance=sqlite_engine,
+            cache_config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300, key_prefix="same:"),
+        )
+
+        class CachedAuthorRepository(SQLAlchemySyncRepository[Any]):
+            model_type = CachedAuthor
+
+        with config.get_session() as session:
+            repo = CachedAuthorRepository(session=session, auto_expunge=True)
+            author = CachedAuthor(name="Same Session Sync")
+            repo.add(author)
+            session.commit()
+            author_id = author.id
+
+        with config.get_session() as session:
+            repo = CachedAuthorRepository(session=session, auto_expunge=True)
+            first = repo.get(author_id)
+            second = repo.get(author_id)
+            assert first.name == second.name == "Same Session Sync"
+            assert first is not second
     finally:
         CachedAuthor.metadata.drop_all(sqlite_engine)
