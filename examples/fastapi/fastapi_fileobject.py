@@ -37,7 +37,7 @@ alchemy_config = SQLAlchemyAsyncConfig(
 app = FastAPI()
 alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
 document_router = APIRouter()
-# For local development, run RustFS on port 9000 and create the static-files bucket first.
+# For local development, run an S3-compatible storage service (e.g., RustFS or MinIO) on port 9000 and create the 'static-files' bucket first.
 s3_backend = ObstoreBackend(
     key="local",
     fs="s3://static-files/",

@@ -24,7 +24,7 @@ from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
 from advanced_alchemy.types.file_object.data_type import StoredObject
 
 # Object storage backend
-# For local development, run RustFS on port 9000 and create the static-files bucket first.
+# For local development, run an S3-compatible storage service (e.g., RustFS or MinIO) on port 9000 and create the 'static-files' bucket first.
 s3_backend = ObstoreBackend(
     key="local",
     fs="s3://static-files/",
