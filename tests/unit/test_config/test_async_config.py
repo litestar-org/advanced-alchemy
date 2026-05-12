@@ -151,7 +151,9 @@ def test_post_init_cache_config_builds_manager() -> None:
         cache_config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300),
     )
     assert isinstance(config.cache_manager, CacheManager)
-    assert config.session_config.info["cache_manager"] is config.cache_manager
+    info = config.session_config.info
+    assert isinstance(info, dict)
+    assert info["cache_manager"] is config.cache_manager
 
 
 def test_post_init_explicit_cache_manager_overrides() -> None:
@@ -164,14 +166,18 @@ def test_post_init_explicit_cache_manager_overrides() -> None:
         cache_manager=manager,
     )
     assert config.cache_manager is manager
-    assert config.session_config.info["cache_manager"] is manager
+    info = config.session_config.info
+    assert isinstance(info, dict)
+    assert info["cache_manager"] is manager
 
 
 def test_post_init_without_cache_config_leaves_info_clean() -> None:
     """No cache_config means no cache_manager key on session.info."""
     config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
     assert config.cache_manager is None
-    assert "cache_manager" not in config.session_config.info
+    info = config.session_config.info
+    assert isinstance(info, dict)
+    assert "cache_manager" not in info
 
 
 def test_post_init_does_not_alias_shared_session_config_info() -> None:
@@ -194,11 +200,15 @@ def test_post_init_does_not_alias_shared_session_config_info() -> None:
         cache_manager=mgr_b,
     )
 
-    assert cfg_a.session_config.info["cache_manager"] is mgr_a
-    assert cfg_b.session_config.info["cache_manager"] is mgr_b
+    info_a = cfg_a.session_config.info
+    info_b = cfg_b.session_config.info
+    assert isinstance(info_a, dict)
+    assert isinstance(info_b, dict)
+    assert info_a["cache_manager"] is mgr_a
+    assert info_b["cache_manager"] is mgr_b
     # User-supplied keys survive the defensive copy.
-    assert cfg_a.session_config.info["user_key"] == "preserved"
-    assert cfg_b.session_config.info["user_key"] == "preserved"
+    assert info_a["user_key"] == "preserved"
+    assert info_b["user_key"] == "preserved"
 
 
 def test_hash_distinguishes_configs_by_cache_manager() -> None:
