@@ -469,7 +469,6 @@ module = [
   "uuid_utils",
   "fsspec",
   "fsspec.*",
-  "s3fs",
   "argon2",
   "argon2.*",
 ]
