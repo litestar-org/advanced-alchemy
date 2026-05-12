@@ -222,6 +222,10 @@ Storage Backends
 - **FSSpec Backend**: Supports various storage systems using the ``fsspec`` library.
 - **Obstore Backend**: Provides a simple interface for object storage (S3, GCS, etc).
 
+For local S3-compatible testing, use RustFS with a bucket owned by the application or test. Pytest
+integration tests can use ``pytest_databases.docker.rustfs`` and its ``rustfs_default_bucket_name``
+fixture; standalone examples should create their own bucket, such as ``static-files``.
+
 Metadata
 ~~~~~~~~
 

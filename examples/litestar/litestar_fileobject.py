@@ -24,12 +24,15 @@ from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
 from advanced_alchemy.types.file_object.data_type import StoredObject
 
 # Object storage backend
+# For local development, run RustFS on port 9000 and create the static-files bucket first.
 s3_backend = ObstoreBackend(
     key="local",
     fs="s3://static-files/",
     aws_endpoint="http://localhost:9000",
-    aws_access_key_id="minioadmin",
-    aws_secret_access_key="minioadmin",  # noqa: S106
+    aws_access_key_id="rustfsadmin",
+    aws_secret_access_key="rustfsadmin",  # noqa: S106
+    aws_virtual_hosted_style_request=False,
+    client_options={"allow_http": True},
 )
 storages.register_backend(s3_backend)
 

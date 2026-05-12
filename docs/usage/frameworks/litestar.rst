@@ -1073,6 +1073,11 @@ For production deployments, avoid development-only endpoints and hardcoded objec
 in application code. Configure the backend with the real bucket or prefix and rely on the platform's
 ambient credentials, such as IAM roles or workload identity.
 
+For local S3-compatible development, use RustFS with an app-owned bucket. The runnable
+``examples/litestar/litestar_fileobject.py`` example points at ``http://localhost:9000`` with
+RustFS's default ``rustfsadmin`` credentials and expects the ``static-files`` bucket to exist before
+the application starts.
+
 **Supported Storage Backends**:
 
 - **Local filesystem**: For development and simple deployments

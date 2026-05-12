@@ -315,5 +315,10 @@ In production, keep object storage credentials out of application code. Point ``
 the real bucket or prefix you use in production and let the runtime provide credentials through the
 platform's normal mechanism, such as an IAM role, IRSA, ECS task role, or other ambient credentials.
 
+For local S3-compatible development, use RustFS with an app-owned bucket. The runnable
+``examples/fastapi/fastapi_fileobject.py`` example points at ``http://localhost:9000`` with
+RustFS's default ``rustfsadmin`` credentials and expects the ``static-files`` bucket to exist before
+the application starts.
+
 The storage backend key must match in both places: the ``StoredObject(backend="...")`` column
 definition and the ``FileObject(backend="...")`` values you create from incoming uploads.
