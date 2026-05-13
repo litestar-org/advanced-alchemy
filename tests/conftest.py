@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 pytest_plugins = [
     "pytest_databases.docker",
-    "pytest_databases.docker.minio",
+    "pytest_databases.docker.rustfs",
     "pytest_databases.docker.mysql",
     "pytest_databases.docker.oracle",
     "pytest_databases.docker.postgres",
