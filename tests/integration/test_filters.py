@@ -4,13 +4,15 @@ from typing import Optional
 
 import pytest
 from pytest import FixtureRequest
-from sqlalchemy import Engine, String, func, select
+from sqlalchemy import Boolean, Engine, String, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from advanced_alchemy.base import BigIntBase, UUIDAuditBase
 from advanced_alchemy.filters import (
     BeforeAfter,
+    BooleanFilter,
+    ChoicesFilter,
     CollectionFilter,
     ComparisonFilter,
     ExistsFilter,
@@ -71,11 +73,13 @@ def get_movie_model_for_engine(engine_dialect_name: str, worker_id: str) -> type
                 "release_date": mapped_column(),
                 "genre": mapped_column(String(length=50)),
                 "director": mapped_column(String(length=100), nullable=True),
+                "is_featured": mapped_column(Boolean(), default=False),
                 "__annotations__": {
                     "title": Mapped[str],
                     "release_date": Mapped[datetime],
                     "genre": Mapped[str],
                     "director": Mapped[Optional[str]],
+                    "is_featured": Mapped[bool],
                 },
             },
         )  # type: ignore[valid-type,misc]
@@ -180,18 +184,21 @@ def setup_movie_data(session: Session, movie_model: type[DeclarativeBase]) -> No
             "release_date": datetime(1999, 3, 31, tzinfo=timezone.utc),
             "genre": "Action",
             "director": "Wachowskis",
+            "is_featured": True,
         },
         {
             "title": "The Hangover",
             "release_date": datetime(2009, 6, 1, tzinfo=timezone.utc),
             "genre": "Comedy",
             "director": None,  # NULL director for testing NullFilter
+            "is_featured": False,
         },
         {
             "title": "Shawshank Redemption",
             "release_date": datetime(1994, 10, 14, tzinfo=timezone.utc),
             "genre": "Drama",
             "director": "Frank Darabont",
+            "is_featured": True,
         },
     ]
 
@@ -268,6 +275,41 @@ def test_collection_filter(session: Session, movie_model_sync: type[DeclarativeB
     statement = collection_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert len(results) == 2
+
+
+def test_choices_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
+
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    session.execute(Movie.__table__.delete())
+    session.commit()
+    setup_movie_data(session, Movie)
+    choices_filter = ChoicesFilter(field_name="genre", values=["Action", "Drama"])
+    statement = choices_filter.append_to_statement(select(Movie), Movie)
+    results = session.execute(statement).scalars().all()
+    assert len(results) == 2
+
+
+def test_boolean_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    Movie = movie_model_sync
+
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    session.execute(Movie.__table__.delete())
+    session.commit()
+    setup_movie_data(session, Movie)
+    boolean_filter = BooleanFilter(field_name="is_featured", value=True)
+    statement = boolean_filter.append_to_statement(select(Movie), Movie)
+    results = session.execute(statement).scalars().all()
+    assert len(results) == 2
+
+    no_op_filter = BooleanFilter(field_name="is_featured", value=None)
+    statement = no_op_filter.append_to_statement(select(Movie), Movie)
+    results = session.execute(statement).scalars().all()
+    assert len(results) == 3
 
 
 def test_not_in_collection_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
