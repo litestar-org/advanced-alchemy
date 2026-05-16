@@ -3,12 +3,11 @@ import sys
 from collections.abc import AsyncGenerator, Generator
 from contextlib import suppress
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import pytest
 import pytest_asyncio
-from minio import Minio  # type: ignore[import-untyped]
-from pytest_databases.docker.minio import MinioService
+from pytest_databases.docker.rustfs import RustfsService
 from sqlalchemy import Engine, String, event
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
@@ -57,6 +56,33 @@ def remove_listeners() -> None:
 
     # Reset async context flag to ensure clean state
     set_async_context(False)
+
+
+def rustfs_endpoint_url(rustfs_service: RustfsService) -> str:
+    scheme = "https" if rustfs_service.secure else "http"
+    return f"{scheme}://{rustfs_service.endpoint}"
+
+
+def rustfs_s3_filesystem(rustfs_service: RustfsService, **kwargs: Any) -> Any:
+    s3fs = pytest.importorskip("s3fs")
+    return s3fs.S3FileSystem(
+        anon=False,
+        key=rustfs_service.access_key,
+        secret=rustfs_service.secret_key,
+        endpoint_url=rustfs_endpoint_url(rustfs_service),
+        client_kwargs={
+            "verify": rustfs_service.secure,
+            "use_ssl": rustfs_service.secure,
+        },
+        config_kwargs={"s3": {"addressing_style": "path"}},
+        **kwargs,
+    )
+
+
+def ensure_rustfs_bucket(rustfs_service: RustfsService, bucket_name: str) -> None:
+    fs = rustfs_s3_filesystem(rustfs_service, asynchronous=False, loop=None)
+    with suppress(FileExistsError):
+        fs.mkdir(bucket_name)
 
 
 # --- Fixtures ---
@@ -229,37 +255,20 @@ async def async_session(
 )
 async def test_fsspec_s3_basic_operations_async(
     storage_registry: StorageRegistry,
-    minio_client: "Minio",
-    minio_service: "MinioService",
-    minio_default_bucket_name: str,
+    rustfs_service: RustfsService,
+    rustfs_default_bucket_name: str,
 ) -> None:
     """Test basic save, get_content, delete via backend and FileObject with prefix."""
     remove_listeners()
-    try:
-        import s3fs
-    except ImportError:
-        pytest.skip("s3fs not installed")
 
-    assert minio_client.bucket_exists(minio_default_bucket_name)
-    _ = minio_client
-
-    # Create s3fs filesystem instance without bucket info
-    fs = s3fs.S3FileSystem(
-        anon=False,
-        key=minio_service.access_key,
-        secret=minio_service.secret_key,
-        endpoint_url=f"http://{minio_service.endpoint}",
-        client_kwargs={
-            "verify": False,
-            "use_ssl": False,
-        },
-    )
+    ensure_rustfs_bucket(rustfs_service, rustfs_default_bucket_name)
+    fs = rustfs_s3_filesystem(rustfs_service)
 
     # Initialize backend with prefix
     backend = FSSpecBackend(
         key="s3_test_store",
         fs=fs,
-        prefix=minio_default_bucket_name,
+        prefix=rustfs_default_bucket_name,
     )
 
     test_content = b"Hello Storage!"
@@ -311,39 +320,24 @@ async def test_fsspec_s3_basic_operations_async(
 )
 def test_fsspec_s3_basic_operations_sync(
     storage_registry: StorageRegistry,
-    minio_client: "Minio",
-    minio_service: "MinioService",
-    minio_default_bucket_name: str,
+    rustfs_service: RustfsService,
+    rustfs_default_bucket_name: str,
 ) -> None:
     """Test basic save, get_content, delete via backend and FileObject with prefix."""
     remove_listeners()
-    try:
-        import s3fs
-    except ImportError:
-        pytest.skip("s3fs not installed")
 
-    assert minio_client.bucket_exists(minio_default_bucket_name)
-    _ = minio_client
-
-    # Create s3fs filesystem instance without bucket info
-    fs = s3fs.S3FileSystem(
-        anon=False,
-        key=minio_service.access_key,
-        secret=minio_service.secret_key,
-        endpoint_url=f"http://{minio_service.endpoint}",
-        client_kwargs={
-            "verify": False,
-            "use_ssl": False,
-        },
+    fs = rustfs_s3_filesystem(
+        rustfs_service,
         asynchronous=False,
         loop=None,
     )
+    ensure_rustfs_bucket(rustfs_service, rustfs_default_bucket_name)
 
     # Initialize backend with prefix
     backend = FSSpecBackend(
         key="s3_test_store",
         fs=fs,
-        prefix=minio_default_bucket_name,
+        prefix=rustfs_default_bucket_name,
     )
 
     test_content = b"Hello Storage!"
@@ -391,22 +385,21 @@ def test_fsspec_s3_basic_operations_sync(
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_s3_basic_operations_async(
     storage_registry: StorageRegistry,
-    minio_client: "Minio",
-    minio_service: "MinioService",
-    minio_default_bucket_name: str,
+    rustfs_service: RustfsService,
+    rustfs_default_bucket_name: str,
 ) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
     remove_listeners()
-    assert minio_client.bucket_exists(minio_default_bucket_name)
-    _ = minio_client
+    endpoint_url = rustfs_endpoint_url(rustfs_service)
+    ensure_rustfs_bucket(rustfs_service, rustfs_default_bucket_name)
     backend = ObstoreBackend(
         key="s3_test_store",
-        fs=f"s3://{minio_default_bucket_name}/",
-        aws_endpoint=f"http://{minio_service.endpoint}/",
-        aws_access_key_id=minio_service.access_key,
-        aws_secret_access_key=minio_service.secret_key,
+        fs=f"s3://{rustfs_default_bucket_name}/",
+        aws_endpoint=f"{endpoint_url}/",
+        aws_access_key_id=rustfs_service.access_key,
+        aws_secret_access_key=rustfs_service.secret_key,
         aws_virtual_hosted_style_request=False,
-        client_options={"allow_http": True},
+        client_options={"allow_http": not rustfs_service.secure},
     )
 
     test_content = b"Hello Storage!"
@@ -456,22 +449,21 @@ async def test_obstore_s3_basic_operations_async(
 @pytest.mark.xdist_group("file_object")
 def test_obstore_s3_basic_operations_sync(
     storage_registry: StorageRegistry,
-    minio_client: "Minio",
-    minio_service: "MinioService",
-    minio_default_bucket_name: str,
+    rustfs_service: RustfsService,
+    rustfs_default_bucket_name: str,
 ) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
     remove_listeners()
-    assert minio_client.bucket_exists(minio_default_bucket_name)
-    _ = minio_client
+    endpoint_url = rustfs_endpoint_url(rustfs_service)
+    ensure_rustfs_bucket(rustfs_service, rustfs_default_bucket_name)
     backend = ObstoreBackend(
         key="s3_test_store",
-        fs=f"s3://{minio_default_bucket_name}/",
-        aws_endpoint=f"http://{minio_service.endpoint}/",
-        aws_access_key_id=minio_service.access_key,
-        aws_secret_access_key=minio_service.secret_key,
+        fs=f"s3://{rustfs_default_bucket_name}/",
+        aws_endpoint=f"{endpoint_url}/",
+        aws_access_key_id=rustfs_service.access_key,
+        aws_secret_access_key=rustfs_service.secret_key,
         aws_virtual_hosted_style_request=False,
-        client_options={"allow_http": True},
+        client_options={"allow_http": not rustfs_service.secure},
     )
 
     test_content = b"Hello Storage!"
