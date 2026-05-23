@@ -37,12 +37,15 @@ alchemy_config = SQLAlchemyAsyncConfig(
 app = FastAPI()
 alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
 document_router = APIRouter()
+# For local development, run an S3-compatible storage service (e.g., RustFS or MinIO) on port 9000 and create the 'static-files' bucket first.
 s3_backend = ObstoreBackend(
     key="local",
     fs="s3://static-files/",
     aws_endpoint="http://localhost:9000",
-    aws_access_key_id="minioadmin",
-    aws_secret_access_key="minioadmin",  # noqa: S106
+    aws_access_key_id="rustfsadmin",
+    aws_secret_access_key="rustfsadmin",  # noqa: S106
+    aws_virtual_hosted_style_request=False,
+    client_options={"allow_http": True},
 )
 storages.register_backend(s3_backend)
 

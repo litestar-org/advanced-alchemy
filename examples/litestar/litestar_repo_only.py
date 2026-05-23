@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime  # noqa: TC003
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Annotated, Optional
 from uuid import UUID  # noqa: TC003
 
 from litestar import Litestar
@@ -9,7 +9,6 @@ from litestar.controller import Controller
 from litestar.di import Provide
 from litestar.handlers.http_handlers.decorators import delete, get, patch, post
 from litestar.pagination import OffsetPagination
-from litestar.params import Parameter
 from pydantic import BaseModel as _BaseModel
 from pydantic import TypeAdapter
 from sqlalchemy import ForeignKey
@@ -22,6 +21,7 @@ from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
 if TYPE_CHECKING:
+    from litestar.params import PathParameter, QueryParameter
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -89,13 +89,8 @@ async def provide_author_details_repo(db_session: AsyncSession) -> AuthorReposit
 
 
 def provide_limit_offset_pagination(
-    current_page: int = Parameter(ge=1, query="currentPage", default=1, required=False),
-    page_size: int = Parameter(
-        query="pageSize",
-        ge=1,
-        default=10,
-        required=False,
-    ),
+    current_page: Annotated[int, QueryParameter(ge=1, name="currentPage")] = 1,
+    page_size: Annotated[int, QueryParameter(name="pageSize", ge=1)] = 10,
 ) -> LimitOffset:
     """Add offset/limit pagination.
 
@@ -150,10 +145,13 @@ class AuthorController(Controller):
     async def get_author(
         self,
         authors_repo: AuthorRepository,
-        author_id: UUID = Parameter(
-            title="Author ID",
-            description="The author to retrieve.",
-        ),
+        author_id: Annotated[
+            UUID,
+            PathParameter(
+                title="Author ID",
+                description="The author to retrieve.",
+            ),
+        ],
     ) -> Author:
         """Get an existing author."""
         obj = await authors_repo.get(author_id)
@@ -167,10 +165,13 @@ class AuthorController(Controller):
         self,
         authors_repo: AuthorRepository,
         data: AuthorUpdate,
-        author_id: UUID = Parameter(
-            title="Author ID",
-            description="The author to update.",
-        ),
+        author_id: Annotated[
+            UUID,
+            PathParameter(
+                title="Author ID",
+                description="The author to update.",
+            ),
+        ],
     ) -> Author:
         """Update an author."""
         raw_obj = data.model_dump(exclude_unset=True, exclude_none=True)
@@ -183,10 +184,13 @@ class AuthorController(Controller):
     async def delete_author(
         self,
         authors_repo: AuthorRepository,
-        author_id: UUID = Parameter(
-            title="Author ID",
-            description="The author to delete.",
-        ),
+        author_id: Annotated[
+            UUID,
+            PathParameter(
+                title="Author ID",
+                description="The author to delete.",
+            ),
+        ],
     ) -> None:
         """Delete a author from the system."""
         _ = await authors_repo.delete(author_id)

@@ -6,7 +6,7 @@ import inspect
 import unittest.mock
 import uuid
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, cast
 from unittest.mock import MagicMock, patch
 
 from litestar import Litestar, get
@@ -482,7 +482,7 @@ def test_litestar_in_filter_values_are_isolated() -> None:
     filter_dependencies = create_filter_dependencies(filter_config)
 
     @get("/test")
-    def handler(filters: list[FilterTypes] = Dependency(skip_validation=True)) -> dict[str, list[str]]:
+    def handler(filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)]) -> dict[str, list[str]]:
         response: dict[str, list[str]] = {}
         for filter_ in filters:
             if isinstance(filter_, CollectionFilter):
@@ -506,7 +506,7 @@ def test_litestar_not_in_filter_values_are_isolated() -> None:
     filter_dependencies = create_filter_dependencies(filter_config)
 
     @get("/test")
-    def handler(filters: list[FilterTypes] = Dependency(skip_validation=True)) -> dict[str, list[str]]:
+    def handler(filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)]) -> dict[str, list[str]]:
         response: dict[str, list[str]] = {}
         for filter_ in filters:
             if isinstance(filter_, NotInCollectionFilter):

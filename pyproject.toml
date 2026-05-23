@@ -139,7 +139,7 @@ lint = [
   "types-cryptography",
   "types-passlib",
 ]
-litestar = ["litestar[cli]>=2.15.0"]
+litestar = ["litestar[cli]>=2.22.0"]
 mssql = ["aioodbc>=0.5.0", "pyodbc>=5.2.0"]
 mysql = ["asyncmy>=0.2.9"]
 oracle = ["oracledb>=2.4.1"]
@@ -162,7 +162,7 @@ test = [
   "pytest>=7.4.4",
   "pytest-asyncio>=0.23.8",
   "pytest-cov>=5.0.0",
-  "pytest-databases[postgres,oracle,cockroachdb,mssql,bigquery,spanner,mysql]",
+  "pytest-databases[postgres,oracle,cockroachdb,bigquery,spanner]",
   "pytest-lazy-fixtures>=1.1.1",
   "pytest-rerunfailures",
   "pytest-mock>=3.14.0",
@@ -469,7 +469,6 @@ module = [
   "uuid_utils",
   "fsspec",
   "fsspec.*",
-  "s3fs",
   "argon2",
   "argon2.*",
 ]
@@ -490,7 +489,7 @@ ignore_missing_imports = true
 module = ["sphinx.*"]
 
 [[tool.mypy.overrides]]
-module = "advanced_alchemy.utils.serialization"
+module = "advanced_alchemy._serialization"
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
@@ -500,6 +499,10 @@ module = "advanced_alchemy.extensions.litestar.cli"
 [[tool.mypy.overrides]]
 disallow_untyped_decorators = false
 module = "advanced_alchemy.types.json"
+
+[[tool.mypy.overrides]]
+module = "advanced_alchemy.service.typing"
+warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 module = "advanced_alchemy.alembic.templates.*.env"
