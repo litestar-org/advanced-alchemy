@@ -162,7 +162,7 @@ test = [
   "pytest>=7.4.4",
   "pytest-asyncio>=0.23.8",
   "pytest-cov>=5.0.0",
-  "pytest-databases[postgres,oracle,cockroachdb,bigquery,spanner]",
+  "pytest-databases[postgres,oracle,cockroachdb,bigquery,spanner]>=0.19.0",
   "pytest-lazy-fixtures>=1.1.1",
   "pytest-rerunfailures",
   "pytest-mock>=3.14.0",
@@ -486,6 +486,11 @@ module = ["pytest", "_pytest.*"]
 follow_imports = "skip"
 ignore_missing_imports = true
 module = ["sphinx.*"]
+
+[[tool.mypy.overrides]]
+follow_imports = "skip"
+ignore_missing_imports = true
+module = ["opentelemetry.*"]
 
 [[tool.mypy.overrides]]
 module = "advanced_alchemy._serialization"
