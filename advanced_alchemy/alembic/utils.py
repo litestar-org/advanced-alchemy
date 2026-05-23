@@ -84,7 +84,7 @@ async def dump_tables(
 ) -> None:
     from types import new_class
 
-    from advanced_alchemy._serialization import encode_json
+    from advanced_alchemy.utils.serialization import encode_json
 
     try:
         from rich import get_console

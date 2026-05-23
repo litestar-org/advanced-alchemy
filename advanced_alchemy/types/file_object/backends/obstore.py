@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union, cast
 
-from advanced_alchemy._serialization import encode_json
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.file_object._utils import get_mtime_equivalent, get_or_generate_etag
 from advanced_alchemy.types.file_object.base import (
@@ -14,6 +13,7 @@ from advanced_alchemy.types.file_object.base import (
     PathLike,
     StorageBackend,
 )
+from advanced_alchemy.utils.serialization import encode_json
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

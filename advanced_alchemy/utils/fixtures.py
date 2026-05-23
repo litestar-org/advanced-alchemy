@@ -5,8 +5,8 @@ import zipfile
 from functools import partial
 from typing import TYPE_CHECKING, Any, Union
 
-from advanced_alchemy._serialization import decode_json
 from advanced_alchemy.exceptions import MissingDependencyError
+from advanced_alchemy.utils.serialization import decode_json
 
 if TYPE_CHECKING:
     from pathlib import Path

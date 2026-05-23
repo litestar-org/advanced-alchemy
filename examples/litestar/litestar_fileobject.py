@@ -25,12 +25,13 @@ from advanced_alchemy.types.file_object.data_type import StoredObject
 
 # Object storage backend
 # For local development, run an S3-compatible storage service (e.g., RustFS or MinIO) on port 9000 and create the 'static-files' bucket first.
+# Defaults below match pytest-databases >=0.19.0 RustFS fixture credentials; override via env when running real services.
 s3_backend = ObstoreBackend(
     key="local",
     fs="s3://static-files/",
     aws_endpoint="http://localhost:9000",
-    aws_access_key_id="rustfsadmin",
-    aws_secret_access_key="rustfsadmin",  # noqa: S106
+    aws_access_key_id="pytest-databases-rustfs",
+    aws_secret_access_key="pytest-databases-rustfs-secret",  # noqa: S106
     aws_virtual_hosted_style_request=False,
     client_options={"allow_http": True},
 )
