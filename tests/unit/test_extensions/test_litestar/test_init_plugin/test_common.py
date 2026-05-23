@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from litestar.datastructures import State
+from litestar.params import FromQuery
 from sqlalchemy import create_engine
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
@@ -154,7 +155,7 @@ def test_namespace_resolution() -> None:
     from litestar import Litestar, get
 
     @get("/")
-    async def handler(param: datetime.datetime, other_param: uuid.UUID) -> None:
+    async def handler(param: FromQuery[datetime.datetime], other_param: FromQuery[uuid.UUID]) -> None:
         return None
 
     Litestar([handler])

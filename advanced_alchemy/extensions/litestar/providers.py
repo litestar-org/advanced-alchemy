@@ -11,6 +11,7 @@ import inspect
 from collections.abc import AsyncGenerator, Callable, Generator
 from typing import (
     TYPE_CHECKING,
+    Annotated,
     Any,
     Literal,
     NamedTuple,
@@ -24,7 +25,7 @@ from typing import (
 from uuid import UUID
 
 from litestar.di import Provide
-from litestar.params import Dependency, Parameter
+from litestar.params import Dependency, FromQuery, QueryParameter
 from typing_extensions import NotRequired
 
 from advanced_alchemy.filters import (
@@ -407,7 +408,7 @@ def _create_statement_filters(  # noqa: C901
     if config.get("id_filter", False):
 
         def provide_id_filter(  # pyright: ignore[reportUnknownParameterType]
-            ids: Optional[list[str]] = Parameter(query="ids", default=None, required=False),
+            ids: FromQuery[Optional[list[str]]] = None,
         ) -> CollectionFilter:  # pyright: ignore[reportMissingTypeArgument]
             return CollectionFilter(field_name=config.get("id_field", "id"), values=ids)
 
@@ -416,8 +417,8 @@ def _create_statement_filters(  # noqa: C901
     if config.get("created_at", False):
 
         def provide_created_filter(
-            before: DTorNone = Parameter(query="createdBefore", default=None, required=False),
-            after: DTorNone = Parameter(query="createdAfter", default=None, required=False),
+            before: Annotated[DTorNone, QueryParameter(name="createdBefore")] = None,
+            after: Annotated[DTorNone, QueryParameter(name="createdAfter")] = None,
         ) -> BeforeAfter:
             return BeforeAfter("created_at", before, after)
 
@@ -426,8 +427,8 @@ def _create_statement_filters(  # noqa: C901
     if config.get("updated_at", False):
 
         def provide_updated_filter(
-            before: DTorNone = Parameter(query="updatedBefore", default=None, required=False),
-            after: DTorNone = Parameter(query="updatedAfter", default=None, required=False),
+            before: Annotated[DTorNone, QueryParameter(name="updatedBefore")] = None,
+            after: Annotated[DTorNone, QueryParameter(name="updatedAfter")] = None,
         ) -> BeforeAfter:
             return BeforeAfter("updated_at", before, after)
 
@@ -436,13 +437,14 @@ def _create_statement_filters(  # noqa: C901
     if config.get("pagination_type") == "limit_offset":
 
         def provide_limit_offset_pagination(
-            current_page: int = Parameter(ge=1, query="currentPage", default=1, required=False),
-            page_size: int = Parameter(
-                query="pageSize",
-                ge=1,
-                default=config.get("pagination_size", dep_defaults.DEFAULT_PAGINATION_SIZE),
-                required=False,
-            ),
+            current_page: Annotated[int, QueryParameter(ge=1, name="currentPage")] = 1,
+            page_size: Annotated[
+                int,
+                QueryParameter(
+                    name="pageSize",
+                    ge=1,
+                ),
+            ] = config.get("pagination_size", dep_defaults.DEFAULT_PAGINATION_SIZE),
         ) -> LimitOffset:
             return LimitOffset(page_size, page_size * (current_page - 1))
 
@@ -453,18 +455,20 @@ def _create_statement_filters(  # noqa: C901
     if search_fields := config.get("search"):
 
         def provide_search_filter(
-            search_string: StringOrNone = Parameter(
-                title="Field to search",
-                query="searchString",
-                default=None,
-                required=False,
-            ),
-            ignore_case: BooleanOrNone = Parameter(
-                title="Search should be case sensitive",
-                query="searchIgnoreCase",
-                default=config.get("search_ignore_case", False),
-                required=False,
-            ),
+            search_string: Annotated[
+                StringOrNone,
+                QueryParameter(
+                    name="searchString",
+                    title="Field to search",
+                ),
+            ] = None,
+            ignore_case: Annotated[
+                BooleanOrNone,
+                QueryParameter(
+                    name="searchIgnoreCase",
+                    title="Search should be case sensitive",
+                ),
+            ] = config.get("search_ignore_case", False),
         ) -> SearchFilter:
             # Handle both string and set input types for search fields
             field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else set(search_fields)
@@ -480,18 +484,20 @@ def _create_statement_filters(  # noqa: C901
     if sort_field := config.get("sort_field"):
 
         def provide_order_by(
-            field_name: StringOrNone = Parameter(
-                title="Order by field",
-                query="orderBy",
-                default=sort_field,
-                required=False,
-            ),
-            sort_order: SortOrderOrNone = Parameter(
-                title="Field to search",
-                query="sortOrder",
-                default=config.get("sort_order", "desc"),
-                required=False,
-            ),
+            field_name: Annotated[
+                StringOrNone,
+                QueryParameter(
+                    title="Order by field",
+                    name="orderBy",
+                ),
+            ] = sort_field,
+            sort_order: Annotated[
+                SortOrderOrNone,
+                QueryParameter(
+                    title="Field to search",
+                    name="sortOrder",
+                ),
+            ] = config.get("sort_order", "desc"),
         ) -> OrderBy:
             return OrderBy(field_name=field_name, sort_order=sort_order)  # type: ignore[arg-type]
 
@@ -522,24 +528,24 @@ def _create_statement_filters(  # noqa: C901
                         else None
                     )
 
+                annotation = Annotated[
+                    Optional[list[field_name.type_hint]],  # type: ignore
+                    QueryParameter(name=camelize(param_name)),
+                ]
                 provide_not_in_filter.__name__ = f"provide_not_in_filter_{field_name.name}"
                 provide_not_in_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
                     parameters=[
                         inspect.Parameter(
                             name=param_name,
                             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                            default=Parameter(
-                                query=camelize(param_name),
-                                default=None,
-                                required=False,
-                            ),
-                            annotation=Optional[list[field_name.type_hint]],  # type: ignore
+                            default=None,
+                            annotation=annotation,
                         )
                     ],
                     return_annotation=Optional[NotInCollectionFilter[field_name.type_hint]],  # type: ignore
                 )
                 provide_not_in_filter.__annotations__ = {
-                    param_name: Optional[list[field_name.type_hint]],  # type: ignore
+                    param_name: annotation,
                     "return": Optional[NotInCollectionFilter[field_name.type_hint]],  # type: ignore
                 }
                 return provide_not_in_filter  # pyright: ignore
@@ -573,23 +579,25 @@ def _create_statement_filters(  # noqa: C901
                     )
 
                 provide_in_filter.__name__ = f"provide_in_filter_{field_name.name}"
+                annotation = Annotated[
+                    Optional[list[field_name.type_hint]],  # type: ignore
+                    QueryParameter(
+                        name=camelize(param_name),
+                    ),
+                ]
                 provide_in_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
                     parameters=[
                         inspect.Parameter(
                             name=param_name,
                             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                            default=Parameter(
-                                query=camelize(param_name),
-                                default=None,
-                                required=False,
-                            ),
-                            annotation=Optional[list[field_name.type_hint]],  # type: ignore
+                            default=None,
+                            annotation=annotation,
                         )
                     ],
                     return_annotation=Optional[CollectionFilter[field_name.type_hint]],  # type: ignore
                 )
                 provide_in_filter.__annotations__ = {
-                    param_name: Optional[list[field_name.type_hint]],  # type: ignore
+                    param_name: annotation,
                     "return": Optional[CollectionFilter[field_name.type_hint]],  # type: ignore
                 }
                 return provide_in_filter  # pyright: ignore
