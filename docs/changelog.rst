@@ -3,6 +3,79 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.10.0
+    :date: 2026-05-23
+
+    .. change:: configurable serialization with Protocol-based architecture
+        :type: feature
+        :pr: 716
+
+        Adds ``advanced_alchemy.utils.serialization`` as the canonical home for
+        JSON serialization, schema dumping, and schema/type guards. JSON
+        encoding can now use msgspec, orjson, or the standard library with
+        configurable type encoders, reversible complex-type markers, and
+        Litestar encoder/decoder integration.
+
+    .. change:: update Litestar integrations to new-style parameter markers
+        :type: feature
+        :pr: 736
+
+        Updates the Litestar extension and examples to use Litestar's new
+        parameter marker style for generated dependency and filter parameters.
+
+    .. change:: add UUID6 and UUID7 support based on Python version
+        :type: feature
+        :pr: 714
+        :issue: 713
+
+        Adds UUID6 and UUID7 primary-key support, using the standard library
+        implementation when available and falling back to the existing
+        compatibility dependency on older Python versions.
+
+    .. change:: deprecate `list()`/`list_and_count()`
+        :type: feature
+        :pr: 706
+
+        Adds ``get_many()`` and ``get_many_and_count()`` as the preferred APIs
+        across repositories, services, memory repositories, query repositories,
+        and cache managers. The older ``list()`` and ``list_and_count()`` names
+        remain available as deprecation wrappers until 2.0.
+
+    .. change:: migrate object storage tests to rustfs
+        :type: misc
+        :pr: 732
+
+        Replaces the MinIO-backed object storage test setup with
+        pytest-databases RustFS fixtures and updates local ``FileObject``
+        examples to use the RustFS defaults.
+
+    .. change:: register session listeners in framework extension configs
+        :type: bugfix
+        :pr: 712
+        :issue: 709
+
+        Framework extension configs now delegate session-maker creation through
+        the shared configuration layer so file-object, timestamp, and cache
+        listeners are registered consistently. This fixes cases where
+        ``FileObject`` metadata could be saved while the actual file content was
+        not persisted.
+
+    .. change:: docs preview workflow
+        :type: bugfix
+        :pr: 718
+
+        Fixes the docs preview workflow so pull-request documentation previews
+        are published reliably for review.
+
+    .. change:: centralize optional-dependency typing shims
+        :type: misc
+        :pr: 719
+
+        Consolidates optional-dependency feature flags and stub types into the
+        public ``advanced_alchemy.typing`` module and updates internal imports
+        to avoid service-specific private typing shims.
+
+
 .. changelog:: 1.9.3
     :date: 2026-04-08
 
