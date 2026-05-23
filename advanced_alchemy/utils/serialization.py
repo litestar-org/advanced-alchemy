@@ -866,7 +866,7 @@ class OrjsonSerializer(BaseJSONSerializer):
         Returns:
             JSON representation as string or bytes.
         """
-        import orjson  # type: ignore[import-not-found]  # pyright: ignore[reportMissingImports]
+        import orjson  # type: ignore[import-not-found,unused-ignore]  # pyright: ignore[reportMissingImports]
 
         orjson_module: Any = orjson
         options: int = orjson_module.OPT_NAIVE_UTC | orjson_module.OPT_SERIALIZE_UUID
@@ -886,7 +886,7 @@ class OrjsonSerializer(BaseJSONSerializer):
         Returns:
             Decoded Python object.
         """
-        import orjson  # type: ignore[import-not-found]  # pyright: ignore[reportMissingImports]
+        import orjson  # type: ignore[import-not-found,unused-ignore]  # pyright: ignore[reportMissingImports]
 
         orjson_module: Any = orjson
         if isinstance(data, bytes) and not decode_bytes:
