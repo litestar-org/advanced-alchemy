@@ -1,3 +1,4 @@
+import copy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Generic, Optional, Union, cast
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm.session import JoinTransactionMode
     from sqlalchemy.sql import TableClause
 
+    from advanced_alchemy.cache import CacheConfig, CacheManager
     from advanced_alchemy.utils.dataclass import EmptyType
 
 __all__ = (
@@ -187,6 +189,25 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     - ``False``: Log warnings on file operation failures, don't raise exceptions
     - ``True`` (default): Raise exceptions on file operation failures
     """
+    cache_config: "Optional[CacheConfig]" = None
+    """Optional :class:`CacheConfig <advanced_alchemy.cache.CacheConfig>` for dogpile.cache integration.
+
+    When set, a :class:`CacheManager <advanced_alchemy.cache.CacheManager>` is instantiated during
+    :meth:`__post_init__` and stored in ``session_config.info["cache_manager"]``. Repositories
+    created against sessions produced by this config will pick the manager up automatically.
+
+    Requires the optional ``dogpile.cache`` dependency (``pip install advanced-alchemy[dogpile]``);
+    without it the manager falls back to a no-op :class:`NullRegion`.
+
+    .. seealso::
+        :doc:`/usage/caching`
+    """
+    cache_manager: "Optional[CacheManager]" = None
+    """Optional pre-built :class:`CacheManager <advanced_alchemy.cache.CacheManager>` instance.
+
+    Takes precedence over :attr:`cache_config`. Useful when sharing a single cache manager across
+    multiple configs.
+    """
     _SESSION_SCOPE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))
     """Internal counter for ensuring unique identification of session scope keys in the class."""
     _ENGINE_APP_STATE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))
@@ -203,12 +224,24 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         else:
             metadata_registry.set(self.bind_key, self.metadata)
 
-        # Store file_object_raise_on_error in session_config.info
-        # Ensure session_config.info is a dict (convert from Empty if needed)
-        if self.session_config.info is Empty:
-            self.session_config.info = {}
-        if isinstance(self.session_config.info, dict):
-            self.session_config.info["file_object_raise_on_error"] = self.file_object_raise_on_error
+        # Detach session_config and normalize info to a private dict so config writes
+        # don't bleed between configs that share the same session_config object.
+        self.session_config = copy.copy(self.session_config)
+        configured_info = self.session_config.info
+        session_info: dict[str, Any] = (
+            {} if configured_info is Empty or configured_info is None else dict(configured_info)
+        )
+        session_info["file_object_raise_on_error"] = self.file_object_raise_on_error
+        self.session_config.info = session_info
+
+        # Build a CacheManager from cache_config if one wasn't supplied explicitly,
+        # then propagate it to sessions via session_config.info["cache_manager"].
+        if self.cache_manager is None and self.cache_config is not None:
+            from advanced_alchemy.cache import CacheManager
+
+            self.cache_manager = CacheManager(self.cache_config)
+        if self.cache_manager is not None:
+            session_info["cache_manager"] = self.cache_manager
 
     def __hash__(self) -> int:  # pragma: no cover
         return hash(
@@ -217,6 +250,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
                 self.connection_string,
                 self.engine_config.__class__.__qualname__,
                 self.bind_key,
+                id(self.cache_manager) if self.cache_manager is not None else None,
             )
         )
 

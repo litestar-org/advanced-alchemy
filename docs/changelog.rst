@@ -41,6 +41,17 @@
         and cache managers. The older ``list()`` and ``list_and_count()`` names
         remain available as deprecation wrappers until 2.0.
 
+    .. change:: configure repository caching from SQLAlchemy configs
+        :type: feature
+        :pr: 731
+        :issue: 730
+
+        Adds ``cache_config`` and ``cache_manager`` support to SQLAlchemy config
+        objects. Configured cache managers are stored in ``session.info`` so
+        repositories created from config-managed sessions pick up caching
+        consistently, including when ``session_config.info`` is explicitly
+        ``None``.
+
     .. change:: migrate object storage tests to rustfs
         :type: misc
         :pr: 732

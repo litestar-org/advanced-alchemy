@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.orm import sessionmaker
 
 from advanced_alchemy.config.common import GenericSQLAlchemyConfig
-from advanced_alchemy.config.sync import SQLAlchemySyncConfig
+from advanced_alchemy.config.sync import SQLAlchemySyncConfig, SyncSessionConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 
@@ -128,3 +128,102 @@ def test_post_init_routing_config_fallback_to_engine_configs() -> None:
 
     config = SQLAlchemySyncConfig(routing_config=mock_routing)
     assert config.connection_string == "sqlite:///fallback"
+
+
+def test_post_init_cache_config_builds_manager() -> None:
+    """cache_config triggers CacheManager creation and propagation to session.info."""
+    from advanced_alchemy.cache import CacheConfig, CacheManager
+
+    config = SQLAlchemySyncConfig(
+        connection_string="sqlite:///:memory:",
+        cache_config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300),
+    )
+    assert isinstance(config.cache_manager, CacheManager)
+    info = config.session_config.info
+    assert isinstance(info, dict)
+    assert info["cache_manager"] is config.cache_manager
+
+
+def test_post_init_cache_config_with_session_info_none_builds_manager() -> None:
+    """cache_config propagates cache_manager when session_config.info is None."""
+    from advanced_alchemy.cache import CacheConfig, CacheManager
+
+    config = SQLAlchemySyncConfig(
+        connection_string="sqlite:///:memory:",
+        session_config=SyncSessionConfig(info=None),
+        cache_config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300),
+    )
+    assert isinstance(config.cache_manager, CacheManager)
+    info = config.session_config.info
+    assert isinstance(info, dict)
+    assert info["file_object_raise_on_error"] is True
+    assert info["cache_manager"] is config.cache_manager
+
+
+def test_post_init_explicit_cache_manager_overrides() -> None:
+    """An explicit cache_manager is preserved and propagated; cache_config is not re-instantiated."""
+    from advanced_alchemy.cache import CacheConfig, CacheManager
+
+    manager = CacheManager(CacheConfig(backend="dogpile.cache.memory"))
+    config = SQLAlchemySyncConfig(
+        connection_string="sqlite:///:memory:",
+        cache_manager=manager,
+    )
+    assert config.cache_manager is manager
+    info = config.session_config.info
+    assert isinstance(info, dict)
+    assert info["cache_manager"] is manager
+
+
+def test_post_init_without_cache_config_leaves_info_clean() -> None:
+    """No cache_config means no cache_manager key on session.info."""
+    config = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:")
+    assert config.cache_manager is None
+    info = config.session_config.info
+    assert isinstance(info, dict)
+    assert "cache_manager" not in info
+
+
+def test_post_init_does_not_alias_shared_session_config_info() -> None:
+    """Two configs sharing a session_config must not clobber each other's cache_manager."""
+    from advanced_alchemy.cache import CacheConfig, CacheManager
+    from advanced_alchemy.config.sync import SyncSessionConfig
+
+    shared = SyncSessionConfig(info={"user_key": "preserved"})
+    mgr_a = CacheManager(CacheConfig(backend="dogpile.cache.memory", key_prefix="a:"))
+    mgr_b = CacheManager(CacheConfig(backend="dogpile.cache.memory", key_prefix="b:"))
+
+    cfg_a = SQLAlchemySyncConfig(
+        connection_string="sqlite:///:memory:",
+        session_config=shared,
+        cache_manager=mgr_a,
+    )
+    cfg_b = SQLAlchemySyncConfig(
+        connection_string="sqlite:///:memory:",
+        session_config=shared,
+        cache_manager=mgr_b,
+    )
+
+    info_a = cfg_a.session_config.info
+    info_b = cfg_b.session_config.info
+    assert isinstance(info_a, dict)
+    assert isinstance(info_b, dict)
+    assert info_a["cache_manager"] is mgr_a
+    assert info_b["cache_manager"] is mgr_b
+    assert info_a["user_key"] == "preserved"
+    assert info_b["user_key"] == "preserved"
+
+
+def test_hash_distinguishes_configs_by_cache_manager() -> None:
+    """Configs identical except for cache_manager hash differently."""
+    from advanced_alchemy.cache import CacheConfig, CacheManager
+
+    mgr_a = CacheManager(CacheConfig(backend="dogpile.cache.memory", key_prefix="a:"))
+    mgr_b = CacheManager(CacheConfig(backend="dogpile.cache.memory", key_prefix="b:"))
+
+    cfg_a = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:", cache_manager=mgr_a)
+    cfg_b = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:", cache_manager=mgr_b)
+    cfg_none = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:")
+
+    assert hash(cfg_a) != hash(cfg_b)
+    assert hash(cfg_a) != hash(cfg_none)
