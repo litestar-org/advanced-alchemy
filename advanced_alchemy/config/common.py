@@ -224,16 +224,15 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         else:
             metadata_registry.set(self.bind_key, self.metadata)
 
-        # Detach session_config and its info dict from any caller-shared instance so writes
-        # below (file_object flag, cache_manager) don't bleed between configs that happened
-        # to be constructed with the same session_config object.
+        # Detach session_config and normalize info to a private dict so config writes
+        # don't bleed between configs that share the same session_config object.
         self.session_config = copy.copy(self.session_config)
-        if self.session_config.info is Empty:
-            self.session_config.info = {}
-        elif isinstance(self.session_config.info, dict):
-            self.session_config.info = dict(self.session_config.info)
-        if isinstance(self.session_config.info, dict):
-            self.session_config.info["file_object_raise_on_error"] = self.file_object_raise_on_error
+        configured_info = self.session_config.info
+        session_info: dict[str, Any] = (
+            {} if configured_info is Empty or configured_info is None else dict(configured_info)
+        )
+        session_info["file_object_raise_on_error"] = self.file_object_raise_on_error
+        self.session_config.info = session_info
 
         # Build a CacheManager from cache_config if one wasn't supplied explicitly,
         # then propagate it to sessions via session_config.info["cache_manager"].
@@ -241,8 +240,8 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
             from advanced_alchemy.cache import CacheManager
 
             self.cache_manager = CacheManager(self.cache_config)
-        if self.cache_manager is not None and isinstance(self.session_config.info, dict):
-            self.session_config.info["cache_manager"] = self.cache_manager
+        if self.cache_manager is not None:
+            session_info["cache_manager"] = self.cache_manager
 
     def __hash__(self) -> int:  # pragma: no cover
         return hash(

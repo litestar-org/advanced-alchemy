@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.orm import sessionmaker
 
 from advanced_alchemy.config.common import GenericSQLAlchemyConfig
-from advanced_alchemy.config.sync import SQLAlchemySyncConfig
+from advanced_alchemy.config.sync import SQLAlchemySyncConfig, SyncSessionConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 
@@ -141,6 +141,22 @@ def test_post_init_cache_config_builds_manager() -> None:
     assert isinstance(config.cache_manager, CacheManager)
     info = config.session_config.info
     assert isinstance(info, dict)
+    assert info["cache_manager"] is config.cache_manager
+
+
+def test_post_init_cache_config_with_session_info_none_builds_manager() -> None:
+    """cache_config propagates cache_manager when session_config.info is None."""
+    from advanced_alchemy.cache import CacheConfig, CacheManager
+
+    config = SQLAlchemySyncConfig(
+        connection_string="sqlite:///:memory:",
+        session_config=SyncSessionConfig(info=None),
+        cache_config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300),
+    )
+    assert isinstance(config.cache_manager, CacheManager)
+    info = config.session_config.info
+    assert isinstance(info, dict)
+    assert info["file_object_raise_on_error"] is True
     assert info["cache_manager"] is config.cache_manager
 
 
