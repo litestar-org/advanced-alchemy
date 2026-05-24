@@ -196,6 +196,81 @@ class TestMergeStatement:
             compile_merge_default(merge_stmt, compiler)  # type: ignore[arg-type]  # pyright: ignore
 
 
+class TestSpannerUpsert:
+    """Tests for the Spanner INSERT_OR_UPDATE DML construct added in Ch.5."""
+
+    def test_spanner_upsert_construction(self, sample_table: Table) -> None:
+        from advanced_alchemy.operations import SpannerUpsert
+
+        upsert = SpannerUpsert(
+            table=sample_table,
+            values_list=[
+                {"key": "k1", "namespace": "ns", "value": "v1"},
+                {"key": "k2", "namespace": "ns", "value": "v2"},
+            ],
+        )
+        assert upsert.table is sample_table
+        assert len(upsert.values_list) == 2
+        assert upsert.columns == ("key", "namespace", "value")
+
+    def test_spanner_upsert_empty_values_raises(self, sample_table: Table) -> None:
+        from advanced_alchemy.operations import SpannerUpsert
+
+        with pytest.raises(ValueError, match="values_list must not be empty"):
+            SpannerUpsert(table=sample_table, values_list=[])
+
+    def test_spanner_upsert_heterogeneous_keys_raises(self, sample_table: Table) -> None:
+        from advanced_alchemy.operations import SpannerUpsert
+
+        with pytest.raises(ValueError, match="same keys"):
+            SpannerUpsert(
+                table=sample_table,
+                values_list=[
+                    {"key": "k1", "namespace": "ns", "value": "v1"},
+                    {"key": "k2", "namespace": "ns"},
+                ],
+            )
+
+    def test_spanner_upsert_compile_emits_insert_or_update(self, sample_table: Table) -> None:
+        from sqlalchemy.engine.default import DefaultDialect
+
+        from advanced_alchemy.operations import SpannerUpsert
+
+        class _MockSpannerDialect(DefaultDialect):
+            name = "spanner"
+
+        upsert = SpannerUpsert(
+            table=sample_table,
+            values_list=[
+                {"key": "k1", "namespace": "ns", "value": "v1"},
+                {"key": "k2", "namespace": "ns", "value": "v2"},
+            ],
+        )
+        compiled = str(upsert.compile(dialect=_MockSpannerDialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
+        upper = compiled.upper()
+        assert "INSERT OR UPDATE INTO TEST_TABLE" in upper
+        assert "(KEY, NAMESPACE, VALUE)" in upper
+        assert upper.count("VALUES") == 1
+        assert compiled.count("(") == 3
+
+    def test_spanner_upsert_compile_default_dialect_raises(self, sample_table: Table) -> None:
+        from advanced_alchemy.operations import SpannerUpsert, compile_spanner_upsert_default
+
+        upsert = SpannerUpsert(
+            table=sample_table,
+            values_list=[{"key": "k1", "namespace": "ns", "value": "v1"}],
+        )
+
+        class _MockDialect:
+            name = "postgresql"
+
+        class _MockCompiler:
+            dialect = _MockDialect()
+
+        with pytest.raises(NotImplementedError, match="SpannerUpsert"):
+            compile_spanner_upsert_default(upsert, _MockCompiler())  # type: ignore[arg-type]
+
+
 class TestMSSQLMergeCompile:
     """Tests for the MSSQL MergeStatement compile path added in Ch.4."""
 

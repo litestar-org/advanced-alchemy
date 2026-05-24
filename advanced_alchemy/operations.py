@@ -57,8 +57,10 @@ UpsertKind = Literal["on_conflict", "merge", "insert_or_update", "fallback"]
 __all__ = (
     "MergeStatement",
     "OnConflictUpsert",
+    "SpannerUpsert",
     "UpsertKind",
     "UpsertStrategy",
+    "compile_spanner_upsert_default",
     "resolve_upsert_strategy",
     "validate_identifier",
 )
@@ -326,6 +328,72 @@ def compile_merge_mssql(element: MergeStatement, compiler: "SQLCompiler", **kwar
     merge_sql += " OUTPUT inserted.*"
     merge_sql += ";"
     return merge_sql
+
+
+class SpannerUpsert(Executable, ClauseElement):
+    """Spanner-specific bulk upsert primitive (``INSERT OR UPDATE INTO``).
+
+    Cloud Spanner does not implement SQL ``MERGE``; the closest DML form is
+    ``INSERT OR UPDATE INTO {table} ({cols}) VALUES (...), (...)``. We model
+    this with its own ClauseElement (instead of overloading ``MergeStatement``)
+    because the syntax has no ``USING`` / ``WHEN MATCHED`` shape.
+
+    The PK must be present in every row — Spanner does not auto-generate PKs
+    via DML. ``INSERT OR UPDATE`` has no ``RETURNING``/``OUTPUT`` equivalent;
+    callers needing hydration must re-SELECT.
+    """
+
+    inherit_cache = True
+
+    def __init__(self, table: Table, values_list: list[dict[str, Any]]) -> None:
+        """Initialize a Spanner INSERT_OR_UPDATE.
+
+        Args:
+            table: Target table for the upsert.
+            values_list: Rows to insert/update. All rows MUST share the same
+                keys; PK columns MUST be present in every row.
+
+        Raises:
+            ValueError: ``values_list`` is empty or rows have heterogeneous
+                keys.
+        """
+        if not values_list:
+            msg = "values_list must not be empty"
+            raise ValueError(msg)
+        first_keys = tuple(values_list[0].keys())
+        first_keyset = set(first_keys)
+        for idx, row in enumerate(values_list[1:], start=1):
+            if set(row.keys()) != first_keyset:
+                msg = f"All entries in values_list must share the same keys (row {idx} differs from row 0)"
+                raise ValueError(msg)
+        self.table = table
+        self.values_list = values_list
+        self.columns: tuple[str, ...] = first_keys
+
+
+@compiles(SpannerUpsert)
+def compile_spanner_upsert_default(element: SpannerUpsert, compiler: "SQLCompiler", **kwargs: Any) -> str:
+    """Default compilation - raises error for non-spanner dialects."""
+    _ = element, kwargs
+    dialect_name = compiler.dialect.name
+    msg = f"SpannerUpsert is only compilable for the 'spanner' dialect, not '{dialect_name}'"
+    raise NotImplementedError(msg)
+
+
+@compiles(SpannerUpsert, "spanner")
+def compile_spanner_upsert(element: SpannerUpsert, compiler: "SQLCompiler", **kwargs: Any) -> str:
+    """Compile Spanner INSERT_OR_UPDATE INTO ... VALUES (...), (...)."""
+    table_name = element.table.name
+    cols = ", ".join(element.columns)
+    row_strs: list[str] = []
+    for idx, row in enumerate(element.values_list):
+        placeholders: list[str] = []
+        for col in element.columns:
+            column = element.table.c[col]
+            bp = bindparam(f"row{idx}_{col}", value=row[col], type_=column.type)
+            placeholders.append(compiler.process(bp, **kwargs))
+        row_strs.append(f"({', '.join(placeholders)})")
+    return f"INSERT OR UPDATE INTO {table_name} ({cols}) VALUES {', '.join(row_strs)}"  # noqa: S608
 
 
 class OnConflictUpsert:
