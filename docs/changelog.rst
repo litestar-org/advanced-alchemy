@@ -6,6 +6,19 @@
 .. changelog:: 1.10.0
     :date: 2026-05-23
 
+    .. change:: bump SQLAlchemy floor to 2.0.41 for native Oracle 23ai VECTOR support
+        :type: misc
+
+        Raises the minimum required ``sqlalchemy`` version from ``>=2.0.20`` to
+        ``>=2.0.41``. SQLAlchemy 2.0.41 introduced the
+        ``sqlalchemy.dialects.oracle.VECTOR``, ``VectorIndexConfig``,
+        ``VectorIndexType``, ``VectorDistanceType``, and ``VectorStorageFormat``
+        symbols required by the new dialect-aware ``Vector`` column type. The
+        floor bump removes the need for runtime ``getattr`` probes in the type
+        layer and unlocks the Oracle 23ai feature matrix (native ``VECTOR``,
+        ``HNSW``/``IVF`` indexes, and — when SQLAlchemy 2.1 lands — native
+        ``BOOLEAN`` and ``JSON``).
+
     .. change:: configurable serialization with Protocol-based architecture
         :type: feature
         :pr: 716

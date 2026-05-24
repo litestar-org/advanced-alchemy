@@ -379,7 +379,7 @@ requires-dist = [
     { name = "passlib", extras = ["argon2"], marker = "extra == 'passlib'" },
     { name = "pwdlib", extras = ["argon2"], marker = "extra == 'pwdlib'" },
     { name = "rich-click", marker = "extra == 'cli'" },
-    { name = "sqlalchemy", specifier = ">=2.0.20" },
+    { name = "sqlalchemy", specifier = ">=2.0.41" },
     { name = "typing-extensions", specifier = ">=4.0.0" },
     { name = "uuid-utils", marker = "extra == 'uuid'", specifier = ">=0.6.1" },
 ]
