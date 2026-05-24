@@ -26,7 +26,7 @@ async def memory_session(tmp_path: Path) -> AsyncIterator[async_sessionmaker[Asy
         await engine.dispose()
 
 
-def _event(event_id: str, text: str, *, author: str = "user", timestamp: float = 123.5):
+def _event(event_id: str, text: str, *, author: str = "user", timestamp: float = 123.5) -> Any:
     from google.adk.events.event import Event
     from google.genai import types
 
@@ -73,7 +73,7 @@ class _PostgreSQLBind:
     def __init__(self) -> None:
         from sqlalchemy.dialects import postgresql
 
-        self.dialect = postgresql.dialect()
+        self.dialect = postgresql.dialect()  # type: ignore[no-untyped-call]
 
 
 class _RecordingAsyncSession:
@@ -127,6 +127,8 @@ async def test_memory_service_add_session_deduplicates_and_searches_content(
         assert len(response.memories) == 1
         assert response.memories[0].id == "event-1"
         assert response.memories[0].author == "user"
+        assert response.memories[0].content is not None
+        assert response.memories[0].content.parts is not None
         assert response.memories[0].content.parts[0].text == "Remember that my favorite color is blue."
         assert response.memories[0].timestamp is not None
 
@@ -255,7 +257,7 @@ async def test_memory_service_auto_prefers_vector_search_when_available() -> Non
     )
 
     statement = await service._search_statement(app_name="app", user_id="user", query="billing")
-    compiled = str(statement.compile(dialect=postgresql.dialect()))
+    compiled = str(statement.compile(dialect=postgresql.dialect()))  # type: ignore[no-untyped-call]
 
     assert calls == ["billing"]
     assert "<=>" in compiled

@@ -26,7 +26,7 @@ SessionService = Annotated[
 
 
 @app.post("/sessions")
-async def create_session(adk_session_service: SessionService) -> dict[str, Any]:  # type: ignore[valid-type]
+async def create_session(adk_session_service: SessionService) -> dict[str, Any]:
     session = await adk_session_service.create_session(
         app_name="adk-example",
         user_id="user-123",
