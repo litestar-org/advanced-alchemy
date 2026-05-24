@@ -10,6 +10,7 @@ Services
 
 .. automodule:: advanced_alchemy.extensions.adk.service
     :members:
+    :no-inherited-members:
     :undoc-members:
     :show-inheritance:
 
@@ -18,6 +19,7 @@ Artifacts
 
 .. automodule:: advanced_alchemy.extensions.adk.artifacts
     :members:
+    :no-inherited-members:
     :undoc-members:
     :show-inheritance:
 
@@ -26,6 +28,7 @@ Memory
 
 .. automodule:: advanced_alchemy.extensions.adk.memory
     :members:
+    :no-inherited-members:
     :undoc-members:
     :show-inheritance:
 
@@ -37,25 +40,31 @@ configuration and exceptions. Framework-specific helpers are documented below.
 
 .. automodule:: advanced_alchemy.extensions.adk.plugins.litestar
     :members:
+    :no-inherited-members:
     :undoc-members:
     :show-inheritance:
 
 .. automodule:: advanced_alchemy.extensions.adk.plugins.fastapi
     :members:
+    :no-inherited-members:
     :undoc-members:
     :show-inheritance:
 
 .. automodule:: advanced_alchemy.extensions.adk.plugins.flask
     :members:
+    :no-inherited-members:
     :undoc-members:
     :show-inheritance:
 
 .. automodule:: advanced_alchemy.extensions.adk.plugins.sanic
     :members:
+    :no-inherited-members:
+    :exclude-members: config
     :undoc-members:
     :show-inheritance:
 
 .. automodule:: advanced_alchemy.extensions.adk.plugins.starlette
     :members:
+    :no-inherited-members:
     :undoc-members:
     :show-inheritance:

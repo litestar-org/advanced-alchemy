@@ -8,18 +8,60 @@ the user-owned model classes in ``ADKSessionModelConfig``.
 
 .. code-block:: python
 
-    service = ADKAsyncSessionService(db_session, model_config=adk_models)
+    from sqlalchemy.ext.asyncio import AsyncSession
 
-    session = await service.create_session(
-        app_name="support-bot",
-        user_id="user-123",
-        session_id="external-session-id",
-        state={
-            "app:theme": "dark",
-            "user:name": "Ada",
-            "turn": 1,
-        },
+    from advanced_alchemy.extensions.adk import (
+        ADKAppStateModelMixin,
+        ADKArtifactModelMixin,
+        ADKAsyncSessionService,
+        ADKEventModelMixin,
+        ADKSessionModelConfig,
+        ADKSessionModelMixin,
+        ADKUserStateModelMixin,
     )
+
+
+    class SessionRow(ADKSessionModelMixin):
+        __tablename__ = "doc_adk_sessions"
+
+
+    class EventRow(ADKEventModelMixin):
+        __tablename__ = "doc_adk_events"
+
+
+    class AppStateRow(ADKAppStateModelMixin):
+        __tablename__ = "doc_adk_app_states"
+
+
+    class UserStateRow(ADKUserStateModelMixin):
+        __tablename__ = "doc_adk_user_states"
+
+
+    class ArtifactRow(ADKArtifactModelMixin):
+        __tablename__ = "doc_adk_session_artifacts"
+
+
+    adk_models = ADKSessionModelConfig(
+        session_model=SessionRow,
+        event_model=EventRow,
+        app_state_model=AppStateRow,
+        user_state_model=UserStateRow,
+        artifact_model=ArtifactRow,
+    )
+
+
+    async def create_support_session(db_session: AsyncSession) -> None:
+        service = ADKAsyncSessionService(db_session, model_config=adk_models)
+        await service.create_session(
+            app_name="support-bot",
+            user_id="user-123",
+            session_id="external-session-id",
+            state={
+                "app:theme": "dark",
+                "user:name": "Ada",
+                "turn": 1,
+            },
+        )
 
 State keys follow ADK semantics:
 

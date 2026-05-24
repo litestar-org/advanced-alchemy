@@ -10,7 +10,11 @@ if sys.version_info < (3, 10):
 
 from tests.unit.test_extensions.test_adk.fixtures import SESSION_MODEL_CONFIG, SampleADKMemory, metadata
 
-pytestmark = [pytest.mark.integration, pytest.mark.aiosqlite]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.aiosqlite,
+    pytest.mark.xdist_group("sqlite"),
+]
 
 
 @pytest.fixture
