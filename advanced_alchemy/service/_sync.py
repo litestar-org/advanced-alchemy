@@ -1080,6 +1080,7 @@ class SQLAlchemySyncRepositoryService(
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
         schema_dump_config: Optional[SchemaDumpConfig] = None,
+        chunk_size: Optional[int] = None,
     ) -> Sequence[ModelT]:
         """Wrap repository upsert operation.
 
@@ -1087,7 +1088,10 @@ class SQLAlchemySyncRepositoryService(
             data: Instance to update existing, or be created.
             auto_expunge: Remove object from session before returning.
             auto_commit: Commit objects before returning.
-            no_merge: Skip the usage of optimized Merge statements (**reserved for future use**)
+            no_merge: When True, forces the SELECT+partition fallback path even on
+                dialects that support a native upsert primitive. Use for callers
+                that need deterministic per-row UPDATE/INSERT semantics or to
+                bypass native dispatch for testing.
             match_fields: a list of keys to use to match the existing model.  When
                 empty, all fields are matched.
             error_messages: An optional dictionary of templates to use
@@ -1097,6 +1101,7 @@ class SQLAlchemySyncRepositoryService(
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             bind_group: Optional routing group to use for the operation.
             schema_dump_config: Optional schema dump behavior for this operation.
+            chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
 
         Returns:
             Updated or created representation.
@@ -1120,6 +1125,7 @@ class SQLAlchemySyncRepositoryService(
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
                 bind_group=bind_group,
+                chunk_size=chunk_size,
             ),
         )
 
