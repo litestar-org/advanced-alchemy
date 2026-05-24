@@ -13,11 +13,24 @@ from tests.unit.test_extensions.test_adk.fixtures import SESSION_MODEL_CONFIG, S
 
 
 def test_service_config_resolves_optional_service_models() -> None:
-    config = ADKServiceConfig(session_model_config=SESSION_MODEL_CONFIG, memory_model=SampleADKMemory)
+    def embed_text(text: str) -> list[float]:
+        return [float(len(text))]
+
+    config = ADKServiceConfig(
+        session_model_config=SESSION_MODEL_CONFIG,
+        memory_model=SampleADKMemory,
+        memory_embedding_provider=embed_text,
+        use_vector_memory=False,
+        vector_distance_metric="l2",
+    )
 
     assert config.resolved_artifact_model is SESSION_MODEL_CONFIG.artifact_model
     assert config.resolved_session_model_config.artifact_model is SESSION_MODEL_CONFIG.artifact_model
     assert config.memory_model is SampleADKMemory
+    service = config.create_async_memory_service(AsyncSession())
+    assert service.embedding_provider is embed_text
+    assert service.use_vector is False
+    assert service.vector_distance_metric == "l2"
 
 
 async def test_litestar_plugin_registers_dependencies_encoders_and_handler() -> None:

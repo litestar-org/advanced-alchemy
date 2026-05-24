@@ -43,5 +43,25 @@ Then subclass ``ADKVectorMemoryModelMixin`` instead of ``ADKMemoryModelMixin``:
     class ADKVectorMemory(ADKVectorMemoryModelMixin):
         __tablename__ = "adk_vector_memory_entries"
 
-The vector mixin adds an ``embedding`` column and leaves embedding generation to
-the application so projects can choose their own model and dimensionality policy.
+The vector mixin adds an ``embedding`` column. The memory service automatically
+uses vector search when all vector components are available:
+
+- the configured memory model has an ``embedding`` column,
+- an ``embedding_provider`` is configured,
+- the database bind is PostgreSQL.
+
+.. code-block:: python
+
+    async def embed_text(text: str) -> list[float]:
+        ...
+
+
+    memory_service = ADKAsyncMemoryService(
+        db_session,
+        memory_model=ADKVectorMemory,
+        embedding_provider=embed_text,
+    )
+
+If any component is missing, the service falls back to PostgreSQL full-text
+search or portable ``ILIKE`` matching. Set ``use_vector=True`` to require vector
+search and raise an error when the vector components are not available.

@@ -1,10 +1,14 @@
 from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any, Optional, cast
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import DateTime, Integer, String, Text, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Mapped, mapped_column, registry
 
+from advanced_alchemy.extensions.adk.models import ADKMemoryModelMixin
+from advanced_alchemy.types import JsonB
 from tests.unit.test_extensions.test_adk.fixtures import SampleADKMemory, metadata
 
 
@@ -33,6 +37,61 @@ def _event(event_id: str, text: str, *, author: str = "user", timestamp: float =
         timestamp=timestamp,
         content=types.Content(role=author, parts=[types.Part(text=text)]),
     )
+
+
+def _vector_memory_model() -> type[Any]:
+    pgvector = pytest.importorskip("pgvector.sqlalchemy")
+
+    mapper_registry = registry()
+
+    @mapper_registry.mapped
+    class VectorMemory:
+        __tablename__ = "test_adk_vector_memory_entries"
+
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        memory_id: Mapped[str] = mapped_column(String(128))
+        app_name: Mapped[str] = mapped_column(String(128))
+        user_id: Mapped[str] = mapped_column(String(128))
+        session_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+        event_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+        author: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+        timestamp: Mapped[Any] = mapped_column(DateTime(timezone=True))
+        content_json: Mapped[dict[str, Any]] = mapped_column(JsonB)
+        content_text: Mapped[str] = mapped_column(Text)
+        metadata_json: Mapped[dict[str, Any]] = mapped_column(JsonB)
+        embedding: Mapped[Optional[list[float]]] = mapped_column(pgvector.Vector(3), nullable=True)
+
+    return VectorMemory
+
+
+class _ScalarResult:
+    def all(self) -> list[Any]:
+        return []
+
+
+class _PostgreSQLBind:
+    def __init__(self) -> None:
+        from sqlalchemy.dialects import postgresql
+
+        self.dialect = postgresql.dialect()
+
+
+class _RecordingAsyncSession:
+    def __init__(self) -> None:
+        self.added: list[Any] = []
+        self.flushed = False
+
+    def get_bind(self) -> _PostgreSQLBind:
+        return _PostgreSQLBind()
+
+    async def scalars(self, statement: object) -> _ScalarResult:
+        return _ScalarResult()
+
+    def add(self, instance: object) -> None:
+        self.added.append(instance)
+
+    async def flush(self) -> None:
+        self.flushed = True
 
 
 async def test_memory_service_add_session_deduplicates_and_searches_content(
@@ -140,3 +199,64 @@ def test_vector_memory_model_import_is_optional() -> None:
     from advanced_alchemy.extensions.adk.memory.vector import ADKVectorMemoryModelMixin
 
     assert ADKVectorMemoryModelMixin.__abstract__ is True
+
+
+async def test_memory_service_auto_writes_embeddings_for_vector_memory_model() -> None:
+    from google.adk.memory.memory_entry import MemoryEntry
+    from google.genai import types
+
+    from advanced_alchemy.extensions.adk.memory import ADKAsyncMemoryService
+
+    session = _RecordingAsyncSession()
+    vector_model = cast("type[ADKMemoryModelMixin]", _vector_memory_model())
+
+    async def embed_text(text: str) -> list[float]:
+        assert "launch" in text.lower()
+        return [0.1, 0.2, 0.3]
+
+    service = ADKAsyncMemoryService(
+        cast("AsyncSession", session),
+        memory_model=vector_model,
+        embedding_provider=embed_text,
+    )
+    await service.add_memory(
+        app_name="app",
+        user_id="user",
+        memories=[
+            MemoryEntry(
+                id="manual-1",
+                author="agent",
+                content=types.Content(role="model", parts=[types.Part(text="The launch window is Friday.")]),
+            ),
+        ],
+    )
+
+    assert session.flushed is True
+    assert session.added[0].embedding == [0.1, 0.2, 0.3]
+
+
+async def test_memory_service_auto_prefers_vector_search_when_available() -> None:
+    from sqlalchemy.dialects import postgresql
+
+    from advanced_alchemy.extensions.adk.memory import ADKAsyncMemoryService
+
+    session = _RecordingAsyncSession()
+    vector_model = cast("type[ADKMemoryModelMixin]", _vector_memory_model())
+    calls: list[str] = []
+
+    def embed_text(text: str) -> list[float]:
+        calls.append(text)
+        return [0.3, 0.2, 0.1]
+
+    service = ADKAsyncMemoryService(
+        cast("AsyncSession", session),
+        memory_model=vector_model,
+        embedding_provider=embed_text,
+    )
+
+    statement = await service._search_statement(app_name="app", user_id="user", query="billing")
+    compiled = str(statement.compile(dialect=postgresql.dialect()))
+
+    assert calls == ["billing"]
+    assert "<=>" in compiled
+    assert "to_tsvector" not in compiled
