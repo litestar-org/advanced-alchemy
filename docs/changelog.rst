@@ -185,32 +185,6 @@
         DuckDB / MySQL / MariaDB, ``MERGE`` on Oracle / MSSQL, and
         ``INSERT OR UPDATE`` on Spanner — compiled to one statement per chunk.
 
-        Internals:
-
-        - New ``advanced_alchemy.operations.OnConflictUpsert.create_upsert_many``
-          and ``create_merge_many`` bulk facades.
-        - New ``advanced_alchemy.operations.SpannerUpsert`` Executable + the
-          accompanying ``@compiles(SpannerUpsert, "spanner")`` body.
-        - New ``@compiles(MergeStatement, "mssql")`` body emitting T-SQL
-          ``MERGE … OUTPUT inserted.*;`` (mandatory trailing semicolon).
-        - New ``advanced_alchemy.operations.resolve_upsert_strategy`` resolver
-          cached via ``functools.lru_cache`` per ``(table, match_fields, dialect)``,
-          gated on a provable PK / UniqueConstraint / unique Index.
-        - ``Repository.upsert_many`` / ``Service.upsert_many`` accept a new
-          ``chunk_size`` kwarg mirroring ``add_many``.
-        - ``no_merge=True`` now forces the SELECT-then-partition fallback path
-          (previously it was documented as reserved for future use). The fallback
-          path is unchanged behaviorally.
-        - ``OnConflictUpsert.supports_native_upsert`` now includes ``mssql`` and
-          ``spanner``; ``create_upsert`` for those dialects returns a
-          ``MergeStatement`` / ``SpannerUpsert`` so existing Litestar single-row
-          session/store callers get native dispatch transparently.
-
-        No breaking API changes: return type is still ``Sequence[ModelT]``, all
-        existing kwargs are preserved, and the dead
-        ``POSTGRES_VERSION_SUPPORTING_MERGE`` constant is removed (dispatch is now
-        owned by the resolver).
-
 .. changelog:: 1.10.0
     :date: 2026-05-23
 
