@@ -8,21 +8,30 @@ subclasses ``ADKArtifactModelMixin``. Artifact bytes are stored as
 
 .. code-block:: python
 
+    from google.genai import types
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from advanced_alchemy.extensions.adk import ADKArtifactModelMixin
     from advanced_alchemy.extensions.adk.artifacts import ADKAsyncArtifactService
 
-    artifact_service = ADKAsyncArtifactService(
-        db_session,
-        artifact_model=ADKArtifact,
-        backend_key="adk-artifacts",
-    )
 
-    version = await artifact_service.save_artifact(
-        app_name="support-bot",
-        user_id="user-123",
-        session_id="session-123",
-        filename="transcript.txt",
-        artifact=types.Part(text="hello"),
-    )
+    class ADKArtifact(ADKArtifactModelMixin):
+        __tablename__ = "doc_adk_artifacts"
+
+
+    async def save_transcript(db_session: AsyncSession) -> int:
+        artifact_service = ADKAsyncArtifactService(
+            db_session,
+            artifact_model=ADKArtifact,
+            backend_key="adk-artifacts",
+        )
+        return await artifact_service.save_artifact(
+            app_name="support-bot",
+            user_id="user-123",
+            session_id="session-123",
+            filename="transcript.txt",
+            artifact=types.Part(text="hello"),
+        )
 
 The default backend key is ``adk-artifacts``. Register a storage backend with
 that key, or pass another ``backend_key`` when constructing the service.

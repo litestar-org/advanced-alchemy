@@ -11,19 +11,61 @@ Litestar
 
 .. code-block:: python
 
-    from advanced_alchemy.extensions.adk import ADKServiceConfig
-    from advanced_alchemy.extensions.adk.plugins.litestar import ADKPlugin
-    from advanced_alchemy.extensions.litestar import SQLAlchemyInitPlugin
+    from litestar import Litestar
 
+    from advanced_alchemy.extensions.adk import (
+        ADKAppStateModelMixin,
+        ADKArtifactModelMixin,
+        ADKEventModelMixin,
+        ADKMemoryModelMixin,
+        ADKServiceConfig,
+        ADKSessionModelConfig,
+        ADKSessionModelMixin,
+        ADKUserStateModelMixin,
+    )
+    from advanced_alchemy.extensions.adk.plugins.litestar import ADKPlugin
+    from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyInitPlugin
+
+
+    class ADKSession(ADKSessionModelMixin):
+        __tablename__ = "fw_adk_sessions"
+
+
+    class ADKEvent(ADKEventModelMixin):
+        __tablename__ = "fw_adk_events"
+
+
+    class ADKAppState(ADKAppStateModelMixin):
+        __tablename__ = "fw_adk_app_states"
+
+
+    class ADKUserState(ADKUserStateModelMixin):
+        __tablename__ = "fw_adk_user_states"
+
+
+    class ADKArtifact(ADKArtifactModelMixin):
+        __tablename__ = "fw_adk_artifacts"
+
+
+    class ADKMemory(ADKMemoryModelMixin):
+        __tablename__ = "fw_adk_memories"
+
+
+    adk_models = ADKSessionModelConfig(
+        session_model=ADKSession,
+        event_model=ADKEvent,
+        app_state_model=ADKAppState,
+        user_state_model=ADKUserState,
+        artifact_model=ADKArtifact,
+    )
     adk_config = ADKServiceConfig(
         session_model_config=adk_models,
         memory_model=ADKMemory,
     )
-
-    app = Litestar(
-        route_handlers=[...],
+    litestar_app = Litestar(
+        route_handlers=[],
         plugins=[
-            SQLAlchemyInitPlugin(config=alchemy_config),
+            SQLAlchemyInitPlugin(config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")),
             ADKPlugin(adk_config),
         ],
     )
@@ -41,15 +83,20 @@ FastAPI
 
     from fastapi import Depends, FastAPI
 
+    from advanced_alchemy.extensions.adk import ADKAsyncSessionService
     from advanced_alchemy.extensions.adk.plugins.fastapi import setup_adk
+    from advanced_alchemy.extensions.fastapi import AdvancedAlchemy as FastAPIAlchemy
+    from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig as FastAPIAsyncConfig
 
-    app = FastAPI()
-    alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
-    adk = setup_adk(app, config=ADKServiceConfig(session_model_config=adk_models))
-
+    fastapi_app = FastAPI()
+    fastapi_alchemy = FastAPIAlchemy(
+        config=FastAPIAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        app=fastapi_app,
+    )
+    fastapi_adk = setup_adk(fastapi_app, config=ADKServiceConfig(session_model_config=adk_models))
     SessionService = Annotated[
         ADKAsyncSessionService,
-        Depends(adk.provide_session_service(alchemy.provide_async_session())),
+        Depends(fastapi_adk.provide_session_service(fastapi_alchemy.provide_async_session())),
     ]
 
 Flask
@@ -57,32 +104,45 @@ Flask
 
 .. code-block:: python
 
+    from flask import Flask
+
     from advanced_alchemy.extensions.adk.plugins.flask import ADKFlaskExtension
+    from advanced_alchemy.extensions.flask import AdvancedAlchemy as FlaskAlchemy
+    from advanced_alchemy.extensions.flask import SQLAlchemySyncConfig as FlaskSyncConfig
 
-    alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
-    adk = ADKFlaskExtension(ADKServiceConfig(session_model_config=adk_models), app=app)
-
-    @app.get("/sessions/<session_id>")
-    def get_session(session_id: str) -> dict[str, str]:
-        service = adk.get_adk_session_service()
-        session = service.get_session(app_name="support-bot", user_id="user-123", session_id=session_id)
-        return {"id": session.id} if session else {"id": ""}
+    flask_app = Flask(__name__)
+    flask_alchemy = FlaskAlchemy(
+        config=FlaskSyncConfig(connection_string="sqlite:///:memory:"),
+        app=flask_app,
+    )
+    flask_adk = ADKFlaskExtension(ADKServiceConfig(session_model_config=adk_models), app=flask_app)
 
 Starlette
 ---------
 
 .. code-block:: python
 
-    from advanced_alchemy.extensions.adk.plugins.starlette import setup_adk
+    from starlette.applications import Starlette
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
 
-    alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
-    setup_adk(
-        app,
+    from advanced_alchemy.extensions.adk.plugins.starlette import setup_adk as setup_starlette_adk
+    from advanced_alchemy.extensions.starlette import AdvancedAlchemy as StarletteAlchemy
+    from advanced_alchemy.extensions.starlette import SQLAlchemyAsyncConfig as StarletteAsyncConfig
+
+    starlette_app = Starlette()
+    starlette_alchemy = StarletteAlchemy(
+        config=StarletteAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        app=starlette_app,
+    )
+    setup_starlette_adk(
+        starlette_app,
         config=ADKServiceConfig(session_model_config=adk_models),
-        alchemy=alchemy,
+        alchemy=starlette_alchemy,
     )
 
-    async def handler(request: Request) -> JSONResponse:
+
+    async def starlette_handler(request: Request) -> JSONResponse:
         service = request.state.adk_session_service
         session = await service.create_session(app_name="support-bot", user_id="user-123")
         return JSONResponse({"id": session.id})
@@ -92,24 +152,22 @@ Sanic
 
 .. code-block:: python
 
-    from advanced_alchemy.extensions.adk.plugins.sanic import ADKSanicExtension
+    from sanic import Sanic
 
-    alchemy = AdvancedAlchemy(sqlalchemy_config=alchemy_config, sanic_app=app)
+    from advanced_alchemy.extensions.adk.plugins.sanic import ADKSanicExtension
+    from advanced_alchemy.extensions.sanic import AdvancedAlchemy as SanicAlchemy
+    from advanced_alchemy.extensions.sanic import SQLAlchemyAsyncConfig as SanicAsyncConfig
+
+    sanic_app = Sanic("ADKDocsApp")
+    sanic_alchemy = SanicAlchemy(
+        sqlalchemy_config=SanicAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        sanic_app=sanic_app,
+    )
     ADKSanicExtension(
         config=ADKServiceConfig(session_model_config=adk_models),
-        sanic_app=app,
-        alchemy=alchemy,
+        sanic_app=sanic_app,
+        alchemy=sanic_alchemy,
     )
-
-    @app.get("/sessions")
-    async def create_session(request: Request) -> HTTPResponse:
-        service = request.ctx.adk_session_service
-        session = await service.create_session(app_name="support-bot", user_id="user-123")
-        return json({"id": session.id})
 
 All framework helpers register a ``StaleSessionError`` handler that maps stale
 session appends to HTTP 409 responses.
-
-Runnable minimal examples are available under ``examples/litestar/adk_example.py``,
-``examples/fastapi/adk_example.py``, ``examples/flask/adk_example.py``,
-``examples/starlette/adk_example.py``, and ``examples/sanic_adk_example.py``.

@@ -7,19 +7,28 @@ model that subclasses ``ADKMemoryModelMixin``.
 
 .. code-block:: python
 
+    from google.adk.sessions.session import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from advanced_alchemy.extensions.adk import ADKMemoryModelMixin
     from advanced_alchemy.extensions.adk.memory import ADKAsyncMemoryService
 
-    memory_service = ADKAsyncMemoryService(
-        db_session,
-        memory_model=ADKMemory,
-    )
 
-    await memory_service.add_session_to_memory(session)
-    results = await memory_service.search_memory(
-        app_name="support-bot",
-        user_id="user-123",
-        query="billing",
-    )
+    class ADKMemory(ADKMemoryModelMixin):
+        __tablename__ = "doc_adk_memory_entries"
+
+
+    async def index_and_search_memory(db_session: AsyncSession, session: Session) -> None:
+        memory_service = ADKAsyncMemoryService(
+            db_session,
+            memory_model=ADKMemory,
+        )
+        await memory_service.add_session_to_memory(session)
+        await memory_service.search_memory(
+            app_name="support-bot",
+            user_id="user-123",
+            query="billing",
+        )
 
 On PostgreSQL, the service uses full-text search by default. Other dialects use
 portable ``ILIKE`` matching against the text and JSON content columns.
@@ -41,7 +50,7 @@ Then subclass ``ADKVectorMemoryModelMixin`` instead of ``ADKMemoryModelMixin``:
 
 
     class ADKVectorMemory(ADKVectorMemoryModelMixin):
-        __tablename__ = "adk_vector_memory_entries"
+        __tablename__ = "doc_adk_vector_memory_entries"
 
 The vector mixin adds an ``embedding`` column. The memory service automatically
 uses vector search when all vector components are available:
@@ -53,7 +62,7 @@ uses vector search when all vector components are available:
 .. code-block:: python
 
     async def embed_text(text: str) -> list[float]:
-        ...
+        return [0.1] * 1536
 
 
     memory_service = ADKAsyncMemoryService(

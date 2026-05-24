@@ -39,6 +39,7 @@ class ADKSanicExtension(Extension):  # type: ignore[no-untyped-call, misc, valid
     """Sanic extension that attaches ADK services to ``request.ctx``."""
 
     name = "ADK"
+    config: ADKServiceConfig
 
     def __init__(
         self,

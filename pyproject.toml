@@ -284,6 +284,7 @@ requires = ["hatchling"]
 [tool.hatch.build.targets.wheel]
 packages = [
   "advanced_alchemy",
+  "advanced_alchemy.extensions.adk",
   "advanced_alchemy.extensions.litestar",
   "advanced_alchemy.extensions.sanic",
   "advanced_alchemy.extensions.starlette",
@@ -530,7 +531,6 @@ module = [
   "google.auth.*",
   "google.cloud.*",
   "pyarrow.*",
-  "pgvector.*",
   "uuid_utils",
   "fsspec",
   "fsspec.*",
@@ -552,7 +552,7 @@ module = ["pytest", "_pytest.*"]
 [[tool.mypy.overrides]]
 follow_imports = "skip"
 ignore_missing_imports = true
-module = ["sphinx", "sphinx.*"]
+module = ["sphinx", "sphinx.*", "google.adk.telemetry.*"]
 
 [[tool.mypy.overrides]]
 disallow_subclassing_any = false
