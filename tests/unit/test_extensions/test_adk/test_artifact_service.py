@@ -4,13 +4,15 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import sessionmaker as sync_sessionmaker
 
-from advanced_alchemy._listeners import setup_file_object_listeners
+from advanced_alchemy._listeners import AsyncFileObjectListener
 from advanced_alchemy.types.file_object.base import AsyncDataLike, DataLike, PathLike, StorageBackend
 from advanced_alchemy.types.file_object.file import FileObject
 from advanced_alchemy.types.file_object.registry import storages
+from tests.unit.test_extensions.test_adk.fixtures import SESSION_MODEL_CONFIG, SampleADKArtifact, metadata
 
 
 class DictStorageBackend(StorageBackend):
@@ -101,21 +103,25 @@ class DictStorageBackend(StorageBackend):
 async def artifact_session(
     tmp_path: Path,
 ) -> AsyncIterator[tuple[async_sessionmaker[AsyncSession], DictStorageBackend]]:
-    from advanced_alchemy.extensions.adk.artifacts import ADKArtifact, ADKAsyncArtifactService
-    from advanced_alchemy.extensions.adk.v1 import metadata
+    from advanced_alchemy.extensions.adk.artifacts import ADKAsyncArtifactService
 
-    _ = ADKArtifact, ADKAsyncArtifactService
+    _ = ADKAsyncArtifactService
     backend = DictStorageBackend("adk-artifacts-test")
     if storages.is_registered(backend.key):
         storages.unregister_backend(backend.key)
     storages.register_backend(backend)
-    setup_file_object_listeners()
 
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'adk-artifacts.db'}")
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    sync_maker = sync_sessionmaker()
+    event.listen(sync_maker, "before_flush", AsyncFileObjectListener.before_flush)
+    event.listen(sync_maker, "after_commit", AsyncFileObjectListener.after_commit)
+    event.listen(sync_maker, "after_rollback", AsyncFileObjectListener.after_rollback)
+    session_factory.configure(sync_session_class=sync_maker)
     async with engine.begin() as connection:
         await connection.run_sync(metadata.create_all)
     try:
-        yield async_sessionmaker(engine, expire_on_commit=False), backend
+        yield session_factory, backend
     finally:
         storages.unregister_backend(backend.key)
         await engine.dispose()
@@ -135,7 +141,7 @@ async def test_artifact_service_round_trips_versions_and_metadata(
 
     session_factory, backend = artifact_session
     async with session_factory() as db_session:
-        service = ADKAsyncArtifactService(db_session, backend_key=backend.key)
+        service = ADKAsyncArtifactService(db_session, artifact_model=SampleADKArtifact, backend_key=backend.key)
 
         assert isinstance(service, BaseArtifactService)
 
@@ -211,11 +217,11 @@ async def test_artifact_service_rollback_skips_blob_upload(
 ) -> None:
     from google.genai import types
 
-    from advanced_alchemy.extensions.adk.artifacts import ADKArtifact, ADKAsyncArtifactService
+    from advanced_alchemy.extensions.adk.artifacts import ADKAsyncArtifactService
 
     session_factory, backend = artifact_session
     async with session_factory() as db_session:
-        service = ADKAsyncArtifactService(db_session, backend_key=backend.key)
+        service = ADKAsyncArtifactService(db_session, artifact_model=SampleADKArtifact, backend_key=backend.key)
         await service.save_artifact(
             app_name="app",
             user_id="user",
@@ -228,7 +234,7 @@ async def test_artifact_service_rollback_skips_blob_upload(
         await _let_file_listener_run()
 
         assert backend.fs == {}
-        assert (await db_session.scalars(select(ADKArtifact))).all() == []
+        assert (await db_session.scalars(select(SampleADKArtifact))).all() == []
 
 
 async def test_artifact_service_delete_removes_blobs_after_commit(
@@ -240,7 +246,7 @@ async def test_artifact_service_delete_removes_blobs_after_commit(
 
     session_factory, backend = artifact_session
     async with session_factory() as db_session:
-        service = ADKAsyncArtifactService(db_session, backend_key=backend.key)
+        service = ADKAsyncArtifactService(db_session, artifact_model=SampleADKArtifact, backend_key=backend.key)
         await service.save_artifact(
             app_name="app",
             user_id="user",
@@ -268,7 +274,7 @@ async def test_artifact_service_user_scoped_artifacts_do_not_require_session_id(
 
     session_factory, backend = artifact_session
     async with session_factory() as db_session:
-        service = ADKAsyncArtifactService(db_session, backend_key=backend.key)
+        service = ADKAsyncArtifactService(db_session, artifact_model=SampleADKArtifact, backend_key=backend.key)
         version = await service.save_artifact(
             app_name="app",
             user_id="user",
@@ -291,12 +297,14 @@ async def test_session_service_delete_session_removes_session_artifact_blobs(
     from google.genai import types
 
     from advanced_alchemy.extensions.adk import ADKAsyncSessionService
-    from advanced_alchemy.extensions.adk.artifacts import ADKArtifact, ADKAsyncArtifactService
+    from advanced_alchemy.extensions.adk.artifacts import ADKAsyncArtifactService
 
     session_factory, backend = artifact_session
     async with session_factory() as db_session:
-        session_service = ADKAsyncSessionService(db_session)
-        artifact_service = ADKAsyncArtifactService(db_session, backend_key=backend.key)
+        session_service = ADKAsyncSessionService(db_session, model_config=SESSION_MODEL_CONFIG)
+        artifact_service = ADKAsyncArtifactService(
+            db_session, artifact_model=SampleADKArtifact, backend_key=backend.key
+        )
         await session_service.create_session(app_name="app", user_id="user", session_id="session")
         await artifact_service.save_artifact(
             app_name="app",
@@ -314,4 +322,4 @@ async def test_session_service_delete_session_removes_session_artifact_blobs(
         await _let_file_listener_run()
 
         assert backend.fs == {}
-        assert (await db_session.scalars(select(ADKArtifact))).all() == []
+        assert (await db_session.scalars(select(SampleADKArtifact))).all() == []
