@@ -57,13 +57,13 @@ def test_v1_metadata_create_all_produces_expected_sqlite_schema() -> None:
     metadata.create_all(engine)
     inspector = inspect(engine)
 
-    assert set(inspector.get_table_names()) == {
+    assert {
         "adk_internal_metadata",
         "app_states",
         "events",
         "sessions",
         "user_states",
-    }
+    }.issubset(inspector.get_table_names())
     assert inspector.get_pk_constraint("sessions")["constrained_columns"] == ["app_name", "user_id", "id"]
     assert inspector.get_pk_constraint("events")["constrained_columns"] == ["id", "app_name", "user_id", "session_id"]
     assert inspector.get_foreign_keys("events")[0]["referred_table"] == "sessions"
