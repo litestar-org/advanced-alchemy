@@ -100,6 +100,7 @@ class ADKSyncSessionService:
         """Delete a session and its cascade-owned events."""
         storage_session = self._get_storage_session(app_name, user_id, session_id)
         if storage_session is not None:
+            self._delete_session_artifacts(app_name, user_id, session_id)
             self.session.delete(storage_session)
             self.session.flush()
 
@@ -150,6 +151,21 @@ class ADKSyncSessionService:
             .where(ADKSession.id == session_id)
         )
         return self.session.scalar(statement)
+
+    def _delete_session_artifacts(self, app_name: str, user_id: str, session_id: str) -> None:
+        try:
+            from advanced_alchemy.extensions.adk.artifacts import ADKArtifact
+        except ImportError:
+            return
+        artifacts = self.session.scalars(
+            select(ADKArtifact)
+            .where(ADKArtifact.app_name == app_name)
+            .where(ADKArtifact.user_id == user_id)
+            .where(ADKArtifact.session_id == session_id),
+        )
+        for artifact in artifacts.all():
+            self.session.delete(artifact)
+        self.session.flush()
 
     def _get_or_create_app_state(self, app_name: str) -> ADKAppState:
         app_state = self.session.scalar(select(ADKAppState).where(ADKAppState.app_name == app_name))
