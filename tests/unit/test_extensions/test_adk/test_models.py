@@ -89,6 +89,7 @@ def test_model_helpers_round_trip_adk_session_and_event_when_extra_is_installed(
 
     assert stored_event.event_id == "event"
     assert stored_event.session_id == "session"
+    assert stored_event.event_data is not None
     assert stored_event.event_data["author"] == "agent"
 
     round_tripped_event = stored_event.to_event()

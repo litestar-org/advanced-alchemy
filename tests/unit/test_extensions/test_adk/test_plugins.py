@@ -134,7 +134,7 @@ def test_starlette_setup_attaches_services_to_request_state() -> None:
             routing.Route("/stale", stale_route),
         ],
     )
-    setup_adk(app, config=ADKServiceConfig(session_model_config=SESSION_MODEL_CONFIG), alchemy=Alchemy())
+    setup_adk(app, config=ADKServiceConfig(session_model_config=SESSION_MODEL_CONFIG), alchemy=Alchemy())  # type: ignore[arg-type]
 
     with testclient.TestClient(app, raise_server_exceptions=False) as client:
         assert client.get("/service").json() == {"service": "ADKAsyncSessionService"}
@@ -155,7 +155,7 @@ def test_sanic_extension_injects_services_from_request_context() -> None:
     )
     request = SimpleNamespace(ctx=SimpleNamespace(db_session=db_session), app=SimpleNamespace(ctx=SimpleNamespace()))
 
-    extension.inject_services(request)
+    extension.inject_services(request)  # type: ignore[arg-type]
 
     assert type(request.ctx.adk_session_service).__name__ == "ADKAsyncSessionService"
     assert type(request.ctx.adk_artifact_service).__name__ == "ADKAsyncArtifactService"

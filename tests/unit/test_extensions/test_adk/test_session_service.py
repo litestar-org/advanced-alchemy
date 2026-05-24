@@ -144,6 +144,7 @@ async def test_session_service_append_event_persists_state_and_filters_temp(
         stored_app_state = await db_session.scalar(select(SampleADKAppState))
         stored_user_state = await db_session.scalar(select(SampleADKUserState))
         assert stored_event is not None
+        assert stored_event.event_data is not None
         assert stored_event.event_data["actions"]["state_delta"] == {
             "app:theme": "light",
             "user:name": "Grace",

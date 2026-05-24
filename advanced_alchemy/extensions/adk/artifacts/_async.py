@@ -241,7 +241,8 @@ class ADKAsyncArtifactService(BaseArtifactService):
             .where(self.artifact_model.session_id == session_id)
             .where(self.artifact_model.filename == filename)
         )
-        return await self.session.scalar(statement)
+        result: Optional[int] = await self.session.scalar(statement)
+        return result
 
     async def _get_artifact(
         self,
@@ -272,7 +273,8 @@ class ADKAsyncArtifactService(BaseArtifactService):
             .where(self.artifact_model.version == version)
             .limit(1)
         )
-        return await self.session.scalar(statement)
+        result: Optional[ADKArtifactModelMixin] = await self.session.scalar(statement)
+        return result
 
     async def _to_part(self, artifact: ADKArtifactModelMixin) -> Optional[types.Part]:
         if artifact.artifact_kind == "file_data":

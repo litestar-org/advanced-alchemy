@@ -1,7 +1,7 @@
 """Sanic integration for Google ADK persistence services."""
 # pyright: reportMissingTypeArgument=false, reportUnnecessaryIsInstance=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportUnknownVariableType=false, reportUnusedFunction=false
 
-from typing import TYPE_CHECKING, Optional, Union, cast
+from typing import TYPE_CHECKING, Optional, Union
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from sanic.response import HTTPResponse
     from sanic_ext import Extend as SanicExtend
 
+    from advanced_alchemy.extensions.sanic.extension import AdvancedAlchemy
+
 
 async def stale_session_exception_handler(_: "Request", exc: StaleSessionError) -> "HTTPResponse":
     """Convert ADK optimistic concurrency failures into HTTP 409 responses."""
@@ -43,7 +45,7 @@ class ADKSanicExtension(Extension):  # type: ignore[no-untyped-call, misc, valid
         *,
         config: ADKServiceConfig,
         sanic_app: Optional["Sanic"] = None,
-        alchemy: Optional[object] = None,
+        alchemy: 'Optional["AdvancedAlchemy"]' = None,
         bind_key: Optional[str] = None,
         session_context_key: Optional[str] = None,
     ) -> None:
@@ -105,11 +107,11 @@ class ADKSanicExtension(Extension):  # type: ignore[no-untyped-call, misc, valid
             session = getattr(request.ctx, self.session_context_key, None)
             if isinstance(session, (AsyncSession, Session)):
                 return session
-        alchemy = self.alchemy or getattr(request.app.ctx, "advanced_alchemy", None)
+        alchemy: Optional[AdvancedAlchemy] = self.alchemy or getattr(request.app.ctx, "advanced_alchemy", None)
         if alchemy is None:
             msg = "Advanced Alchemy Sanic extension must be registered or passed to ADKSanicExtension."
             raise ImproperConfigurationError(msg)
-        return cast("Union[AsyncSession, Session]", alchemy.get_session(request, self.bind_key))  # type: ignore[attr-defined]
+        return alchemy.get_session(request, self.bind_key)
 
 
 __all__ = ("ADKSanicExtension", "stale_session_exception_handler")

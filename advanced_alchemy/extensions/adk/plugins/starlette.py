@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from starlette.applications import Starlette
     from starlette.types import ASGIApp, ExceptionHandler, Receive, Scope, Send
 
+    from advanced_alchemy.extensions.starlette.extension import AdvancedAlchemy
+
 
 async def stale_session_exception_handler(_: Request, exc: StaleSessionError) -> JSONResponse:
     """Convert ADK optimistic concurrency failures into HTTP 409 responses."""
@@ -31,7 +33,7 @@ class ADKStarletteMiddleware:
         app: "ASGIApp",
         *,
         config: ADKServiceConfig,
-        alchemy: Optional[object] = None,
+        alchemy: 'Optional["AdvancedAlchemy"]' = None,
         bind_key: Optional[str] = None,
         session_state_key: Optional[str] = None,
     ) -> None:
@@ -62,22 +64,18 @@ class ADKStarletteMiddleware:
             session = getattr(request.state, self.session_state_key, None)
             if isinstance(session, AsyncSession):
                 return session
-        alchemy = self.alchemy or getattr(request.app.state, "advanced_alchemy", None)
+        alchemy: Optional[AdvancedAlchemy] = self.alchemy or getattr(request.app.state, "advanced_alchemy", None)
         if alchemy is None:
             msg = "Advanced Alchemy Starlette extension must be registered or passed to ADKStarletteMiddleware."
             raise ImproperConfigurationError(msg)
-        session = alchemy.get_async_session(request, self.bind_key)  # type: ignore[attr-defined]
-        if not isinstance(session, AsyncSession):  # pragma: no cover
-            msg = "Expected AsyncSession."
-            raise ImproperConfigurationError(msg)
-        return session
+        return alchemy.get_async_session(request, self.bind_key)
 
 
 def setup_adk(
     app: "Starlette",
     *,
     config: ADKServiceConfig,
-    alchemy: Optional[object] = None,
+    alchemy: 'Optional["AdvancedAlchemy"]' = None,
     bind_key: Optional[str] = None,
     session_state_key: Optional[str] = None,
 ) -> None:
