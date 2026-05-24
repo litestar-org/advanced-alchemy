@@ -5,13 +5,14 @@ import importlib
 import subprocess
 import sys
 import textwrap
-from typing import Optional
+from typing import Any, Optional, cast
 
 import pytest
-from sqlalchemy import Column, MetaData, Table, create_engine, insert, select
+from sqlalchemy import Integer, Table, create_engine, insert, select
 from sqlalchemy.dialects import oracle as oracle_dialect_mod
 from sqlalchemy.dialects import postgresql as postgresql_dialect_mod
 from sqlalchemy.dialects import sqlite as sqlite_dialect_mod
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import JSON
 
 from advanced_alchemy.types import Vector
@@ -63,7 +64,7 @@ def test_vector_default_impl_is_json() -> None:
 
 def test_vector_sqlite_falls_back_to_json() -> None:
     """On dialects without a native vector type, ``Vector`` resolves to JSON."""
-    dialect = sqlite_dialect_mod.dialect()
+    dialect = sqlite_dialect_mod.dialect()  # type: ignore[no-untyped-call,unused-ignore]
     resolved = Vector(3).dialect_impl(dialect)
     assert isinstance(resolved.impl, JSON)
 
@@ -71,9 +72,9 @@ def test_vector_sqlite_falls_back_to_json() -> None:
 def test_vector_postgresql_uses_pgvector_when_available() -> None:
     """On PostgreSQL/CockroachDB, ``Vector`` selects the ``pgvector`` impl."""
     pytest.importorskip("pgvector.sqlalchemy")
-    from pgvector.sqlalchemy import Vector as PgVector
+    from pgvector.sqlalchemy import Vector as PgVector  # pyright: ignore[reportMissingTypeStubs]
 
-    dialect = postgresql_dialect_mod.dialect()
+    dialect = postgresql_dialect_mod.dialect()  # type: ignore[no-untyped-call,unused-ignore]
     resolved = Vector(1536).dialect_impl(dialect)
     assert isinstance(resolved.impl, PgVector)
     assert resolved.impl.dim == 1536
@@ -83,7 +84,7 @@ def test_vector_postgresql_without_pgvector_falls_back_to_json(monkeypatch: pyte
     """If ``pgvector`` cannot be imported, PostgreSQL emits the JSON fallback."""
     real_import = importlib.import_module
 
-    def fake_import(name: str, *args: object, **kwargs: object):
+    def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
         if name.startswith("pgvector"):
             raise ImportError(name)
         return real_import(name, *args, **kwargs)
@@ -92,7 +93,7 @@ def test_vector_postgresql_without_pgvector_falls_back_to_json(monkeypatch: pyte
     monkeypatch.setitem(sys.modules, "pgvector", None)
     monkeypatch.setitem(sys.modules, "pgvector.sqlalchemy", None)
 
-    dialect = postgresql_dialect_mod.dialect()
+    dialect = postgresql_dialect_mod.dialect()  # type: ignore[no-untyped-call,unused-ignore]
     resolved = Vector(4).dialect_impl(dialect)
     assert isinstance(resolved.impl, JSON)
 
@@ -101,7 +102,7 @@ def test_vector_oracle_uses_native_vector_type() -> None:
     """On Oracle, ``Vector`` selects ``oracle.VECTOR`` with the requested storage format."""
     from sqlalchemy.dialects.oracle import VECTOR, VectorStorageFormat
 
-    dialect = oracle_dialect_mod.dialect()
+    dialect = oracle_dialect_mod.dialect()  # type: ignore[no-untyped-call,unused-ignore]
     resolved = Vector(1024, storage_format="FLOAT64").dialect_impl(dialect)
     assert isinstance(resolved.impl, VECTOR)
     assert resolved.impl.dim == 1024
@@ -110,9 +111,17 @@ def test_vector_oracle_uses_native_vector_type() -> None:
 
 def test_vector_oracle_ddl_compiles_with_dim_and_format() -> None:
     """DDL for ``Vector`` on Oracle includes the dimension and storage format."""
-    dialect = oracle_dialect_mod.dialect()
-    column = Column("embedding", Vector(8, storage_format="FLOAT32"))
-    ddl = str(column.type.compile(dialect=dialect))
+
+    class _Base(DeclarativeBase):
+        pass
+
+    class _OracleVectorModel(_Base):
+        __tablename__ = "oracle_vector_model"
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        embedding: Mapped[list[float]] = mapped_column(Vector(8, storage_format="FLOAT32"))
+
+    dialect = oracle_dialect_mod.dialect()  # type: ignore[no-untyped-call,unused-ignore]
+    ddl = str(_OracleVectorModel.__table__.c.embedding.type.compile(dialect=dialect))  # type: ignore[no-untyped-call,unused-ignore]
     assert "VECTOR" in ddl
     assert "8" in ddl
     assert "FLOAT32" in ddl
@@ -122,7 +131,7 @@ def test_vector_process_result_value_normalizes_array_array() -> None:
     """Oracle's ``array.array`` result is normalized to ``list[float]``."""
     vec = Vector(3)
     raw = array.array("f", [1.0, 2.0, 3.0])
-    assert vec.process_result_value(raw, oracle_dialect_mod.dialect()) == [1.0, 2.0, 3.0]
+    assert vec.process_result_value(raw, oracle_dialect_mod.dialect()) == [1.0, 2.0, 3.0]  # type: ignore[no-untyped-call,unused-ignore]
 
 
 def test_vector_process_result_value_normalizes_tolist_result() -> None:
@@ -136,33 +145,36 @@ def test_vector_process_result_value_normalizes_tolist_result() -> None:
             return list(self._values)
 
     vec = Vector(2)
-    assert vec.process_result_value(FakeNumpy([0.5, 0.25]), postgresql_dialect_mod.dialect()) == [0.5, 0.25]
+    assert vec.process_result_value(FakeNumpy([0.5, 0.25]), postgresql_dialect_mod.dialect()) == [0.5, 0.25]  # type: ignore[no-untyped-call,unused-ignore]
 
 
 def test_vector_process_result_value_preserves_none() -> None:
     """``None`` survives the result normalization step unchanged."""
-    assert Vector(4).process_result_value(None, sqlite_dialect_mod.dialect()) is None
+    assert Vector(4).process_result_value(None, sqlite_dialect_mod.dialect()) is None  # type: ignore[no-untyped-call,unused-ignore]
 
 
 def test_vector_process_result_value_returns_list_for_plain_iterable() -> None:
     """JSON fallback returns a plain ``list`` (or anything iterable) and stays a ``list``."""
     vec = Vector(3)
-    assert vec.process_result_value([1.0, 2.0, 3.0], sqlite_dialect_mod.dialect()) == [1.0, 2.0, 3.0]
+    assert vec.process_result_value([1.0, 2.0, 3.0], sqlite_dialect_mod.dialect()) == [1.0, 2.0, 3.0]  # type: ignore[no-untyped-call,unused-ignore]
 
 
 def test_vector_sqlite_round_trip_via_json_fallback() -> None:
     """End-to-end: insert a vector on SQLite and round-trip it back as ``list[float]``."""
+
+    class _Base(DeclarativeBase):
+        pass
+
+    class _SqliteVectorModel(_Base):
+        __tablename__ = "vector_round_trip_model"
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        embedding: Mapped[list[float]] = mapped_column(Vector(3))
+
     engine = create_engine("sqlite:///:memory:")
-    metadata = MetaData()
-    table = Table(
-        "vectors",
-        metadata,
-        Column("id", primary_key=True, type_=__import__("sqlalchemy").Integer),
-        Column("embedding", Vector(3)),
-    )
-    metadata.create_all(engine)
+    _Base.metadata.create_all(engine)
+    table = cast(Table, _SqliteVectorModel.__table__)
     with engine.begin() as conn:
         conn.execute(insert(table).values(id=1, embedding=[0.1, 0.2, 0.3]))
-        row: Optional[tuple] = conn.execute(select(table.c.embedding).where(table.c.id == 1)).first()
+        row: Optional[Any] = conn.execute(select(table.c.embedding).where(table.c.id == 1)).first()
     assert row is not None
     assert row[0] == [0.1, 0.2, 0.3]

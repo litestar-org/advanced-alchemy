@@ -3,8 +3,7 @@
 1.x Changelog
 =============
 
-.. changelog:: 1.10.0
-    :date: 2026-05-23
+.. changelog:: 1.11.0
 
     .. change:: dialect-aware ``Vector`` column type
         :type: feature
@@ -40,6 +39,9 @@
         layer and unlocks the Oracle 23ai feature matrix (native ``VECTOR``,
         ``HNSW``/``IVF`` indexes, and — when SQLAlchemy 2.1 lands — native
         ``BOOLEAN`` and ``JSON``).
+
+.. changelog:: 1.10.0
+    :date: 2026-05-23
 
     .. change:: configurable serialization with Protocol-based architecture
         :type: feature
