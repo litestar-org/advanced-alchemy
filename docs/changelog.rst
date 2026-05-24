@@ -6,6 +6,28 @@
 .. changelog:: 1.10.0
     :date: 2026-05-23
 
+    .. change:: dialect-aware ``Vector`` column type
+        :type: feature
+
+        Adds :class:`advanced_alchemy.types.Vector`, a unified ``TypeDecorator``
+        that resolves to the most appropriate backend representation per
+        dialect:
+
+        - Oracle 23ai → ``sqlalchemy.dialects.oracle.VECTOR(dim, storage_format)``
+        - PostgreSQL / CockroachDB → ``pgvector.sqlalchemy.Vector(dim)`` when
+          ``pgvector`` is importable.
+        - All other dialects (sqlite, mysql, mssql, ...) → JSON round-trip as a
+          JSON array.
+
+        The pattern mirrors :class:`advanced_alchemy.types.guid.GUID`: one
+        ``TypeDecorator`` with a single ``__init__(dim, *, storage_format)``
+        signature, and ``load_dialect_impl`` selects the backend at DDL emit.
+        ``pgvector`` and ``oracledb`` are imported lazily inside
+        ``load_dialect_impl`` so ``from advanced_alchemy.types import Vector``
+        works on a bare install. Result values from any backend (Oracle's
+        ``array.array``, pgvector's ``numpy.ndarray``, JSON's ``list``) are
+        normalized to ``list[float]`` so downstream code is portable.
+
     .. change:: bump SQLAlchemy floor to 2.0.41 for native Oracle 23ai VECTOR support
         :type: misc
 

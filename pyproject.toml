@@ -470,6 +470,8 @@ module = [
   "fsspec.*",
   "argon2",
   "argon2.*",
+  "pgvector",
+  "pgvector.*",
 ]
 
 [[tool.mypy.overrides]]
