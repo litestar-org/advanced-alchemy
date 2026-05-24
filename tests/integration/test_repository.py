@@ -1447,6 +1447,116 @@ async def test_composite_pk_upsert_many_all_new(
         assert created is not None
 
 
+async def test_upsert_many_native_path_is_single_statement_per_chunk(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Native dispatch must compile to ONE upsert statement per chunk.
+
+    Acceptance gate from the saga PRD: on a native-capable dialect, the
+    upsert path emits one INSERT...ON CONFLICT / MERGE / INSERT OR UPDATE per
+    chunk plus (when ``supports_returning=False``) at most one re-SELECT for
+    hydration — never the historical 1 SELECT + N add/update sequence.
+    """
+    from sqlalchemy import event
+
+    session, models = seeded_test_session_async
+    author_model = models["author"]
+    author_repo = create_repository(session, author_model)
+    dialect_name = session.bind.dialect.name if session.bind is not None else session.get_bind().dialect.name
+    if dialect_name not in {"postgresql", "cockroachdb", "sqlite", "duckdb", "mysql", "mariadb", "oracle", "mssql"}:
+        pytest.skip(f"native upsert path not exercised for dialect {dialect_name!r}")
+
+    statements: list[str] = []
+
+    def _record(conn: Any, clauseelement: Any, *args: Any, **kwargs: Any) -> None:
+        _ = conn, args, kwargs
+        statements.append(str(clauseelement))
+
+    bind = session.bind if session.bind is not None else session.get_bind()
+    sync_engine = getattr(bind, "sync_engine", bind)
+    event.listen(sync_engine, "before_execute", _record)
+    try:
+        data = [author_model(name=f"native-upsert-author-{i}", dob=datetime.date(1990, 1, 1)) for i in range(5)]
+        results = await maybe_async(author_repo.upsert_many(data, match_fields=["id"]))
+    finally:
+        event.remove(sync_engine, "before_execute", _record)
+
+    assert len(results) == 5
+    upsert_statements = [s for s in statements if "INSERT" in s.upper() or "MERGE" in s.upper()]
+    assert len(upsert_statements) == 1, (
+        f"expected 1 native upsert statement, got {len(upsert_statements)}: {statements}"
+    )
+
+
+async def test_upsert_many_no_merge_forces_fallback(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """``no_merge=True`` must take the SELECT+partition+add/update fallback path.
+
+    The fallback emits at minimum a SELECT (existence probe) followed by an
+    INSERT statement — the native path emits a single upsert with no
+    initial SELECT.
+    """
+    from sqlalchemy import event
+
+    session, models = seeded_test_session_async
+    author_model = models["author"]
+    author_repo = create_repository(session, author_model)
+
+    statements: list[str] = []
+
+    def _record(conn: Any, clauseelement: Any, *args: Any, **kwargs: Any) -> None:
+        _ = conn, args, kwargs
+        statements.append(str(clauseelement))
+
+    bind = session.bind if session.bind is not None else session.get_bind()
+    sync_engine = getattr(bind, "sync_engine", bind)
+    event.listen(sync_engine, "before_execute", _record)
+    try:
+        data = [author_model(name=f"fallback-author-{i}", dob=datetime.date(1990, 1, 1)) for i in range(3)]
+        results = await maybe_async(author_repo.upsert_many(data, match_fields=["id"], no_merge=True))
+    finally:
+        event.remove(sync_engine, "before_execute", _record)
+
+    assert len(results) == 3
+    saw_select = any("SELECT" in s.upper() for s in statements)
+    saw_insert = any(s.upper().startswith("INSERT") for s in statements)
+    assert saw_select and saw_insert, f"fallback expected SELECT+INSERT, got: {statements}"
+
+
+async def test_upsert_many_chunk_size_emits_multiple_chunks(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Passing chunk_size below the row count must produce multiple native statements."""
+    from sqlalchemy import event
+
+    session, models = seeded_test_session_async
+    author_model = models["author"]
+    author_repo = create_repository(session, author_model)
+    dialect_name = session.bind.dialect.name if session.bind is not None else session.get_bind().dialect.name
+    if dialect_name not in {"postgresql", "cockroachdb", "sqlite", "duckdb", "mysql", "mariadb", "oracle", "mssql"}:
+        pytest.skip(f"native upsert path not exercised for dialect {dialect_name!r}")
+
+    statements: list[str] = []
+
+    def _record(conn: Any, clauseelement: Any, *args: Any, **kwargs: Any) -> None:
+        _ = conn, args, kwargs
+        statements.append(str(clauseelement))
+
+    bind = session.bind if session.bind is not None else session.get_bind()
+    sync_engine = getattr(bind, "sync_engine", bind)
+    event.listen(sync_engine, "before_execute", _record)
+    try:
+        data = [author_model(name=f"chunked-author-{i}", dob=datetime.date(1990, 1, 1)) for i in range(8)]
+        results = await maybe_async(author_repo.upsert_many(data, match_fields=["id"], chunk_size=4))
+    finally:
+        event.remove(sync_engine, "before_execute", _record)
+
+    assert len(results) == 8
+    upsert_statements = [s for s in statements if "INSERT" in s.upper() or "MERGE" in s.upper()]
+    assert len(upsert_statements) >= 2, f"expected >=2 upsert statements with chunk_size=4, got {upsert_statements}"
+
+
 async def test_repo_update_partial_does_not_clear_relationships_github_684(
     seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
 ) -> None:
