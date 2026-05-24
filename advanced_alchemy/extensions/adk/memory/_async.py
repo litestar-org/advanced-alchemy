@@ -1,8 +1,10 @@
 """Async Google ADK memory service implementation."""
 
 import datetime
-from collections.abc import Mapping, Sequence
-from typing import Optional
+import inspect
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from typing import Any, Literal, Optional, Union
+from typing import cast as type_cast
 
 from google.adk.events.event import Event
 from google.adk.memory.base_memory_service import BaseMemoryService, SearchMemoryResponse
@@ -13,7 +15,11 @@ from sqlalchemy import Select, cast, func, literal, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.types import String
 
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.adk.models import ADKMemoryModelMixin
+
+ADKMemoryEmbeddingProvider = Callable[[str], Union[Sequence[float], Awaitable[Sequence[float]]]]
+ADKVectorDistanceMetric = Literal["cosine", "l2", "inner_product"]
 
 
 class ADKAsyncMemoryService(BaseMemoryService):
@@ -26,11 +32,17 @@ class ADKAsyncMemoryService(BaseMemoryService):
         memory_model: type[ADKMemoryModelMixin],
         max_results: int = 50,
         use_fts: Optional[bool] = None,
+        embedding_provider: Optional[ADKMemoryEmbeddingProvider] = None,
+        use_vector: Optional[bool] = None,
+        vector_distance_metric: ADKVectorDistanceMetric = "cosine",
     ) -> None:
         self.session = session
         self.memory_model = memory_model
         self.max_results = max_results
         self.use_fts = use_fts
+        self.embedding_provider = embedding_provider
+        self.use_vector = use_vector
+        self.vector_distance_metric = vector_distance_metric
 
     async def add_session_to_memory(self, session: ADKSessionModel) -> None:
         """Add all content-bearing events from a session to memory."""
@@ -57,19 +69,24 @@ class ADKAsyncMemoryService(BaseMemoryService):
         for event in events:
             if not event.id or event.id in existing_ids or event.content is None or not event.content.parts:
                 continue
+            content_text = self._content_to_text(event.content)
+            vector_embedding = await self._embedding_for_text(content_text)
+            memory_data: dict[str, object] = {
+                "memory_id": event.id,
+                "app_name": app_name,
+                "user_id": user_id,
+                "session_id": session_id,
+                "event_id": event.id,
+                "author": event.author,
+                "timestamp": datetime.datetime.fromtimestamp(event.timestamp, tz=datetime.timezone.utc),
+                "content_json": event.content.model_dump(exclude_none=True, mode="json"),
+                "content_text": content_text,
+                "metadata_json": metadata,
+            }
+            if vector_embedding is not None:
+                memory_data["embedding"] = vector_embedding
             self.session.add(
-                self.memory_model(
-                    memory_id=event.id,
-                    app_name=app_name,
-                    user_id=user_id,
-                    session_id=session_id,
-                    event_id=event.id,
-                    author=event.author,
-                    timestamp=datetime.datetime.fromtimestamp(event.timestamp, tz=datetime.timezone.utc),
-                    content_json=event.content.model_dump(exclude_none=True, mode="json"),
-                    content_text=self._content_to_text(event.content),
-                    metadata_json=metadata,
-                ),
+                self.memory_model(**memory_data),
             )
             existing_ids.add(event.id)
         await self.session.flush()
@@ -91,26 +108,31 @@ class ADKAsyncMemoryService(BaseMemoryService):
             if memory_id in existing_ids:
                 continue
             metadata = {**shared_metadata, **(memory.custom_metadata or {})}
+            content_text = self._content_to_text(memory.content)
+            vector_embedding = await self._embedding_for_text(content_text)
+            memory_data: dict[str, object] = {
+                "memory_id": memory_id,
+                "app_name": app_name,
+                "user_id": user_id,
+                "session_id": None,
+                "event_id": memory.id,
+                "author": memory.author,
+                "timestamp": self._parse_memory_timestamp(memory.timestamp),
+                "content_json": memory.content.model_dump(exclude_none=True, mode="json"),
+                "content_text": content_text,
+                "metadata_json": metadata,
+            }
+            if vector_embedding is not None:
+                memory_data["embedding"] = vector_embedding
             self.session.add(
-                self.memory_model(
-                    memory_id=memory_id,
-                    app_name=app_name,
-                    user_id=user_id,
-                    session_id=None,
-                    event_id=memory.id,
-                    author=memory.author,
-                    timestamp=self._parse_memory_timestamp(memory.timestamp),
-                    content_json=memory.content.model_dump(exclude_none=True, mode="json"),
-                    content_text=self._content_to_text(memory.content),
-                    metadata_json=metadata,
-                ),
+                self.memory_model(**memory_data),
             )
             existing_ids.add(memory_id)
         await self.session.flush()
 
     async def search_memory(self, *, app_name: str, user_id: str, query: str) -> SearchMemoryResponse:
         """Search memory entries for an app/user scope."""
-        statement = self._search_statement(app_name=app_name, user_id=user_id, query=query)
+        statement = await self._search_statement(app_name=app_name, user_id=user_id, query=query)
         result = await self.session.scalars(statement)
         return SearchMemoryResponse(memories=[self._to_memory_entry(memory) for memory in result.all()])
 
@@ -125,13 +147,16 @@ class ADKAsyncMemoryService(BaseMemoryService):
         )
         return set(result.all())
 
-    def _search_statement(self, *, app_name: str, user_id: str, query: str) -> Select[tuple[ADKMemoryModelMixin]]:
+    async def _search_statement(self, *, app_name: str, user_id: str, query: str) -> Select[tuple[ADKMemoryModelMixin]]:
         statement = (
             select(self.memory_model)
             .where(self.memory_model.app_name == app_name)
             .where(self.memory_model.user_id == user_id)
             .limit(self.max_results)
         )
+        vector_embedding = await self._embedding_for_text(query)
+        if vector_embedding is not None:
+            return self._vector_search_statement(statement, vector_embedding)
         if self._should_use_fts():
             rank = func.ts_rank(
                 func.to_tsvector(literal("english"), self.memory_model.content_text),
@@ -154,11 +179,65 @@ class ADKAsyncMemoryService(BaseMemoryService):
             ),
         ).order_by(self.memory_model.timestamp.desc())
 
+    def _vector_search_statement(
+        self,
+        statement: Select[tuple[ADKMemoryModelMixin]],
+        embedding: Sequence[float],
+    ) -> Select[tuple[ADKMemoryModelMixin]]:
+        embedding_column = self._embedding_column()
+        distance = self._vector_distance_expression(embedding_column, embedding)
+        return statement.where(embedding_column.is_not(None)).order_by(distance, self.memory_model.timestamp.desc())
+
+    def _vector_distance_expression(self, embedding_column: Any, embedding: Sequence[float]) -> Any:
+        if self.vector_distance_metric == "l2":
+            return embedding_column.l2_distance(embedding)
+        if self.vector_distance_metric == "inner_product":
+            return embedding_column.max_inner_product(embedding)
+        return embedding_column.cosine_distance(embedding)
+
+    async def _embedding_for_text(self, text_value: str) -> Optional[list[float]]:
+        if not self._should_use_vector():
+            return None
+        if self.embedding_provider is None:
+            return None
+        embedding = self.embedding_provider(text_value)
+        if inspect.isawaitable(embedding):
+            embedding = await embedding
+        return [float(value) for value in embedding]
+
+    def _should_use_vector(self) -> bool:
+        has_vector_model = self._has_embedding_column()
+        has_provider = self.embedding_provider is not None
+        is_postgresql = self._is_postgresql()
+        can_use_vector = has_vector_model and has_provider and is_postgresql
+        if self.use_vector is True and not can_use_vector:
+            missing: list[str] = []
+            if not has_vector_model:
+                missing.append("memory model embedding column")
+            if not has_provider:
+                missing.append("embedding provider")
+            if not is_postgresql:
+                missing.append("PostgreSQL database bind")
+            msg = f"Vector memory requires {', '.join(missing)}."
+            raise ImproperConfigurationError(msg)
+        if self.use_vector is False:
+            return False
+        return can_use_vector
+
+    def _has_embedding_column(self) -> bool:
+        return hasattr(self.memory_model, "embedding")
+
+    def _embedding_column(self) -> Any:
+        return type_cast("Any", self.memory_model).embedding
+
+    def _is_postgresql(self) -> bool:
+        bind = self.session.get_bind()
+        return bool(bind and bind.dialect.name == "postgresql")
+
     def _should_use_fts(self) -> bool:
         if self.use_fts is not None:
             return self.use_fts
-        bind = self.session.get_bind()
-        return bool(bind and bind.dialect.name == "postgresql")
+        return self._is_postgresql()
 
     @staticmethod
     def _to_memory_entry(memory: ADKMemoryModelMixin) -> MemoryEntry:
@@ -195,4 +274,4 @@ class ADKAsyncMemoryService(BaseMemoryService):
         return platform_uuid.new_uuid()
 
 
-__all__ = ("ADKAsyncMemoryService",)
+__all__ = ("ADKAsyncMemoryService", "ADKMemoryEmbeddingProvider", "ADKVectorDistanceMetric")
