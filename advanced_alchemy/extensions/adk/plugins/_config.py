@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.adk._sync import ADKSyncSessionService
 from advanced_alchemy.extensions.adk.artifacts import ADKAsyncArtifactService
-from advanced_alchemy.extensions.adk.memory import ADKAsyncMemoryService
+from advanced_alchemy.extensions.adk.memory import (
+    ADKAsyncMemoryService,
+    ADKMemoryEmbeddingProvider,
+    ADKVectorDistanceMetric,
+)
 from advanced_alchemy.extensions.adk.models import (
     DEFAULT_ARTIFACT_BACKEND_KEY,
     ADKArtifactModelMixin,
@@ -32,6 +36,9 @@ class ADKServiceConfig:
     memory_model: Optional[type[ADKMemoryModelMixin]] = None
     artifact_model: Optional[type[ADKArtifactModelMixin]] = None
     artifact_backend_key: str = DEFAULT_ARTIFACT_BACKEND_KEY
+    memory_embedding_provider: Optional[ADKMemoryEmbeddingProvider] = None
+    use_vector_memory: Optional[bool] = None
+    vector_distance_metric: ADKVectorDistanceMetric = "cosine"
     session_dependency_key: str = "adk_session_service"
     artifact_dependency_key: str = "adk_artifact_service"
     memory_dependency_key: str = "adk_memory_service"
@@ -80,7 +87,13 @@ class ADKServiceConfig:
         if self.memory_model is None:
             msg = "Configure a memory model subclassing ADKMemoryModelMixin to use ADK memory services."
             raise ImproperConfigurationError(msg)
-        return ADKAsyncMemoryService(session, memory_model=self.memory_model)
+        return ADKAsyncMemoryService(
+            session,
+            memory_model=self.memory_model,
+            embedding_provider=self.memory_embedding_provider,
+            use_vector=self.use_vector_memory,
+            vector_distance_metric=self.vector_distance_metric,
+        )
 
 
 __all__ = ("ADKServiceConfig",)

@@ -28,6 +28,10 @@ Litestar
         ],
     )
 
+For vector memory, pass ``memory_embedding_provider`` to ``ADKServiceConfig`` and
+use a memory model with an ``embedding`` column. The framework helpers pass that
+provider through to ``ADKAsyncMemoryService``.
+
 FastAPI
 -------
 
