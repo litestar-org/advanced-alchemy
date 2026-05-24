@@ -32,6 +32,8 @@ def test_adk_extension_rejects_python_before_adk_supported_floor(monkeypatch: py
 def test_schema_registry_round_trips_registered_model_bundle() -> None:
     from advanced_alchemy.extensions.adk import ADKSchemaVersion, SchemaModels, get_models, register_schema
 
+    previous_models = get_models(ADKSchemaVersion.V1)
+
     class Marker:
         pass
 
@@ -48,6 +50,8 @@ def test_schema_registry_round_trips_registered_model_bundle() -> None:
 
     assert get_models(ADKSchemaVersion.V1) is models
     assert get_models("1") is models
+
+    register_schema(ADKSchemaVersion.V1, previous_models)
 
 
 def test_register_schema_rejects_unknown_version() -> None:
