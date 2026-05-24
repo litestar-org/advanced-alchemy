@@ -482,7 +482,6 @@ module = [
   "google.auth.*",
   "google.cloud.*",
   "pyarrow.*",
-  "pgvector.*",
   "uuid_utils",
   "fsspec",
   "fsspec.*",

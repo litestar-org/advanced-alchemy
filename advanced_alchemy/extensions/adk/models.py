@@ -27,6 +27,11 @@ class ADKSessionModelMixin(UUIDv7Base):
 
     __abstract__ = True
 
+    @staticmethod
+    def _create_session_lookup_index(*_: Any, **kwargs: Any) -> bool:
+        dialect_name = kwargs["dialect"].name if "dialect" in kwargs else ""
+        return dialect_name != "oracle"
+
     @declared_attr.directive
     @classmethod
     def __table_args__(cls) -> "TableArgsType":
@@ -37,7 +42,12 @@ class ADKSessionModelMixin(UUIDv7Base):
                 cls.session_id,
                 name=f"uq_{cls.__tablename__}_adk_session",
             ),
-            Index(f"ix_{cls.__tablename__}_adk_session_lookup", cls.app_name, cls.user_id, cls.session_id),
+            Index(
+                f"ix_{cls.__tablename__}_adk_session_lookup",
+                cls.app_name,
+                cls.user_id,
+                cls.session_id,
+            ).ddl_if(callable_=cls._create_session_lookup_index),
         )
 
     @declared_attr
