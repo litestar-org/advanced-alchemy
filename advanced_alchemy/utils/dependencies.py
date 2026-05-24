@@ -12,11 +12,12 @@ from typing_extensions import Literal, NotRequired, TypedDict
 
 from advanced_alchemy.utils.singleton import SingletonMeta
 
-__all__ = ("DependencyCache", "FieldNameType", "FilterConfig", "make_hashable")
+__all__ = ("DependencyCache", "FieldNameType", "FilterConfig", "make_hashable", "normalize_sort_field")
 
 HashableValue = Union[str, int, float, bool, None]
 HashableType = Union[HashableValue, tuple[Any, ...], tuple[tuple[str, Any], ...], tuple[HashableValue, ...]]
 SortOrder = Literal["asc", "desc"]
+SortField = Union[str, set[str], list[str]]
 
 
 class FieldNameType(NamedTuple):
@@ -39,7 +40,7 @@ class FilterConfig(TypedDict):
     """Enable an id filter using the supplied type."""
     id_field: NotRequired[str]
     """Model field storing the primary key or identifier."""
-    sort_field: NotRequired[Union[str, set[str], list[str]]]
+    sort_field: NotRequired[SortField]
     """Default field or fields to use for sorting."""
     sort_order: NotRequired[SortOrder]
     """Default sort order."""
@@ -121,7 +122,10 @@ def make_hashable(value: Any) -> HashableType:
         mapping = cast("Mapping[Any, Any]", value)  # type: ignore[redundant-cast]
         items = [(str(key), make_hashable(mapping[key])) for key in sorted(mapping.keys(), key=str)]
         return tuple(items)
-    if isinstance(value, (list, set)):
+    if isinstance(value, list):
+        values = cast("Iterable[Any]", value)
+        return tuple(make_hashable(item) for item in values)
+    if isinstance(value, set):
         values = cast("Iterable[Any]", value)
         hashable_items = [make_hashable(item) for item in values]
         filtered_items = [item for item in hashable_items if item is not None]
@@ -132,3 +136,12 @@ def make_hashable(value: Any) -> HashableType:
     if isinstance(value, (str, int, float, bool, type(None))):
         return value
     return str(value)
+
+
+def normalize_sort_field(sort_field: SortField) -> str:
+    """Return a scalar default field for a configured sort field value."""
+    if isinstance(sort_field, str):
+        return sort_field
+    if isinstance(sort_field, list):
+        return sort_field[0]
+    return sorted(sort_field)[0]

@@ -43,7 +43,13 @@ from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
-from advanced_alchemy.utils.dependencies import DependencyCache, FieldNameType, FilterConfig, make_hashable
+from advanced_alchemy.utils.dependencies import (
+    DependencyCache,
+    FieldNameType,
+    FilterConfig,
+    make_hashable,
+    normalize_sort_field,
+)
 from advanced_alchemy.utils.singleton import SingletonMeta
 from advanced_alchemy.utils.text import camelize
 
@@ -317,6 +323,33 @@ def create_filter_dependencies(
     return deps
 
 
+def _create_order_by_filter_provider(
+    sort_field: Union[str, set[str], list[str]],
+    sort_order_default: SortOrder = "desc",
+) -> Callable[..., OrderBy]:
+    sort_field_default = normalize_sort_field(sort_field)
+
+    def provide_order_by(
+        field_name: Annotated[
+            StringOrNone,
+            QueryParameter(
+                title="Order by field",
+                name="orderBy",
+            ),
+        ] = sort_field_default,
+        sort_order: Annotated[
+            SortOrderOrNone,
+            QueryParameter(
+                title="Field to search",
+                name="sortOrder",
+            ),
+        ] = sort_order_default,
+    ) -> OrderBy:
+        return OrderBy(field_name=field_name, sort_order=sort_order or sort_order_default)  # type: ignore[arg-type]
+
+    return provide_order_by
+
+
 def _create_statement_filters(  # noqa: C901
     config: FilterConfig, dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS
 ) -> dict[str, Provide]:
@@ -408,26 +441,10 @@ def _create_statement_filters(  # noqa: C901
         filters[dep_defaults.SEARCH_FILTER_DEPENDENCY_KEY] = Provide(provide_search_filter, sync_to_thread=False)
 
     if sort_field := config.get("sort_field"):
-
-        def provide_order_by(
-            field_name: Annotated[
-                StringOrNone,
-                QueryParameter(
-                    title="Order by field",
-                    name="orderBy",
-                ),
-            ] = sort_field,  # type: ignore[assignment]
-            sort_order: Annotated[
-                SortOrderOrNone,
-                QueryParameter(
-                    title="Field to search",
-                    name="sortOrder",
-                ),
-            ] = config.get("sort_order", "desc"),
-        ) -> OrderBy:
-            return OrderBy(field_name=field_name, sort_order=sort_order)  # type: ignore[arg-type]
-
-        filters[dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY] = Provide(provide_order_by, sync_to_thread=False)
+        filters[dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY] = Provide(
+            _create_order_by_filter_provider(sort_field, config.get("sort_order", "desc")),
+            sync_to_thread=False,
+        )
 
     # Add not_in filter providers
     if not_in_fields := config.get("not_in_fields"):

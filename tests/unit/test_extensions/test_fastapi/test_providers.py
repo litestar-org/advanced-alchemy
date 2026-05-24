@@ -530,6 +530,30 @@ def test_provide_filters_normalizes_list_field_config() -> None:
     }
 
 
+def test_provide_filters_uses_scalar_default_from_list_sort_field() -> None:
+    """Test list-based sort fields produce a scalar default order field."""
+    deps = provide_filters({"sort_field": ["name", "id"]})
+
+    app = FastAPI()
+
+    @app.get("/items")
+    async def get_items(filters: Annotated[list[FilterTypes], Depends(deps)]) -> list[dict[str, str]]:
+        return [
+            {"field_name": cast(str, filter_.field_name), "sort_order": filter_.sort_order}
+            for filter_ in filters
+            if isinstance(filter_, OrderBy)
+        ]
+
+    client = TestClient(app)
+    response = client.get("/items")
+    overridden_response = client.get("/items?orderBy=id&sortOrder=asc")
+
+    assert response.status_code == 200
+    assert response.json() == [{"field_name": "name", "sort_order": "desc"}]
+    assert overridden_response.status_code == 200
+    assert overridden_response.json() == [{"field_name": "id", "sort_order": "asc"}]
+
+
 def test_openapi_schema_edge_cases() -> None:
     """Test OpenAPI schema generation for edge cases and special configurations."""
     # Test with minimal configuration

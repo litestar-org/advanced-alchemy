@@ -48,7 +48,13 @@ from advanced_alchemy.service import (
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
-from advanced_alchemy.utils.dependencies import DependencyCache, FieldNameType, FilterConfig, make_hashable
+from advanced_alchemy.utils.dependencies import (
+    DependencyCache,
+    FieldNameType,
+    FilterConfig,
+    make_hashable,
+    normalize_sort_field,
+)
 from advanced_alchemy.utils.text import camelize
 
 logger = logging.getLogger("advanced_alchemy.extensions.fastapi")
@@ -599,6 +605,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 
     # Add sort filter providers
     if sort_field := config.get("sort_field"):
+        sort_field_default = normalize_sort_field(sort_field)
         sort_order_default = config.get("sort_order", "desc")
 
         def provide_order_by(
@@ -609,7 +616,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     description="Field to order by.",
                     required=False,
                 ),
-            ] = sort_field,  # type: ignore[assignment]
+            ] = sort_field_default,
             sort_order: Annotated[
                 Optional[SortOrder],
                 Query(

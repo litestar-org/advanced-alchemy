@@ -5,7 +5,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from advanced_alchemy.utils.dependencies import DependencyCache, FieldNameType, FilterConfig, make_hashable
+from advanced_alchemy.utils.dependencies import (
+    DependencyCache,
+    FieldNameType,
+    FilterConfig,
+    make_hashable,
+    normalize_sort_field,
+)
 from advanced_alchemy.utils.singleton import SingletonMeta
 
 pytestmark = pytest.mark.unit
@@ -43,6 +49,18 @@ def test_make_hashable_nested_values() -> None:
 
 def test_make_hashable_set_order_invariant() -> None:
     assert make_hashable({1, 2, 3}) == make_hashable({3, 2, 1})
+
+
+def test_make_hashable_preserves_list_order() -> None:
+    assert make_hashable(["name", "id"]) != make_hashable(["id", "name"])
+
+
+def test_normalize_sort_field_preserves_list_order() -> None:
+    assert normalize_sort_field(["name", "id"]) == "name"
+
+
+def test_normalize_sort_field_sorts_set_values() -> None:
+    assert normalize_sort_field({"name", "id"}) == "id"
 
 
 def test_dependency_cache_singleton() -> None:
