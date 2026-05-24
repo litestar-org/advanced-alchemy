@@ -291,3 +291,277 @@ class TestStoreIntegration:
         assert OnConflictUpsert is not None
         assert MergeStatement is not None
         assert SQLAlchemyStore is not None
+
+
+class TestCreateUpsertMany:
+    """Tests for the bulk-aware OnConflictUpsert.create_upsert_many facade (Ch.1)."""
+
+    def test_empty_values_list_raises(self, sample_table: Table) -> None:
+        with pytest.raises(ValueError, match="values_list must not be empty"):
+            OnConflictUpsert.create_upsert_many(
+                table=sample_table,
+                values_list=[],
+                conflict_columns=["key", "namespace"],
+                dialect_name="postgresql",
+            )
+
+    def test_heterogeneous_keys_raises(self, sample_table: Table) -> None:
+        values_list = [
+            {"key": "a", "namespace": "ns", "value": "v1"},
+            {"key": "b", "namespace": "ns"},
+        ]
+        with pytest.raises(ValueError, match="same keys"):
+            OnConflictUpsert.create_upsert_many(
+                table=sample_table,
+                values_list=values_list,
+                conflict_columns=["key", "namespace"],
+                dialect_name="postgresql",
+            )
+
+    def test_postgresql_compiles_to_single_insert_with_multiple_values(self, sample_table: Table) -> None:
+        from sqlalchemy.dialects import postgresql
+
+        values_list = [
+            {"key": "k1", "namespace": "ns", "value": "v1"},
+            {"key": "k2", "namespace": "ns", "value": "v2"},
+            {"key": "k3", "namespace": "ns", "value": "v3"},
+        ]
+        stmt, supports_returning = OnConflictUpsert.create_upsert_many(
+            table=sample_table,
+            values_list=values_list,
+            conflict_columns=["key", "namespace"],
+            dialect_name="postgresql",
+        )
+        compiled = str(stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
+        assert supports_returning is True
+        assert "INSERT INTO" in compiled.upper()
+        assert "ON CONFLICT" in compiled.upper()
+        assert compiled.upper().count("VALUES") == 1
+        assert compiled.count("(") >= 3
+
+    def test_cockroachdb_returns_supports_returning_true(self, sample_table: Table) -> None:
+        values_list = [{"key": "k1", "namespace": "ns", "value": "v1"}]
+        _, supports_returning = OnConflictUpsert.create_upsert_many(
+            table=sample_table,
+            values_list=values_list,
+            conflict_columns=["key", "namespace"],
+            dialect_name="cockroachdb",
+        )
+        assert supports_returning is True
+
+    def test_sqlite_compiles_and_returns_supports_returning_true(self, sample_table: Table) -> None:
+        from sqlalchemy.dialects import sqlite
+
+        values_list = [
+            {"key": "k1", "namespace": "ns", "value": "v1"},
+            {"key": "k2", "namespace": "ns", "value": "v2"},
+        ]
+        stmt, supports_returning = OnConflictUpsert.create_upsert_many(
+            table=sample_table,
+            values_list=values_list,
+            conflict_columns=["key", "namespace"],
+            dialect_name="sqlite",
+        )
+        compiled = str(stmt.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
+        assert supports_returning is True
+        assert "ON CONFLICT" in compiled.upper()
+
+    def test_duckdb_compiles(self, sample_table: Table) -> None:
+        values_list = [{"key": "k1", "namespace": "ns", "value": "v1"}]
+        stmt, supports_returning = OnConflictUpsert.create_upsert_many(
+            table=sample_table,
+            values_list=values_list,
+            conflict_columns=["key", "namespace"],
+            dialect_name="duckdb",
+        )
+        assert stmt is not None
+        assert supports_returning is True
+
+    def test_mysql_returns_supports_returning_false(self, sample_table: Table) -> None:
+        values_list = [
+            {"key": "k1", "namespace": "ns", "value": "v1"},
+            {"key": "k2", "namespace": "ns", "value": "v2"},
+        ]
+        stmt, supports_returning = OnConflictUpsert.create_upsert_many(
+            table=sample_table,
+            values_list=values_list,
+            conflict_columns=["key", "namespace"],
+            dialect_name="mysql",
+        )
+        assert supports_returning is False
+        assert hasattr(stmt, "on_duplicate_key_update")
+
+    def test_mariadb_returns_supports_returning_false(self, sample_table: Table) -> None:
+        values_list = [{"key": "k1", "namespace": "ns", "value": "v1"}]
+        _, supports_returning = OnConflictUpsert.create_upsert_many(
+            table=sample_table,
+            values_list=values_list,
+            conflict_columns=["key", "namespace"],
+            dialect_name="mariadb",
+        )
+        assert supports_returning is False
+
+    def test_unsupported_dialect_raises(self, sample_table: Table) -> None:
+        values_list = [{"key": "k1", "namespace": "ns", "value": "v1"}]
+        with pytest.raises(NotImplementedError, match="oracle"):
+            OnConflictUpsert.create_upsert_many(
+                table=sample_table,
+                values_list=values_list,
+                conflict_columns=["key", "namespace"],
+                dialect_name="oracle",
+            )
+
+    def test_single_row_equivalence_to_create_upsert(self, sample_table: Table) -> None:
+        from sqlalchemy.dialects import postgresql
+
+        row = {"key": "k1", "namespace": "ns", "value": "v1"}
+        single = OnConflictUpsert.create_upsert(
+            table=sample_table,
+            values=row,
+            conflict_columns=["key", "namespace"],
+            dialect_name="postgresql",
+        )
+        bulk_stmt, _ = OnConflictUpsert.create_upsert_many(
+            table=sample_table,
+            values_list=[row],
+            conflict_columns=["key", "namespace"],
+            dialect_name="postgresql",
+        )
+        single_sql = str(single.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
+        bulk_sql = str(bulk_stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
+        assert single_sql.split(" RETURNING ", maxsplit=1)[0] == bulk_sql.split(" RETURNING ", maxsplit=1)[0]
+
+    def test_validate_identifiers_rejects_bad_column_in_bulk(self, sample_table: Table) -> None:
+        values_list = [{"key": "k1", "namespace": "ns", "value": "v1"}]
+        with pytest.raises(ValueError, match="Invalid"):
+            OnConflictUpsert.create_upsert_many(
+                table=sample_table,
+                values_list=values_list,
+                conflict_columns=["key; --"],
+                dialect_name="postgresql",
+                validate_identifiers=True,
+            )
+
+
+class TestCreateMergeMany:
+    """Tests for the bulk-aware OnConflictUpsert.create_merge_many facade (Ch.1)."""
+
+    def test_empty_values_list_raises(self, sample_table: Table) -> None:
+        with pytest.raises(ValueError, match="values_list must not be empty"):
+            OnConflictUpsert.create_merge_many(
+                table=sample_table,
+                values_list=[],
+                conflict_columns=["key", "namespace"],
+                dialect_name="oracle",
+            )
+
+    def test_heterogeneous_keys_raises(self, sample_table: Table) -> None:
+        values_list = [
+            {"key": "a", "namespace": "ns", "value": "v1"},
+            {"key": "b", "namespace": "ns"},
+        ]
+        with pytest.raises(ValueError, match="same keys"):
+            OnConflictUpsert.create_merge_many(
+                table=sample_table,
+                values_list=values_list,
+                conflict_columns=["key", "namespace"],
+                dialect_name="oracle",
+            )
+
+    def test_oracle_returns_single_merge_with_union_all_source(self, sample_table: Table) -> None:
+        values_list = [
+            {"key": "k1", "namespace": "ns", "value": "v1"},
+            {"key": "k2", "namespace": "ns", "value": "v2"},
+            {"key": "k3", "namespace": "ns", "value": "v3"},
+        ]
+        result, additional_params = OnConflictUpsert.create_merge_many(
+            table=sample_table,
+            values_list=values_list,
+            conflict_columns=["key", "namespace"],
+            dialect_name="oracle",
+        )
+        assert isinstance(result, MergeStatement)
+        source_repr = str(result.source)
+        assert "UNION ALL" in source_repr.upper()
+        assert "FROM DUAL" in source_repr.upper()
+        assert isinstance(additional_params, dict)
+
+    def test_postgresql_returns_single_merge_with_union_all_source(self, sample_table: Table) -> None:
+        values_list = [
+            {"key": "k1", "namespace": "ns", "value": "v1"},
+            {"key": "k2", "namespace": "ns", "value": "v2"},
+        ]
+        result, _ = OnConflictUpsert.create_merge_many(
+            table=sample_table,
+            values_list=values_list,
+            conflict_columns=["key", "namespace"],
+            dialect_name="postgresql",
+        )
+        assert isinstance(result, MergeStatement)
+        source_repr = str(result.source)
+        assert "UNION ALL" in source_repr.upper()
+        assert "FROM DUAL" not in source_repr.upper()
+
+    def test_mssql_returns_merge_with_values_source_raw_string(self, sample_table: Table) -> None:
+        values_list = [
+            {"key": "k1", "namespace": "ns", "value": "v1"},
+            {"key": "k2", "namespace": "ns", "value": "v2"},
+        ]
+        result, _ = OnConflictUpsert.create_merge_many(
+            table=sample_table,
+            values_list=values_list,
+            conflict_columns=["key", "namespace"],
+            dialect_name="mssql",
+        )
+        assert isinstance(result, MergeStatement)
+        assert isinstance(result.source, str)
+        assert "VALUES" in result.source.upper()
+        assert "AS SRC" in result.source.upper()
+
+    def test_other_dialect_returns_list_of_per_row_merge_statements(self, sample_table: Table) -> None:
+        values_list = [
+            {"key": "k1", "namespace": "ns", "value": "v1"},
+            {"key": "k2", "namespace": "ns", "value": "v2"},
+            {"key": "k3", "namespace": "ns", "value": "v3"},
+        ]
+        result, _ = OnConflictUpsert.create_merge_many(
+            table=sample_table,
+            values_list=values_list,
+            conflict_columns=["key", "namespace"],
+            dialect_name="mysql",
+        )
+        assert isinstance(result, list)
+        assert len(result) == 3
+        for item in result:
+            assert isinstance(item, MergeStatement)
+
+    def test_validate_identifiers_propagates_to_bulk_merge(self, sample_table: Table) -> None:
+        values_list = [{"key": "k1", "namespace": "ns", "value": "v1"}]
+        with pytest.raises(ValueError, match="Invalid"):
+            OnConflictUpsert.create_merge_many(
+                table=sample_table,
+                values_list=values_list,
+                conflict_columns=["bad-col"],
+                dialect_name="oracle",
+                validate_identifiers=True,
+            )
+
+    def test_single_row_oracle_equivalence_keys(self, sample_table: Table) -> None:
+        row = {"key": "k1", "namespace": "ns", "value": "v1"}
+        single_stmt, single_params = OnConflictUpsert.create_merge_upsert(
+            table=sample_table,
+            values=row,
+            conflict_columns=["key", "namespace"],
+            dialect_name="oracle",
+        )
+        bulk_result, bulk_params = OnConflictUpsert.create_merge_many(
+            table=sample_table,
+            values_list=[row],
+            conflict_columns=["key", "namespace"],
+            dialect_name="oracle",
+        )
+        assert isinstance(bulk_result, MergeStatement)
+        assert set(bulk_result.when_not_matched_insert.keys()) == set(single_stmt.when_not_matched_insert.keys())
+        assert set(bulk_result.when_matched_update.keys()) == set(single_stmt.when_matched_update.keys())
+        assert isinstance(bulk_params, dict)
+        assert isinstance(single_params, dict)

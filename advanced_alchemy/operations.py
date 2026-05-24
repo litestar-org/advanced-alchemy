@@ -472,5 +472,312 @@ class OnConflictUpsert:
 
         return merge_stmt, additional_params  # pyright: ignore[reportUnknownVariableType]
 
+    @staticmethod
+    def create_upsert_many(
+        table: Table,
+        values_list: list[dict[str, Any]],
+        conflict_columns: list[str],
+        update_columns: Optional[list[str]] = None,
+        dialect_name: Optional[str] = None,
+        validate_identifiers: bool = False,
+    ) -> tuple[Insert, bool]:
+        """Build a dialect-specific bulk Insert with ON CONFLICT / ON DUPLICATE KEY UPDATE.
 
-# Note: Oracle-specific helper removed; inline logic now handles defaults
+        Compiles to a single ``INSERT ... VALUES (...), (...), ...`` per chunk so the
+        round-trip cost is fixed regardless of batch size.
+
+        Args:
+            table: Target table for the upsert.
+            values_list: Rows to insert/update. All rows MUST share the same keys.
+            conflict_columns: Columns that define the conflict / match condition.
+            update_columns: Columns to update on conflict (defaults to all
+                non-conflict keys from the first row).
+            dialect_name: Database dialect name; determines compile path.
+            validate_identifiers: If True, validate column identifiers for safety.
+
+        Returns:
+            A tuple ``(statement, supports_returning)`` where ``supports_returning``
+            is True for postgresql / cockroachdb / sqlite / duckdb and False for
+            mysql / mariadb.
+
+        Raises:
+            ValueError: ``values_list`` is empty, rows have heterogeneous keys,
+                or identifier validation fails.
+            NotImplementedError: The dialect does not support an ON CONFLICT
+                style native bulk upsert.
+        """
+        _validate_bulk_inputs(values_list, conflict_columns, update_columns, validate_identifiers)
+
+        resolved_update_columns = (
+            update_columns
+            if update_columns is not None
+            else [col for col in values_list[0] if col not in conflict_columns]
+        )
+
+        if dialect_name in {"postgresql", "sqlite", "duckdb", "cockroachdb"}:
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            pg_stmt = pg_insert(table).values(values_list)
+            return (
+                pg_stmt.on_conflict_do_update(
+                    index_elements=conflict_columns,
+                    set_={col: pg_stmt.excluded[col] for col in resolved_update_columns},
+                ),
+                True,
+            )
+
+        if dialect_name in {"mysql", "mariadb"}:
+            from sqlalchemy.dialects.mysql import insert as mysql_insert
+
+            mysql_stmt = mysql_insert(table).values(values_list)
+            return (
+                mysql_stmt.on_duplicate_key_update(
+                    **{col: mysql_stmt.inserted[col] for col in resolved_update_columns}
+                ),
+                False,
+            )
+
+        msg = f"Native bulk upsert not supported for dialect '{dialect_name}'"
+        raise NotImplementedError(msg)
+
+    @staticmethod
+    def create_merge_many(
+        table: Table,
+        values_list: list[dict[str, Any]],
+        conflict_columns: list[str],
+        update_columns: Optional[list[str]] = None,
+        dialect_name: Optional[str] = None,
+        validate_identifiers: bool = False,
+    ) -> tuple[Union[MergeStatement, list[MergeStatement]], dict[str, Any]]:
+        """Build a bulk MERGE / executemany-fallback per dialect.
+
+        Returns a single ``MergeStatement`` for dialects whose MERGE syntax supports
+        a multi-row source (oracle, mssql, postgresql/cockroachdb), and a list of
+        single-row ``MergeStatement`` (one per input row) for everything else.
+
+        Args:
+            table: Target table for the upsert.
+            values_list: Rows to insert/update. All rows MUST share the same keys.
+            conflict_columns: Columns that define the matching condition.
+            update_columns: Columns to update on match (defaults to all non-conflict
+                keys from the first row).
+            dialect_name: Database dialect name; selects the source construction.
+            validate_identifiers: If True, validate column identifiers for safety.
+
+        Returns:
+            A tuple ``(statement_or_list, additional_params)``. ``additional_params``
+            carries generated values (Oracle UUID PKs, MSSQL bound row values) that
+            must be passed when executing.
+
+        Raises:
+            ValueError: ``values_list`` is empty, rows have heterogeneous keys,
+                or identifier validation fails.
+        """
+        _validate_bulk_inputs(values_list, conflict_columns, update_columns, validate_identifiers)
+
+        resolved_update_columns = (
+            update_columns
+            if update_columns is not None
+            else [col for col in values_list[0] if col not in conflict_columns]
+        )
+
+        if dialect_name == "oracle":
+            return _build_oracle_bulk_merge(table, values_list, conflict_columns, resolved_update_columns)
+
+        if dialect_name in {"postgresql", "cockroachdb"}:
+            return _build_pg_bulk_merge(table, values_list, conflict_columns, resolved_update_columns)
+
+        if dialect_name == "mssql":
+            return _build_mssql_bulk_merge(table, values_list, conflict_columns, resolved_update_columns)
+
+        stmts: list[MergeStatement] = []
+        combined_params: dict[str, Any] = {}
+        for row in values_list:
+            stmt, row_params = OnConflictUpsert.create_merge_upsert(
+                table=table,
+                values=row,
+                conflict_columns=conflict_columns,
+                update_columns=update_columns,
+                dialect_name=dialect_name,
+                validate_identifiers=False,
+            )
+            stmts.append(stmt)
+            combined_params.update(row_params)
+        return stmts, combined_params
+
+
+def _validate_bulk_inputs(
+    values_list: list[dict[str, Any]],
+    conflict_columns: list[str],
+    update_columns: Optional[list[str]],
+    validate_identifiers_flag: bool,
+) -> None:
+    """Shared input guard for create_upsert_many / create_merge_many.
+
+    Raises ValueError on empty list, heterogeneous keys, or invalid identifiers
+    when validation is requested.
+    """
+    if not values_list:
+        msg = "values_list must not be empty"
+        raise ValueError(msg)
+    first_keys = set(values_list[0].keys())
+    for idx, row in enumerate(values_list[1:], start=1):
+        if set(row.keys()) != first_keys:
+            msg = f"All entries in values_list must share the same keys (row {idx} differs from row 0)"
+            raise ValueError(msg)
+    if validate_identifiers_flag:
+        for col in conflict_columns:
+            validate_identifier(col, "conflict column")
+        if update_columns:
+            for col in update_columns:
+                validate_identifier(col, "update column")
+        for col in first_keys:
+            validate_identifier(col, "column")
+
+
+def _collect_oracle_pk_defaults(
+    table: Table,
+    row: dict[str, Any],
+    idx: int,
+    additional_params: dict[str, Any],
+) -> list["ColumnElement[Any]"]:
+    """Generate PK default bindparams for one Oracle MERGE row.
+
+    Mirrors the per-row PK-default block in create_merge_upsert but namespaces the
+    bindparam names with ``row{idx}_pk_`` so each row in the bulk source has its
+    own unique param name (Oracle MERGE has no implicit row identity).
+    """
+    pk_columns: list[ColumnElement[Any]] = []
+    for pk_column in table.primary_key.columns:
+        if pk_column.name in row or pk_column.default is None:
+            continue
+        if not callable(getattr(pk_column.default, "arg", None)):
+            continue
+        try:
+            default_value = pk_column.default.arg(None)  # type: ignore[attr-defined]
+        except (TypeError, AttributeError, ValueError):
+            continue
+        if isinstance(default_value, UUID):
+            default_value = default_value.hex
+        param_name = f"row{idx}_pk_{pk_column.name}"
+        additional_params[param_name] = default_value
+        pk_columns.append(bindparam(param_name, value=default_value, type_=pk_column.type).label(pk_column.name))
+    return pk_columns
+
+
+def _build_oracle_bulk_merge(
+    table: Table,
+    values_list: list[dict[str, Any]],
+    conflict_columns: list[str],
+    update_columns: list[str],
+) -> tuple[MergeStatement, dict[str, Any]]:
+    """Construct an Oracle MERGE whose source is ``SELECT ... FROM DUAL UNION ALL ...``."""
+    first_keys = list(values_list[0].keys())
+    additional_params: dict[str, Any] = {}
+    per_row_selects: list[Any] = []
+    pk_default_names: list[str] = []
+
+    for idx, row in enumerate(values_list):
+        row_columns: list[ColumnElement[Any]] = []
+        for key in first_keys:
+            column = table.c[key]
+            bp = bindparam(f"row{idx}_{key}", value=row[key], type_=column.type)
+            row_columns.append(bp.label(key))
+        pk_extras = _collect_oracle_pk_defaults(table, row, idx, additional_params)
+        if idx == 0:
+            pk_default_names = [col.name for col in pk_extras]
+        row_columns.extend(pk_extras)
+        per_row_selects.append(select(*row_columns).select_from(text("DUAL")))
+
+    unified = per_row_selects[0] if len(per_row_selects) == 1 else per_row_selects[0].union_all(*per_row_selects[1:])
+    source = unified.subquery("src")
+    insert_columns = list(first_keys) + pk_default_names
+    when_not_matched_insert: dict[str, Any] = {col: literal_column(f"src.{col}") for col in insert_columns}
+    when_matched_update: dict[str, Any] = {
+        col: literal_column(f"src.{col}") for col in update_columns if col in first_keys
+    }
+    on_condition = text(" AND ".join(f"tgt.{col} = src.{col}" for col in conflict_columns))
+    return (
+        MergeStatement(
+            table=table,
+            source=source,
+            on_condition=on_condition,
+            when_matched_update=when_matched_update,
+            when_not_matched_insert=when_not_matched_insert,
+        ),
+        additional_params,
+    )
+
+
+def _build_pg_bulk_merge(
+    table: Table,
+    values_list: list[dict[str, Any]],
+    conflict_columns: list[str],
+    update_columns: list[str],
+) -> tuple[MergeStatement, dict[str, Any]]:
+    """Construct a PostgreSQL/CockroachDB MERGE whose source is ``SELECT ... UNION ALL ...``."""
+    first_keys = list(values_list[0].keys())
+    per_row_selects: list[Any] = []
+    for idx, row in enumerate(values_list):
+        row_columns: list[ColumnElement[Any]] = []
+        for key in first_keys:
+            column = table.c[key]
+            bp = bindparam(f"src_row{idx}_{key}", value=row[key], type_=column.type)
+            row_columns.append(bp.label(key))
+        per_row_selects.append(select(*row_columns))
+
+    unified = per_row_selects[0] if len(per_row_selects) == 1 else per_row_selects[0].union_all(*per_row_selects[1:])
+    source = unified.subquery("src")
+    when_not_matched_insert: dict[str, Any] = {col: literal_column(f"src.{col}") for col in first_keys}
+    when_matched_update: dict[str, Any] = {
+        col: literal_column(f"src.{col}") for col in update_columns if col in first_keys
+    }
+    on_condition = text(" AND ".join(f"tgt.{col} = src.{col}" for col in conflict_columns))
+    return (
+        MergeStatement(
+            table=table,
+            source=source,
+            on_condition=on_condition,
+            when_matched_update=when_matched_update,
+            when_not_matched_insert=when_not_matched_insert,
+        ),
+        {},
+    )
+
+
+def _build_mssql_bulk_merge(
+    table: Table,
+    values_list: list[dict[str, Any]],
+    conflict_columns: list[str],
+    update_columns: list[str],
+) -> tuple[MergeStatement, dict[str, Any]]:
+    """Construct an MSSQL MergeStatement with a raw-string ``VALUES (...) AS src(...)`` source.
+
+    The MSSQL @compiles body for MergeStatement is added in Ch.4; this chapter only
+    fixes the shape: a raw string source so the compiler emits it verbatim.
+    """
+    first_keys = list(values_list[0].keys())
+    additional_params: dict[str, Any] = {}
+    col_names = ", ".join(first_keys)
+    row_strs: list[str] = []
+    for idx, row in enumerate(values_list):
+        placeholders = ", ".join(f":row{idx}_{key}" for key in first_keys)
+        row_strs.append(f"({placeholders})")
+        for key in first_keys:
+            additional_params[f"row{idx}_{key}"] = row[key]
+    values_source = f"VALUES {', '.join(row_strs)} AS src({col_names})"
+    when_not_matched_insert: dict[str, Any] = {col: literal_column(f"src.{col}") for col in first_keys}
+    when_matched_update: dict[str, Any] = {
+        col: literal_column(f"src.{col}") for col in update_columns if col in first_keys
+    }
+    on_condition = text(" AND ".join(f"tgt.{col} = src.{col}" for col in conflict_columns))
+    return (
+        MergeStatement(
+            table=table,
+            source=values_source,
+            on_condition=on_condition,
+            when_matched_update=when_matched_update,
+            when_not_matched_insert=when_not_matched_insert,
+        ),
+        additional_params,
+    )
