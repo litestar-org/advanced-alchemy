@@ -273,6 +273,61 @@ def compile_merge_postgresql(element: MergeStatement, compiler: "SQLCompiler", *
     return merge_sql
 
 
+@compiles(MergeStatement, "mssql")
+def compile_merge_mssql(element: MergeStatement, compiler: "SQLCompiler", **kwargs: Any) -> str:
+    """Compile MERGE for SQL Server.
+
+    Emits T-SQL form:
+
+        MERGE INTO {table} AS tgt
+        USING (VALUES (...), (...)) AS src(col1, col2)
+        ON tgt.col = src.col [AND ...]
+        WHEN MATCHED THEN UPDATE SET tgt.col = src.col [, ...]
+        WHEN NOT MATCHED THEN INSERT (col1, ...) VALUES (src.col1, ...)
+        OUTPUT inserted.*;
+
+    The trailing semicolon is REQUIRED for T-SQL MERGE — without it SQL Server
+    raises a syntax error. ``OUTPUT inserted.*`` provides RETURNING-equivalent
+    hydration for the repository upsert path.
+    """
+    table_name = element.table.name
+
+    if isinstance(element.source, str):
+        source_clause = f"({element.source})"
+    else:
+        compiled_source = compiler.process(element.source, **kwargs)
+        compiled_trim = compiled_source.strip()
+        source_clause = compiled_trim if compiled_trim.startswith("(") else f"({compiled_trim})"
+
+    merge_sql = f"MERGE INTO {table_name} AS tgt USING {source_clause} ON ("
+    merge_sql += compiler.process(element.on_condition, **kwargs)
+    merge_sql += ")"
+
+    if element.when_matched_update:
+        merge_sql += " WHEN MATCHED THEN UPDATE SET "
+        updates: list[str] = []
+        for column, value in element.when_matched_update.items():
+            compiled_value = compiler.process(value, **kwargs)
+            updates.append(f"tgt.{column} = {compiled_value}")
+        merge_sql += ", ".join(updates)
+
+    if element.when_not_matched_insert:
+        columns = list(element.when_not_matched_insert.keys())
+        values = list(element.when_not_matched_insert.values())
+
+        merge_sql += " WHEN NOT MATCHED THEN INSERT ("
+        merge_sql += ", ".join(columns)
+        merge_sql += ") VALUES ("
+
+        compiled_values: list[str] = [compiler.process(value, **kwargs) for value in values]
+        merge_sql += ", ".join(compiled_values)
+        merge_sql += ")"
+
+    merge_sql += " OUTPUT inserted.*"
+    merge_sql += ";"
+    return merge_sql
+
+
 class OnConflictUpsert:
     """Cross-database upsert operation using dialect-specific constructs.
 

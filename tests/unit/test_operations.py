@@ -196,6 +196,61 @@ class TestMergeStatement:
             compile_merge_default(merge_stmt, compiler)  # type: ignore[arg-type]  # pyright: ignore
 
 
+class TestMSSQLMergeCompile:
+    """Tests for the MSSQL MergeStatement compile path added in Ch.4."""
+
+    def test_mssql_compile_emits_using_values_source_and_output_inserted(self, sample_table: Table) -> None:
+        from sqlalchemy.dialects import mssql
+
+        values_list = [
+            {"key": "k1", "namespace": "ns", "value": "v1"},
+            {"key": "k2", "namespace": "ns", "value": "v2"},
+        ]
+        stmt, _ = OnConflictUpsert.create_merge_many(
+            table=sample_table,
+            values_list=values_list,
+            conflict_columns=["key", "namespace"],
+            dialect_name="mssql",
+        )
+        compiled = str(stmt.compile(dialect=mssql.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
+        upper = compiled.upper()
+        assert "MERGE INTO TEST_TABLE AS TGT" in upper
+        assert "USING (VALUES" in upper
+        assert "AS SRC(" in upper
+        assert "WHEN MATCHED THEN UPDATE SET" in upper
+        assert "WHEN NOT MATCHED THEN INSERT" in upper
+        assert "OUTPUT INSERTED.*" in upper
+        assert compiled.rstrip().endswith(";")
+
+    def test_mssql_compile_trailing_semicolon_is_mandatory(self, sample_table: Table) -> None:
+        from sqlalchemy.dialects import mssql
+
+        values_list = [{"key": "k1", "namespace": "ns", "value": "v1"}]
+        stmt, _ = OnConflictUpsert.create_merge_many(
+            table=sample_table,
+            values_list=values_list,
+            conflict_columns=["key", "namespace"],
+            dialect_name="mssql",
+        )
+        compiled = str(stmt.compile(dialect=mssql.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
+        assert compiled.rstrip().endswith(";")
+
+    def test_mssql_compile_on_clause_uses_conflict_columns(self, sample_table: Table) -> None:
+        from sqlalchemy.dialects import mssql
+
+        values_list = [{"key": "k1", "namespace": "ns", "value": "v1"}]
+        stmt, _ = OnConflictUpsert.create_merge_many(
+            table=sample_table,
+            values_list=values_list,
+            conflict_columns=["key", "namespace"],
+            dialect_name="mssql",
+        )
+        compiled = str(stmt.compile(dialect=mssql.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
+        upper = compiled.upper()
+        assert "TGT.KEY = SRC.KEY" in upper
+        assert "TGT.NAMESPACE = SRC.NAMESPACE" in upper
+
+
 class TestIdentifierValidation:
     """Test identifier validation security feature."""
 
