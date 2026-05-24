@@ -36,20 +36,32 @@ See Also:
 - :mod:`advanced_alchemy.extensions` : Additional database extensions
 """
 
+import functools
 import re
-from typing import TYPE_CHECKING, Any, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Optional, Union, cast
 from uuid import UUID
 
-from sqlalchemy import Insert, Table, bindparam, literal_column, select, text
+from sqlalchemy import Insert, Table, UniqueConstraint, bindparam, literal_column, select, text
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import ClauseElement
 from sqlalchemy.sql.expression import Executable
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
+    from collections.abc import Sequence
+
     from sqlalchemy.sql.compiler import SQLCompiler
     from sqlalchemy.sql.elements import ColumnElement
 
-__all__ = ("MergeStatement", "OnConflictUpsert", "validate_identifier")
+UpsertKind = Literal["on_conflict", "merge", "insert_or_update", "fallback"]
+
+__all__ = (
+    "MergeStatement",
+    "OnConflictUpsert",
+    "UpsertKind",
+    "UpsertStrategy",
+    "resolve_upsert_strategy",
+    "validate_identifier",
+)
 
 # Pattern for valid SQL identifiers (conservative - alphanumeric and underscore only)
 _IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -780,4 +792,145 @@ def _build_mssql_bulk_merge(
             when_not_matched_insert=when_not_matched_insert,
         ),
         additional_params,
+    )
+
+
+class UpsertStrategy(NamedTuple):
+    """Dispatch decision returned by :func:`resolve_upsert_strategy`.
+
+    Tells the repository which native primitive to compile (``on_conflict`` /
+    ``merge`` / ``insert_or_update``) or whether to take the existing
+    SELECT-then-partition fallback. The ``conflict_columns`` field is the
+    *validated* unique key (PK / UniqueConstraint / unique Index) — which
+    may be a subset of the caller's ``match_fields`` (e.g. PK match where
+    the caller passed extra columns).
+    """
+
+    kind: UpsertKind
+    supports_returning: bool
+    conflict_columns: tuple[str, ...]
+    dialect_name: str
+
+
+_DIALECTS_ON_CONFLICT_RETURNING: frozenset[str] = frozenset({"postgresql", "cockroachdb", "sqlite", "duckdb"})
+_DIALECTS_ON_CONFLICT_NO_RETURNING: frozenset[str] = frozenset({"mysql", "mariadb"})
+_DIALECTS_MERGE: frozenset[str] = frozenset({"oracle", "mssql"})
+_DIALECTS_INSERT_OR_UPDATE: frozenset[str] = frozenset({"spanner"})
+
+
+def _native_primitive_for_dialect(dialect_name: str) -> tuple[Optional[UpsertKind], bool]:
+    """Return ``(kind, supports_returning)`` for the dialect's native upsert primitive.
+
+    Returns ``(None, False)`` for dialects without a native primitive (fallback).
+    """
+    if dialect_name in _DIALECTS_ON_CONFLICT_RETURNING:
+        return ("on_conflict", True)
+    if dialect_name in _DIALECTS_ON_CONFLICT_NO_RETURNING:
+        return ("on_conflict", False)
+    if dialect_name in _DIALECTS_MERGE:
+        return ("merge", True)
+    if dialect_name in _DIALECTS_INSERT_OR_UPDATE:
+        return ("insert_or_update", False)
+    return (None, False)
+
+
+def resolve_upsert_strategy(
+    table: Table,
+    match_fields: "Sequence[str]",
+    dialect_name: str,
+) -> UpsertStrategy:
+    """Resolve the optimal upsert strategy for ``(table, match_fields, dialect)``.
+
+    The result is cached for the process lifetime; ``Table`` objects are
+    singletons per declarative class, so this is one decision per
+    ``(model, match_fields, dialect)`` tuple.
+
+    Resolution priority:
+
+    1. ``match_fields`` equals or is a superset of the table's primary key →
+       native primitive for the dialect, ``conflict_columns`` is the PK.
+    2. A :class:`~sqlalchemy.UniqueConstraint` whose columns match exactly →
+       native primitive, ``conflict_columns`` is that constraint's columns.
+    3. A unique :class:`~sqlalchemy.Index` whose columns match exactly →
+       native primitive, ``conflict_columns`` is that index's columns.
+    4. Otherwise → ``kind="fallback"``, ``supports_returning=False``.
+
+    Args:
+        table: Target table. Used by identity for caching.
+        match_fields: Columns the caller wants to match on. Order-insensitive.
+        dialect_name: Database dialect name.
+
+    Returns:
+        An :class:`UpsertStrategy` describing the decision.
+
+    Raises:
+        ValueError: ``match_fields`` is empty or contains a column not present
+            on the table.
+    """
+    if not match_fields:
+        msg = "match_fields must not be empty"
+        raise ValueError(msg)
+    normalized = tuple(sorted(set(match_fields)))
+    table_columns = set(table.c.keys())
+    missing = [col for col in normalized if col not in table_columns]
+    if missing:
+        msg = f"match_fields {missing!r} not present in table {table.name!r}"
+        raise ValueError(msg)
+    return _resolve_upsert_strategy_cached(table, normalized, dialect_name)
+
+
+@functools.cache
+def _resolve_upsert_strategy_cached(
+    table: Table,
+    match_fields: tuple[str, ...],
+    dialect_name: str,
+) -> UpsertStrategy:
+    """Cached arm of :func:`resolve_upsert_strategy`. Keyed by identity of ``table``."""
+    kind, supports_returning = _native_primitive_for_dialect(dialect_name)
+    if kind is None:
+        return UpsertStrategy(
+            kind="fallback",
+            supports_returning=False,
+            conflict_columns=match_fields,
+            dialect_name=dialect_name,
+        )
+
+    match_set = set(match_fields)
+    pk_cols = tuple(col.name for col in table.primary_key.columns)
+    if pk_cols and set(pk_cols).issubset(match_set):
+        return UpsertStrategy(
+            kind=kind,
+            supports_returning=supports_returning,
+            conflict_columns=pk_cols,
+            dialect_name=dialect_name,
+        )
+
+    for constraint in table.constraints:
+        if isinstance(constraint, UniqueConstraint):
+            uc_cols = tuple(col.name for col in constraint.columns)
+            if uc_cols and set(uc_cols) == match_set:
+                return UpsertStrategy(
+                    kind=kind,
+                    supports_returning=supports_returning,
+                    conflict_columns=uc_cols,
+                    dialect_name=dialect_name,
+                )
+
+    for idx in table.indexes:
+        if not idx.unique:
+            continue
+        idx_cols = tuple(col.name for col in idx.columns)
+        if idx_cols and set(idx_cols) == match_set:
+            return UpsertStrategy(
+                kind=kind,
+                supports_returning=supports_returning,
+                conflict_columns=idx_cols,
+                dialect_name=dialect_name,
+            )
+
+    return UpsertStrategy(
+        kind="fallback",
+        supports_returning=False,
+        conflict_columns=match_fields,
+        dialect_name=dialect_name,
     )

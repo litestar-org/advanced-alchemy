@@ -3,7 +3,7 @@
 from typing import Any
 
 import pytest
-from sqlalchemy import Column, Integer, MetaData, String, Table
+from sqlalchemy import Column, Index, Integer, MetaData, String, Table, UniqueConstraint
 
 from advanced_alchemy.operations import MergeStatement, OnConflictUpsert, validate_identifier
 
@@ -565,3 +565,140 @@ class TestCreateMergeMany:
         assert set(bulk_result.when_matched_update.keys()) == set(single_stmt.when_matched_update.keys())
         assert isinstance(bulk_params, dict)
         assert isinstance(single_params, dict)
+
+
+@pytest.fixture
+def composite_pk_table() -> Table:
+    """Table with composite PK + UniqueConstraint + unique Index for resolver tests."""
+    metadata = MetaData()
+    return Table(
+        "users_v2",
+        metadata,
+        Column("tenant_id", Integer, primary_key=True),
+        Column("user_id", Integer, primary_key=True),
+        Column("email", String(255), nullable=False),
+        Column("external_ref", String(64), nullable=False),
+        Column("display_name", String(120)),
+        UniqueConstraint("email", name="uq_users_email"),
+        Index("ux_users_external_ref", "external_ref", unique=True),
+        Index("ix_users_display_name", "display_name", unique=False),
+    )
+
+
+class TestResolveUpsertStrategy:
+    """Tests for the dispatch resolver introduced in Ch.2."""
+
+    def test_pk_exact_match_on_conflict_dialect(self, sample_table: Table) -> None:
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        strategy = resolve_upsert_strategy(sample_table, ("id",), "postgresql")
+        assert strategy.kind == "on_conflict"
+        assert strategy.supports_returning is True
+        assert strategy.conflict_columns == ("id",)
+        assert strategy.dialect_name == "postgresql"
+
+    def test_pk_superset_match_uses_pk_cols(self, composite_pk_table: Table) -> None:
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        strategy = resolve_upsert_strategy(composite_pk_table, ("tenant_id", "user_id", "email"), "postgresql")
+        assert strategy.kind == "on_conflict"
+        assert set(strategy.conflict_columns) == {"tenant_id", "user_id"}
+
+    def test_composite_pk_exact_match(self, composite_pk_table: Table) -> None:
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        strategy = resolve_upsert_strategy(composite_pk_table, ("tenant_id", "user_id"), "postgresql")
+        assert strategy.kind == "on_conflict"
+        assert set(strategy.conflict_columns) == {"tenant_id", "user_id"}
+
+    def test_unique_constraint_match(self, composite_pk_table: Table) -> None:
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        strategy = resolve_upsert_strategy(composite_pk_table, ("email",), "postgresql")
+        assert strategy.kind == "on_conflict"
+        assert strategy.conflict_columns == ("email",)
+
+    def test_unique_index_match(self, composite_pk_table: Table) -> None:
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        strategy = resolve_upsert_strategy(composite_pk_table, ("external_ref",), "postgresql")
+        assert strategy.kind == "on_conflict"
+        assert strategy.conflict_columns == ("external_ref",)
+
+    def test_non_unique_field_falls_back(self, composite_pk_table: Table) -> None:
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        strategy = resolve_upsert_strategy(composite_pk_table, ("display_name",), "postgresql")
+        assert strategy.kind == "fallback"
+        assert strategy.supports_returning is False
+
+    def test_non_existent_column_raises_value_error(self, sample_table: Table) -> None:
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        with pytest.raises(ValueError, match="not present in table"):
+            resolve_upsert_strategy(sample_table, ("missing_col",), "postgresql")
+
+    def test_empty_match_fields_raises(self, sample_table: Table) -> None:
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        with pytest.raises(ValueError, match="must not be empty"):
+            resolve_upsert_strategy(sample_table, (), "postgresql")
+
+    def test_match_fields_order_independent_cache(self, composite_pk_table: Table) -> None:
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        first = resolve_upsert_strategy(composite_pk_table, ("tenant_id", "user_id"), "postgresql")
+        second = resolve_upsert_strategy(composite_pk_table, ("user_id", "tenant_id"), "postgresql")
+        assert first == second
+
+    def test_cache_returns_same_instance(self, sample_table: Table) -> None:
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        first = resolve_upsert_strategy(sample_table, ("id",), "postgresql")
+        second = resolve_upsert_strategy(sample_table, ("id",), "postgresql")
+        assert first is second
+
+    @pytest.mark.parametrize(
+        ("dialect", "expected_kind", "expected_returning"),
+        [
+            ("postgresql", "on_conflict", True),
+            ("cockroachdb", "on_conflict", True),
+            ("sqlite", "on_conflict", True),
+            ("duckdb", "on_conflict", True),
+            ("mysql", "on_conflict", False),
+            ("mariadb", "on_conflict", False),
+            ("oracle", "merge", True),
+            ("mssql", "merge", True),
+            ("spanner", "insert_or_update", False),
+        ],
+    )
+    def test_dialect_to_kind_mapping(
+        self,
+        sample_table: Table,
+        dialect: str,
+        expected_kind: str,
+        expected_returning: bool,
+    ) -> None:
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        strategy = resolve_upsert_strategy(sample_table, ("id",), dialect)
+        assert strategy.kind == expected_kind
+        assert strategy.supports_returning is expected_returning
+        assert strategy.dialect_name == dialect
+
+    def test_unknown_dialect_falls_back(self, sample_table: Table) -> None:
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        strategy = resolve_upsert_strategy(sample_table, ("id",), "snowflake")
+        assert strategy.kind == "fallback"
+        assert strategy.supports_returning is False
+
+    def test_upsert_strategy_is_named_tuple_like(self, sample_table: Table) -> None:
+        from advanced_alchemy.operations import UpsertStrategy, resolve_upsert_strategy
+
+        strategy = resolve_upsert_strategy(sample_table, ("id",), "postgresql")
+        assert isinstance(strategy, UpsertStrategy)
+        assert hasattr(strategy, "kind")
+        assert hasattr(strategy, "supports_returning")
+        assert hasattr(strategy, "conflict_columns")
+        assert hasattr(strategy, "dialect_name")
