@@ -414,7 +414,16 @@ class OnConflictUpsert:
         Returns:
             True if native upsert is supported, False otherwise
         """
-        return dialect_name in {"postgresql", "cockroachdb", "sqlite", "mysql", "mariadb", "duckdb"}
+        return dialect_name in {
+            "postgresql",
+            "cockroachdb",
+            "sqlite",
+            "mysql",
+            "mariadb",
+            "duckdb",
+            "mssql",
+            "spanner",
+        }
 
     @staticmethod
     def create_upsert(
@@ -424,7 +433,7 @@ class OnConflictUpsert:
         update_columns: Optional[list[str]] = None,
         dialect_name: Optional[str] = None,
         validate_identifiers: bool = False,
-    ) -> Insert:
+    ) -> Union[Insert, MergeStatement, "SpannerUpsert"]:
         """Create a dialect-specific upsert statement.
 
         Args:
@@ -436,7 +445,10 @@ class OnConflictUpsert:
             validate_identifiers: If True, validate column names for safety (default: False)
 
         Returns:
-            A SQLAlchemy Insert statement with upsert logic
+            A SQLAlchemy Executable: an ``Insert`` for ON-CONFLICT dialects,
+            a ``MergeStatement`` for MSSQL (delegated to ``create_merge_many``
+            with a single-row list to reuse the Ch.4 compile), or a
+            ``SpannerUpsert`` for Spanner.
 
         Raises:
             NotImplementedError: If the dialect doesn't support native upsert
@@ -454,19 +466,13 @@ class OnConflictUpsert:
         if update_columns is None:
             update_columns = [col for col in values if col not in conflict_columns]
 
-        if dialect_name in {"postgresql", "sqlite", "duckdb"}:
+        if dialect_name in {"postgresql", "sqlite", "duckdb", "cockroachdb"}:
             from sqlalchemy.dialects.postgresql import insert as pg_insert
 
             pg_insert_stmt = pg_insert(table).values(values)
             return pg_insert_stmt.on_conflict_do_update(
-                index_elements=conflict_columns, set_={col: pg_insert_stmt.excluded[col] for col in update_columns}
-            )
-        if dialect_name == "cockroachdb":
-            from sqlalchemy.dialects.postgresql import insert as pg_insert
-
-            pg_insert_stmt = pg_insert(table).values(values)
-            return pg_insert_stmt.on_conflict_do_update(
-                index_elements=conflict_columns, set_={col: pg_insert_stmt.excluded[col] for col in update_columns}
+                index_elements=conflict_columns,
+                set_={col: pg_insert_stmt.excluded[col] for col in update_columns},
             )
 
         if dialect_name in {"mysql", "mariadb"}:
@@ -476,6 +482,20 @@ class OnConflictUpsert:
             return mysql_insert_stmt.on_duplicate_key_update(
                 **{col: mysql_insert_stmt.inserted[col] for col in update_columns}
             )
+
+        if dialect_name == "mssql":
+            merge_stmt, _ = OnConflictUpsert.create_merge_many(
+                table=table,
+                values_list=[values],
+                conflict_columns=conflict_columns,
+                update_columns=update_columns,
+                dialect_name="mssql",
+                validate_identifiers=False,
+            )
+            return cast("MergeStatement", merge_stmt)
+
+        if dialect_name == "spanner":
+            return SpannerUpsert(table=table, values_list=[values])
 
         msg = f"Native upsert not supported for dialect '{dialect_name}'"
         raise NotImplementedError(msg)
