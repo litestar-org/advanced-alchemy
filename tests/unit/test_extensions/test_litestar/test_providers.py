@@ -438,6 +438,83 @@ def test_order_by_filter() -> None:
     assert f.sort_order == "desc"
 
 
+def test_order_by_filter_uses_scalar_default_from_list_sort_field() -> None:
+    """Test list-based sort fields produce a scalar default order field."""
+    deps = _create_statement_filters({"sort_field": ["name", "id"]})
+
+    provider_func = deps["order_by_filter"].dependency
+    f = provider_func()
+
+    assert isinstance(f, OrderBy)
+    assert f.field_name == "name"
+    f.append_to_statement(select(DITestModel), DITestModel)
+
+
+def test_order_by_filter_uses_scalar_default_from_set_sort_field() -> None:
+    """Test set-based sort fields produce a deterministic scalar default order field."""
+    deps = _create_statement_filters({"sort_field": {"name", "id"}})
+
+    provider_func = deps["order_by_filter"].dependency
+    f = provider_func()
+
+    assert isinstance(f, OrderBy)
+    assert f.field_name == "id"
+    f.append_to_statement(select(DITestModel), DITestModel)
+
+
+def test_individual_order_by_dependency_injection_skips_runtime_field_validation() -> None:
+    """Test individual Litestar filter dependencies can be injected directly."""
+
+    @get("/", dependencies=create_filter_dependencies({"sort_field": "name"}))
+    async def handler(order_by_filter: OrderBy) -> dict[str, str]:
+        return {"field_name": cast(str, order_by_filter.field_name), "sort_order": order_by_filter.sort_order}
+
+    with TestClient(Litestar([handler])) as client:
+        response = client.get("/")
+        overridden_response = client.get("/?orderBy=id&sortOrder=asc")
+
+    assert response.status_code == 200
+    assert response.json() == {"field_name": "name", "sort_order": "desc"}
+    assert overridden_response.status_code == 200
+    assert overridden_response.json() == {"field_name": "id", "sort_order": "asc"}
+
+
+def test_litestar_openapi_schema_uses_typed_sort_parameters() -> None:
+    """Test sort parameters keep concrete OpenAPI schemas for collection defaults."""
+    filter_dependencies = create_filter_dependencies({"sort_field": ["name", "id"], "sort_order": "asc"})
+
+    @get("/test")
+    async def handler(filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)]) -> list[str]:
+        return [type(filter_).__name__ for filter_ in filters]
+
+    app = Litestar(
+        route_handlers=[handler],
+        signature_namespace=signature_namespace_values,
+        dependencies=filter_dependencies,
+        openapi_config=OpenAPIConfig(title="Test API", version="1.0.0", path="/schema"),
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/schema/openapi.json")
+
+    assert response.status_code == 200
+    parameters = response.json()["paths"]["/test"]["get"]["parameters"]
+    order_by_param = next(param for param in parameters if param["name"] == "orderBy")
+    sort_order_param = next(param for param in parameters if param["name"] == "sortOrder")
+
+    assert order_by_param["schema"] == {
+        "oneOf": [{"type": "string", "default": "name"}, {"type": "null"}],
+        "title": "Order by field",
+        "default": "name",
+    }
+    assert sort_order_param["schema"] == {
+        "type": ["null", "string"],
+        "enum": ["asc", "desc", None],
+        "title": "Field to search",
+        "default": "asc",
+    }
+
+
 def test_not_in_filter() -> None:
     """Test creating not_in filter dependency."""
     deps = _create_statement_filters({"not_in_fields": ["status"]})
