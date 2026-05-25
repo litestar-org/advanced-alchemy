@@ -3,7 +3,7 @@ from typing import Any
 from sqlalchemy.engine import Dialect
 from sqlalchemy.types import Boolean, TypeDecorator, TypeEngine
 
-__all__ = ("BooleanType",)
+__all__ = ("Bool",)
 
 
 _ORACLE_NATIVE_BOOLEAN_MIN_VERSION = 23
@@ -38,4 +38,4 @@ class _OracleAwareBoolean(TypeDecorator[bool]):
         return dialect.type_descriptor(Boolean())
 
 
-BooleanType = _OracleAwareBoolean
+Bool = _OracleAwareBoolean

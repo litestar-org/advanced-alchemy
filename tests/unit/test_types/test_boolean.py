@@ -6,7 +6,7 @@ from sqlalchemy.dialects import oracle as oracle_dialect_module
 from sqlalchemy.engine import Dialect
 from sqlalchemy.types import Boolean
 
-from advanced_alchemy.types import BooleanType
+from advanced_alchemy.types import Bool
 from advanced_alchemy.types.boolean import _OracleAwareBoolean
 
 
@@ -37,42 +37,42 @@ def _make_dialect(name: str, server_version_info: Optional[tuple[int, ...]] = No
 
 
 def test_python_type_and_cache_ok() -> None:
-    assert BooleanType is _OracleAwareBoolean
-    instance = BooleanType()
+    assert Bool is _OracleAwareBoolean
+    instance = Bool()
     assert instance.python_type is bool
     assert instance.cache_ok is True
 
 
 def test_oracle_23_with_sa_2_1_uses_native_boolean(fake_oracle_boolean: type[Boolean]) -> None:
     dialect = _make_dialect("oracle", server_version_info=(23, 0, 0, 0, 0))
-    result = BooleanType().load_dialect_impl(dialect)
+    result = Bool().load_dialect_impl(dialect)
     assert isinstance(result, fake_oracle_boolean)
 
 
 def test_oracle_23_with_sa_2_0_falls_back_to_boolean(remove_oracle_boolean: None) -> None:
     dialect = _make_dialect("oracle", server_version_info=(23, 0, 0, 0, 0))
-    result = BooleanType().load_dialect_impl(dialect)
+    result = Bool().load_dialect_impl(dialect)
     assert isinstance(result, Boolean)
     assert not isinstance(result, _FakeOracleBoolean)
 
 
 def test_oracle_19_with_sa_2_1_falls_back_to_boolean(fake_oracle_boolean: type[Boolean]) -> None:
     dialect = _make_dialect("oracle", server_version_info=(19, 0, 0, 0, 0))
-    result = BooleanType().load_dialect_impl(dialect)
+    result = Bool().load_dialect_impl(dialect)
     assert isinstance(result, Boolean)
     assert not isinstance(result, _FakeOracleBoolean)
 
 
 def test_oracle_18_with_sa_2_1_falls_back_to_boolean(fake_oracle_boolean: type[Boolean]) -> None:
     dialect = _make_dialect("oracle", server_version_info=(18, 0, 0, 0, 0))
-    result = BooleanType().load_dialect_impl(dialect)
+    result = Bool().load_dialect_impl(dialect)
     assert isinstance(result, Boolean)
     assert not isinstance(result, _FakeOracleBoolean)
 
 
 def test_oracle_with_no_server_version_falls_back(fake_oracle_boolean: type[Boolean]) -> None:
     dialect = _make_dialect("oracle", server_version_info=None)
-    result = BooleanType().load_dialect_impl(dialect)
+    result = Bool().load_dialect_impl(dialect)
     assert isinstance(result, Boolean)
     assert not isinstance(result, _FakeOracleBoolean)
 
@@ -83,14 +83,14 @@ def test_non_oracle_dialects_use_stock_boolean(
     fake_oracle_boolean: type[Boolean],
 ) -> None:
     dialect = _make_dialect(dialect_name, server_version_info=(99, 0, 0))
-    result = BooleanType().load_dialect_impl(dialect)
+    result = Bool().load_dialect_impl(dialect)
     assert isinstance(result, Boolean)
     assert not isinstance(result, _FakeOracleBoolean)
 
 
 def test_load_dialect_impl_returns_type_engine(fake_oracle_boolean: type[Boolean]) -> None:
     dialect = _make_dialect("oracle", server_version_info=(23, 0, 0, 0, 0))
-    instance = BooleanType()
+    instance = Bool()
     result: Any = instance.load_dialect_impl(dialect)
     assert result is not None
     assert dialect.type_descriptor.called
