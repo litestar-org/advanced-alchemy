@@ -50,9 +50,11 @@ from advanced_alchemy.base import model_to_dict
 from advanced_alchemy.exceptions import ErrorMessages, NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.filters import StatementFilter, StatementTypeT
 from advanced_alchemy.operations import (
+    DEFAULT_INVOKE_FAILED,
     OnConflictUpsert,
     SpannerUpsert,
     UpsertStrategy,
+    invoke_python_default,
     resolve_upsert_strategy,
 )
 from advanced_alchemy.repository._util import (
@@ -85,29 +87,6 @@ if TYPE_CHECKING:
     from advanced_alchemy.cache.manager import CacheManager
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
-
-_DEFAULT_INVOKE_FAILED: Any = object()
-
-
-def _invoke_default(callable_default: Any) -> Any:
-    """Invoke a ``ColumnDefault.arg`` callable, tolerating both signatures.
-
-    SQLAlchemy accepts both context-taking defaults (``lambda ctx: …``) and
-    zero-arg defaults (``lambda: …``, ``uuid7``, ``datetime.utcnow``). Try
-    the context-taking form first to match SQLAlchemy's own dispatch, then
-    fall back to the zero-arg form. Returns ``_DEFAULT_INVOKE_FAILED`` if
-    neither call shape produced a value.
-    """
-    try:
-        return callable_default(None)
-    except TypeError:
-        pass
-    except (AttributeError, ValueError):
-        return _DEFAULT_INVOKE_FAILED
-    try:
-        return callable_default()
-    except (TypeError, AttributeError, ValueError):
-        return _DEFAULT_INVOKE_FAILED
 
 
 @runtime_checkable
@@ -3116,8 +3095,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             default = col.default
             arg = getattr(default, "arg", None) if default is not None else None
             if callable(arg):
-                resolved = _invoke_default(arg)
-                if resolved is not _DEFAULT_INVOKE_FAILED:
+                resolved = invoke_python_default(arg)
+                if resolved is not DEFAULT_INVOKE_FAILED:
                     prepared[col.name] = resolved
                     continue
             elif default is not None and arg is not None:

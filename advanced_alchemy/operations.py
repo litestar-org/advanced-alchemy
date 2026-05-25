@@ -368,9 +368,10 @@ class SpannerUpsert(Executable, ClauseElement):
             if set(row.keys()) != first_keyset:
                 msg = f"All entries in values_list must share the same keys (row {idx} differs from row 0)"
                 raise ValueError(msg)
+        augmented = _augment_with_pk_defaults(table, values_list)
         self.table = table
-        self.values_list = values_list
-        self.columns: tuple[str, ...] = first_keys
+        self.values_list = augmented
+        self.columns: tuple[str, ...] = tuple(augmented[0].keys())
 
 
 @compiles(SpannerUpsert)
@@ -561,17 +562,17 @@ class OnConflictUpsert:
             for pk_column in table.primary_key.columns:
                 if pk_column.name in values or pk_column.default is None:
                     continue
-                if callable(getattr(pk_column.default, "arg", None)):
-                    try:
-                        default_value = pk_column.default.arg(None)  # type: ignore[attr-defined]
-                        if isinstance(default_value, UUID):
-                            default_value = default_value.hex
-                        additional_params[pk_column.name] = default_value
-                        labeled_columns.append(
-                            bindparam(pk_column.name, value=default_value, type_=pk_column.type).label(pk_column.name)
-                        )
-                    except (TypeError, AttributeError, ValueError):
+                arg = getattr(pk_column.default, "arg", None)
+                if callable(arg):
+                    default_value = invoke_python_default(arg)
+                    if default_value is DEFAULT_INVOKE_FAILED:
                         continue
+                    if isinstance(default_value, UUID):
+                        default_value = default_value.hex
+                    additional_params[pk_column.name] = default_value
+                    labeled_columns.append(
+                        bindparam(pk_column.name, value=default_value, type_=pk_column.type).label(pk_column.name)
+                    )
                 elif hasattr(pk_column.default, "next_value"):
                     pk_col_with_seq = pk_column
 
@@ -732,6 +733,7 @@ class OnConflictUpsert:
                 or identifier validation fails.
         """
         _validate_bulk_inputs(values_list, conflict_columns, update_columns, validate_identifiers)
+        values_list = _augment_with_pk_defaults(table, values_list)
 
         resolved_update_columns = (
             update_columns
@@ -779,6 +781,67 @@ def _coerce_values_list(values: Any) -> list[dict[str, Any]]:
     return [values]
 
 
+DEFAULT_INVOKE_FAILED: Any = object()
+
+
+def invoke_python_default(arg: Any) -> Any:
+    """Invoke a SQLAlchemy ``ColumnDefault.arg`` callable, tolerating both signatures.
+
+    SQLAlchemy accepts both context-taking defaults (``lambda ctx: …``) and
+    zero-arg defaults (``lambda: …``, ``uuid7``, ``datetime.utcnow``).
+    Returns ``DEFAULT_INVOKE_FAILED`` if neither call shape produced a value.
+    """
+    try:
+        return arg(None)
+    except TypeError:
+        pass
+    except (AttributeError, ValueError):
+        return DEFAULT_INVOKE_FAILED
+    try:
+        return arg()
+    except (TypeError, AttributeError, ValueError):
+        return DEFAULT_INVOKE_FAILED
+
+
+def _augment_with_pk_defaults(
+    table: Table,
+    values_list: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Invoke Python-callable PK defaults for any rows missing those columns.
+
+    Callers like the Litestar session/store backends invoke
+    ``OnConflictUpsert.create_upsert`` (and thus ``create_merge_many``) with a
+    values dict that omits the PK — they expect SQLAlchemy's ORM flush to
+    populate the Python ``default=uuid7`` factory. The native dispatch path
+    bypasses that flush, so we invoke the default here, once per row, before
+    building the dialect-specific ``MERGE`` / ``INSERT OR UPDATE``. Columns
+    without a Python default (autoincrement / IDENTITY / Sequence) are left
+    untouched so the database supplies them.
+    """
+    if not values_list:
+        return values_list
+    first_keys = set(values_list[0].keys())
+    pk_defaults: list[tuple[str, Any]] = []
+    for pk_col in table.primary_key.columns:
+        if pk_col.name in first_keys:
+            continue
+        default = pk_col.default
+        arg = getattr(default, "arg", None) if default is not None else None
+        if callable(arg):
+            pk_defaults.append((pk_col.name, arg))
+    if not pk_defaults:
+        return values_list
+    augmented: list[dict[str, Any]] = []
+    for row in values_list:
+        new_row = dict(row)
+        for col_name, arg in pk_defaults:
+            value = invoke_python_default(arg)
+            if value is not DEFAULT_INVOKE_FAILED:
+                new_row[col_name] = value
+        augmented.append(new_row)
+    return augmented
+
+
 def _validate_bulk_inputs(
     values_list: list[dict[str, Any]],
     conflict_columns: list[str],
@@ -824,11 +887,11 @@ def _collect_oracle_pk_defaults(
     for pk_column in table.primary_key.columns:
         if pk_column.name in row or pk_column.default is None:
             continue
-        if not callable(getattr(pk_column.default, "arg", None)):
+        arg = getattr(pk_column.default, "arg", None)
+        if not callable(arg):
             continue
-        try:
-            default_value = pk_column.default.arg(None)  # type: ignore[attr-defined]
-        except (TypeError, AttributeError, ValueError):
+        default_value = invoke_python_default(arg)
+        if default_value is DEFAULT_INVOKE_FAILED:
             continue
         if isinstance(default_value, UUID):
             default_value = default_value.hex
