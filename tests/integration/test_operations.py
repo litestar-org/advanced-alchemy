@@ -452,7 +452,13 @@ def cleanup_operations_tables(request: FixtureRequest) -> Generator[None, None, 
 
 
 async def test_supports_native_upsert_all_dialects(any_engine: Engine | AsyncEngine) -> None:
-    """Test dialect support detection against actual engines."""
+    """Test dialect support detection against actual engines.
+
+    ``supports_native_upsert`` covers only the single-row ``create_upsert`` API
+    (true ``INSERT ... ON CONFLICT``/``ON DUPLICATE KEY UPDATE`` dialects).
+    MSSQL/Oracle/Spanner go through the bulk MERGE / INSERT-OR-UPDATE path in
+    :func:`Repository.upsert_many`, not this flag.
+    """
 
     if getattr(any_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
@@ -465,8 +471,6 @@ async def test_supports_native_upsert_all_dialects(any_engine: Engine | AsyncEng
         "mysql",
         "mariadb",
         "duckdb",
-        "mssql",
-        "spanner",
     }
 
     actual_support = OnConflictUpsert.supports_native_upsert(dialect_name)
