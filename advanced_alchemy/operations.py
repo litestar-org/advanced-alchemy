@@ -409,13 +409,22 @@ class OnConflictUpsert:
 
     @staticmethod
     def supports_native_upsert(dialect_name: str) -> bool:
-        """Check if the dialect supports native upsert operations.
+        """Check if the dialect supports the single-row ``create_upsert`` API.
+
+        This flag is scoped to the per-row ``INSERT ... ON CONFLICT`` /
+        ``ON DUPLICATE KEY UPDATE`` dialects that
+        :meth:`OnConflictUpsert.create_upsert` can compile directly. The
+        bulk ``MERGE`` (mssql, oracle) and ``INSERT OR UPDATE`` (spanner)
+        primitives are dispatched separately by
+        :meth:`Repository.upsert_many` via :func:`resolve_upsert_strategy`
+        and are intentionally **not** reported here.
 
         Args:
             dialect_name: Name of the database dialect
 
         Returns:
-            True if native upsert is supported, False otherwise
+            ``True`` for postgresql / cockroachdb / sqlite / mysql /
+            mariadb / duckdb; ``False`` otherwise.
         """
         return dialect_name in {"postgresql", "cockroachdb", "sqlite", "mysql", "mariadb", "duckdb"}
 

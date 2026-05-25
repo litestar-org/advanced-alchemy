@@ -184,6 +184,15 @@ Important behaviors:
 - **``chunk_size``** mirrors ``add_many``: each chunk compiles to exactly one
   native statement (plus a re-SELECT for hydration on dialects without
   RETURNING).
+- **Server-managed PK safety net.** ``MERGE`` (oracle / mssql) and
+  ``INSERT OR UPDATE`` (spanner) cannot transparently invoke server-side
+  ``Sequence`` / ``Identity`` defaults the way ``INSERT ... ON CONFLICT``
+  does on PostgreSQL. When any prepared row is missing a primary-key
+  column on those dialects, ``upsert_many`` transparently falls back to
+  the SELECT-then-partition path so the sequence/identity machinery
+  runs normally. Models with Python-callable PK defaults (UUIDv6 /
+  UUIDv7 / nano-id) keep the single-statement native path because
+  the row is populated before dispatch.
 - **No breaking changes.** ``Sequence[ModelT]`` return shape is preserved;
   Litestar session / store callers using the single-row ``OnConflictUpsert``
   API are unaffected.
