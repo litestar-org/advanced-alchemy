@@ -1,4 +1,4 @@
-from typing import Any, Optional, Union, cast
+from typing import Any, Optional, Union
 
 from sqlalchemy import text, util
 from sqlalchemy.dialects.oracle import BLOB as ORA_BLOB
@@ -10,6 +10,10 @@ from sqlalchemy.types import SchemaType, TypeDecorator, TypeEngine
 from advanced_alchemy.utils.serialization import decode_json, encode_json
 
 __all__ = ("ORA_JSONB",)
+
+
+_ORACLE_NATIVE_JSON_MIN_VERSION = 21
+"""Oracle Database major version that introduced the native ``JSON`` data type."""
 
 
 class ORA_JSONB(TypeDecorator[dict[str, Any]], SchemaType):  # noqa: N801
@@ -35,6 +39,13 @@ class ORA_JSONB(TypeDecorator[dict[str, Any]], SchemaType):  # noqa: N801
         return self.impl.coerce_compared_value(op=op, value=value)  # type: ignore[no-untyped-call, call-arg]
 
     def load_dialect_impl(self, dialect: Dialect) -> TypeEngine[Any]:
+        try:
+            from sqlalchemy.dialects.oracle import JSON as ORA_JSON
+        except ImportError:
+            return dialect.type_descriptor(ORA_BLOB())
+        sv = dialect.server_version_info
+        if sv and sv[0] >= _ORACLE_NATIVE_JSON_MIN_VERSION:
+            return dialect.type_descriptor(ORA_JSON())
         return dialect.type_descriptor(ORA_BLOB())
 
     def process_bind_param(self, value: Any, dialect: Dialect) -> Optional[Any]:
@@ -46,7 +57,14 @@ class ORA_JSONB(TypeDecorator[dict[str, Any]], SchemaType):  # noqa: N801
         return value
 
     def _should_create_constraint(self, compiler: Any, **kw: Any) -> bool:
-        return cast("bool", compiler.dialect.name == "oracle")
+        if compiler.dialect.name != "oracle":
+            return False
+        try:
+            from sqlalchemy.dialects.oracle import JSON as ORA_JSON  # noqa: F401
+        except ImportError:
+            return True
+        sv = compiler.dialect.server_version_info
+        return not (sv and sv[0] >= _ORACLE_NATIVE_JSON_MIN_VERSION)
 
     def _variant_mapping_for_set_table(self, column: Any) -> Optional[dict[str, Any]]:
         if column.type._variant_mapping:  # noqa: SLF001
