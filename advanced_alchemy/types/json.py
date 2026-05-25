@@ -39,13 +39,14 @@ class ORA_JSONB(TypeDecorator[dict[str, Any]], SchemaType):  # noqa: N801
         return self.impl.coerce_compared_value(op=op, value=value)  # type: ignore[no-untyped-call, call-arg]
 
     def load_dialect_impl(self, dialect: Dialect) -> TypeEngine[Any]:
-        try:
-            from sqlalchemy.dialects.oracle import JSON as ORA_JSON
-        except ImportError:
+        from sqlalchemy.dialects import oracle as _ora_dialect
+
+        ora_json = getattr(_ora_dialect, "JSON", None)
+        if ora_json is None:
             return dialect.type_descriptor(ORA_BLOB())
         sv = dialect.server_version_info
         if sv and sv[0] >= _ORACLE_NATIVE_JSON_MIN_VERSION:
-            return dialect.type_descriptor(ORA_JSON())
+            return dialect.type_descriptor(ora_json())
         return dialect.type_descriptor(ORA_BLOB())
 
     def process_bind_param(self, value: Any, dialect: Dialect) -> Optional[Any]:
@@ -59,9 +60,9 @@ class ORA_JSONB(TypeDecorator[dict[str, Any]], SchemaType):  # noqa: N801
     def _should_create_constraint(self, compiler: Any, **kw: Any) -> bool:
         if compiler.dialect.name != "oracle":
             return False
-        try:
-            from sqlalchemy.dialects.oracle import JSON as ORA_JSON  # noqa: F401
-        except ImportError:
+        from sqlalchemy.dialects import oracle as _ora_dialect
+
+        if not hasattr(_ora_dialect, "JSON"):
             return True
         sv = compiler.dialect.server_version_info
         return not (sv and sv[0] >= _ORACLE_NATIVE_JSON_MIN_VERSION)
