@@ -86,6 +86,29 @@ if TYPE_CHECKING:
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
 
+_DEFAULT_INVOKE_FAILED: Any = object()
+
+
+def _invoke_default(callable_default: Any) -> Any:
+    """Invoke a ``ColumnDefault.arg`` callable, tolerating both signatures.
+
+    SQLAlchemy accepts both context-taking defaults (``lambda ctx: …``) and
+    zero-arg defaults (``lambda: …``, ``uuid7``, ``datetime.utcnow``). Try
+    the context-taking form first to match SQLAlchemy's own dispatch, then
+    fall back to the zero-arg form. Returns ``_DEFAULT_INVOKE_FAILED`` if
+    neither call shape produced a value.
+    """
+    try:
+        return callable_default(None)
+    except TypeError:
+        pass
+    except (AttributeError, ValueError):
+        return _DEFAULT_INVOKE_FAILED
+    try:
+        return callable_default()
+    except (TypeError, AttributeError, ValueError):
+        return _DEFAULT_INVOKE_FAILED
+
 
 @runtime_checkable
 class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Protocol[ModelT]):
@@ -3077,8 +3100,12 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         audit timestamps, etc.) — the native dispatch path bypasses
         SQLAlchemy's ORM flush, which is where these defaults would normally
         fire, and a hand-built ``MergeStatement`` only emits the columns we
-        give it. ``None``-valued PK columns with no Python default are
-        dropped so the DB autoincrement / sequence fires.
+        give it.
+
+        Columns whose default is server-managed (``Sequence``, ``Identity``,
+        ``server_default``) are dropped from the row when their value is
+        ``None`` so the database supplies them — otherwise we'd emit
+        ``INSERT … VALUES (NULL, …)`` against a NOT NULL identity column.
         """
         row = model_to_dict(instance)
         table = cast("Table", self.model_type.__table__)
@@ -3089,15 +3116,14 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             default = col.default
             arg = getattr(default, "arg", None) if default is not None else None
             if callable(arg):
-                try:
-                    prepared[col.name] = arg(None)
+                resolved = _invoke_default(arg)
+                if resolved is not _DEFAULT_INVOKE_FAILED:
+                    prepared[col.name] = resolved
                     continue
-                except (TypeError, AttributeError, ValueError):
-                    pass
-            elif default is not None and not callable(arg):
+            elif default is not None and arg is not None:
                 prepared[col.name] = arg
                 continue
-            if col.primary_key and prepared.get(col.name) is None:
+            if col.primary_key or default is not None or col.server_default is not None:
                 prepared.pop(col.name, None)
         return prepared
 

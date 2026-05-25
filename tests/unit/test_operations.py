@@ -346,8 +346,8 @@ class TestMSSQLMergeCompile:
         )
         compiled = str(stmt.compile(dialect=mssql.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
         upper = compiled.upper()
-        assert "TGT.KEY = SRC.KEY" in upper
-        assert "TGT.NAMESPACE = SRC.NAMESPACE" in upper
+        assert "TGT.[KEY] = SRC.[KEY]" in upper
+        assert "TGT.[NAMESPACE] = SRC.[NAMESPACE]" in upper
 
 
 class TestIdentifierValidation:

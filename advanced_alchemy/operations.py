@@ -290,9 +290,11 @@ def compile_merge_mssql(element: MergeStatement, compiler: "SQLCompiler", **kwar
 
     The trailing semicolon is REQUIRED for T-SQL MERGE — without it SQL Server
     raises a syntax error. ``OUTPUT inserted.*`` provides RETURNING-equivalent
-    hydration for the repository upsert path.
+    hydration for the repository upsert path. All identifiers are quoted via
+    ``compiler.preparer`` so reserved words like ``key`` survive.
     """
-    table_name = element.table.name
+    quote = compiler.preparer.quote
+    table_name = quote(element.table.name)
 
     if isinstance(element.source, str):
         source_clause = f"({element.source})"
@@ -310,7 +312,7 @@ def compile_merge_mssql(element: MergeStatement, compiler: "SQLCompiler", **kwar
         updates: list[str] = []
         for column, value in element.when_matched_update.items():
             compiled_value = compiler.process(value, **kwargs)
-            updates.append(f"tgt.{column} = {compiled_value}")
+            updates.append(f"tgt.{quote(column)} = {compiled_value}")
         merge_sql += ", ".join(updates)
 
     if element.when_not_matched_insert:
@@ -318,7 +320,7 @@ def compile_merge_mssql(element: MergeStatement, compiler: "SQLCompiler", **kwar
         values = list(element.when_not_matched_insert.values())
 
         merge_sql += " WHEN NOT MATCHED THEN INSERT ("
-        merge_sql += ", ".join(columns)
+        merge_sql += ", ".join(quote(col) for col in columns)
         merge_sql += ") VALUES ("
 
         compiled_values: list[str] = [compiler.process(value, **kwargs) for value in values]
@@ -929,9 +931,14 @@ def _build_mssql_bulk_merge(
     ``?`` placeholders that pyodbc understands — a literal-string source
     would survive intact through compilation and fail at the driver with a
     ``[SQL Server]Incorrect syntax near ':'`` ProgrammingError.
+
+    Column identifiers are bracket-quoted (``[name]``) so reserved T-SQL
+    keywords like ``key`` survive in the alias column list, the ON clause,
+    and the WHEN MATCHED / WHEN NOT MATCHED source references.
     """
     first_keys = list(values_list[0].keys())
-    col_names = ", ".join(first_keys)
+    quoted_cols = [f"[{key}]" for key in first_keys]
+    col_names = ", ".join(quoted_cols)
     bp_objects: list[Any] = []
     row_fragments: list[str] = []
     for idx, row in enumerate(values_list):
@@ -942,11 +949,11 @@ def _build_mssql_bulk_merge(
             placeholders.append(f":{bp_name}")
         row_fragments.append(f"({', '.join(placeholders)})")
     source = text(f"(VALUES {', '.join(row_fragments)}) AS src({col_names})").bindparams(*bp_objects)
-    when_not_matched_insert: dict[str, Any] = {col: literal_column(f"src.{col}") for col in first_keys}
+    when_not_matched_insert: dict[str, Any] = {col: literal_column(f"src.[{col}]") for col in first_keys}
     when_matched_update: dict[str, Any] = {
-        col: literal_column(f"src.{col}") for col in update_columns if col in first_keys
+        col: literal_column(f"src.[{col}]") for col in update_columns if col in first_keys
     }
-    on_condition = text(" AND ".join(f"tgt.{col} = src.{col}" for col in conflict_columns))
+    on_condition = text(" AND ".join(f"tgt.[{col}] = src.[{col}]" for col in conflict_columns))
     return (
         MergeStatement(
             table=table,
