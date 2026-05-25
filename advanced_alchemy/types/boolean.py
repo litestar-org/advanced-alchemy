@@ -27,13 +27,14 @@ class _OracleAwareBoolean(TypeDecorator[bool]):
     def load_dialect_impl(self, dialect: Dialect) -> TypeEngine[Any]:
         if dialect.name != "oracle":
             return dialect.type_descriptor(Boolean())
-        try:
-            from sqlalchemy.dialects.oracle import BOOLEAN as ORA_BOOLEAN
-        except ImportError:
+        from sqlalchemy.dialects import oracle as _ora_dialect
+
+        ora_boolean = getattr(_ora_dialect, "BOOLEAN", None)
+        if ora_boolean is None:
             return dialect.type_descriptor(Boolean())
         sv = dialect.server_version_info
         if sv and sv[0] >= _ORACLE_NATIVE_BOOLEAN_MIN_VERSION:
-            return dialect.type_descriptor(ORA_BOOLEAN())
+            return dialect.type_descriptor(ora_boolean())
         return dialect.type_descriptor(Boolean())
 
 
