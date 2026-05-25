@@ -3072,15 +3072,34 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     def _prepare_upsert_row(self, instance: ModelT) -> dict[str, Any]:
         """Convert a ModelT to a row dict suitable for native upsert execution.
 
-        Drops PK columns whose value is ``None`` so the database can supply an
-        autoincrement / sequence value. Python-side callable defaults on the
-        model (UUID factories, ``default=`` columns) have already populated the
-        instance at ``__init__`` time, so their values are preserved.
+        Invokes Python-side callable defaults for columns missing from the
+        instance (UUID factories on PK columns, ``default=datetime.utcnow``
+        audit timestamps, etc.) — the native dispatch path bypasses
+        SQLAlchemy's ORM flush, which is where these defaults would normally
+        fire, and a hand-built ``MergeStatement`` only emits the columns we
+        give it. ``None``-valued PK columns with no Python default are
+        dropped so the DB autoincrement / sequence fires.
         """
         row = model_to_dict(instance)
         table = cast("Table", self.model_type.__table__)
-        pk_names = {col.name for col in table.primary_key.columns}
-        return {key: value for key, value in row.items() if not (value is None and key in pk_names)}
+        prepared = dict(row)
+        for col in table.columns:
+            if prepared.get(col.name) is not None:
+                continue
+            default = col.default
+            arg = getattr(default, "arg", None) if default is not None else None
+            if callable(arg):
+                try:
+                    prepared[col.name] = arg(None)
+                    continue
+                except (TypeError, AttributeError, ValueError):
+                    pass
+            elif default is not None and not callable(arg):
+                prepared[col.name] = arg
+                continue
+            if col.primary_key and prepared.get(col.name) is None:
+                prepared.pop(col.name, None)
+        return prepared
 
     async def _upsert_many_native(
         self,

@@ -1463,14 +1463,19 @@ async def test_upsert_many_native_path_is_single_statement_per_chunk(
     author_model = models["author"]
     author_repo = create_repository(session, author_model)
     dialect_name = session.bind.dialect.name if session.bind is not None else session.get_bind().dialect.name
-    if dialect_name not in {"postgresql", "cockroachdb", "sqlite", "duckdb", "mysql", "mariadb", "oracle", "mssql"}:
-        pytest.skip(f"native upsert path not exercised for dialect {dialect_name!r}")
+    if dialect_name not in {"postgresql", "cockroachdb", "sqlite", "duckdb", "oracle", "mssql"}:
+        pytest.skip(
+            f"native upsert path with match_fields=['id'] cannot hydrate on {dialect_name!r} (no RETURNING / autoincrement PK)"
+        )
 
     statements: list[str] = []
 
     def _record(conn: Any, clauseelement: Any, *args: Any, **kwargs: Any) -> None:
-        _ = conn, args, kwargs
-        statements.append(str(clauseelement))
+        _ = args, kwargs
+        try:
+            statements.append(str(clauseelement.compile(dialect=conn.dialect)))
+        except Exception:
+            statements.append(type(clauseelement).__name__)
 
     bind = session.bind if session.bind is not None else session.get_bind()
     sync_engine = getattr(bind, "sync_engine", bind)
@@ -1506,8 +1511,11 @@ async def test_upsert_many_no_merge_forces_fallback(
     statements: list[str] = []
 
     def _record(conn: Any, clauseelement: Any, *args: Any, **kwargs: Any) -> None:
-        _ = conn, args, kwargs
-        statements.append(str(clauseelement))
+        _ = args, kwargs
+        try:
+            statements.append(str(clauseelement.compile(dialect=conn.dialect)))
+        except Exception:
+            statements.append(type(clauseelement).__name__)
 
     bind = session.bind if session.bind is not None else session.get_bind()
     sync_engine = getattr(bind, "sync_engine", bind)
@@ -1534,14 +1542,19 @@ async def test_upsert_many_chunk_size_emits_multiple_chunks(
     author_model = models["author"]
     author_repo = create_repository(session, author_model)
     dialect_name = session.bind.dialect.name if session.bind is not None else session.get_bind().dialect.name
-    if dialect_name not in {"postgresql", "cockroachdb", "sqlite", "duckdb", "mysql", "mariadb", "oracle", "mssql"}:
-        pytest.skip(f"native upsert path not exercised for dialect {dialect_name!r}")
+    if dialect_name not in {"postgresql", "cockroachdb", "sqlite", "duckdb", "oracle", "mssql"}:
+        pytest.skip(
+            f"native upsert path with match_fields=['id'] cannot hydrate on {dialect_name!r} (no RETURNING / autoincrement PK)"
+        )
 
     statements: list[str] = []
 
     def _record(conn: Any, clauseelement: Any, *args: Any, **kwargs: Any) -> None:
-        _ = conn, args, kwargs
-        statements.append(str(clauseelement))
+        _ = args, kwargs
+        try:
+            statements.append(str(clauseelement.compile(dialect=conn.dialect)))
+        except Exception:
+            statements.append(type(clauseelement).__name__)
 
     bind = session.bind if session.bind is not None else session.get_bind()
     sync_engine = getattr(bind, "sync_engine", bind)

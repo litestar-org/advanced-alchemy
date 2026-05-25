@@ -656,7 +656,9 @@ class TestCreateMergeMany:
         assert "UNION ALL" in source_repr.upper()
         assert "FROM DUAL" not in source_repr.upper()
 
-    def test_mssql_returns_merge_with_values_source_raw_string(self, sample_table: Table) -> None:
+    def test_mssql_returns_merge_with_values_source_clause(self, sample_table: Table) -> None:
+        from sqlalchemy.dialects import mssql
+
         values_list = [
             {"key": "k1", "namespace": "ns", "value": "v1"},
             {"key": "k2", "namespace": "ns", "value": "v2"},
@@ -668,9 +670,9 @@ class TestCreateMergeMany:
             dialect_name="mssql",
         )
         assert isinstance(result, MergeStatement)
-        assert isinstance(result.source, str)
-        assert "VALUES" in result.source.upper()
-        assert "AS SRC" in result.source.upper()
+        compiled_source = str(result.source.compile(dialect=mssql.dialect()))  # type: ignore[union-attr,no-untyped-call]
+        assert "VALUES" in compiled_source.upper()
+        assert "AS SRC" in compiled_source.upper()
 
     def test_other_dialect_returns_list_of_per_row_merge_statements(self, sample_table: Table) -> None:
         values_list = [

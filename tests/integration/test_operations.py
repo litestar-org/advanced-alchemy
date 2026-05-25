@@ -458,7 +458,16 @@ async def test_supports_native_upsert_all_dialects(any_engine: Engine | AsyncEng
         pytest.skip("Mock engine cannot test real database operations")
 
     dialect_name = any_engine.dialect.name
-    expected_support = dialect_name in {"postgresql", "cockroachdb", "sqlite", "mysql", "mariadb", "duckdb"}
+    expected_support = dialect_name in {
+        "postgresql",
+        "cockroachdb",
+        "sqlite",
+        "mysql",
+        "mariadb",
+        "duckdb",
+        "mssql",
+        "spanner",
+    }
 
     actual_support = OnConflictUpsert.supports_native_upsert(dialect_name)
     assert actual_support == expected_support, f"Dialect '{dialect_name}' support mismatch"

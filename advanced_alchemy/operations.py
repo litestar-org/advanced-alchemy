@@ -484,9 +484,10 @@ class OnConflictUpsert:
             )
 
         if dialect_name == "mssql":
+            values_list = _coerce_values_list(values)
             merge_stmt, _ = OnConflictUpsert.create_merge_many(
                 table=table,
-                values_list=[values],
+                values_list=values_list,
                 conflict_columns=conflict_columns,
                 update_columns=update_columns,
                 dialect_name="mssql",
@@ -495,7 +496,7 @@ class OnConflictUpsert:
             return cast("MergeStatement", merge_stmt)
 
         if dialect_name == "spanner":
-            return SpannerUpsert(table=table, values_list=[values])
+            return SpannerUpsert(table=table, values_list=_coerce_values_list(values))
 
         msg = f"Native upsert not supported for dialect '{dialect_name}'"
         raise NotImplementedError(msg)
@@ -761,6 +762,21 @@ class OnConflictUpsert:
         return stmts, combined_params
 
 
+def _coerce_values_list(values: Any) -> list[dict[str, Any]]:
+    """Defensive normalizer for the single-row ``create_upsert`` call sites.
+
+    Some existing callers (tests, legacy code) pass a ``list[dict]`` against
+    the documented ``dict[str, Any]`` signature so they can reuse the
+    single-row API for bulk inputs on dialects like postgresql/mysql where
+    ``Insert.values(list)`` is silently accepted. The mssql / spanner
+    delegation paths land in ``create_merge_many`` / ``SpannerUpsert`` which
+    require a real ``list[dict]`` shape; this normalizes the input.
+    """
+    if isinstance(values, list):
+        return cast("list[dict[str, Any]]", values)
+    return [values]
+
+
 def _validate_bulk_inputs(
     values_list: list[dict[str, Any]],
     conflict_columns: list[str],
@@ -906,21 +922,26 @@ def _build_mssql_bulk_merge(
     conflict_columns: list[str],
     update_columns: list[str],
 ) -> tuple[MergeStatement, dict[str, Any]]:
-    """Construct an MSSQL MergeStatement with a raw-string ``VALUES (...) AS src(...)`` source.
+    """Construct an MSSQL ``MergeStatement`` whose source is a ``text(...).bindparams(...)`` VALUES clause.
 
-    The MSSQL @compiles body for MergeStatement is added in Ch.4; this chapter only
-    fixes the shape: a raw string source so the compiler emits it verbatim.
+    Using ``text()`` with explicit :class:`~sqlalchemy.sql.expression.BindParameter`
+    children lets the MSSQL compiler translate the ``:row0_*`` markers to
+    ``?`` placeholders that pyodbc understands — a literal-string source
+    would survive intact through compilation and fail at the driver with a
+    ``[SQL Server]Incorrect syntax near ':'`` ProgrammingError.
     """
     first_keys = list(values_list[0].keys())
-    additional_params: dict[str, Any] = {}
     col_names = ", ".join(first_keys)
-    row_strs: list[str] = []
+    bp_objects: list[Any] = []
+    row_fragments: list[str] = []
     for idx, row in enumerate(values_list):
-        placeholders = ", ".join(f":row{idx}_{key}" for key in first_keys)
-        row_strs.append(f"({placeholders})")
-        for key in first_keys:
-            additional_params[f"row{idx}_{key}"] = row[key]
-    values_source = f"VALUES {', '.join(row_strs)} AS src({col_names})"
+        placeholders: list[str] = []
+        for col_name in first_keys:
+            bp_name = f"row{idx}_{col_name}"
+            bp_objects.append(bindparam(bp_name, value=row[col_name], type_=table.c[col_name].type))
+            placeholders.append(f":{bp_name}")
+        row_fragments.append(f"({', '.join(placeholders)})")
+    source = text(f"(VALUES {', '.join(row_fragments)}) AS src({col_names})").bindparams(*bp_objects)
     when_not_matched_insert: dict[str, Any] = {col: literal_column(f"src.{col}") for col in first_keys}
     when_matched_update: dict[str, Any] = {
         col: literal_column(f"src.{col}") for col in update_columns if col in first_keys
@@ -929,12 +950,12 @@ def _build_mssql_bulk_merge(
     return (
         MergeStatement(
             table=table,
-            source=values_source,
+            source=source,
             on_condition=on_condition,
             when_matched_update=when_matched_update,
             when_not_matched_insert=when_not_matched_insert,
         ),
-        additional_params,
+        {},
     )
 
 
