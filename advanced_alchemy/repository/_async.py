@@ -2983,6 +2983,17 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
             input_dicts = [self._prepare_upsert_row(datum) for datum in data]
+            if self._native_path_missing_required_pks(input_dicts, strategy):
+                return await self._upsert_many_fallback(
+                    data=data,
+                    match_fields=resolved_match_fields,
+                    auto_expunge=auto_expunge,
+                    auto_commit=auto_commit,
+                    error_messages=error_messages,
+                    load=load,
+                    execution_options=execution_options,
+                    bind_group=bind_group,
+                )
             instances = await self._upsert_many_native(
                 input_dicts=input_dicts,
                 strategy=strategy,
@@ -3070,6 +3081,28 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
         return instances
+
+    def _native_path_missing_required_pks(
+        self,
+        input_dicts: List[dict[str, Any]],
+        strategy: UpsertStrategy,
+    ) -> bool:
+        """Detect whether the native MERGE / INSERT OR UPDATE path can't fire.
+
+        ``MERGE`` (oracle/mssql) and ``INSERT OR UPDATE`` (spanner) do not
+        transparently invoke server-side ``Sequence`` / ``Identity`` defaults
+        the way ``INSERT ... ON CONFLICT`` does on postgresql: a hand-built
+        statement that omits an autoincrement PK column will produce a NULL
+        violation. When the resolved strategy is one of those kinds and any
+        row is missing a PK column, fall back to the ORM-managed
+        SELECT+partition path so the sequence/identity machinery runs
+        normally.
+        """
+        if strategy.kind not in {"merge", "insert_or_update"}:
+            return False
+        table = cast("Table", self.model_type.__table__)
+        pk_names = {col.name for col in table.primary_key.columns}
+        return any(not pk_names.issubset(row.keys()) for row in input_dicts)
 
     def _prepare_upsert_row(self, instance: ModelT) -> dict[str, Any]:
         """Convert a ModelT to a row dict suitable for native upsert execution.

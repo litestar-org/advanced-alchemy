@@ -1467,6 +1467,12 @@ async def test_upsert_many_native_path_is_single_statement_per_chunk(
         pytest.skip(
             f"native upsert path with match_fields=['id'] cannot hydrate on {dialect_name!r} (no RETURNING / autoincrement PK)"
         )
+    from advanced_alchemy.base import BigIntBase
+
+    if issubclass(author_model, BigIntBase) and dialect_name in {"oracle", "mssql"}:
+        pytest.skip(
+            f"bigint Sequence PK on {dialect_name!r} MERGE path falls back to ORM-managed inserts; native single-statement assertion does not apply"
+        )
 
     statements: list[str] = []
 
@@ -1545,6 +1551,12 @@ async def test_upsert_many_chunk_size_emits_multiple_chunks(
     if dialect_name not in {"postgresql", "cockroachdb", "sqlite", "duckdb", "oracle", "mssql"}:
         pytest.skip(
             f"native upsert path with match_fields=['id'] cannot hydrate on {dialect_name!r} (no RETURNING / autoincrement PK)"
+        )
+    from advanced_alchemy.base import BigIntBase
+
+    if issubclass(author_model, BigIntBase) and dialect_name in {"oracle", "mssql"}:
+        pytest.skip(
+            f"bigint Sequence PK on {dialect_name!r} MERGE path falls back to ORM-managed inserts; native single-statement assertion does not apply"
         )
 
     statements: list[str] = []

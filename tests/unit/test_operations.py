@@ -34,35 +34,14 @@ class TestOnConflictUpsert:
         assert OnConflictUpsert.supports_native_upsert("mysql") is True
         assert OnConflictUpsert.supports_native_upsert("mariadb") is True
         assert OnConflictUpsert.supports_native_upsert("duckdb") is True
-        assert OnConflictUpsert.supports_native_upsert("mssql") is True
-        assert OnConflictUpsert.supports_native_upsert("spanner") is True
 
-        # Unsupported dialects
+        # MERGE / INSERT-OR-UPDATE dialects go through Repository.upsert_many's
+        # resolver, not the single-row create_upsert API — so they're not in
+        # supports_native_upsert.
         assert OnConflictUpsert.supports_native_upsert("oracle") is False
+        assert OnConflictUpsert.supports_native_upsert("mssql") is False
+        assert OnConflictUpsert.supports_native_upsert("spanner") is False
         assert OnConflictUpsert.supports_native_upsert("unknown") is False
-
-    def test_create_upsert_mssql_delegates_to_merge_statement(self, sample_table: Table) -> None:
-        values = {"key": "k1", "namespace": "ns", "value": "v1"}
-        stmt = OnConflictUpsert.create_upsert(
-            table=sample_table,
-            values=values,
-            conflict_columns=["key", "namespace"],
-            dialect_name="mssql",
-        )
-        assert isinstance(stmt, MergeStatement)
-
-    def test_create_upsert_spanner_returns_spanner_upsert(self, sample_table: Table) -> None:
-        from advanced_alchemy.operations import SpannerUpsert
-
-        values = {"key": "k1", "namespace": "ns", "value": "v1"}
-        stmt = OnConflictUpsert.create_upsert(
-            table=sample_table,
-            values=values,
-            conflict_columns=["key", "namespace"],
-            dialect_name="spanner",
-        )
-        assert isinstance(stmt, SpannerUpsert)
-        assert len(stmt.values_list) == 1
 
     def test_create_postgresql_upsert(self, sample_table: Table) -> None:
         """Test PostgreSQL ON CONFLICT upsert generation."""

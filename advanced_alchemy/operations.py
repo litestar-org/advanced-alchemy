@@ -417,16 +417,7 @@ class OnConflictUpsert:
         Returns:
             True if native upsert is supported, False otherwise
         """
-        return dialect_name in {
-            "postgresql",
-            "cockroachdb",
-            "sqlite",
-            "mysql",
-            "mariadb",
-            "duckdb",
-            "mssql",
-            "spanner",
-        }
+        return dialect_name in {"postgresql", "cockroachdb", "sqlite", "mysql", "mariadb", "duckdb"}
 
     @staticmethod
     def create_upsert(
@@ -436,7 +427,7 @@ class OnConflictUpsert:
         update_columns: Optional[list[str]] = None,
         dialect_name: Optional[str] = None,
         validate_identifiers: bool = False,
-    ) -> Union[Insert, MergeStatement, "SpannerUpsert"]:
+    ) -> Insert:
         """Create a dialect-specific upsert statement.
 
         Args:
@@ -448,10 +439,13 @@ class OnConflictUpsert:
             validate_identifiers: If True, validate column names for safety (default: False)
 
         Returns:
-            A SQLAlchemy Executable: an ``Insert`` for ON-CONFLICT dialects,
-            a ``MergeStatement`` for MSSQL (delegated to ``create_merge_many``
-            with a single-row list to reuse the Ch.4 compile), or a
-            ``SpannerUpsert`` for Spanner.
+            A SQLAlchemy ``Insert`` for the ON-CONFLICT dialects (postgresql /
+            cockroachdb / sqlite / duckdb / mysql / mariadb). MSSQL, Oracle,
+            and Spanner are handled by the bulk ``MERGE`` / ``INSERT OR UPDATE``
+            path in :func:`OnConflictUpsert.create_merge_many` and
+            :class:`SpannerUpsert`, accessed through
+            :func:`resolve_upsert_strategy` from the repository layer — they
+            are not exposed via this single-row API.
 
         Raises:
             NotImplementedError: If the dialect doesn't support native upsert
@@ -485,21 +479,6 @@ class OnConflictUpsert:
             return mysql_insert_stmt.on_duplicate_key_update(
                 **{col: mysql_insert_stmt.inserted[col] for col in update_columns}
             )
-
-        if dialect_name == "mssql":
-            values_list = _coerce_values_list(values)
-            merge_stmt, _ = OnConflictUpsert.create_merge_many(
-                table=table,
-                values_list=values_list,
-                conflict_columns=conflict_columns,
-                update_columns=update_columns,
-                dialect_name="mssql",
-                validate_identifiers=False,
-            )
-            return cast("MergeStatement", merge_stmt)
-
-        if dialect_name == "spanner":
-            return SpannerUpsert(table=table, values_list=_coerce_values_list(values))
 
         msg = f"Native upsert not supported for dialect '{dialect_name}'"
         raise NotImplementedError(msg)
@@ -764,21 +743,6 @@ class OnConflictUpsert:
             stmts.append(stmt)
             combined_params.update(row_params)
         return stmts, combined_params
-
-
-def _coerce_values_list(values: Any) -> list[dict[str, Any]]:
-    """Defensive normalizer for the single-row ``create_upsert`` call sites.
-
-    Some existing callers (tests, legacy code) pass a ``list[dict]`` against
-    the documented ``dict[str, Any]`` signature so they can reuse the
-    single-row API for bulk inputs on dialects like postgresql/mysql where
-    ``Insert.values(list)`` is silently accepted. The mssql / spanner
-    delegation paths land in ``create_merge_many`` / ``SpannerUpsert`` which
-    require a real ``list[dict]`` shape; this normalizes the input.
-    """
-    if isinstance(values, list):
-        return cast("list[dict[str, Any]]", values)
-    return [values]
 
 
 DEFAULT_INVOKE_FAILED: Any = object()
