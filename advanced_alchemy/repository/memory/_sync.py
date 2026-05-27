@@ -607,6 +607,38 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
             raise IntegrityError(msg)
         return result[0] if result else None
 
+    def get_or_none(
+        self,
+        *filters: Union[StatementFilter, ColumnElement[bool]],
+        auto_expunge: Optional[bool] = None,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Optional[ModelT]:
+        """Get a model instance or None.
+
+        .. deprecated:: 2.1
+            This method is an alias for :meth:`get_one_or_none`.
+
+        Returns:
+            The model instance, or ``None``.
+        """
+        return self.get_one_or_none(
+            *filters,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            with_for_update=with_for_update,
+            bind_group=bind_group,
+            **kwargs,
+        )
+
     def get_or_upsert(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],

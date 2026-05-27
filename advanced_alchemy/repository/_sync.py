@@ -252,6 +252,38 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         **kwargs: Any,
     ) -> Optional[ModelT]: ...
 
+    def get_or_none(
+        self,
+        *filters: Union[StatementFilter, ColumnElement[bool]],
+        auto_expunge: Optional[bool] = None,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Optional[ModelT]:
+        """Get a model instance or None.
+
+        .. deprecated:: 2.1
+            This method is an alias for :meth:`get_one_or_none`.
+
+        Returns:
+            The model instance, or ``None``.
+        """
+        return self.get_one_or_none(
+            *filters,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            with_for_update=with_for_update,
+            bind_group=bind_group,
+            **kwargs,
+        )
+
     def get_or_upsert(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
@@ -1860,7 +1892,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             bind_group=bind_group,
         )
 
-    def get_one(
+    def get_one_or_none(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
@@ -1872,8 +1904,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         with_for_update: ForUpdateParameter = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
-    ) -> ModelT:
-        """Get instance identified by ``kwargs``.
+    ) -> Union[ModelT, None]:
+        """Get instance identified by ``kwargs`` or None if not found.
 
         Args:
             *filters: Types for specific filtering operations.
@@ -1889,8 +1921,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
-            The retrieved instance.
-
+            The retrieved instance or None
         """
         self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
@@ -1905,15 +1936,48 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options["bind_group"] = bind_group
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            statement = self._get_base_stmt(
-                statement=statement,
-                loader_options=loader_options,
-                execution_options=execution_options,
-            )
-            statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
-            statement = self._filter_select_by_kwargs(statement, kwargs)
-            statement = self._apply_for_update_options(statement, with_for_update)
+            statement = self._apply_filters(*filters, statement=statement, **kwargs)
+            statement = self._apply_loader_options(load=load, statement=statement)
+            statement = statement.options(self._get_execution_options(execution_options))
+            if with_for_update:
+                statement = statement.with_for_update(with_for_update)
+            result = (self._execute(statement)).unique() if self._uniquify else (self._execute(statement))
+            instance = result.scalar_one_or_none()
+            if instance and auto_expunge is True:
+                self.session.expunge(instance)
+            return instance
+
+    def get_or_none(
+        self,
+        *filters: Union[StatementFilter, ColumnElement[bool]],
+        auto_expunge: Optional[bool] = None,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Optional[ModelT]:
+        """Get a model instance or None.
+
+        .. deprecated:: 2.1
+            This method is an alias for :meth:`get_one_or_none`.
+
+        Returns:
+            The model instance, or ``None``.
+        """
+        return self.get_one_or_none(
+            *filters,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            with_for_update=with_for_update,
+            bind_group=bind_group,
+            **kwargs,
+        )
             instance = (self._execute(statement, uniquify=loader_options_have_wildcard)).scalar_one_or_none()
             instance = self.check_not_found(instance)
             self._expunge(instance, auto_expunge=auto_expunge)
@@ -1963,16 +2027,48 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options["bind_group"] = bind_group
             execution_options = self._get_execution_options(execution_options)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            statement = self._get_base_stmt(
-                statement=statement,
-                loader_options=loader_options,
-                execution_options=execution_options,
-            )
-            statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
-            statement = self._filter_select_by_kwargs(statement, kwargs)
-            statement = self._apply_for_update_options(statement, with_for_update)
-            instance = cast(
+            statement = self._apply_filters(*filters, statement=statement, **kwargs)
+            statement = self._apply_loader_options(load=load, statement=statement)
+            statement = statement.options(self._get_execution_options(execution_options))
+            if with_for_update:
+                statement = statement.with_for_update(with_for_update)
+            result = (self._execute(statement)).unique() if self._uniquify else (self._execute(statement))
+            instance = result.scalar_one_or_none()
+            if instance and auto_expunge is True:
+                self.session.expunge(instance)
+            return instance
+
+    def get_or_none(
+        self,
+        *filters: Union[StatementFilter, ColumnElement[bool]],
+        auto_expunge: Optional[bool] = None,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Optional[ModelT]:
+        """Get a model instance or None.
+
+        .. deprecated:: 2.1
+            This method is an alias for :meth:`get_one_or_none`.
+
+        Returns:
+            The model instance, or ``None``.
+        """
+        return self.get_one_or_none(
+            *filters,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            with_for_update=with_for_update,
+            bind_group=bind_group,
+            **kwargs,
+        )
                 "Result[tuple[ModelT]]",
                 (self._execute(statement, uniquify=loader_options_have_wildcard)),
             ).scalar_one_or_none()

@@ -318,6 +318,25 @@ async def test_repo_get_one_or_none_method(seeded_test_session_async: "tuple[Asy
     assert author is None
 
 
+async def test_repo_get_or_none_method(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
+    """Test repository get_or_none method."""
+    session, models = seeded_test_session_async
+    author_repo = create_repository(session, models["author"])
+
+    # Get first author ID
+    authors = await maybe_async(author_repo.get_many())
+    first_author_id = authors[0].id
+
+    author = await maybe_async(author_repo.get_or_none(id=first_author_id))
+    assert author is not None
+    assert author.id == first_author_id
+
+    # Test with non-existent ID
+    non_existent_id = UUID("00000000-0000-0000-0000-000000000000") if hasattr(first_author_id, "hex") else 99999
+    author = await maybe_async(author_repo.get_or_none(id=non_existent_id))
+    assert author is None
+
+
 async def test_repo_create_method(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
     """Test repository create method."""
     session, models = seeded_test_session_async
