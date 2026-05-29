@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Any, Union, cast
 
 from litestar.di import Provide
 from litestar.dto import DTOData
-from litestar.params import Dependency
 from litestar.plugins import CLIPlugin, InitPluginProtocol
 from sqlalchemy.ext.asyncio import AsyncSession, async_scoped_session
 from sqlalchemy.orm import Session, scoped_session
@@ -57,7 +56,6 @@ signature_namespace_values: dict[str, Any] = {
     "FilterTypes": FilterTypes,
     "OffsetPagination": OffsetPagination,
     "ExistsFilter": ExistsFilter,
-    "Dependency": Dependency,
     "DTOData": DTOData,
     "Sequence": Sequence,
     "ModelT": ModelT,

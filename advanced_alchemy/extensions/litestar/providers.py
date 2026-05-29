@@ -22,8 +22,8 @@ from typing import (
 )
 from uuid import UUID
 
-from litestar.di import Provide
-from litestar.params import Dependency, FromQuery, QueryParameter
+from litestar.di import NamedDependency, Provide
+from litestar.params import FromQuery, QueryParameter, SkipValidation
 
 from advanced_alchemy.filters import (
     BeforeAfter,
@@ -170,7 +170,7 @@ def create_service_provider(
     session_dependency_key = config.session_dependency_key if config else "db_session"
 
     if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
-        session_type_annotation = "Optional[AsyncSession]"
+        async_session_type_annotation = NamedDependency[SkipValidation[Optional["AsyncSession"]]]
         return_type_annotation = AsyncGenerator[service_class, None]  # type: ignore[valid-type]
 
         async def provide_service_async(*args: Any, **kwargs: Any) -> "AsyncGenerator[AsyncServiceT_co, None]":
@@ -190,8 +190,7 @@ def create_service_provider(
         session_param = inspect.Parameter(
             name=session_dependency_key,
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            default=Dependency(skip_validation=True),
-            annotation=session_type_annotation,
+            annotation=async_session_type_annotation,
         )
 
         provider_signature = inspect.Signature(
@@ -200,11 +199,12 @@ def create_service_provider(
         )
         provide_service_async.__signature__ = provider_signature  # type: ignore[attr-defined]
         provide_service_async.__annotations__ = {
-            session_dependency_key: session_type_annotation,
+            session_dependency_key: async_session_type_annotation,
             "return": return_type_annotation,
         }
         return provide_service_async
-    session_type_annotation = "Optional[Session]"
+
+    sync_session_type_annotation = NamedDependency[SkipValidation[Optional["Session"]]]
     return_type_annotation = Generator[service_class, None, None]  # type: ignore[misc,assignment,valid-type]
 
     def provide_service_sync(*args: Any, **kwargs: Any) -> "Generator[SyncServiceT_co, None, None]":
@@ -224,8 +224,7 @@ def create_service_provider(
     session_param = inspect.Parameter(
         name=session_dependency_key,
         kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        default=Dependency(skip_validation=True),
-        annotation=session_type_annotation,
+        annotation=sync_session_type_annotation,
     )
 
     provider_signature = inspect.Signature(
@@ -234,7 +233,7 @@ def create_service_provider(
     )
     provide_service_sync.__signature__ = provider_signature  # type: ignore[attr-defined]
     provide_service_sync.__annotations__ = {
-        session_dependency_key: session_type_annotation,
+        session_dependency_key: sync_session_type_annotation,
         "return": return_type_annotation,
     }
     return provide_service_sync
@@ -574,8 +573,7 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
         parameters["id_filter"] = inspect.Parameter(
             name="id_filter",
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            default=Dependency(skip_validation=True),
-            annotation=CollectionFilter[cls],  # type: ignore[valid-type]
+            annotation=NamedDependency[SkipValidation[CollectionFilter[cls]]],  # type: ignore[valid-type]
         )
         annotations["id_filter"] = CollectionFilter[cls]  # type: ignore[valid-type]
 
@@ -583,8 +581,7 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
         parameters["created_filter"] = inspect.Parameter(
             name="created_filter",
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            default=Dependency(skip_validation=True),
-            annotation=BeforeAfter,
+            annotation=NamedDependency[SkipValidation[BeforeAfter]],
         )
         annotations["created_filter"] = BeforeAfter
 
@@ -592,8 +589,7 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
         parameters["updated_filter"] = inspect.Parameter(
             name="updated_filter",
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            default=Dependency(skip_validation=True),
-            annotation=BeforeAfter,
+            annotation=NamedDependency[SkipValidation[BeforeAfter]],
         )
         annotations["updated_filter"] = BeforeAfter
 
@@ -601,8 +597,7 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
         parameters["search_filter"] = inspect.Parameter(
             name="search_filter",
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            default=Dependency(skip_validation=True),
-            annotation=SearchFilter,
+            annotation=NamedDependency[SkipValidation[SearchFilter]],
         )
         annotations["search_filter"] = SearchFilter
 
@@ -610,8 +605,7 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
         parameters["limit_offset_filter"] = inspect.Parameter(
             name="limit_offset_filter",
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            default=Dependency(skip_validation=True),
-            annotation=LimitOffset,
+            annotation=NamedDependency[SkipValidation[LimitOffset]],
         )
         annotations["limit_offset_filter"] = LimitOffset
 
@@ -619,8 +613,7 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
         parameters["order_by_filter"] = inspect.Parameter(
             name="order_by_filter",
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            default=Dependency(skip_validation=True),
-            annotation=OrderBy,
+            annotation=NamedDependency[SkipValidation[OrderBy,]],
         )
         annotations["order_by_filter"] = OrderBy
 
@@ -628,25 +621,24 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
     if not_in_fields := config.get("not_in_fields"):
         for field_def in not_in_fields:
             field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+            annotation = NamedDependency[SkipValidation[NotInCollectionFilter[field_def.type_hint]]]  # type: ignore[name-defined]
             parameters[f"{field_def.name}_not_in_filter"] = inspect.Parameter(
                 name=f"{field_def.name}_not_in_filter",
                 kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                default=Dependency(skip_validation=True),
-                annotation=NotInCollectionFilter[field_def.type_hint],  # type: ignore
+                annotation=annotation,
             )
-            annotations[f"{field_def.name}_not_in_filter"] = NotInCollectionFilter[field_def.type_hint]  # type: ignore
+            annotations[f"{field_def.name}_not_in_filter"] = annotation
 
     # Add parameters for in filters
     if in_fields := config.get("in_fields"):
         for field_def in in_fields:
             field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+            annotation = CollectionFilter[field_def.type_hint]  # type: ignore
+
             parameters[f"{field_def.name}_in_filter"] = inspect.Parameter(
-                name=f"{field_def.name}_in_filter",
-                kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                default=Dependency(skip_validation=True),
-                annotation=CollectionFilter[field_def.type_hint],  # type: ignore
+                name=f"{field_def.name}_in_filter", kind=inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=annotation
             )
-            annotations[f"{field_def.name}_in_filter"] = CollectionFilter[field_def.type_hint]  # type: ignore
+            annotations[f"{field_def.name}_in_filter"] = annotation
 
     def provide_filters(**kwargs: FilterTypes) -> list[FilterTypes]:
         """Provide filter dependencies based on configuration.
