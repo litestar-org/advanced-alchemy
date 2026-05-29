@@ -22,6 +22,7 @@ from advanced_alchemy.types.identity import BigIntIdentity
 from advanced_alchemy.types.json import ORA_JSONB, JsonB
 from advanced_alchemy.types.mutables import MutableList
 from advanced_alchemy.types.password_hash.base import HashedPassword, PasswordHash
+from advanced_alchemy.types.vector import Vector
 
 __all__ = (
     "GUID",
@@ -44,6 +45,7 @@ __all__ = (
     "StorageBackendT",
     "StorageRegistry",
     "StoredObject",
+    "Vector",
     "encrypted_string",
     "file_object",
     "password_hash",

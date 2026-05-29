@@ -26,7 +26,7 @@ classifiers = [
   "Topic :: Database :: Database Engines/Servers",
 ]
 dependencies = [
-  "sqlalchemy>=2.0.20",
+  "sqlalchemy>=2.0.41",
   "alembic>=1.12.0",
   "typing-extensions>=4.0.0",
   "greenlet",
@@ -470,6 +470,8 @@ module = [
   "fsspec.*",
   "argon2",
   "argon2.*",
+  "pgvector",
+  "pgvector.*",
 ]
 
 [[tool.mypy.overrides]]
