@@ -170,7 +170,7 @@ def create_service_provider(
     session_dependency_key = config.session_dependency_key if config else "db_session"
 
     if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
-        session_type_annotation = NamedDependency[SkipValidation[Optional["AsyncSession"]]]
+        async_session_type_annotation = NamedDependency[SkipValidation[Optional["AsyncSession"]]]
         return_type_annotation = AsyncGenerator[service_class, None]  # type: ignore[valid-type]
 
         async def provide_service_async(*args: Any, **kwargs: Any) -> "AsyncGenerator[AsyncServiceT_co, None]":
@@ -190,7 +190,7 @@ def create_service_provider(
         session_param = inspect.Parameter(
             name=session_dependency_key,
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            annotation=session_type_annotation,
+            annotation=async_session_type_annotation,
         )
 
         provider_signature = inspect.Signature(
@@ -199,12 +199,12 @@ def create_service_provider(
         )
         provide_service_async.__signature__ = provider_signature  # type: ignore[attr-defined]
         provide_service_async.__annotations__ = {
-            session_dependency_key: session_type_annotation,
+            session_dependency_key: async_session_type_annotation,
             "return": return_type_annotation,
         }
         return provide_service_async
 
-    session_type_annotation = NamedDependency[SkipValidation[Optional["Session"]]]
+    sync_session_type_annotation = NamedDependency[SkipValidation[Optional["Session"]]]
     return_type_annotation = Generator[service_class, None, None]  # type: ignore[misc,assignment,valid-type]
 
     def provide_service_sync(*args: Any, **kwargs: Any) -> "Generator[SyncServiceT_co, None, None]":
@@ -224,7 +224,7 @@ def create_service_provider(
     session_param = inspect.Parameter(
         name=session_dependency_key,
         kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        annotation=session_type_annotation,
+        annotation=sync_session_type_annotation,
     )
 
     provider_signature = inspect.Signature(
@@ -233,7 +233,7 @@ def create_service_provider(
     )
     provide_service_sync.__signature__ = provider_signature  # type: ignore[attr-defined]
     provide_service_sync.__annotations__ = {
-        session_dependency_key: session_type_annotation,
+        session_dependency_key: sync_session_type_annotation,
         "return": return_type_annotation,
     }
     return provide_service_sync
@@ -621,13 +621,13 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
     if not_in_fields := config.get("not_in_fields"):
         for field_def in not_in_fields:
             field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
-            annotation = NamedDependency[SkipValidation[NotInCollectionFilter[field_def.type_hint]]]
+            annotation = NamedDependency[SkipValidation[NotInCollectionFilter[field_def.type_hint]]]  # type: ignore[name-defined]
             parameters[f"{field_def.name}_not_in_filter"] = inspect.Parameter(
                 name=f"{field_def.name}_not_in_filter",
                 kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                annotation=annotation,  # type: ignore
+                annotation=annotation,
             )
-            annotations[f"{field_def.name}_not_in_filter"] = annotation  # type: ignore
+            annotations[f"{field_def.name}_not_in_filter"] = annotation
 
     # Add parameters for in filters
     if in_fields := config.get("in_fields"):
@@ -638,7 +638,7 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
             parameters[f"{field_def.name}_in_filter"] = inspect.Parameter(
                 name=f"{field_def.name}_in_filter", kind=inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=annotation
             )
-            annotations[f"{field_def.name}_in_filter"] = annotation  # type: ignore
+            annotations[f"{field_def.name}_in_filter"] = annotation
 
     def provide_filters(**kwargs: FilterTypes) -> list[FilterTypes]:
         """Provide filter dependencies based on configuration.
