@@ -139,7 +139,7 @@ lint = [
   "types-cryptography",
   "types-passlib",
 ]
-litestar = ["litestar[cli]>=2.22.0"]
+litestar = ["litestar[cli]>=2.23.0"]
 mssql = ["aioodbc>=0.5.0", "pyodbc>=5.2.0"]
 mysql = ["asyncmy>=0.2.9"]
 oracle = ["oracledb>=2.4.1"]
