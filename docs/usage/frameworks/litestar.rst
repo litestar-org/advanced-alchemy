@@ -259,8 +259,6 @@ choice filters:
 
     from enum import Enum
 
-    from advanced_alchemy.extensions.litestar.providers import ChoiceField, FieldNameType
-
     class Status(str, Enum):
         DRAFT = "draft"
         PUBLISHED = "published"
@@ -271,16 +269,16 @@ choice filters:
         filters={
             "boolean_fields": ["active"],
             "choice_fields": [
-                ChoiceField("visibility", ("public", "private")),
-                FieldNameType("status", Status),
+                ("visibility", ("public", "private")),
+                ("status", Status),
             ],
         },
     )
 
-This emits ``active``, ``visibility``, and ``status`` query parameters in OpenAPI. ``ChoiceField`` exposes
-explicit enum values in the generated schema, while ``FieldNameType`` can use an enum type such as
-``Status``. When supplied, those parameters are aggregated into ``BooleanFilter`` and ``ChoicesFilter``
-instances.
+This emits ``active``, ``visibility``, and ``status`` query parameters in OpenAPI. ``ChoiceField`` or
+``(field_name, choices)`` exposes explicit enum values in the generated schema, while ``FieldNameType`` or
+``(field_name, type_hint)`` can use an enum type such as ``Status``. When supplied, those parameters are
+aggregated into ``BooleanFilter`` and ``ChoicesFilter`` instances.
 
 Application Configuration
 -------------------------

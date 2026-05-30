@@ -25,7 +25,6 @@ from advanced_alchemy.extensions.litestar.providers import (
     ChoiceField,
     DependencyCache,
     DependencyDefaults,
-    FieldNameType,
     FilterConfig,
     SingletonMeta,
     _create_filter_aggregate_function,  # pyright: ignore[reportPrivateUsage]
@@ -615,9 +614,9 @@ def test_choice_filter_openapi_schema_supports_explicit_and_enum_choices() -> No
     filter_dependencies = create_filter_dependencies(
         {
             "choice_fields": [
-                ChoiceField("visibility", ("public", "private")),
-                FieldNameType("status", StatusChoice),
-                FieldNameType("priority", PriorityChoice),
+                ("visibility", ("public", "private")),
+                ("status", StatusChoice),
+                ("priority", PriorityChoice),
             ],
         }
     )

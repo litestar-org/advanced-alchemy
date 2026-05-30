@@ -127,8 +127,6 @@ Advanced Alchemy can also generate a combined filter dependency with OpenAPI que
     from enum import Enum
     from uuid import UUID
 
-    from advanced_alchemy.extensions.fastapi.providers import ChoiceField, FieldNameType
-
     class Status(str, Enum):
         DRAFT = "draft"
         PUBLISHED = "published"
@@ -143,8 +141,8 @@ Advanced Alchemy can also generate a combined filter dependency with OpenAPI que
                     "search": "name",
                     "boolean_fields": ["active"],
                     "choice_fields": [
-                        ChoiceField("visibility", ("public", "private")),
-                        FieldNameType("status", Status),
+                        ("visibility", ("public", "private")),
+                        ("status", Status),
                     ],
                 }
             )
@@ -153,8 +151,9 @@ Advanced Alchemy can also generate a combined filter dependency with OpenAPI que
 
 ``boolean_fields`` emits a field-name query parameter such as ``active`` and creates a ``BooleanFilter``.
 ``choice_fields`` emits repeated query parameters such as ``visibility=public&status=published`` and creates
-``ChoicesFilter`` instances. Use ``ChoiceField`` when the generated OpenAPI schema should expose explicit
-allowed values, or ``FieldNameType`` with an enum type when the allowed values already live in an enum.
+``ChoicesFilter`` instances. Use ``ChoiceField`` or ``(field_name, choices)`` when the generated OpenAPI
+schema should expose explicit allowed values, or ``FieldNameType`` / ``(field_name, type_hint)`` when the
+allowed values already live in an enum.
 
 The session providers accept an optional bind key when you configure multiple database connections:
 

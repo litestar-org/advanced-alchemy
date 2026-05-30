@@ -414,9 +414,9 @@ def test_choice_filter_openapi_schema_supports_explicit_and_enum_choices() -> No
     deps = provide_filters(
         {
             "choice_fields": [
-                ChoiceField("visibility", ("public", "private")),
-                FieldNameType("status", StatusChoice),
-                FieldNameType("priority", PriorityChoice),
+                ("visibility", ("public", "private")),
+                ("status", StatusChoice),
+                ("priority", PriorityChoice),
             ],
         }
     )
