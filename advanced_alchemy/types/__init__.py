@@ -1,6 +1,7 @@
 """SQLAlchemy custom types for use with the ORM."""
 
 from advanced_alchemy.types import encrypted_string, file_object, password_hash
+from advanced_alchemy.types.boolean import Bool
 from advanced_alchemy.types.datetime import DateTimeUTC
 from advanced_alchemy.types.encrypted_string import (
     EncryptedString,
@@ -30,6 +31,7 @@ __all__ = (
     "ORA_JSONB",
     "UUID_UTILS_INSTALLED",
     "BigIntIdentity",
+    "Bool",
     "DateTimeUTC",
     "EncryptedString",
     "EncryptedText",

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 import sqlalchemy as sa
 from alembic import op
-from advanced_alchemy.types import EncryptedString, EncryptedText, GUID, JsonB, ORA_JSONB, DateTimeUTC, StoredObject, PasswordHash, FernetBackend
+from advanced_alchemy.types import Bool, EncryptedString, EncryptedText, GUID, JsonB, ORA_JSONB, DateTimeUTC, StoredObject, PasswordHash, FernetBackend
 from advanced_alchemy.types.encrypted_string import PGCryptoBackend
 from sqlalchemy import Text  # noqa: F401
 ${imports if imports else ""}
@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 __all__ = ["downgrade", "upgrade", "schema_upgrades", "schema_downgrades", "data_upgrades", "data_downgrades"]
 
 sa.GUID = GUID
+sa.Bool = Bool
 sa.DateTimeUTC = DateTimeUTC
 sa.JsonB = JsonB
 sa.ORA_JSONB = ORA_JSONB
