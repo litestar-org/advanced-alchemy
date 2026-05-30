@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sybil import Sybil
-from sybil.parsers.rest import PythonCodeBlockParser
+from sybil.parsers.rest import PythonCodeBlockParser, SkipParser
 
 EXECUTABLE_DOCS = (
     "usage/modeling/basics.rst",
@@ -16,6 +16,9 @@ EXECUTABLE_DOCS = (
     "usage/repositories/filtering.rst",
     "usage/database_seeding.rst",
     "usage/services.rst",
+    # litestar.rst is executable only for the session-integration blocks; all
+    # other code blocks are wrapped in ``.. skip: start``/``.. skip: end``.
+    "usage/frameworks/litestar.rst",
 )
 
 NON_EXECUTABLE_DOCS = (
@@ -23,7 +26,6 @@ NON_EXECUTABLE_DOCS = (
     "usage/cli.rst",
     "usage/frameworks/fastapi.rst",
     "usage/frameworks/flask.rst",
-    "usage/frameworks/litestar.rst",
     "usage/frameworks/sanic.rst",
     "usage/frameworks/starlette.rst",
     "usage/routing.rst",
@@ -47,7 +49,7 @@ async def db_session_fixture(engine: AsyncEngine) -> AsyncGenerator[AsyncSession
 
 
 pytest_collect_file = Sybil(
-    parsers=[PythonCodeBlockParser()],
+    parsers=[PythonCodeBlockParser(), SkipParser()],
     patterns=EXECUTABLE_DOCS,
     fixtures=["db_session", "engine"],
 ).pytest()

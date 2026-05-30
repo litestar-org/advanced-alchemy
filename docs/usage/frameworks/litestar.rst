@@ -10,6 +10,12 @@ Advanced Alchemy provides first-class integration with Litestar through its SQLA
 
 This guide demonstrates building a complete CRUD API for a book management system.
 
+.. The code blocks in this guide are illustrative and share context across sections,
+   so they are not executed individually. Only the self-contained session-integration
+   examples below are run as doctests; everything else is inside a Sybil skip region.
+
+.. skip: start
+
 Key Features
 ------------
 
@@ -523,6 +529,8 @@ The SQLAlchemy session backend provides:
 - **UUID-based sessions**: Uses UUIDv7 for session identifiers
 - **Timezone-aware timestamps**: Proper handling of session expiration times
 
+.. skip: end
+
 Store-Based Integration (Recommended)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -606,6 +614,8 @@ Use a dedicated session backend and wire it into ``SessionMiddleware`` directly.
         middleware=[partial(SessionMiddleware, backend=session_backend)],
     )
 
+.. skip: start
+
 Session Model Configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -623,7 +633,6 @@ The session model must inherit from ``SessionModelMixin``, which provides the re
         # - session_id: String(255) session identifier
         # - data: LargeBinary session data
         # - expires_at: DateTime expiration timestamp
-        # - created_at, updated_at: Audit timestamps
 
 The ``SessionModelMixin`` automatically creates:
 
@@ -641,6 +650,7 @@ You can customize table arguments while keeping the mixin's constraints:
 .. code-block:: python
 
     from sqlalchemy import Index
+    from sqlalchemy.orm import declared_attr
     from advanced_alchemy.extensions.litestar.session import SessionModelMixin
 
     class UserSession(SessionModelMixin):
@@ -649,11 +659,9 @@ You can customize table arguments while keeping the mixin's constraints:
         @declared_attr.directive
         @classmethod
         def __table_args__(cls):
-            # Get the mixin's default constraints
-            base_args = super().__table_args__()
-            # Add your custom indexes/constraints
-            return base_args + (
-                Index("ix_user_sessions_custom", cls.session_id, cls.created_at),
+            # Get the mixin's default constraints (a tuple) and append your own
+            return super().__table_args__ + (
+                Index("ix_user_sessions_custom", cls.session_id, cls.expires_at),
             )
 
 **Sync vs Async Configuration**
@@ -744,14 +752,12 @@ The session table created by ``SessionModelMixin`` has the following structure:
         session_id VARCHAR(255) NOT NULL,
         data BYTEA NOT NULL,
         expires_at TIMESTAMP WITH TIME ZONE,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        sa_orm_sentinel INTEGER,
 
         CONSTRAINT uq_user_sessions_session_id UNIQUE (session_id)
     );
 
     CREATE INDEX ix_user_sessions_expires_at ON user_sessions (expires_at);
-    CREATE INDEX ix_user_sessions_session_id_unique ON user_sessions (session_id);
 
 **Session ID Handling**
 
@@ -771,7 +777,7 @@ Configure appropriate session timeouts:
     # Sessions are automatically renewed on each request
     session_config = ServerSideSessionConfig(
         max_age=1800,  # 30 minutes
-        https_only=True,  # Require HTTPS in production
+        secure=True,  # Require HTTPS in production
         samesite="strict",  # CSRF protection
     )
 
@@ -793,13 +799,19 @@ The mixin automatically creates optimal indexes, but you can add application-spe
 
 .. code-block:: python
 
+    from sqlalchemy import Index
+    from sqlalchemy.orm import declared_attr
+
     class UserSession(SessionModelMixin):
         __tablename__ = "user_sessions"
 
         # Add indexes for common query patterns
-        __table_args__ = SessionModelMixin.__table_args__ + (
-            Index("ix_user_sessions_created_user", "created_at", "session_id"),
-        )
+        @declared_attr.directive
+        @classmethod
+        def __table_args__(cls):
+            return super().__table_args__ + (
+                Index("ix_user_sessions_session_expires", cls.session_id, cls.expires_at),
+            )
 
 **Connection Pooling**
 
@@ -1356,3 +1368,5 @@ Alternative Patterns
     - Want to avoid the service layer abstraction
     - Have complex repository logic that doesn't fit the service pattern
     - Are building a smaller application with simpler data access patterns
+
+.. skip: end
