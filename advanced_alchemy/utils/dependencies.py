@@ -6,10 +6,10 @@ These primitives are framework-agnostic and reused by framework
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, NamedTuple, Optional, Union, cast
+from typing import Any, Literal, NamedTuple, Optional, Union, cast
 from uuid import UUID
 
-from typing_extensions import Literal, NotRequired, TypeAlias, TypedDict
+from typing_extensions import NotRequired, TypeAlias, TypedDict
 
 from advanced_alchemy.utils.singleton import SingletonMeta
 
