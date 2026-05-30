@@ -23,6 +23,7 @@ from advanced_alchemy.typing import (
     ORJSON_INSTALLED,
     PYDANTIC_INSTALLED,
 )
+from advanced_alchemy.utils import serialization
 from advanced_alchemy.utils.dataclass import Empty
 from advanced_alchemy.utils.serialization import (
     DEFAULT_TYPE_ENCODERS,
@@ -172,6 +173,15 @@ def test_schema_dump_config_pydantic_missing_sentinel_is_excluded_by_default() -
     assert result == {"name": "Ada"}
 
 
+def test_pydantic_missing_sentinel_is_unavailable_when_pydantic_support_is_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pydantic MISSING lookup should be skipped when Pydantic support is unavailable."""
+    monkeypatch.setattr("advanced_alchemy.utils.serialization.PYDANTIC_INSTALLED", False)
+
+    assert serialization._get_pydantic_missing_sentinel() is None
+
+
 @pytest.mark.skipif(not MSGSPEC_INSTALLED, reason="msgspec not installed")
 def test_schema_dump_config_msgspec_exclude_sentinels() -> None:
     """SchemaDumpConfig should control msgspec UNSET sentinel filtering."""
@@ -192,6 +202,18 @@ def test_schema_dump_config_msgspec_exclude_sentinels() -> None:
     }
     assert schema_dump(data, config=SchemaDumpConfig(exclude_defaults=True, exclude_sentinels=False)) == {}
     assert schema_dump(data, config=SchemaDumpConfig(exclude_none=True)) == {"is_admin": False}
+
+
+def test_msgspec_struct_dump_skips_declared_fields_without_values() -> None:
+    """msgspec-style declared fields without values should be skipped."""
+
+    class UpdateStruct:
+        __struct_fields__ = ("name",)
+        __struct_defaults__ = ()
+
+    data: Any = UpdateStruct()
+
+    assert serialization._dump_msgspec_struct(data, SchemaDumpConfig()) == {}
 
 
 @pytest.mark.skipif(not MSGSPEC_INSTALLED, reason="msgspec not installed")
@@ -226,12 +248,13 @@ def test_schema_dump_config_pydantic_can_include_missing_sentinel() -> None:
     missing_module = pytest.importorskip("pydantic.experimental.missing_sentinel")
 
     class UpdateSchema(BaseModel):
+        name: str = "Ada"
         marker: Any = missing_module.MISSING
 
     assert schema_dump(
         UpdateSchema(),
         config=SchemaDumpConfig(exclude_unset=False, exclude_sentinels=False),
-    ) == {"marker": missing_module.MISSING}
+    ) == {"name": "Ada", "marker": missing_module.MISSING}
 
 
 def test_schema_dump_config_dataclass_exclude_sentinels() -> None:
@@ -258,6 +281,25 @@ def test_schema_dump_config_dataclass_exclude_sentinels() -> None:
     assert schema_dump(data, config=SchemaDumpConfig(exclude_none=True)) == {"name": "Ada", "is_admin": False}
 
 
+def test_schema_dump_config_dataclass_nested_instances() -> None:
+    """Nested dataclass instances should be dumped recursively."""
+    from dataclasses import dataclass
+
+    @dataclass
+    class ChildDataclass:
+        name: str
+
+    @dataclass
+    class ParentDataclass:
+        child: ChildDataclass
+        is_admin: bool = False
+
+    assert schema_dump(ParentDataclass(child=ChildDataclass(name="Ada"))) == {
+        "child": {"name": "Ada"},
+        "is_admin": False,
+    }
+
+
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
 def test_schema_dump_config_attrs_exclude_defaults_and_none() -> None:
     """SchemaDumpConfig should apply default and None filtering to attrs instances."""
@@ -273,6 +315,62 @@ def test_schema_dump_config_attrs_exclude_defaults_and_none() -> None:
 
     assert schema_dump(data, config=SchemaDumpConfig(exclude_defaults=True)) == {"name": "Ada"}
     assert schema_dump(data, config=SchemaDumpConfig(exclude_none=True)) == {"name": "Ada", "is_admin": False}
+
+
+@pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
+def test_schema_dump_config_attrs_exclude_sentinels() -> None:
+    """SchemaDumpConfig should filter attrs NOTHING sentinel values."""
+    from attrs import NOTHING, define
+
+    @define
+    class UpdateAttrs:
+        name: str
+        marker: Any
+
+    data = UpdateAttrs(name="Ada", marker=NOTHING)
+
+    assert schema_dump(data) == {"name": "Ada"}
+    assert schema_dump(data, config=SchemaDumpConfig(exclude_sentinels=False, exclude_none=True)) == {
+        "name": "Ada",
+        "marker": NOTHING,
+    }
+
+
+@pytest.mark.skipif(
+    not ATTRS_INSTALLED or not serialization.CATTRS_INSTALLED,
+    reason="attrs and cattrs are not installed",
+)
+def test_schema_dump_config_attrs_without_filtering_uses_cattrs() -> None:
+    """attrs instances without active filters should use cattrs when it is available."""
+    from attrs import define
+
+    @define
+    class UpdateAttrs:
+        name: str
+        is_admin: bool = False
+
+    assert schema_dump(
+        UpdateAttrs(name="Ada"),
+        config=SchemaDumpConfig(exclude_sentinels=False),
+    ) == {"name": "Ada", "is_admin": False}
+
+
+@pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
+def test_schema_dump_config_attrs_without_cattrs_uses_attrs_asdict(monkeypatch: pytest.MonkeyPatch) -> None:
+    """attrs instances should still dump when cattrs is unavailable."""
+    from attrs import define
+
+    @define
+    class UpdateAttrs:
+        name: str
+        is_admin: bool = False
+
+    monkeypatch.setattr("advanced_alchemy.utils.serialization.CATTRS_INSTALLED", False)
+
+    assert schema_dump(
+        UpdateAttrs(name="Ada"),
+        config=SchemaDumpConfig(exclude_sentinels=False),
+    ) == {"name": "Ada", "is_admin": False}
 
 
 def test_schema_dump_skips_pydantic_branch_when_pydantic_not_installed(monkeypatch: pytest.MonkeyPatch) -> None:
