@@ -38,13 +38,36 @@ __all__ = ("AdvancedAlchemy",)
 
 def assign_cli_group(app: "FastAPI") -> None:  # pragma: no cover
     try:
+        import typer
+        from click import ClickException
+        from click.exceptions import Exit as ClickExit
         from fastapi_cli.cli import app as fastapi_cli_app  # pyright: ignore[reportUnknownVariableType]
-        from typer.main import get_group
     except ImportError:
         print("FastAPI CLI is not installed.  Skipping CLI registration.")  # noqa: T201
         return
-    click_app = get_group(fastapi_cli_app)  # pyright: ignore[reportUnknownArgumentType]
-    click_app.add_command(register_database_commands(app))
+
+    def run_database_command(ctx: typer.Context) -> None:
+        database_group = register_database_commands(app)
+        args = list(ctx.args) or ["--help"]
+        try:
+            database_group.main(
+                args=args,
+                prog_name=ctx.info_name or database_group.name,
+                standalone_mode=False,
+            )
+        except ClickExit as e:
+            raise typer.Exit(e.exit_code) from e
+        except ClickException as e:
+            e.show()
+            raise typer.Exit(e.exit_code) from e
+
+    for name in ("database", "db"):
+        fastapi_cli_app.command(
+            name=name,
+            help="Manage SQLAlchemy database components.",
+            context_settings={"allow_extra_args": True, "ignore_unknown_options": True, "help_option_names": []},
+            add_help_option=False,
+        )(run_database_command)
 
 
 class AdvancedAlchemy(StarletteAdvancedAlchemy):
