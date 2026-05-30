@@ -1337,6 +1337,8 @@ class SQLAlchemyAsyncRepositoryService(
             item_ids: List of identifiers of instances to be deleted.
                 For single primary key models, pass a list of scalar values.
                 For composite primary key models, pass a list of tuples or dicts.
+                Model instances may also be passed in place of identifiers, and the list
+                may mix instances with raw identifier values.
             auto_expunge: Remove object from session before returning.
             auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
@@ -1374,10 +1376,24 @@ class SQLAlchemyAsyncRepositoryService(
             ...     ]
             ... )
         """
+        resolved_item_ids: list[PrimaryKeyType] = []
+        for item in item_ids:
+            if isinstance(item, self.model_type):
+                if self.repository.has_composite_pk:
+                    resolved_item_ids.append(self.repository.get_primary_key_value(item))
+                else:
+                    resolved_item_ids.append(
+                        cast(
+                            "PrimaryKeyType",
+                            self.repository.get_id_attribute_value(item=item, id_attribute=id_attribute),
+                        )
+                    )
+            else:
+                resolved_item_ids.append(item)
         return cast(
             "Sequence[ModelT]",
             await self.repository.delete_many(
-                item_ids=item_ids,
+                item_ids=resolved_item_ids,
                 auto_commit=auto_commit,
                 auto_expunge=auto_expunge,
                 id_attribute=id_attribute,

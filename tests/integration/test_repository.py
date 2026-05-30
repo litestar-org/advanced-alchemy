@@ -562,6 +562,41 @@ async def test_service_delete_method(seeded_test_session_async: "tuple[AsyncSess
     assert len(remaining_authors) == 1
 
 
+async def test_service_delete_many_accepts_instances(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test service delete_many accepts model instances as well as raw primary keys."""
+    author_service = get_service_from_session(seeded_test_session_async, "author")
+
+    authors = await maybe_async(author_service.get_many())
+    assert len(authors) == 2
+
+    deleted = await maybe_async(author_service.delete_many(list(authors)))
+    assert len(deleted) == 2
+    assert {a.id for a in deleted} == {a.id for a in authors}
+
+    remaining = await maybe_async(author_service.get_many())
+    assert len(remaining) == 0
+
+
+async def test_service_delete_many_accepts_mixed_instances_and_ids(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test service delete_many accepts a mixed list of model instances and raw primary keys."""
+    author_service = get_service_from_session(seeded_test_session_async, "author")
+
+    authors = await maybe_async(author_service.get_many())
+    assert len(authors) == 2
+
+    mixed = [authors[0], authors[1].id]
+    deleted = await maybe_async(author_service.delete_many(mixed))
+    assert len(deleted) == 2
+    assert {a.id for a in deleted} == {a.id for a in authors}
+
+    remaining = await maybe_async(author_service.get_many())
+    assert len(remaining) == 0
+
+
 # Additional filter tests
 async def test_repo_filter_before_after(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
     """Test repository with BeforeAfter filter."""
