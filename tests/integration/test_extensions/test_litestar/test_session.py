@@ -9,6 +9,7 @@ import datetime
 import uuid
 from collections.abc import AsyncGenerator, Generator
 from functools import partial
+from pathlib import Path
 from typing import Optional
 from unittest.mock import Mock
 
@@ -22,6 +23,7 @@ from sqlalchemy import Engine, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Session
 
+from advanced_alchemy.extensions.litestar import SQLAlchemyPlugin
 from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.session import (
@@ -29,6 +31,7 @@ from advanced_alchemy.extensions.litestar.session import (
     SQLAlchemyAsyncSessionBackend,
     SQLAlchemySyncSessionBackend,
 )
+from advanced_alchemy.extensions.litestar.store import SQLAlchemyStore, StoreModelMixin
 from tests.integration.helpers import cleanup_database, cleanup_database_async
 
 pytestmark = [
@@ -562,3 +565,89 @@ async def test_sync_session_middleware_integration(
         response = await client.get("/get")
         assert response.status_code == 200
         assert response.json() == {"counter": 2}
+
+
+async def test_docs_store_based_session_pattern(tmp_path: Path) -> None:
+    """The documented store-based pattern persists session data to the database.
+
+    Guards the "Store-Based Integration (Recommended)" example in
+    ``docs/usage/frameworks/litestar.rst``: register a ``SQLAlchemyStore`` under
+    the ``"sessions"`` store name and use ``session_config.middleware``.
+    """
+
+    class DocsStoreSession(StoreModelMixin):
+        __tablename__ = "docs_store_based_sessions"
+
+    config = SQLAlchemyAsyncConfig(connection_string=f"sqlite+aiosqlite:///{tmp_path / 'store.db'}")
+    async with config.get_engine().begin() as conn:
+        await conn.run_sync(DocsStoreSession.__table__.create)
+
+    session_config = ServerSideSessionConfig(max_age=3600)
+    store = SQLAlchemyStore(config, model=DocsStoreSession, namespace="docs-app")
+
+    @post("/login")
+    async def login(request: Request) -> "dict[str, str]":
+        request.set_session({"username": "alice"})
+        return {"status": "ok"}
+
+    @get("/")
+    async def home(request: Request) -> "dict[str, Optional[str]]":
+        return {"username": request.session.get("username")}
+
+    app = Litestar(
+        route_handlers=[login, home],
+        plugins=[SQLAlchemyPlugin(config=config)],
+        middleware=[session_config.middleware],
+        stores={"sessions": store},
+    )
+
+    async with AsyncTestClient(app=app) as client:
+        assert (await client.post("/login")).status_code == 201
+        assert (await client.get("/")).json() == {"username": "alice"}
+
+    async with config.get_session() as db_session:
+        rows = (await db_session.scalars(select(DocsStoreSession))).all()
+    assert len(rows) == 1, "store-based session was not persisted to the database"
+
+
+async def test_docs_backend_based_session_pattern(tmp_path: Path) -> None:
+    """The documented backend-based pattern persists session data to the database.
+
+    Guards the "Backend-Based Integration" example in
+    ``docs/usage/frameworks/litestar.rst``: wire the backend with
+    ``partial(SessionMiddleware, backend=...)`` instead of
+    ``session_config.middleware``.
+    """
+
+    class DocsBackendSession(SessionModelMixin):
+        __tablename__ = "docs_backend_based_sessions"
+
+    config = SQLAlchemyAsyncConfig(connection_string=f"sqlite+aiosqlite:///{tmp_path / 'backend.db'}")
+    async with config.get_engine().begin() as conn:
+        await conn.run_sync(DocsBackendSession.__table__.create)
+
+    session_config = ServerSideSessionConfig(max_age=3600)
+    backend = SQLAlchemyAsyncSessionBackend(config=session_config, alchemy_config=config, model=DocsBackendSession)
+
+    @post("/login")
+    async def login(request: Request) -> "dict[str, str]":
+        request.set_session({"username": "alice"})
+        return {"status": "ok"}
+
+    @get("/")
+    async def home(request: Request) -> "dict[str, Optional[str]]":
+        return {"username": request.session.get("username")}
+
+    app = Litestar(
+        route_handlers=[login, home],
+        plugins=[SQLAlchemyPlugin(config=config)],
+        middleware=[partial(SessionMiddleware, backend=backend)],
+    )
+
+    async with AsyncTestClient(app=app) as client:
+        assert (await client.post("/login")).status_code == 201
+        assert (await client.get("/")).json() == {"username": "alice"}
+
+    async with config.get_session() as db_session:
+        rows = (await db_session.scalars(select(DocsBackendSession))).all()
+    assert len(rows) == 1, "backend-based session was not persisted to the database"

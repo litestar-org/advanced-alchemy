@@ -56,3 +56,4 @@ Additional API References
     plugins
     cli
     session
+    store
