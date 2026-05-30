@@ -10,10 +10,6 @@ Advanced Alchemy provides first-class integration with Litestar through its SQLA
 
 This guide demonstrates building a complete CRUD API for a book management system.
 
-.. The code blocks in this guide are illustrative and share context across sections,
-   so they are not executed individually. Only the self-contained session-integration
-   examples below are run as doctests; everything else is inside a Sybil skip region.
-
 .. skip: start
 
 Key Features
