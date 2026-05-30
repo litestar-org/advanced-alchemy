@@ -505,12 +505,12 @@ You can upgrade a database to the latest version by running the following comman
 Server-Side Session Backend
 ---------------------------
 
-Advanced Alchemy provides SQLAlchemy-based session backends for Litestar's server-side session middleware. This allows you to store session data in your existing SQLAlchemy database instead of using external stores like Redis or file-based storage.
+Advanced Alchemy can store Litestar server-side session data in your SQLAlchemy database instead of an external store such as Redis or the in-memory default. There are two integration styles, and it matters which one you pick.
 
-If you need a general-purpose Litestar store outside the session middleware itself, the same
-extension package also exposes ``advanced_alchemy.extensions.litestar.store.SQLAlchemyStore`` and
-``StoreModelMixin``. The examples below focus on the session backend used with
-``ServerSideSessionConfig``.
+Litestar's ``ServerSideSessionConfig.middleware`` always installs Litestar's built-in ``ServerSideSessionBackend``. That backend reads and writes session data through whichever :class:`Store <litestar.stores.base.Store>` is registered under ``ServerSideSessionConfig.store`` (``"sessions"`` by default); it does not pick up a custom backend instance. This gives you two options:
+
+- **Store-based integration (recommended).** Register :class:`SQLAlchemyStore <advanced_alchemy.extensions.litestar.store.SQLAlchemyStore>` under the ``"sessions"`` store name and use ``session_config.middleware`` as usual. Litestar's session backend then persists session data through the SQLAlchemy store.
+- **Backend-based integration.** Use a dedicated :class:`SQLAlchemyAsyncSessionBackend <advanced_alchemy.extensions.litestar.session.SQLAlchemyAsyncSessionBackend>` (or its sync variant) and wire it into ``SessionMiddleware`` yourself with ``partial(SessionMiddleware, backend=...)``. Because ``session_config.middleware`` ignores custom backends, you must construct the middleware directly for this style.
 
 Overview
 ^^^^^^^^
@@ -523,18 +523,55 @@ The SQLAlchemy session backend provides:
 - **UUID-based sessions**: Uses UUIDv7 for session identifiers
 - **Timezone-aware timestamps**: Proper handling of session expiration times
 
-Quick Setup
-^^^^^^^^^^^
+Store-Based Integration (Recommended)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To use the SQLAlchemy session backend, you need to:
-
-1. Create a session model using the provided mixin
-2. Configure the SQLAlchemy session backend
-3. Register the session middleware with your Litestar application
+Register a :class:`SQLAlchemyStore` under the session store name and let Litestar's middleware use it:
 
 .. code-block:: python
 
     from litestar import Litestar
+    from litestar.middleware.session.server_side import ServerSideSessionConfig
+    from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+    from advanced_alchemy.extensions.litestar.store import SQLAlchemyStore, StoreModelMixin
+
+    # 1. Create the model backing the store table
+    class SessionStore(StoreModelMixin):
+        __tablename__ = "session_store"
+
+    # 2. Configure SQLAlchemy
+    alchemy_config = SQLAlchemyAsyncConfig(
+        connection_string="postgresql+asyncpg://user:password@localhost/mydb",
+        create_all=True,
+    )
+
+    # 3. Configure the session middleware (``store`` defaults to "sessions")
+    session_config = ServerSideSessionConfig(max_age=3600)
+
+    # 4. Build the store and bind it to the session model
+    session_store = SQLAlchemyStore(alchemy_config, model=SessionStore, namespace="my-app")
+
+    # 5. Register the store under the session store name ("sessions")
+    app = Litestar(
+        route_handlers=[],
+        plugins=[SQLAlchemyPlugin(config=alchemy_config)],
+        middleware=[session_config.middleware],
+        stores={"sessions": session_store},
+    )
+
+The registered store name must match ``ServerSideSessionConfig.store``, which is ``"sessions"`` unless you override it.
+
+Backend-Based Integration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Use a dedicated session backend and wire it into ``SessionMiddleware`` directly. Do not use ``session_config.middleware`` for this style, because that installs Litestar's built-in backend and ignores ``session_backend``:
+
+.. code-block:: python
+
+    from functools import partial
+
+    from litestar import Litestar
+    from litestar.middleware.session import SessionMiddleware
     from litestar.middleware.session.server_side import ServerSideSessionConfig
     from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
     from advanced_alchemy.extensions.litestar.session import (
@@ -552,10 +589,8 @@ To use the SQLAlchemy session backend, you need to:
         create_all=True,
     )
 
-    # 3. Configure session backend
-    session_config = ServerSideSessionConfig(
-        max_age=3600,  # 1 hour
-    )
+    # 3. Configure the session middleware
+    session_config = ServerSideSessionConfig(max_age=3600)
 
     # 4. Create the session backend
     session_backend = SQLAlchemyAsyncSessionBackend(
@@ -564,11 +599,11 @@ To use the SQLAlchemy session backend, you need to:
         model=UserSession,
     )
 
-    # 5. Create your Litestar app
+    # 5. Wire the backend into ``SessionMiddleware`` directly
     app = Litestar(
         route_handlers=[],
         plugins=[SQLAlchemyPlugin(config=alchemy_config)],
-        middleware=[session_config.middleware],
+        middleware=[partial(SessionMiddleware, backend=session_backend)],
     )
 
 Session Model Configuration
@@ -810,15 +845,17 @@ Here's a complete working example:
 
 .. code-block:: python
 
+    from functools import partial
+
     from litestar import Litestar, get, post
     from litestar.connection import ASGIConnection
+    from litestar.middleware.session import SessionMiddleware
     from litestar.middleware.session.server_side import ServerSideSessionConfig
     from advanced_alchemy.extensions.litestar import (
         AsyncSessionConfig,
         SQLAlchemyAsyncConfig,
         SQLAlchemyPlugin,
     )
-    from litestar.response import Template
 
     from advanced_alchemy.extensions.litestar.session import (
         SessionModelMixin,
@@ -874,10 +911,10 @@ Here's a complete working example:
     app = Litestar(
         route_handlers=[home, login, logout],
         plugins=[SQLAlchemyPlugin(config=alchemy_config)],
-        middleware=[session_config.middleware],
+        middleware=[partial(SessionMiddleware, backend=session_backend)],
     )
 
-This example provides a complete session-enabled application using SQLAlchemy for session storage.
+This example provides a complete session-enabled application using SQLAlchemy for session storage. To use the store-based integration instead, drop ``session_backend`` and register a :class:`SQLAlchemyStore` under ``stores={"sessions": ...}`` as shown above.
 
 File Object Storage
 -------------------
