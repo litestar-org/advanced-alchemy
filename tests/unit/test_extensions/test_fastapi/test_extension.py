@@ -1,10 +1,13 @@
 import sys
+import types
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Annotated, Callable, Literal, Union, cast
 from unittest.mock import MagicMock
 
+import click as base_click
 import pytest
+import typer
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.testclient import TestClient
 from pytest import FixtureRequest
@@ -12,6 +15,7 @@ from pytest_mock import MockerFixture
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session
+from typer.testing import CliRunner
 from typing_extensions import assert_type
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
@@ -53,6 +57,77 @@ def config(request: FixtureRequest) -> AnyConfig:
 @pytest.fixture()
 def alchemy(config: AnyConfig, app: FastAPI) -> AdvancedAlchemy:
     return AdvancedAlchemy(config, app=app)
+
+
+def _install_fastapi_cli_app(monkeypatch: pytest.MonkeyPatch, typer_app: typer.Typer) -> None:
+    fastapi_cli = types.ModuleType("fastapi_cli")
+    fastapi_cli_cli = types.ModuleType("fastapi_cli.cli")
+    fastapi_cli_cli.app = typer_app
+    setattr(fastapi_cli, "cli", fastapi_cli_cli)
+    monkeypatch.setitem(sys.modules, "fastapi_cli", fastapi_cli)
+    monkeypatch.setitem(sys.modules, "fastapi_cli.cli", fastapi_cli_cli)
+
+
+def test_assign_cli_group_delegates_database_and_db(monkeypatch: pytest.MonkeyPatch) -> None:
+    from advanced_alchemy.extensions.fastapi import extension as fastapi_extension
+    from advanced_alchemy.extensions.fastapi.extension import assign_cli_group
+
+    seen: list[tuple[FastAPI, str]] = []
+
+    def fake_register_database_commands(app: FastAPI) -> base_click.Group:
+        @base_click.group(name="database")
+        def database_group() -> None:
+            pass
+
+        @database_group.command(name="upgrade")
+        @base_click.argument("revision", default="head")
+        def upgrade_database(revision: str) -> None:
+            seen.append((app, revision))
+
+        return database_group
+
+    monkeypatch.setattr(fastapi_extension, "register_database_commands", fake_register_database_commands)
+    app = FastAPI()
+    typer_app = typer.Typer(context_settings={"help_option_names": ["-h", "--help"]})
+    _install_fastapi_cli_app(monkeypatch, typer_app)
+
+    assign_cli_group(app)
+
+    runner = CliRunner()
+    result = runner.invoke(typer_app, ["database", "upgrade", "abc123"])
+    alias_result = runner.invoke(typer_app, ["db", "upgrade"])
+
+    assert result.exit_code == 0, result.output
+    assert alias_result.exit_code == 0, alias_result.output
+    assert seen == [(app, "abc123"), (app, "head")]
+
+
+def test_assign_cli_group_delegates_database_help(monkeypatch: pytest.MonkeyPatch) -> None:
+    from advanced_alchemy.extensions.fastapi import extension as fastapi_extension
+    from advanced_alchemy.extensions.fastapi.extension import assign_cli_group
+
+    def fake_register_database_commands(app: FastAPI) -> base_click.Group:
+        @base_click.group(name="database")
+        def database_group() -> None:
+            pass
+
+        @database_group.command(name="upgrade")
+        def upgrade_database() -> None:
+            pass
+
+        return database_group
+
+    monkeypatch.setattr(fastapi_extension, "register_database_commands", fake_register_database_commands)
+    app = FastAPI()
+    typer_app = typer.Typer(context_settings={"help_option_names": ["-h", "--help"]})
+    _install_fastapi_cli_app(monkeypatch, typer_app)
+    assign_cli_group(app)
+
+    result = CliRunner().invoke(typer_app, ["database", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "Commands:" in result.output
+    assert "upgrade" in result.output
 
 
 async def test_infer_types_from_config(async_config: SQLAlchemyAsyncConfig, sync_config: SQLAlchemySyncConfig) -> None:
