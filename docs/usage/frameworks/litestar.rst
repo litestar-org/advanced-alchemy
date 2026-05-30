@@ -180,7 +180,12 @@ Create a controller class to handle HTTP endpoints. The controller uses dependen
             AuthorService,
             "authors_service",
             load=[AuthorModel.books],
-            filters={"pagination_type": "limit_offset", "id_filter": UUID, "search": "name", "search_ignore_case": True},
+            filters={
+                "pagination_type": "limit_offset",
+                "id_filter": UUID,
+                "search": "name",
+                "search_ignore_case": True,
+            },
         )
 
         @get(path="/authors")
@@ -241,6 +246,39 @@ Create a controller class to handle HTTP endpoints. The controller uses dependen
         ) -> None:
             """Delete an author from the system."""
             _ = await authors_service.delete(author_id)
+
+Filter Dependency Configuration
+-------------------------------
+
+The ``filters`` config passed to ``create_service_dependencies()`` controls which query parameters and
+``StatementFilter`` instances are generated for collection routes. In addition to ``id_filter``, date,
+pagination, search, sort, ``in_fields``, and ``not_in_fields``, you can enable field-specific boolean and
+choice filters:
+
+.. code-block:: python
+
+    from enum import Enum
+
+    class Status(str, Enum):
+        DRAFT = "draft"
+        PUBLISHED = "published"
+
+    providers.create_service_dependencies(
+        AuthorService,
+        "authors_service",
+        filters={
+            "boolean_fields": ["active"],
+            "choice_fields": [
+                ("visibility", ("public", "private")),
+                ("status", Status),
+            ],
+        },
+    )
+
+This emits ``active``, ``visibility``, and ``status`` query parameters in OpenAPI. ``ChoiceField`` or
+``(field_name, choices)`` exposes explicit enum values in the generated schema, while ``FieldNameType`` or
+``(field_name, type_hint)`` can use an enum type such as ``Status``. When supplied, those parameters are
+aggregated into ``BooleanFilter`` and ``ChoicesFilter`` instances.
 
 Application Configuration
 -------------------------

@@ -120,6 +120,41 @@ Set up dependency injected into the request context.
     ) -> filters.LimitOffset:
         return filters.LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
 
+Advanced Alchemy can also generate a combined filter dependency with OpenAPI query parameters:
+
+.. code-block:: python
+
+    from enum import Enum
+    from uuid import UUID
+
+    class Status(str, Enum):
+        DRAFT = "draft"
+        PUBLISHED = "published"
+
+    AuthorFilters = Annotated[
+        list[filters.FilterTypes],
+        Depends(
+            alchemy.provide_filters(
+                {
+                    "id_filter": UUID,
+                    "pagination_type": "limit_offset",
+                    "search": "name",
+                    "boolean_fields": ["active"],
+                    "choice_fields": [
+                        ("visibility", ("public", "private")),
+                        ("status", Status),
+                    ],
+                }
+            )
+        ),
+    ]
+
+``boolean_fields`` emits a field-name query parameter such as ``active`` and creates a ``BooleanFilter``.
+``choice_fields`` emits repeated query parameters such as ``visibility=public&status=published`` and creates
+``ChoicesFilter`` instances. Use ``ChoiceField`` or ``(field_name, choices)`` when the generated OpenAPI
+schema should expose explicit allowed values, or ``FieldNameType`` / ``(field_name, type_hint)`` when the
+allowed values already live in an enum.
+
 The session providers accept an optional bind key when you configure multiple database connections:
 
 .. code-block:: python

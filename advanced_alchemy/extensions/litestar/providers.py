@@ -27,6 +27,8 @@ from litestar.params import FromQuery, QueryParameter, SkipValidation
 
 from advanced_alchemy.filters import (
     BeforeAfter,
+    BooleanFilter,
+    ChoicesFilter,
     CollectionFilter,
     FilterTypes,
     LimitOffset,
@@ -44,10 +46,13 @@ from advanced_alchemy.service import (
     SQLAlchemySyncRepositoryService,
 )
 from advanced_alchemy.utils.dependencies import (
+    ChoiceField,
     DependencyCache,
     FieldNameType,
     FilterConfig,
     make_hashable,
+    normalize_choice_field_types,
+    normalize_field_name_types,
     normalize_sort_field,
 )
 from advanced_alchemy.utils.singleton import SingletonMeta
@@ -73,6 +78,7 @@ SyncServiceT_co = TypeVar("SyncServiceT_co", bound=SQLAlchemySyncRepositoryServi
 
 __all__ = (
     "DEPENDENCY_DEFAULTS",
+    "ChoiceField",
     "DependencyCache",
     "DependencyDefaults",
     "FieldNameType",
@@ -349,7 +355,7 @@ def _create_order_by_filter_provider(
     return provide_order_by
 
 
-def _create_statement_filters(  # noqa: C901
+def _create_statement_filters(  # noqa: C901, PLR0915
     config: FilterConfig, dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS
 ) -> dict[str, Provide]:
     """Create filter dependencies based on configuration.
@@ -547,6 +553,84 @@ def _create_statement_filters(  # noqa: C901
             provider = create_in_filter_provider(field_def)  # type: ignore
             filters[f"{field_def.name}_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
 
+    if boolean_fields := config.get("boolean_fields"):
+        for boolean_field_def in normalize_field_name_types(boolean_fields):
+
+            def create_boolean_filter_provider(
+                field_name: FieldNameType = boolean_field_def,
+            ) -> Callable[..., Optional[BooleanFilter]]:
+                param_name = f"{field_name.name}_boolean"
+
+                def provide_boolean_filter(**kwargs: Any) -> Optional[BooleanFilter]:
+                    value = kwargs.get(param_name)
+                    return BooleanFilter(field_name=field_name.name, value=value) if value is not None else None
+
+                annotation = Annotated[
+                    BooleanOrNone,
+                    QueryParameter(name=camelize(field_name.name)),
+                ]
+                provide_boolean_filter.__name__ = f"provide_boolean_filter_{field_name.name}"
+                provide_boolean_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+                    parameters=[
+                        inspect.Parameter(
+                            name=param_name,
+                            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                            default=None,
+                            annotation=annotation,
+                        )
+                    ],
+                    return_annotation=Optional[BooleanFilter],
+                )
+                provide_boolean_filter.__annotations__ = {
+                    param_name: annotation,
+                    "return": Optional[BooleanFilter],
+                }
+                return provide_boolean_filter
+
+            boolean_provider = create_boolean_filter_provider(boolean_field_def)
+            filters[f"{boolean_field_def.name}_boolean_filter"] = Provide(boolean_provider, sync_to_thread=False)
+
+    if choice_fields := config.get("choice_fields"):
+        for choice_field_def in normalize_choice_field_types(choice_fields):
+
+            def create_choices_filter_provider(
+                field_name: FieldNameType = choice_field_def,
+            ) -> Callable[..., Optional[ChoicesFilter[Any]]]:
+                param_name = f"{field_name.name}_choices"
+
+                def provide_choices_filter(**kwargs: Any) -> Optional[ChoicesFilter[Any]]:
+                    values = kwargs.get(param_name)
+                    return (
+                        ChoicesFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore
+                        if values
+                        else None
+                    )
+
+                annotation = Annotated[
+                    Optional[list[field_name.type_hint]],  # type: ignore
+                    QueryParameter(name=camelize(field_name.name)),
+                ]
+                provide_choices_filter.__name__ = f"provide_choices_filter_{field_name.name}"
+                provide_choices_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+                    parameters=[
+                        inspect.Parameter(
+                            name=param_name,
+                            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                            default=None,
+                            annotation=annotation,
+                        )
+                    ],
+                    return_annotation=Optional[ChoicesFilter[Any]],
+                )
+                provide_choices_filter.__annotations__ = {
+                    param_name: annotation,
+                    "return": Optional[ChoicesFilter[Any]],
+                }
+                return provide_choices_filter
+
+            choices_provider = create_choices_filter_provider(choice_field_def)
+            filters[f"{choice_field_def.name}_choices_filter"] = Provide(choices_provider, sync_to_thread=False)
+
     if filters:
         filters[dep_defaults.FILTERS_DEPENDENCY_KEY] = Provide(
             _create_filter_aggregate_function(config), sync_to_thread=False
@@ -619,8 +703,7 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
 
     # Add parameters for not_in filters
     if not_in_fields := config.get("not_in_fields"):
-        for field_def in not_in_fields:
-            field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+        for field_def in normalize_field_name_types(not_in_fields):
             annotation = NamedDependency[SkipValidation[NotInCollectionFilter[field_def.type_hint]]]  # type: ignore[name-defined]
             parameters[f"{field_def.name}_not_in_filter"] = inspect.Parameter(
                 name=f"{field_def.name}_not_in_filter",
@@ -631,8 +714,7 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
 
     # Add parameters for in filters
     if in_fields := config.get("in_fields"):
-        for field_def in in_fields:
-            field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+        for field_def in normalize_field_name_types(in_fields):
             annotation = CollectionFilter[field_def.type_hint]  # type: ignore
 
             parameters[f"{field_def.name}_in_filter"] = inspect.Parameter(
@@ -640,7 +722,27 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
             )
             annotations[f"{field_def.name}_in_filter"] = annotation
 
-    def provide_filters(**kwargs: FilterTypes) -> list[FilterTypes]:
+    if boolean_fields := config.get("boolean_fields"):
+        for boolean_field_def in normalize_field_name_types(boolean_fields):
+            boolean_annotation = NamedDependency[SkipValidation[BooleanFilter]]
+            parameters[f"{boolean_field_def.name}_boolean_filter"] = inspect.Parameter(
+                name=f"{boolean_field_def.name}_boolean_filter",
+                kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                annotation=boolean_annotation,
+            )
+            annotations[f"{boolean_field_def.name}_boolean_filter"] = boolean_annotation
+
+    if choice_fields := config.get("choice_fields"):
+        for choice_field_def in normalize_choice_field_types(choice_fields):
+            choices_annotation = NamedDependency[SkipValidation[ChoicesFilter[choice_field_def.type_hint]]]  # type: ignore[name-defined]
+            parameters[f"{choice_field_def.name}_choices_filter"] = inspect.Parameter(
+                name=f"{choice_field_def.name}_choices_filter",
+                kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                annotation=choices_annotation,
+            )
+            annotations[f"{choice_field_def.name}_choices_filter"] = choices_annotation
+
+    def provide_filters(**kwargs: FilterTypes) -> list[FilterTypes]:  # noqa: C901
         """Provide filter dependencies based on configuration.
 
         Args:
@@ -674,21 +776,25 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
 
         # Add not_in filters
         if not_in_fields := config.get("not_in_fields"):
-            # Get all field names, handling both strings and FieldNameType objects
-            not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
-            for field_def in not_in_fields:
-                field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+            for field_def in normalize_field_name_types(not_in_fields):
                 filter_ = kwargs.get(f"{field_def.name}_not_in_filter")
                 if filter_ is not None:
                     filters.append(filter_)
 
         # Add in filters
         if in_fields := config.get("in_fields"):
-            # Get all field names, handling both strings and FieldNameType objects
-            in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
-            for field_def in in_fields:
-                field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+            for field_def in normalize_field_name_types(in_fields):
                 filter_ = kwargs.get(f"{field_def.name}_in_filter")
+                if filter_ is not None:
+                    filters.append(filter_)
+        if boolean_fields := config.get("boolean_fields"):
+            for field_def in normalize_field_name_types(boolean_fields):
+                filter_ = kwargs.get(f"{field_def.name}_boolean_filter")
+                if filter_ is not None:
+                    filters.append(filter_)
+        if choice_fields := config.get("choice_fields"):
+            for field_def in normalize_choice_field_types(choice_fields):
+                filter_ = kwargs.get(f"{field_def.name}_choices_filter")
                 if filter_ is not None:
                     filters.append(filter_)
         return filters

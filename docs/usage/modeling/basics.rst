@@ -120,8 +120,8 @@ Consider a model that declares ``name`` and ``email`` on top of ``UUIDAuditBase`
     from sqlalchemy.orm import Mapped
 
 
-    class User(UUIDAuditBase):
-        __tablename__ = "users"
+    class OrderedUser(UUIDAuditBase):
+        __tablename__ = "ordered_users"
 
         name: Mapped[str]
         email: Mapped[str]
@@ -157,8 +157,8 @@ columns that share a value keep their declaration order.
     from sqlalchemy.orm import Mapped, mapped_column
 
 
-    class User(UUIDAuditBase):
-        __tablename__ = "users"
+    class PositionedUser(UUIDAuditBase):
+        __tablename__ = "positioned_users"
 
         email: Mapped[str] = mapped_column(sort_order=-50)
         name: Mapped[str]
@@ -408,13 +408,17 @@ already has.
 
 .. code-block:: python
 
-    session.add_all(
-        [
-            ImportedProduct(id="SKU-001", name="Widget"),
-            ImportedProduct(id="SKU-002", name="Gadget"),
-        ]
-    )
-    session.commit()
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+
+    async def create_imported_products(db_session: AsyncSession) -> None:
+        db_session.add_all(
+            [
+                ImportedProduct(id="SKU-001", name="Widget"),
+                ImportedProduct(id="SKU-002", name="Gadget"),
+            ]
+        )
+        await db_session.commit()
 
 The ``created_at`` and ``updated_at`` timestamps are still populated automatically.
 

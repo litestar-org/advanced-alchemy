@@ -30,7 +30,7 @@ All types include:
     storages.register_backend("file:///tmp/", key="avatars")
 
     class UserRecord(UUIDBase):
-        __tablename__ = "users"
+        __tablename__ = "user_records"
         created_at: Mapped[datetime] = mapped_column(DateTimeUTC)
         password: Mapped[str] = mapped_column(EncryptedString(key="secret-key"))
         preferences: Mapped[dict[str, str]] = mapped_column(JsonB)
@@ -145,7 +145,7 @@ fixtures on every backend.
 For primary keys, use **UUIDv7** (time-ordered, RFC 9562). Its
 leading-timestamp bytes give a monotonic insert order, which keeps B-tree
 indexes balanced and avoids the page splits caused by random UUIDv4 keys.
-This applies across all supported backends — PostgreSQL, MySQL, MSSQL,
+This applies across all supported backends -- PostgreSQL, MySQL, MSSQL,
 SQLite, and Oracle alike.
 
 The optional ``uuid-utils`` dependency provides ``uuid7()``. Advanced

@@ -1,20 +1,28 @@
 """Unit tests for shared dependency-injection utilities."""
 
+from enum import Enum
 from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
 
 from advanced_alchemy.utils.dependencies import (
+    ChoiceField,
     DependencyCache,
     FieldNameType,
     FilterConfig,
     make_hashable,
+    normalize_choice_field_types,
     normalize_sort_field,
 )
 from advanced_alchemy.utils.singleton import SingletonMeta
 
 pytestmark = pytest.mark.unit
+
+
+class StatusChoice(str, Enum):
+    ACTIVE = "active"
+    PENDING = "pending"
 
 
 def test_field_name_type_is_named_tuple_with_default_type_hint() -> None:
@@ -41,7 +49,12 @@ def test_make_hashable_dict_order_invariant() -> None:
 def test_make_hashable_nested_values() -> None:
     config: FilterConfig = cast(
         "FilterConfig",
-        {"sort_field": ("a", "b"), "search_ignore_case": True, "in_fields": [FieldNameType("tag")]},
+        {
+            "sort_field": ("a", "b"),
+            "search_ignore_case": True,
+            "in_fields": [FieldNameType("tag")],
+            "choice_fields": [ChoiceField("status", ["active", "pending"])],
+        },
     )
 
     assert make_hashable(config) == make_hashable(dict(config))
@@ -61,6 +74,38 @@ def test_normalize_sort_field_preserves_list_order() -> None:
 
 def test_normalize_sort_field_sorts_set_values() -> None:
     assert normalize_sort_field({"name", "id"}) == "id"
+
+
+def test_normalize_choice_field_types_supports_explicit_values() -> None:
+    normalized = normalize_choice_field_types([ChoiceField("status", ["active", "pending"])])
+    field = next(iter(normalized))
+
+    assert field.name == "status"
+    assert "active" in str(field.type_hint)
+    assert "pending" in str(field.type_hint)
+
+
+def test_normalize_choice_field_types_supports_explicit_value_tuples() -> None:
+    normalized = normalize_choice_field_types(("status", ("active", "pending")))
+    field = next(iter(normalized))
+
+    assert field.name == "status"
+    assert "active" in str(field.type_hint)
+    assert "pending" in str(field.type_hint)
+
+
+def test_normalize_choice_field_types_supports_type_hint_tuples() -> None:
+    normalized = normalize_choice_field_types(("status", StatusChoice))
+    field = next(iter(normalized))
+
+    assert field.name == "status"
+    assert field.type_hint is StatusChoice
+
+
+def test_normalize_choice_field_types_preserves_list_order() -> None:
+    normalized = normalize_choice_field_types([("visibility", ["public", "private"]), FieldNameType("status", str)])
+
+    assert [field.name for field in normalized] == ["visibility", "status"]
 
 
 def test_dependency_cache_singleton() -> None:

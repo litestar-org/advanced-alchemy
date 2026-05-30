@@ -5,19 +5,30 @@ These primitives are framework-agnostic and reused by framework
 """
 
 from collections.abc import Iterable, Mapping
-from typing import Any, NamedTuple, Optional, Union, cast
+from dataclasses import dataclass
+from typing import Any, Literal, NamedTuple, Optional, Union, cast
 from uuid import UUID
 
-from typing_extensions import Literal, NotRequired, TypedDict
+from typing_extensions import NotRequired, TypeAlias, TypedDict, TypeGuard
 
 from advanced_alchemy.utils.singleton import SingletonMeta
 
-__all__ = ("DependencyCache", "FieldNameType", "FilterConfig", "make_hashable", "normalize_sort_field")
+__all__ = (
+    "ChoiceField",
+    "DependencyCache",
+    "FieldNameType",
+    "FilterConfig",
+    "make_hashable",
+    "normalize_choice_field_types",
+    "normalize_field_name_types",
+    "normalize_sort_field",
+)
 
 HashableValue = Union[str, int, float, bool, None]
 HashableType = Union[HashableValue, tuple[Any, ...], tuple[tuple[str, Any], ...], tuple[HashableValue, ...]]
 SortOrder = Literal["asc", "desc"]
 SortField = Union[str, set[str], list[str]]
+FIELD_TUPLE_LENGTH = 2
 
 
 class FieldNameType(NamedTuple):
@@ -29,8 +40,32 @@ class FieldNameType(NamedTuple):
 
     name: str
     """Name of the field to filter on."""
-    type_hint: type[Any] = str
+    type_hint: Any = str
     """Type of the filter value. Defaults to ``str``."""
+
+
+@dataclass(frozen=True)
+class ChoiceField:
+    """Field name and explicit values for generated choice filters."""
+
+    name: str
+    """Name of the field to filter on."""
+    choices: tuple[Any, ...]
+    """Allowed values for the generated choice filter."""
+
+    def __init__(self, name: str, choices: Iterable[Any]) -> None:
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "choices", tuple(choices))
+
+
+FieldDefinition: TypeAlias = Union[str, FieldNameType]
+FieldNameConfig: TypeAlias = Union[FieldDefinition, set[FieldDefinition], list[FieldDefinition]]
+ChoiceFieldTuple: TypeAlias = tuple[str, Iterable[Any]]
+FieldNameTypeTuple: TypeAlias = tuple[str, Any]
+ChoiceFieldDefinition: TypeAlias = Union[str, FieldNameType, ChoiceField, FieldNameTypeTuple]
+ChoiceFieldConfig: TypeAlias = Union[
+    ChoiceFieldDefinition, set[ChoiceFieldDefinition], list[ChoiceFieldDefinition], tuple[ChoiceFieldDefinition, ...]
+]
 
 
 class FilterConfig(TypedDict):
@@ -56,10 +91,14 @@ class FilterConfig(TypedDict):
     """Enable created-at range filtering."""
     updated_at: NotRequired[bool]
     """Enable updated-at range filtering."""
-    not_in_fields: NotRequired[Union[FieldNameType, set[FieldNameType], list[Union[str, FieldNameType]]]]
+    not_in_fields: NotRequired[FieldNameConfig]
     """Fields that support not-in collection filters."""
-    in_fields: NotRequired[Union[FieldNameType, set[FieldNameType], list[Union[str, FieldNameType]]]]
+    in_fields: NotRequired[FieldNameConfig]
     """Fields that support in-collection filters."""
+    boolean_fields: NotRequired[FieldNameConfig]
+    """Fields that support boolean filters."""
+    choice_fields: NotRequired[ChoiceFieldConfig]
+    """Fields that support choices filters."""
 
 
 class DependencyCache(metaclass=SingletonMeta):
@@ -136,6 +175,88 @@ def make_hashable(value: Any) -> HashableType:
     if isinstance(value, (str, int, float, bool, type(None))):
         return value
     return str(value)
+
+
+def normalize_field_name_types(field_definitions: FieldNameConfig) -> set[FieldNameType]:
+    """Normalize field-name filter config to ``FieldNameType`` values."""
+    raw_fields = {field_definitions} if isinstance(field_definitions, (str, FieldNameType)) else set(field_definitions)
+    return {
+        FieldNameType(name=field_definition, type_hint=str) if isinstance(field_definition, str) else field_definition
+        for field_definition in raw_fields
+    }
+
+
+def _literal_type(choices: tuple[Any, ...]) -> Any:
+    """Build a runtime ``Literal`` type from configured choices."""
+    return cast("Any", Literal).__getitem__(choices)
+
+
+def _is_choice_field_tuple(value: Any) -> TypeGuard[ChoiceFieldTuple]:
+    """Return whether ``value`` is a ``(field_name, choices)`` config tuple."""
+    if not isinstance(value, tuple) or isinstance(value, FieldNameType):
+        return False
+    tuple_value = cast("tuple[Any, ...]", value)  # type: ignore[redundant-cast]
+    return (
+        len(tuple_value) == FIELD_TUPLE_LENGTH
+        and isinstance(tuple_value[0], str)
+        and not isinstance(tuple_value[1], type)
+        and isinstance(tuple_value[1], Iterable)
+        and not isinstance(tuple_value[1], (str, bytes))
+    )
+
+
+def _is_field_name_type_tuple(value: Any) -> TypeGuard[FieldNameTypeTuple]:
+    """Return whether ``value`` is a ``(field_name, type_hint)`` config tuple."""
+    if not isinstance(value, tuple) or isinstance(value, FieldNameType):
+        return False
+    tuple_value = cast("tuple[Any, ...]", value)  # type: ignore[redundant-cast]
+    return (
+        len(tuple_value) == FIELD_TUPLE_LENGTH
+        and isinstance(tuple_value[0], str)
+        and not _is_choice_field_tuple(value)
+        and not isinstance(tuple_value[1], (str, bytes))
+    )
+
+
+def _field_type_from_choices(name: str, choices: Iterable[Any]) -> FieldNameType:
+    """Build a field definition from explicit choice values."""
+    choices_tuple = tuple(choices)
+    if not choices_tuple:
+        msg = "ChoiceField choices must not be empty"
+        raise ValueError(msg)
+    return FieldNameType(name=name, type_hint=_literal_type(choices_tuple))
+
+
+def normalize_choice_field_types(field_definitions: ChoiceFieldConfig) -> tuple[FieldNameType, ...]:
+    """Normalize choice filter config to ``FieldNameType`` values."""
+    raw_fields: tuple[ChoiceFieldDefinition, ...]
+    if (
+        isinstance(field_definitions, (str, FieldNameType, ChoiceField))
+        or _is_choice_field_tuple(field_definitions)
+        or _is_field_name_type_tuple(field_definitions)
+    ):
+        raw_fields = (field_definitions,)
+    elif isinstance(field_definitions, set):
+        raw_fields = tuple(sorted(field_definitions, key=str))
+    else:
+        raw_fields = tuple(field_definitions)
+    normalized_fields: dict[str, FieldNameType] = {}
+    for field_definition in raw_fields:
+        if isinstance(field_definition, str):
+            normalized_field = FieldNameType(name=field_definition, type_hint=str)
+        elif isinstance(field_definition, FieldNameType):
+            normalized_field = field_definition
+        elif isinstance(field_definition, ChoiceField):
+            normalized_field = _field_type_from_choices(field_definition.name, field_definition.choices)
+        elif _is_choice_field_tuple(field_definition):
+            normalized_field = _field_type_from_choices(field_definition[0], field_definition[1])
+        elif _is_field_name_type_tuple(field_definition):
+            normalized_field = FieldNameType(name=field_definition[0], type_hint=field_definition[1])
+        else:
+            msg = "Choice field tuple must be (field_name, type_hint) or (field_name, choices)"
+            raise ValueError(msg)
+        normalized_fields.setdefault(normalized_field.name, normalized_field)
+    return tuple(normalized_fields.values())
 
 
 def normalize_sort_field(sort_field: SortField) -> str:
