@@ -6,13 +6,13 @@ import inspect
 import unittest.mock
 import uuid
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Annotated, Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
 
 from litestar import Litestar, get
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 from litestar.openapi.config import OpenAPIConfig
-from litestar.params import Dependency
+from litestar.params import SkipValidation
 from litestar.testing import TestClient
 from sqlalchemy import FromClause, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Mapper, mapped_column
@@ -484,7 +484,7 @@ def test_litestar_openapi_schema_uses_typed_sort_parameters() -> None:
     filter_dependencies = create_filter_dependencies({"sort_field": ["name", "id"], "sort_order": "asc"})
 
     @get("/test")
-    async def handler(filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)]) -> list[str]:
+    async def handler(filters: SkipValidation[list[FilterTypes]]) -> list[str]:
         return [type(filter_).__name__ for filter_ in filters]
 
     app = Litestar(
@@ -559,7 +559,7 @@ def test_litestar_in_filter_values_are_isolated() -> None:
     filter_dependencies = create_filter_dependencies(filter_config)
 
     @get("/test")
-    def handler(filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)]) -> dict[str, list[str]]:
+    def handler(filters: SkipValidation[list[FilterTypes]]) -> dict[str, list[str]]:
         response: dict[str, list[str]] = {}
         for filter_ in filters:
             if isinstance(filter_, CollectionFilter):
@@ -583,7 +583,7 @@ def test_litestar_not_in_filter_values_are_isolated() -> None:
     filter_dependencies = create_filter_dependencies(filter_config)
 
     @get("/test")
-    def handler(filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)]) -> dict[str, list[str]]:
+    def handler(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> dict[str, list[str]]:
         response: dict[str, list[str]] = {}
         for filter_ in filters:
             if isinstance(filter_, NotInCollectionFilter):
@@ -591,7 +591,7 @@ def test_litestar_not_in_filter_values_are_isolated() -> None:
                 response[field_name] = list(filter_.values or [])
         return response
 
-    app = Litestar(route_handlers=[handler], dependencies=filter_dependencies)
+    app = Litestar(route_handlers=[handler], dependencies=filter_dependencies, debug=True)
     client = TestClient(app)
 
     response = client.get("/test?firstNameNotIn=Sezer&lastNameNotIn=Tasan")
