@@ -894,8 +894,10 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
-        """.. deprecated:: 1.10.0
-        Use :meth:`get_many_and_count` instead.
+        """List of records and total count returned by query.
+
+        .. deprecated:: 1.10.0
+            Use :meth:`get_many_and_count` instead.
         """
         warn_deprecation(
             version="1.10.0",
@@ -926,8 +928,10 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> List[ModelT]:
-        """.. deprecated:: 1.10.0
-        Use :meth:`get_many` instead.
+        """List of records returned by query.
+
+        .. deprecated:: 1.10.0
+            Use :meth:`get_many` instead.
         """
         warn_deprecation(
             version="1.10.0",
