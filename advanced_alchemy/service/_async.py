@@ -31,18 +31,18 @@ from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.deprecation import warn_deprecation
 from advanced_alchemy.utils.serialization import (
-    UNSET,
     BulkModelDictT,
     ModelDictListT,
     ModelDictT,
-    asdict,
-    attrs_nothing,
+    SchemaDumpConfig,
     is_attrs_instance,
+    is_dataclass,
     is_dict,
     is_dto_data,
     is_msgspec_struct,
     is_pydantic_model,
     is_sqlmodel_table_model,
+    schema_dump,
 )
 
 
@@ -107,6 +107,8 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
     """Optionally apply the ``unique()`` method to results before returning."""
     count_with_window_function: ClassVar[bool] = True
     """Use an analytical window function to count results.  This allows the count to be performed in a single query."""
+    schema_dump_config: ClassVar[SchemaDumpConfig] = SchemaDumpConfig()
+    """Default dump behavior when schema-like input is converted into a model."""
     _repository_instance: SQLAlchemyAsyncRepositoryT
 
     def __init__(
@@ -462,16 +464,19 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         self,
         data: "ModelDictT[ModelT]",
         operation: Optional[str] = None,
+        schema_dump_config: Optional[SchemaDumpConfig] = None,
     ) -> ModelT:
         """Parse and Convert input into a model.
 
         Args:
             data: Representations to be created.
             operation: Optional operation flag so that you can provide behavior based on CRUD operation
+            schema_dump_config: Optional schema dump behavior for this conversion.
 
         Returns:
             Representation of created instances.
         """
+        dump_config = schema_dump_config if schema_dump_config is not None else self.schema_dump_config
         operation_map = {
             "create": self.to_model_on_create,
             "update": self.to_model_on_update,
@@ -486,34 +491,14 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             return model_from_dict(self.model_type, **data)
         if is_sqlmodel_table_model(data):
             return model_from_dict(self.model_type, **model_to_dict(cast("ModelProtocol", data)))
-        if is_pydantic_model(data):
+        if is_pydantic_model(data) or is_msgspec_struct(data) or is_attrs_instance(data) or is_dataclass(data):
             return model_from_dict(
                 self.model_type,
-                **data.model_dump(exclude_unset=True),
-            )
-
-        if is_msgspec_struct(data):
-            return model_from_dict(
-                self.model_type,
-                **{
-                    f: getattr(data, f)
-                    for f in data.__struct_fields__
-                    if hasattr(data, f) and getattr(data, f) is not UNSET
-                },
+                **schema_dump(data, config=dump_config),
             )
 
         if is_dto_data(data):
             return cast("ModelT", data.create_instance())
-
-        if is_attrs_instance(data):
-            # Filter out attrs.NOTHING values for partial updates
-            def filter_unset(attr: Any, value: Any) -> bool:  # noqa: ARG001
-                return value is not attrs_nothing
-
-            return model_from_dict(
-                self.model_type,
-                **asdict(data, filter=filter_unset),
-            )
 
         # Fallback for objects with __dict__ (e.g., regular classes)
         if hasattr(data, "__dict__") and not isinstance(data, self.model_type):
@@ -773,6 +758,7 @@ class SQLAlchemyAsyncRepositoryService(
         auto_refresh: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         bind_group: Optional[str] = None,
+        schema_dump_config: Optional[SchemaDumpConfig] = None,
     ) -> "ModelT":
         """Wrap repository instance creation.
 
@@ -784,11 +770,12 @@ class SQLAlchemyAsyncRepositoryService(
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             bind_group: Optional routing group to use for the operation.
+            schema_dump_config: Optional schema dump behavior for this operation.
 
         Returns:
             Representation of created instance.
         """
-        data = await self.to_model(data, "create")
+        data = await self.to_model(data, "create", schema_dump_config=schema_dump_config)
         return cast(
             "ModelT",
             await self.repository.add(
@@ -809,6 +796,7 @@ class SQLAlchemyAsyncRepositoryService(
         auto_expunge: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         bind_group: Optional[str] = None,
+        schema_dump_config: Optional[SchemaDumpConfig] = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance creation.
 
@@ -819,13 +807,17 @@ class SQLAlchemyAsyncRepositoryService(
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             bind_group: Optional routing group to use for the operation.
+            schema_dump_config: Optional schema dump behavior for this operation.
 
         Returns:
             Representation of created instances.
         """
         if is_dto_data(data):
             data = data.create_instance()
-        data = [(await self.to_model(datum, "create")) for datum in cast("ModelDictListT[ModelT]", data)]
+        data = [
+            (await self.to_model(datum, "create", schema_dump_config=schema_dump_config))
+            for datum in cast("ModelDictListT[ModelT]", data)
+        ]
         return cast(
             "Sequence[ModelT]",
             await self.repository.add_many(
@@ -853,6 +845,7 @@ class SQLAlchemyAsyncRepositoryService(
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
+        schema_dump_config: Optional[SchemaDumpConfig] = None,
     ) -> "ModelT":
         """Wrap repository update operation.
 
@@ -875,6 +868,7 @@ class SQLAlchemyAsyncRepositoryService(
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             bind_group: Optional routing group to use for the operation.
+            schema_dump_config: Optional schema dump behavior for this operation.
 
         Raises:
             RepositoryError: If no configuration or session is provided.
@@ -885,7 +879,7 @@ class SQLAlchemyAsyncRepositoryService(
         # ALWAYS convert data through to_model first to ensure operation hooks are called
         # This ensures custom to_model() implementations receive the operation="update" parameter
         # and that to_model_on_update() is properly invoked via the operation_map
-        data = await self.to_model(data, "update")
+        data = await self.to_model(data, "update", schema_dump_config=schema_dump_config)
 
         if item_id is not None:
             # When item_id is provided, update existing instance rather than replacing it
@@ -958,6 +952,7 @@ class SQLAlchemyAsyncRepositoryService(
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
+        schema_dump_config: Optional[SchemaDumpConfig] = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance update.
 
@@ -971,13 +966,17 @@ class SQLAlchemyAsyncRepositoryService(
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             bind_group: Optional routing group to use for the operation.
+            schema_dump_config: Optional schema dump behavior for this operation.
 
         Returns:
             Representation of updated instances.
         """
         if is_dto_data(data):
             data = data.create_instance()
-        data = [(await self.to_model(datum, "update")) for datum in cast("ModelDictListT[ModelT]", data)]
+        data = [
+            (await self.to_model(datum, "update", schema_dump_config=schema_dump_config))
+            for datum in cast("ModelDictListT[ModelT]", data)
+        ]
         return cast(
             "Sequence[ModelT]",
             await self.repository.update_many(
@@ -1008,6 +1007,7 @@ class SQLAlchemyAsyncRepositoryService(
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
+        schema_dump_config: Optional[SchemaDumpConfig] = None,
     ) -> ModelT:
         """Wrap repository upsert operation.
 
@@ -1031,11 +1031,12 @@ class SQLAlchemyAsyncRepositoryService(
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             bind_group: Optional routing group to use for the operation.
+            schema_dump_config: Optional schema dump behavior for this operation.
 
         Returns:
             Updated or created representation.
         """
-        data = await self.to_model(data, "upsert")
+        data = await self.to_model(data, "upsert", schema_dump_config=schema_dump_config)
         # Handle ID extraction and setting for single-column PKs
         # For composite PKs, the repository's upsert() handles this directly
         if item_id is None:
@@ -1079,6 +1080,7 @@ class SQLAlchemyAsyncRepositoryService(
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
+        schema_dump_config: Optional[SchemaDumpConfig] = None,
     ) -> Sequence[ModelT]:
         """Wrap repository upsert operation.
 
@@ -1095,13 +1097,17 @@ class SQLAlchemyAsyncRepositoryService(
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             bind_group: Optional routing group to use for the operation.
+            schema_dump_config: Optional schema dump behavior for this operation.
 
         Returns:
             Updated or created representation.
         """
         if is_dto_data(data):
             data = data.create_instance()
-        data = [(await self.to_model(datum, "upsert")) for datum in cast("ModelDictListT[ModelT]", data)]
+        data = [
+            (await self.to_model(datum, "upsert", schema_dump_config=schema_dump_config))
+            for datum in cast("ModelDictListT[ModelT]", data)
+        ]
         return cast(
             "Sequence[ModelT]",
             await self.repository.upsert_many(
@@ -1133,6 +1139,7 @@ class SQLAlchemyAsyncRepositoryService(
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
+        schema_dump_config: Optional[SchemaDumpConfig] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Wrap repository instance creation.
@@ -1158,13 +1165,14 @@ class SQLAlchemyAsyncRepositoryService(
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             bind_group: Optional routing group to use for the operation.
+            schema_dump_config: Optional schema dump behavior for this operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
             Representation of created instance.
         """
         match_fields = match_fields or self.match_fields
-        validated_model = await self.to_model(kwargs, "create")
+        validated_model = await self.to_model(kwargs, "create", schema_dump_config=schema_dump_config)
         return cast(
             "tuple[ModelT, bool]",
             await self.repository.get_or_upsert(
@@ -1199,6 +1207,7 @@ class SQLAlchemyAsyncRepositoryService(
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
+        schema_dump_config: Optional[SchemaDumpConfig] = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Wrap repository instance creation.
@@ -1221,13 +1230,14 @@ class SQLAlchemyAsyncRepositoryService(
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             bind_group: Optional routing group to use for the operation.
+            schema_dump_config: Optional schema dump behavior for this operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
             Representation of updated instance.
         """
         match_fields = match_fields or self.match_fields
-        validated_model = await self.to_model(kwargs, "update")
+        validated_model = await self.to_model(kwargs, "update", schema_dump_config=schema_dump_config)
         return cast(
             "tuple[ModelT, bool]",
             await self.repository.get_and_update(

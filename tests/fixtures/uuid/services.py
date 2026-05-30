@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from advanced_alchemy.service import (
+    SchemaDumpConfig,
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
@@ -227,13 +228,15 @@ class SlugBookAsyncService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook, SlugBo
         self,
         data: ModelDictT[UUIDSlugBook],
         operation: str | None = None,
+        schema_dump_config: SchemaDumpConfig | None = None,
     ) -> UUIDSlugBook:
-        data = schema_dump(data)
+        dump_config = schema_dump_config if schema_dump_config is not None else self.schema_dump_config
+        data = schema_dump(data, config=dump_config)
         if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = await self.repository.get_available_slug(data["title"])
-        return await super().to_model(data, operation)
+        return await super().to_model(data, operation, schema_dump_config=dump_config)
 
 
 class SlugBookSyncService(SQLAlchemySyncRepositoryService[UUIDSlugBook, SlugBookSyncRepository]):
@@ -245,13 +248,15 @@ class SlugBookSyncService(SQLAlchemySyncRepositoryService[UUIDSlugBook, SlugBook
         self,
         data: ModelDictT[UUIDSlugBook],
         operation: str | None = None,
+        schema_dump_config: SchemaDumpConfig | None = None,
     ) -> UUIDSlugBook:
-        data = schema_dump(data)
+        dump_config = schema_dump_config if schema_dump_config is not None else self.schema_dump_config
+        data = schema_dump(data, config=dump_config)
         if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = self.repository.get_available_slug(data["title"])
-        return super().to_model(data, operation)
+        return super().to_model(data, operation, schema_dump_config=dump_config)
 
 
 class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook, SlugBookAsyncMockRepository]):
@@ -264,13 +269,15 @@ class SlugBookAsyncMockService(SQLAlchemyAsyncRepositoryService[UUIDSlugBook, Sl
         self,
         data: ModelDictT[UUIDSlugBook],
         operation: str | None = None,
+        schema_dump_config: SchemaDumpConfig | None = None,
     ) -> UUIDSlugBook:
-        data = schema_dump(data)
+        dump_config = schema_dump_config if schema_dump_config is not None else self.schema_dump_config
+        data = schema_dump(data, config=dump_config)
         if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = await self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = await self.repository.get_available_slug(data["title"])
-        return await super().to_model(data, operation)
+        return await super().to_model(data, operation, schema_dump_config=dump_config)
 
 
 class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[UUIDSlugBook, SlugBookSyncMockRepository]):
@@ -283,10 +290,12 @@ class SlugBookSyncMockService(SQLAlchemySyncRepositoryService[UUIDSlugBook, Slug
         self,
         data: ModelDictT[UUIDSlugBook],
         operation: str | None = None,
+        schema_dump_config: SchemaDumpConfig | None = None,
     ) -> UUIDSlugBook:
-        data = schema_dump(data)
+        dump_config = schema_dump_config if schema_dump_config is not None else self.schema_dump_config
+        data = schema_dump(data, config=dump_config)
         if is_dict_without_field(data, "slug") and operation == "create":
             data["slug"] = self.repository.get_available_slug(data["title"])
         if is_dict_without_field(data, "slug") and is_dict_with_field(data, "title") and operation == "update":
             data["slug"] = self.repository.get_available_slug(data["title"])
-        return super().to_model(data, operation)
+        return super().to_model(data, operation, schema_dump_config=dump_config)

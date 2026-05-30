@@ -33,6 +33,9 @@ import json
 import threading
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from dataclasses import MISSING as DATACLASS_MISSING
+from dataclasses import dataclass
+from dataclasses import fields as dataclass_fields
 from decimal import Decimal
 from functools import lru_cache
 from ipaddress import IPv4Address, IPv4Interface, IPv4Network, IPv6Address, IPv6Interface, IPv6Network
@@ -85,6 +88,8 @@ from advanced_alchemy.typing import attrs_fields as fields
 from advanced_alchemy.typing import attrs_has as has
 from advanced_alchemy.typing import cattrs_structure as structure
 from advanced_alchemy.typing import cattrs_unstructure as unstructure
+from advanced_alchemy.utils.dataclass import Empty as DataclassEmpty
+from advanced_alchemy.utils.dataclass import is_dataclass_instance
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -113,6 +118,7 @@ __all__ = (
     "MsgspecSerializer",
     "OrjsonSerializer",
     "PydanticOrMsgspecT",
+    "SchemaDumpConfig",
     "StandardLibSerializer",
     "Struct",
     "SupportedSchemaModel",
@@ -192,6 +198,39 @@ BulkModelDictT: TypeAlias = (
     "Union[Sequence[Union[dict[str, Any], ModelT, SupportedSchemaModel, Any]], DTODataLike[list[ModelT]]]"
 )
 """Type alias for bulk model dictionaries."""
+
+
+@dataclass(frozen=True)
+class SchemaDumpConfig:
+    """Configuration for dumping schema-like service input data."""
+
+    exclude_unset: bool = True
+    exclude_none: bool = False
+    exclude_defaults: bool = False
+    exclude_sentinels: bool = True
+
+
+DEFAULT_SCHEMA_DUMP_CONFIG: Final = SchemaDumpConfig()
+
+
+def _get_schema_dump_config(exclude_unset: bool, config: "Optional[SchemaDumpConfig]") -> SchemaDumpConfig:
+    """Resolve backwards-compatible schema dump configuration."""
+    if config is not None:
+        return config
+    if exclude_unset:
+        return DEFAULT_SCHEMA_DUMP_CONFIG
+    return SchemaDumpConfig(exclude_unset=False, exclude_sentinels=False)
+
+
+def _get_pydantic_missing_sentinel() -> Any:
+    """Return Pydantic's experimental MISSING sentinel when available."""
+    if not PYDANTIC_INSTALLED:
+        return None
+    try:
+        from pydantic.experimental.missing_sentinel import MISSING
+    except ImportError:  # pragma: no cover - depends on installed Pydantic version
+        return None
+    return MISSING
 
 
 # ============================================================================
@@ -411,60 +450,149 @@ def is_schema_or_dict_without_field(
     return is_schema_or_dict(v) and not is_schema_or_dict_with_field(v, field_name)
 
 
-@overload
-def schema_dump(data: "RowMapping", exclude_unset: bool = True) -> "dict[str, Any]": ...
+def _dump_pydantic_model(data: BaseModelLike, dump_config: SchemaDumpConfig) -> "dict[str, Any]":
+    """Dump a Pydantic model according to the schema dump config."""
+    dumped = data.model_dump(
+        exclude_unset=dump_config.exclude_unset,
+        exclude_none=dump_config.exclude_none,
+        exclude_defaults=dump_config.exclude_defaults,
+    )
+    if not dump_config.exclude_sentinels and (missing := _get_pydantic_missing_sentinel()) is not None:
+        for field_name in getattr(data.__class__, "model_fields", {}):
+            if getattr(data, field_name, None) is missing:
+                dumped[field_name] = missing
+    return dumped
+
+
+def _dump_msgspec_struct(data: StructLike, dump_config: SchemaDumpConfig) -> "dict[str, Any]":
+    """Dump a msgspec struct according to the schema dump config."""
+    fields = data.__struct_fields__
+    defaults = getattr(data, "__struct_defaults__", ())
+    default_fields = fields[-len(defaults) :] if defaults else ()
+    default_values = dict(zip(default_fields, defaults))
+    dumped: dict[str, Any] = {}
+    for field_name in fields:
+        if not hasattr(data, field_name):
+            continue
+        value = getattr(data, field_name)
+        if dump_config.exclude_sentinels and value is UNSET:
+            continue
+        if dump_config.exclude_none and value is None:
+            continue
+        if dump_config.exclude_defaults and field_name in default_values and value == default_values[field_name]:
+            continue
+        dumped[field_name] = value
+    return dumped
+
+
+def _dump_attrs_instance(data: AttrsLike, dump_config: SchemaDumpConfig) -> "dict[str, Any]":
+    """Dump an attrs instance according to the schema dump config."""
+    if dump_config.exclude_sentinels or dump_config.exclude_none:
+        # Filter out attrs.NOTHING values for partial updates.
+        def filter_unset_attrs(attr: Any, value: Any) -> bool:
+            if dump_config.exclude_sentinels and value is attrs_nothing:
+                return False
+            if dump_config.exclude_none and value is None:
+                return False
+            return not (dump_config.exclude_defaults and attr.default is not attrs_nothing and value == attr.default)
+
+        return asdict(data, filter=filter_unset_attrs)
+    if CATTRS_INSTALLED:
+        return unstructure(data)  # type: ignore[no-any-return]
+    return asdict(data)
+
+
+def _dump_dataclass_instance(data: Any, dump_config: SchemaDumpConfig) -> "dict[str, Any]":
+    """Dump a dataclass instance according to the schema dump config."""
+    dumped: dict[str, Any] = {}
+    for field in dataclass_fields(data):
+        value = getattr(data, field.name)
+        if dump_config.exclude_sentinels and value is DataclassEmpty:
+            continue
+        if dump_config.exclude_none and value is None:
+            continue
+        if dump_config.exclude_defaults and field.default is not DATACLASS_MISSING and value == field.default:
+            continue
+        if is_dataclass_instance(value):
+            value = _dump_dataclass_instance(value, dump_config)
+        dumped[field.name] = value
+    return dumped
+
+
+def _dump_schema_model(data: Any, dump_config: SchemaDumpConfig) -> "Optional[dict[str, Any]]":
+    """Dump a supported schema-like object according to the schema dump config."""
+    if is_pydantic_model(data):
+        return _dump_pydantic_model(data, dump_config)
+    if is_msgspec_struct(data):
+        return _dump_msgspec_struct(data, dump_config)
+    if is_attrs_instance(data):
+        return _dump_attrs_instance(data, dump_config)
+    if is_dataclass(data):
+        return _dump_dataclass_instance(data, dump_config)
+    return None
 
 
 @overload
-def schema_dump(data: "Row[Any]", exclude_unset: bool = True) -> "dict[str, Any]": ...
+def schema_dump(
+    data: "RowMapping",
+    exclude_unset: bool = True,
+    *,
+    config: "Optional[SchemaDumpConfig]" = None,
+) -> "dict[str, Any]": ...
 
 
 @overload
-def schema_dump(data: "DTODataLike[Any]", exclude_unset: bool = True) -> "dict[str, Any]": ...
+def schema_dump(
+    data: "Row[Any]",
+    exclude_unset: bool = True,
+    *,
+    config: "Optional[SchemaDumpConfig]" = None,
+) -> "dict[str, Any]": ...
 
 
 @overload
-def schema_dump(data: "ModelT", exclude_unset: bool = True) -> "ModelT": ...  # pyright: ignore[reportOverlappingOverload]
+def schema_dump(
+    data: "DTODataLike[Any]",
+    exclude_unset: bool = True,
+    *,
+    config: "Optional[SchemaDumpConfig]" = None,
+) -> "dict[str, Any]": ...
+
+
+@overload
+def schema_dump(  # pyright: ignore[reportOverlappingOverload]
+    data: "ModelT",
+    exclude_unset: bool = True,
+    *,
+    config: "Optional[SchemaDumpConfig]" = None,
+) -> "ModelT": ...
 
 
 @overload
 def schema_dump(
     data: Any,
     exclude_unset: bool = True,
+    *,
+    config: "Optional[SchemaDumpConfig]" = None,
 ) -> "dict[str, Any]": ...
 
 
 def schema_dump(  # noqa: PLR0911
     data: "Union[dict[str, Any], ModelT, SupportedSchemaModel, DTODataLike[ModelT], RowMapping, Row[Any]]",
     exclude_unset: bool = True,
+    *,
+    config: "Optional[SchemaDumpConfig]" = None,
 ) -> "Union[dict[str, Any], ModelT]":
     """Dump a data object to a dictionary."""
+    dump_config = _get_schema_dump_config(exclude_unset=exclude_unset, config=config)
     if is_dict(data):
         return data
     if is_row_mapping(data):
         return dict(data)
     if is_sqlmodel_table_model(data):
         return cast("ModelT", data)
-    if is_pydantic_model(data):
-        return data.model_dump(exclude_unset=exclude_unset)
-    if is_msgspec_struct(data):
-        if exclude_unset:
-            return {
-                f: getattr(data, f)
-                for f in data.__struct_fields__
-                if hasattr(data, f) and getattr(data, f) is not UNSET
-            }
-        return {f: getattr(data, f, None) for f in data.__struct_fields__}
-    if is_attrs_instance(data):
-        if exclude_unset:
-            # Filter out attrs.NOTHING values for partial updates.
-            def filter_unset_attrs(attr: Any, value: Any) -> bool:  # noqa: ARG001
-                return value is not attrs_nothing
-
-            return asdict(data, filter=filter_unset_attrs)
-        if CATTRS_INSTALLED:
-            return unstructure(data)  # type: ignore[no-any-return]
-        return asdict(data)
+    if (schema_data := _dump_schema_model(data, dump_config)) is not None:
+        return schema_data
     if is_dto_data(data):
         return cast("dict[str, Any]", data.as_builtins())
     if has_dict_attribute(data):
