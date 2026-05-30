@@ -357,7 +357,7 @@ class BooleanFilter(StatementFilter):
         if self.value is None:
             return statement
         field = self._get_instrumented_attr(model, self.field_name)
-        return cast("StatementTypeT", statement.where(field.is_(self.value)))
+        return cast("StatementTypeT", statement.where(field == self.value))
 
 
 @dataclass
@@ -1165,6 +1165,8 @@ class MultiFilter(StatementFilter):
     _filter_map: ClassVar[FilterMap] = {
         "before_after": BeforeAfter,
         "on_before_after": OnBeforeAfter,
+        "boolean": BooleanFilter,
+        "choices": ChoicesFilter,
         "collection": CollectionFilter,
         "not_in_collection": NotInCollectionFilter,
         "limit_offset": LimitOffset,
@@ -1261,6 +1263,8 @@ class MultiFilter(StatementFilter):
 FilterTypes: TypeAlias = Union[
     BeforeAfter,
     OnBeforeAfter,
+    BooleanFilter,
+    ChoicesFilter[Any],
     CollectionFilter[Any],
     LimitOffset,
     NullFilter,

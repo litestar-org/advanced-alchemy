@@ -5,6 +5,7 @@ from typing import Optional
 import pytest
 from pytest import FixtureRequest
 from sqlalchemy import Boolean, Engine, String, func, select
+from sqlalchemy.dialects import oracle
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
@@ -303,6 +304,9 @@ def test_boolean_filter(session: Session, movie_model_sync: type[DeclarativeBase
     setup_movie_data(session, Movie)
     boolean_filter = BooleanFilter(field_name="is_featured", value=True)
     statement = boolean_filter.append_to_statement(select(Movie), Movie)
+    oracle_sql = str(statement.compile(dialect=oracle.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
+    assert " IS 1" not in oracle_sql
+    assert " = 1" in oracle_sql
     results = session.execute(statement).scalars().all()
     assert len(results) == 2
 
@@ -1026,6 +1030,20 @@ def test_multi_filter_all_filter_types(session: Session, movie_model_sync: type[
     # Should match all movies since at least one condition is true for each
     assert len(results) == 3
     assert {r.title for r in results} == {"The Matrix", "The Hangover", "Shawshank Redemption"}
+
+    multi_filter = MultiFilter(
+        filters={
+            "and_": [
+                {"type": "boolean", "field_name": "is_featured", "value": True},
+                {"type": "choices", "field_name": "genre", "values": ["Action"]},
+            ]
+        }
+    )
+
+    statement = multi_filter.append_to_statement(select(Movie), Movie)
+    results = session.execute(statement).scalars().all()
+    assert len(results) == 1
+    assert results[0].title == "The Matrix"
 
 
 def test_comparison_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:

@@ -1,10 +1,11 @@
 """Tests for the FastAPI DI module."""
 
 import inspect
-import sys  # Import sys
+import sys
 import typing
 from collections.abc import AsyncGenerator
 from datetime import datetime
+from enum import Enum, IntEnum
 from typing import Annotated, Union, cast
 from unittest.mock import patch
 from uuid import UUID
@@ -22,6 +23,7 @@ from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.fastapi.providers import (
     _CACHE_NAMESPACE,  # pyright: ignore[reportPrivateUsage]
     DEPENDENCY_DEFAULTS,
+    ChoiceField,
     DependencyCache,
     DependencyDefaults,
     FieldNameType,
@@ -32,6 +34,8 @@ from advanced_alchemy.extensions.fastapi.providers import (
 )
 from advanced_alchemy.filters import (
     BeforeAfter,
+    BooleanFilter,
+    ChoicesFilter,
     CollectionFilter,
     FilterTypes,
     LimitOffset,
@@ -42,6 +46,23 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.utils.dependencies import make_hashable
 from advanced_alchemy.utils.singleton import SingletonMeta
+
+if sys.version_info >= (3, 11):
+    from enum import StrEnum
+else:
+
+    class StrEnum(str, Enum):  # type: ignore[no-redef]
+        """Compatibility shim for testing string enum behavior on Python < 3.11."""
+
+
+class StatusChoice(StrEnum):
+    ACTIVE = "active"
+    PENDING = "pending"
+
+
+class PriorityChoice(IntEnum):
+    LOW = 1
+    HIGH = 2
 
 
 def test_dependency_cache_singleton() -> None:
@@ -267,6 +288,8 @@ def test_create_filter_dependencies_integration_and_openapi() -> None:
             "search": "name",
             "sort_field": "name",  # Enables OrderBy
             "created_at": True,
+            "boolean_fields": ["is_featured"],
+            "choice_fields": [ChoiceField("status", ("active", "pending"))],
         }
     )
 
@@ -283,7 +306,7 @@ def test_create_filter_dependencies_integration_and_openapi() -> None:
     # Restore original client.get call
     # Test case: Apply multiple filters
     response = client.get(
-        "/items?ids=123e4567-e89b-12d3-a456-426614174000&ids=123e4567-e89b-12d3-a456-426614174001&currentPage=2&pageSize=5&searchString=apple&orderBy=name&sortOrder=asc&createdAfter=2023-01-01T00:00:00Z"
+        "/items?ids=123e4567-e89b-12d3-a456-426614174000&ids=123e4567-e89b-12d3-a456-426614174001&currentPage=2&pageSize=5&searchString=apple&orderBy=name&sortOrder=asc&createdAfter=2023-01-01T00:00:00Z&isFeatured=true&status=active&status=pending"
     )
     assert response.status_code == 200
     data = cast(list[str], response.json())
@@ -294,7 +317,9 @@ def test_create_filter_dependencies_integration_and_openapi() -> None:
     assert "SearchFilter" in data
     assert "OrderBy" in data
     assert "BeforeAfter" in data
-    assert len(data) == 5
+    assert "BooleanFilter" in data
+    assert "ChoicesFilter" in data
+    assert len(data) == 7
 
     # Test case: Only defaults (expect LimitOffset, OrderBy)
     response = client.get("/items")
@@ -304,6 +329,8 @@ def test_create_filter_dependencies_integration_and_openapi() -> None:
     assert "LimitOffset" in data
     assert "OrderBy" in data
     assert "CollectionFilter" not in data
+    assert "BooleanFilter" not in data
+    assert "ChoicesFilter" not in data
     assert "SearchFilter" not in data
     assert "BeforeAfter" not in data
     assert len(data) == 2
@@ -324,6 +351,8 @@ def test_create_filter_dependencies_integration_and_openapi() -> None:
     # search -> searchString, searchIgnoreCase
     # sort_field -> orderBy, sortOrder
     # created_at -> createdBefore, createdAfter
+    # boolean_fields -> isFeatured
+    # choice_fields -> status
     expected_params = {
         "ids",
         "currentPage",
@@ -334,6 +363,8 @@ def test_create_filter_dependencies_integration_and_openapi() -> None:
         "sortOrder",
         "createdBefore",
         "createdAfter",
+        "isFeatured",
+        "status",
     }
 
     assert param_names == expected_params
@@ -355,6 +386,74 @@ def test_create_filter_dependencies_integration_and_openapi() -> None:
     assert page_size_param["required"] is False
     assert page_size_param["schema"]["type"] == "integer"
     assert page_size_param["schema"]["default"] == 20  # Default from DependencyDefaults
+
+    is_featured_param = next((p for p in parameters if p["name"] == "isFeatured"), None)
+    assert is_featured_param is not None
+    assert is_featured_param["in"] == "query"
+    assert is_featured_param["required"] is False
+    assert any(
+        schema.get("type") == "boolean"
+        for schema in is_featured_param["schema"].get("anyOf", [is_featured_param["schema"]])
+    )
+
+    status_param = next((p for p in parameters if p["name"] == "status"), None)
+    assert status_param is not None
+    assert status_param["in"] == "query"
+    assert status_param["required"] is False
+    status_array_schema = next(
+        schema
+        for schema in status_param["schema"].get("anyOf", [status_param["schema"]])
+        if schema.get("type") == "array"
+    )
+    assert status_array_schema["items"]["type"] == "string"
+    assert status_array_schema["items"]["enum"] == ["active", "pending"]
+
+
+def test_choice_filter_openapi_schema_supports_explicit_and_enum_choices() -> None:
+    """Test choice filters expose explicit, StrEnum, and IntEnum values in OpenAPI."""
+    deps = provide_filters(
+        {
+            "choice_fields": [
+                ChoiceField("visibility", ("public", "private")),
+                FieldNameType("status", StatusChoice),
+                FieldNameType("priority", PriorityChoice),
+            ],
+        }
+    )
+
+    app = FastAPI()
+
+    @app.get("/items")
+    async def get_items(filters: Annotated[list[FilterTypes], Depends(deps)]) -> list[str]:
+        return [type(f).__name__ for f in filters]
+
+    client = TestClient(app)
+
+    response = client.get("/items?visibility=public&status=active&priority=1")
+    assert response.status_code == 200
+    assert response.json() == ["ChoicesFilter", "ChoicesFilter", "ChoicesFilter"]
+
+    schema = client.get("/openapi.json").json()
+    parameters = schema["paths"]["/items"]["get"]["parameters"]
+    param_schemas = {parameter["name"]: parameter["schema"] for parameter in parameters}
+    components = schema["components"]["schemas"]
+
+    visibility_items = next(schema for schema in param_schemas["visibility"]["anyOf"] if schema.get("type") == "array")[
+        "items"
+    ]
+    assert visibility_items == {"enum": ["public", "private"], "type": "string"}
+
+    status_items = next(schema for schema in param_schemas["status"]["anyOf"] if schema.get("type") == "array")["items"]
+    assert status_items == {"$ref": "#/components/schemas/StatusChoice"}
+    assert components["StatusChoice"]["enum"] == ["active", "pending"]
+    assert components["StatusChoice"]["type"] == "string"
+
+    priority_items = next(schema for schema in param_schemas["priority"]["anyOf"] if schema.get("type") == "array")[
+        "items"
+    ]
+    assert priority_items == {"$ref": "#/components/schemas/PriorityChoice"}
+    assert components["PriorityChoice"]["enum"] == [1, 2]
+    assert components["PriorityChoice"]["type"] == "integer"
 
 
 # Custom Defaults Test (remains largely the same logic)
@@ -430,6 +529,8 @@ def test_openapi_schema_comprehensive() -> None:
             "sort_field": {"name", "created_at", "email"},  # Multiple sort fields (using set)
             "not_in_fields": {FieldNameType("status", str), FieldNameType("category", str)},  # Not-in fields
             "in_fields": {FieldNameType("tag", str), FieldNameType("author_id", str)},  # In fields
+            "boolean_fields": ["is_featured"],
+            "choice_fields": [FieldNameType("state", str)],
         }
     )
 
@@ -447,6 +548,8 @@ def test_openapi_schema_comprehensive() -> None:
         "category_not_in_filter",
         "tag_in_filter",
         "author_id_in_filter",
+        "is_featured_boolean_filter",
+        "state_choices_filter",
     }
     assert param_names == expected_param_names
 
@@ -473,6 +576,14 @@ def test_openapi_schema_comprehensive() -> None:
             assert "NotInCollectionFilter" in str(param.annotation), (
                 f"{name} should have NotInCollectionFilter type, got {param.annotation}"
             )
+        elif "boolean_filter" in name:
+            assert "BooleanFilter" in str(param.annotation), (
+                f"{name} should have BooleanFilter type, got {param.annotation}"
+            )
+        elif "choices_filter" in name:
+            assert "ChoicesFilter" in str(param.annotation), (
+                f"{name} should have ChoicesFilter type, got {param.annotation}"
+            )
         elif "in_filter" in name:
             assert "CollectionFilter" in str(param.annotation), (
                 f"{name} should have CollectionFilter type, got {param.annotation}"
@@ -487,6 +598,8 @@ def test_openapi_schema_comprehensive() -> None:
     mock_limit_offset = LimitOffset(limit=10, offset=0)
     mock_search_filter = SearchFilter(field_name={"name"}, value="test", ignore_case=False)
     mock_order_by = OrderBy(field_name="name", sort_order="asc")
+    mock_boolean_filter = BooleanFilter(field_name="is_featured", value=True)
+    mock_choices_filter = ChoicesFilter(field_name="state", values=["active"])
 
     result = deps(
         id_filter=mock_id_filter,
@@ -499,16 +612,20 @@ def test_openapi_schema_comprehensive() -> None:
         category_not_in_filter=None,
         tag_in_filter=None,
         author_id_in_filter=None,
+        is_featured_boolean_filter=mock_boolean_filter,
+        state_choices_filter=mock_choices_filter,
     )
 
     # Verify that the results contain the expected filter objects
     assert isinstance(result, list)
-    assert len(result) == 5
+    assert len(result) == 7
     assert mock_id_filter in result
     assert mock_created_filter in result
     assert mock_limit_offset in result
     assert mock_search_filter in result
     assert mock_order_by in result
+    assert mock_boolean_filter in result
+    assert mock_choices_filter in result
 
 
 def test_provide_filters_normalizes_list_field_config() -> None:
@@ -518,6 +635,8 @@ def test_provide_filters_normalizes_list_field_config() -> None:
             "search": ["name", "email"],
             "not_in_fields": ["status", FieldNameType("category", str)],
             "in_fields": ["tag"],
+            "boolean_fields": ["is_active"],
+            "choice_fields": ["state"],
         }
     )
 
@@ -527,6 +646,8 @@ def test_provide_filters_normalizes_list_field_config() -> None:
         "status_not_in_filter",
         "category_not_in_filter",
         "tag_in_filter",
+        "is_active_boolean_filter",
+        "state_choices_filter",
     }
 
 

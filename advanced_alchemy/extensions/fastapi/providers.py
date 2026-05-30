@@ -32,6 +32,8 @@ from sqlalchemy.orm import Session
 from advanced_alchemy.extensions.fastapi.extension import AdvancedAlchemy
 from advanced_alchemy.filters import (
     BeforeAfter,
+    BooleanFilter,
+    ChoicesFilter,
     CollectionFilter,
     FilterTypes,
     LimitOffset,
@@ -49,10 +51,13 @@ from advanced_alchemy.service import (
     SQLAlchemySyncRepositoryService,
 )
 from advanced_alchemy.utils.dependencies import (
+    ChoiceField,
     DependencyCache,
     FieldNameType,
     FilterConfig,
     make_hashable,
+    normalize_choice_field_types,
+    normalize_field_name_types,
     normalize_sort_field,
 )
 from advanced_alchemy.utils.text import camelize
@@ -75,6 +80,7 @@ SyncServiceT_co = TypeVar("SyncServiceT_co", bound=SQLAlchemySyncRepositoryServi
 
 __all__ = (
     "DEPENDENCY_DEFAULTS",
+    "ChoiceField",
     "DependencyCache",
     "DependencyDefaults",
     "FieldNameType",
@@ -129,16 +135,6 @@ def _should_commit_for_status(status_code: int, commit_mode: str) -> bool:
     if commit_mode == "autocommit_include_redirect":
         return 200 <= status_code < 400  # noqa: PLR2004
     return False
-
-
-def _normalize_field_name_types(
-    field_definitions: Union[str, FieldNameType, set[FieldNameType], list[Union[str, FieldNameType]]],
-) -> set[FieldNameType]:
-    raw_fields = {field_definitions} if isinstance(field_definitions, (str, FieldNameType)) else set(field_definitions)
-    return {
-        FieldNameType(name=field_definition, type_hint=str) if isinstance(field_definition, str) else field_definition
-        for field_definition in raw_fields
-    }
 
 
 @overload
@@ -354,6 +350,8 @@ def provide_filters(
         "sort_field",
         "not_in_fields",
         "in_fields",
+        "boolean_fields",
+        "choice_fields",
     }
 
     has_filters = False
@@ -640,7 +638,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 
     # Add not_in filter providers
     if not_in_fields := config.get("not_in_fields"):
-        for field_def in _normalize_field_name_types(not_in_fields):
+        for field_def in normalize_field_name_types(not_in_fields):
             # Capture field_def by value to avoid Python closure late binding gotcha
             # Without default parameter, all closures would reference the loop variable's final value
             def create_not_in_filter_provider(  # pyright: ignore
@@ -672,7 +670,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 
     # Add in filter providers
     if in_fields := config.get("in_fields"):
-        for field_def in _normalize_field_name_types(in_fields):
+        for field_def in normalize_field_name_types(in_fields):
             # Capture field_def by value to avoid Python closure late binding gotcha
             # Without default parameter, all closures would reference the loop variable's final value
             def create_in_filter_provider(  # pyright: ignore
@@ -701,6 +699,66 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 )
             )
             annotations[param_name] = Annotated[Optional[CollectionFilter[field_def.type_hint]], Depends(provider)]  # type: ignore
+
+    if boolean_fields := config.get("boolean_fields"):
+        for boolean_field_def in normalize_field_name_types(boolean_fields):
+
+            def create_boolean_filter_provider(
+                field_name: FieldNameType = boolean_field_def,
+            ) -> Callable[..., Optional[BooleanFilter]]:
+                def provide_boolean_filter(
+                    value: Annotated[
+                        Optional[bool],
+                        Query(
+                            alias=camelize(field_name.name),
+                            description=f"Filter {field_name.name} by boolean value",
+                        ),
+                    ] = None,
+                ) -> Optional[BooleanFilter]:
+                    return BooleanFilter(field_name=field_name.name, value=value) if value is not None else None
+
+                return provide_boolean_filter
+
+            boolean_provider = create_boolean_filter_provider()
+            param_name = f"{boolean_field_def.name}_boolean_filter"
+            params.append(
+                inspect.Parameter(
+                    name=param_name,
+                    kind=inspect.Parameter.KEYWORD_ONLY,
+                    annotation=Annotated[Optional[BooleanFilter], Depends(boolean_provider)],
+                )
+            )
+            annotations[param_name] = Annotated[Optional[BooleanFilter], Depends(boolean_provider)]
+
+    if choice_fields := config.get("choice_fields"):
+        for choice_field_def in normalize_choice_field_types(choice_fields):
+
+            def create_choices_filter_provider(  # pyright: ignore
+                field_name: FieldNameType = choice_field_def,
+            ) -> Callable[..., Optional[ChoicesFilter[Any]]]:
+                def provide_choices_filter(  # pyright: ignore
+                    values: Annotated[  # type: ignore
+                        Optional[list[field_name.type_hint]],  # pyright: ignore
+                        Query(
+                            alias=camelize(field_name.name),
+                            description=f"Filter {field_name.name} by allowed choices",
+                        ),
+                    ] = None,
+                ) -> Optional[ChoicesFilter[field_name.type_hint]]:  # type: ignore
+                    return ChoicesFilter(field_name=field_name.name, values=values) if values else None  # pyright: ignore
+
+                return provide_choices_filter  # pyright: ignore
+
+            choices_provider = create_choices_filter_provider()  # pyright: ignore
+            param_name = f"{choice_field_def.name}_choices_filter"
+            params.append(
+                inspect.Parameter(
+                    name=param_name,
+                    kind=inspect.Parameter.KEYWORD_ONLY,
+                    annotation=Annotated[Optional[ChoicesFilter[Any]], Depends(choices_provider)],
+                )
+            )
+            annotations[param_name] = Annotated[Optional[ChoicesFilter[Any]], Depends(choices_provider)]
 
     _aggregate_filter_function.__signature__ = inspect.Signature(  # type: ignore
         parameters=params,
