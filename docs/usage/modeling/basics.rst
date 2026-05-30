@@ -76,6 +76,110 @@ Additionally, Advanced Alchemy provides mixins to enhance model functionality:
      - Automatic Select or Create for many-to-many relationships
 
 
+Column Ordering
+---------------
+
+The mixin and base columns carry a ``sort_order`` so that tables created with
+``metadata.create_all()`` have a consistent, predictable column layout. Primary keys come
+first, your model's own columns sit in the middle, and the sentinel and audit columns are
+grouped at the end.
+
+.. list-table:: Mixin Column ``sort_order`` Values
+   :header-rows: 1
+   :widths: 40 30 30
+
+   * - Column
+     - Source
+     - ``sort_order``
+   * - ``id`` (primary key)
+     - ``UUIDPrimaryKey``, ``BigIntPrimaryKey``, ``IdentityPrimaryKey``, ``NanoIDPrimaryKey``
+     - ``-100``
+   * - Your model's columns
+     - User-defined
+     - ``0`` (default)
+   * - ``sa_orm_sentinel``
+     - ``SentinelMixin``
+     - ``3001``
+   * - ``created_at``
+     - ``AuditColumns``
+     - ``3002``
+   * - ``updated_at``
+     - ``AuditColumns``
+     - ``3003``
+
+Columns are emitted in ascending ``sort_order``; columns sharing a value (such as your own
+columns, which all use the default of ``0``) keep their declaration order. The negative value
+on the primary key pins it ahead of user columns, and the high values on the sentinel and audit
+columns push them to the end of the table.
+
+Consider a model that declares ``name`` and ``email`` on top of ``UUIDAuditBase``:
+
+.. code-block:: python
+
+    from advanced_alchemy.base import UUIDAuditBase
+    from sqlalchemy.orm import Mapped
+
+
+    class OrderedUser(UUIDAuditBase):
+        __tablename__ = "ordered_users"
+
+        name: Mapped[str]
+        email: Mapped[str]
+
+The resulting table has the following physical column order:
+
+.. code-block:: text
+
+    id              -- sort_order -100 (primary key)
+    name            -- sort_order 0    (declaration order)
+    email           -- sort_order 0    (declaration order)
+    sa_orm_sentinel -- sort_order 3001
+    created_at      -- sort_order 3002
+    updated_at      -- sort_order 3003
+
+.. note::
+
+   This ordering applies to **new table creation** through ``metadata.create_all()`` only. It
+   does not reorder columns in tables that already exist, and Alembic autogenerate does not
+   detect column-order changes, so it will not emit a migration to reorder an existing table.
+
+Positioning Your Own Columns
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``sort_order`` is a standard :func:`~sqlalchemy.orm.mapped_column` argument, so you can place your
+own columns anywhere in the table by setting it explicitly. Give a column a value between the
+primary key (``-100``) and the sentinel (``3001``) to position it within the body of the table;
+columns that share a value keep their declaration order.
+
+.. code-block:: python
+
+    from advanced_alchemy.base import UUIDAuditBase
+    from sqlalchemy.orm import Mapped, mapped_column
+
+
+    class PositionedUser(UUIDAuditBase):
+        __tablename__ = "positioned_users"
+
+        email: Mapped[str] = mapped_column(sort_order=-50)
+        name: Mapped[str]
+        signup_source: Mapped[str] = mapped_column(sort_order=100)
+
+This pins ``email`` ahead of the default columns and pushes ``signup_source`` after them:
+
+.. code-block:: text
+
+    id              -- sort_order -100 (primary key)
+    email           -- sort_order -50
+    name            -- sort_order 0    (default)
+    signup_source   -- sort_order 100
+    sa_orm_sentinel -- sort_order 3001
+    created_at      -- sort_order 3002
+    updated_at      -- sort_order 3003
+
+Use a value below ``-100`` to place a column ahead of the primary key, or above ``3003`` to place
+it after the audit columns.
+
+
 Basic Model Example
 -------------------
 
@@ -272,3 +376,67 @@ letting you replace the primary key strategy.
         full_name: Mapped[str]
         is_active: Mapped[bool] = mapped_column(default=True)
         last_login: Mapped[Optional[datetime.datetime]] = mapped_column(default=None)
+
+.. _custom_primary_keys:
+
+Caller-Supplied Primary Keys with Audit Columns
+-----------------------------------------------
+
+The opinionated bases such as ``UUIDAuditBase`` and ``BigIntAuditBase`` generate the ``id`` value
+for you (a fresh UUID, a sequence value, and so on). When the primary key already exists -- for
+example when importing rows that carry their own identifiers from an external system -- combine
+``DefaultBase`` with the :class:`~advanced_alchemy.mixins.AuditColumns` mixin and declare the
+primary key yourself. ``DefaultBase`` supplies the Advanced Alchemy registry and table-name
+handling without adding a primary key, and ``AuditColumns`` adds the ``created_at`` and
+``updated_at`` timestamps on its own.
+
+.. code-block:: python
+
+    from advanced_alchemy.base import DefaultBase
+    from advanced_alchemy.mixins import AuditColumns
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    class ImportedProduct(DefaultBase, AuditColumns):
+        __tablename__ = "imported_product"
+
+        id: Mapped[str] = mapped_column(primary_key=True)
+        name: Mapped[str]
+
+The ``id`` column has no ``default`` and no server default, so the value is always taken from the
+instance you create. This is exactly what bulk imports need: each row keeps the identifier it
+already has.
+
+.. code-block:: python
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+
+    async def create_imported_products(db_session: AsyncSession) -> None:
+        db_session.add_all(
+            [
+                ImportedProduct(id="SKU-001", name="Widget"),
+                ImportedProduct(id="SKU-002", name="Gadget"),
+            ]
+        )
+        await db_session.commit()
+
+The ``created_at`` and ``updated_at`` timestamps are still populated automatically.
+
+For an integer primary key whose values come from the caller, disable autoincrement so the
+database does not attempt to assign one:
+
+.. code-block:: python
+
+    from advanced_alchemy.base import DefaultBase
+    from advanced_alchemy.mixins import AuditColumns
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    class LegacyRecord(DefaultBase, AuditColumns):
+        __tablename__ = "legacy_record"
+
+        id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+        label: Mapped[str]
+
+If you want to set a UUID yourself rather than letting the base generate one, use the same
+pattern with a :class:`uuid.UUID`-typed column and pass the value explicitly when constructing the
+instance.
