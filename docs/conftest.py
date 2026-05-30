@@ -22,6 +22,11 @@ EXECUTABLE_DOCS = (
 )
 
 NON_EXECUTABLE_DOCS = (
+    "usage/adk/artifacts.rst",
+    "usage/adk/frameworks.rst",
+    "usage/adk/getting-started.rst",
+    "usage/adk/memory.rst",
+    "usage/adk/sessions.rst",
     "usage/caching.rst",
     "usage/cli.rst",
     "usage/frameworks/fastapi.rst",

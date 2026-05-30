@@ -21,6 +21,7 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     caching
     cli
     database_seeding
+    adk/index
 
 .. toctree::
     :maxdepth: 2

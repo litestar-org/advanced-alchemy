@@ -3,6 +3,18 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.11.0
+    :date: 2026-05-24
+
+    .. change:: add Google ADK persistence extension
+        :type: feature
+
+        Adds ``advanced_alchemy.extensions.adk`` for Google ADK 2.x sessions,
+        artifacts, and memory. The extension uses user-owned model mixins,
+        integrates artifact blobs with Advanced Alchemy storage backends, and
+        includes framework helpers for Litestar, FastAPI, Flask, Sanic, and
+        Starlette.
+
 .. changelog:: 1.10.0
     :date: 2026-05-23
 
