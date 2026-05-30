@@ -17,16 +17,19 @@ from uuid import UUID
 import pytest
 
 from advanced_alchemy.typing import (
+    ATTRS_INSTALLED,
     MSGSPEC_INSTALLED,
     NUMPY_INSTALLED,
     ORJSON_INSTALLED,
     PYDANTIC_INSTALLED,
 )
+from advanced_alchemy.utils.dataclass import Empty
 from advanced_alchemy.utils.serialization import (
     DEFAULT_TYPE_ENCODERS,
     JSONSerializer,
     MsgspecSerializer,
     OrjsonSerializer,
+    SchemaDumpConfig,
     StandardLibSerializer,
     TypeEncodersMap,
     convert_date_to_iso,
@@ -36,6 +39,7 @@ from advanced_alchemy.utils.serialization import (
     encode_complex_type,
     encode_json,
     get_serializer,
+    schema_dump,
 )
 
 
@@ -136,6 +140,183 @@ def test_default_bytes_encoder() -> None:
 def test_default_set_and_frozenset_encoders() -> None:
     assert DEFAULT_TYPE_ENCODERS[set]({1, 2, 3}) == [1, 2, 3]
     assert DEFAULT_TYPE_ENCODERS[frozenset](frozenset({"a"})) == ["a"]
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic not installed")
+def test_schema_dump_config_pydantic_exclude_unset_false_includes_defaults() -> None:
+    """SchemaDumpConfig should pass exclude_unset through to Pydantic model_dump."""
+    from pydantic import BaseModel
+
+    class UpdateSchema(BaseModel):
+        name: str
+        is_admin: bool = False
+
+    result = schema_dump(UpdateSchema(name="Ada"), config=SchemaDumpConfig(exclude_unset=False))
+
+    assert result == {"name": "Ada", "is_admin": False}
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic not installed")
+def test_schema_dump_config_pydantic_missing_sentinel_is_excluded_by_default() -> None:
+    """Pydantic MISSING remains sentinel-like under the default dump policy."""
+    from pydantic import BaseModel
+
+    missing_module = pytest.importorskip("pydantic.experimental.missing_sentinel")
+
+    class UpdateSchema(BaseModel):
+        name: str = "Ada"
+        marker: Any = missing_module.MISSING
+
+    result = schema_dump(UpdateSchema(), config=SchemaDumpConfig(exclude_unset=False))
+
+    assert result == {"name": "Ada"}
+
+
+@pytest.mark.skipif(not MSGSPEC_INSTALLED, reason="msgspec not installed")
+def test_schema_dump_config_msgspec_exclude_sentinels() -> None:
+    """SchemaDumpConfig should control msgspec UNSET sentinel filtering."""
+    import msgspec
+
+    class UpdateStruct(msgspec.Struct):
+        name: Any = msgspec.UNSET
+        is_admin: bool = False
+        notes: Any = None
+
+    data = UpdateStruct()
+
+    assert schema_dump(data) == {"is_admin": False, "notes": None}
+    assert schema_dump(data, config=SchemaDumpConfig(exclude_sentinels=False)) == {
+        "name": msgspec.UNSET,
+        "is_admin": False,
+        "notes": None,
+    }
+    assert schema_dump(data, config=SchemaDumpConfig(exclude_defaults=True, exclude_sentinels=False)) == {}
+    assert schema_dump(data, config=SchemaDumpConfig(exclude_none=True)) == {"is_admin": False}
+
+
+@pytest.mark.skipif(not MSGSPEC_INSTALLED, reason="msgspec not installed")
+def test_schema_dump_exclude_unset_false_includes_msgspec_unset() -> None:
+    """exclude_unset=False should include msgspec UNSET values for existing callers."""
+    import msgspec
+
+    class UpdateStruct(msgspec.Struct):
+        name: Any = msgspec.UNSET
+
+    assert schema_dump(UpdateStruct(), exclude_unset=False) == {"name": msgspec.UNSET}
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic not installed")
+def test_schema_dump_config_exclude_unset_false_filters_pydantic_missing_by_default() -> None:
+    """SchemaDumpConfig(exclude_unset=False) should filter sentinels by default."""
+    from pydantic import BaseModel
+
+    missing_module = pytest.importorskip("pydantic.experimental.missing_sentinel")
+
+    class UpdateSchema(BaseModel):
+        marker: Any = missing_module.MISSING
+
+    assert schema_dump(UpdateSchema(), config=SchemaDumpConfig(exclude_unset=False)) == {}
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic not installed")
+def test_schema_dump_config_pydantic_can_include_missing_sentinel() -> None:
+    """SchemaDumpConfig should be able to include Pydantic MISSING when requested."""
+    from pydantic import BaseModel
+
+    missing_module = pytest.importorskip("pydantic.experimental.missing_sentinel")
+
+    class UpdateSchema(BaseModel):
+        marker: Any = missing_module.MISSING
+
+    assert schema_dump(
+        UpdateSchema(),
+        config=SchemaDumpConfig(exclude_unset=False, exclude_sentinels=False),
+    ) == {"marker": missing_module.MISSING}
+
+
+def test_schema_dump_config_dataclass_exclude_sentinels() -> None:
+    """SchemaDumpConfig should apply Advanced Alchemy Empty filtering to dataclasses."""
+    from dataclasses import dataclass
+
+    @dataclass
+    class UpdateDataclass:
+        name: str
+        is_admin: bool = False
+        notes: Any = None
+        marker: Any = Empty
+
+    data = UpdateDataclass(name="Ada")
+
+    assert schema_dump(data) == {"name": "Ada", "is_admin": False, "notes": None}
+    assert schema_dump(data, config=SchemaDumpConfig(exclude_sentinels=False)) == {
+        "name": "Ada",
+        "is_admin": False,
+        "notes": None,
+        "marker": Empty,
+    }
+    assert schema_dump(data, config=SchemaDumpConfig(exclude_defaults=True, exclude_sentinels=False)) == {"name": "Ada"}
+    assert schema_dump(data, config=SchemaDumpConfig(exclude_none=True)) == {"name": "Ada", "is_admin": False}
+
+
+@pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
+def test_schema_dump_config_attrs_exclude_defaults_and_none() -> None:
+    """SchemaDumpConfig should apply default and None filtering to attrs instances."""
+    from attrs import define
+
+    @define
+    class UpdateAttrs:
+        name: str
+        is_admin: bool = False
+        notes: Any = None
+
+    data = UpdateAttrs(name="Ada")
+
+    assert schema_dump(data, config=SchemaDumpConfig(exclude_defaults=True)) == {"name": "Ada"}
+    assert schema_dump(data, config=SchemaDumpConfig(exclude_none=True)) == {"name": "Ada", "is_admin": False}
+
+
+def test_schema_dump_skips_pydantic_branch_when_pydantic_not_installed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """schema_dump should not rely on Pydantic APIs when Pydantic is unavailable."""
+
+    class PydanticLike:
+        def __init__(self) -> None:
+            self.name = "Ada"
+
+        def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+            msg = "model_dump should not be called when Pydantic is unavailable"
+            raise AssertionError(msg)
+
+    monkeypatch.setattr("advanced_alchemy.utils.serialization.PYDANTIC_INSTALLED", False)
+
+    assert schema_dump(PydanticLike()) == {"name": "Ada"}
+
+
+def test_schema_dump_skips_msgspec_branch_when_msgspec_not_installed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """schema_dump should not rely on msgspec APIs when msgspec is unavailable."""
+
+    class MsgspecLike:
+        __struct_fields__ = ("name",)
+
+        def __init__(self) -> None:
+            self.name = "Ada"
+
+    monkeypatch.setattr("advanced_alchemy.utils.serialization.MSGSPEC_INSTALLED", False)
+
+    assert schema_dump(MsgspecLike()) == {"name": "Ada"}
+
+
+def test_schema_dump_skips_attrs_branch_when_attrs_not_installed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """schema_dump should not rely on attrs APIs when attrs is unavailable."""
+
+    class AttrsLike:
+        __attrs_attrs__ = ()
+
+        def __init__(self) -> None:
+            self.name = "Ada"
+
+    monkeypatch.setattr("advanced_alchemy.utils.serialization.ATTRS_INSTALLED", False)
+
+    assert schema_dump(AttrsLike()) == {"name": "Ada"}
 
 
 @pytest.mark.parametrize(

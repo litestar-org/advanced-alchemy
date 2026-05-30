@@ -1,28 +1,33 @@
-"""Unit tests verifying to_model() operation flow for service.update()
+"""Unit tests for service.update() model conversion flow.
 
-This test suite validates GitHub issue #555 fix - ensuring that service.update()
-calls to_model(data, "update") for ALL data types (dict, Pydantic, msgspec, attrs, model).
-
-Before the fix, dict/Pydantic/msgspec/attrs data bypassed to_model() entirely.
+These tests verify that update input types are routed through to_model(data, "update")
+and the update lifecycle hook before persistence.
 """
 
 from __future__ import annotations
 
-from typing import Any, Optional
+import datetime
+from typing import Any, Optional, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy import String
+from sqlalchemy.orm import Mapped, mapped_column
 
+from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 from advanced_alchemy.repository._util import get_primary_key_info
-from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
+from advanced_alchemy.service import SchemaDumpConfig, SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
 from advanced_alchemy.utils.serialization import ATTRS_INSTALLED, MSGSPEC_INSTALLED, PYDANTIC_INSTALLED, ModelDictT
 
-# Use real SQLAlchemy models from fixtures instead of mock
-# Import from test fixtures which have proper SQLAlchemy declarative models
-from tests.fixtures.uuid.models import UUIDAuthor as MockModel
-
 pytestmark = [pytest.mark.unit]
+
+
+class MockModel(UUIDAuditBase):
+    """Minimal SQLAlchemy model for service flow tests."""
+
+    name: Mapped[str] = mapped_column(String(length=100))  # pyright: ignore[reportUninitializedInstanceVariable]
+    dob: Mapped[datetime.date | None] = mapped_column(nullable=True)  # pyright: ignore[reportUninitializedInstanceVariable]
 
 
 class MockRepository(SQLAlchemyAsyncRepository[MockModel]):
@@ -80,10 +85,11 @@ class TrackingService(SQLAlchemyAsyncRepositoryService[MockModel, MockRepository
         self,
         data: ModelDictT[MockModel],
         operation: Optional[str] = None,
+        schema_dump_config: Optional[SchemaDumpConfig] = None,
     ) -> MockModel:
         """Track to_model calls."""
         self.to_model_calls.append((data, operation))
-        return await super().to_model(data, operation)
+        return await super().to_model(data, operation, schema_dump_config=schema_dump_config)
 
     async def to_model_on_update(self, data: ModelDictT[MockModel]) -> ModelDictT[MockModel]:
         """Track to_model_on_update calls."""
@@ -120,10 +126,11 @@ class TrackingSyncService(SQLAlchemySyncRepositoryService[MockModel, MockSyncRep
         self,
         data: ModelDictT[MockModel],
         operation: Optional[str] = None,
+        schema_dump_config: Optional[SchemaDumpConfig] = None,
     ) -> MockModel:
         """Track to_model calls."""
         self.to_model_calls.append((data, operation))
-        return super().to_model(data, operation)
+        return super().to_model(data, operation, schema_dump_config=schema_dump_config)
 
     def to_model_on_update(self, data: ModelDictT[MockModel]) -> ModelDictT[MockModel]:
         """Track to_model_on_update calls."""
@@ -190,6 +197,88 @@ async def test_update_pydantic_calls_to_model_with_operation() -> None:
     data, operation = service.to_model_calls[0]
     assert operation == "update"
     assert isinstance(data, AuthorSchema)
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic not installed")
+@pytest.mark.asyncio
+async def test_update_pydantic_per_call_schema_dump_config_includes_unset_defaults() -> None:
+    """Per-call schema_dump_config should include Pydantic defaults when exclude_unset is disabled."""
+    from pydantic import BaseModel
+
+    default_dob = datetime.date(2000, 1, 1)
+
+    class AuthorSchema(BaseModel):
+        name: str
+        dob: datetime.date = default_dob
+
+    service = TrackingService()
+
+    result = await service.update(
+        AuthorSchema(name="Updated Name"),
+        item_id="test-id",
+        schema_dump_config=SchemaDumpConfig(exclude_unset=False),
+    )
+
+    assert result.name == "Updated Name"
+    assert result.dob == default_dob
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic not installed")
+@pytest.mark.asyncio
+async def test_update_pydantic_class_schema_dump_config_includes_unset_defaults() -> None:
+    """Service class schema_dump_config should apply when no per-call override is passed."""
+    from pydantic import BaseModel
+
+    default_dob = datetime.date(2000, 1, 1)
+
+    class AuthorSchema(BaseModel):
+        name: str
+        dob: datetime.date = default_dob
+
+    class IncludeUnsetDefaultsService(TrackingService):
+        schema_dump_config = SchemaDumpConfig(exclude_unset=False)
+
+    service = IncludeUnsetDefaultsService()
+
+    result = await service.update(AuthorSchema(name="Updated Name"), item_id="test-id")
+
+    assert result.name == "Updated Name"
+    assert result.dob == default_dob
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic not installed")
+@pytest.mark.asyncio
+async def test_update_pydantic_per_call_schema_dump_config_does_not_leak() -> None:
+    """A per-call schema_dump_config override should not affect later service calls."""
+    from pydantic import BaseModel
+
+    default_dob = datetime.date(2000, 1, 1)
+
+    class AuthorSchema(BaseModel):
+        name: str
+        dob: datetime.date = default_dob
+
+    service = TrackingService()
+    first_existing = MockModel()
+    first_existing.id = "first-id"  # type: ignore[assignment]
+    first_existing.name = "first"
+    first_existing.dob = None  # type: ignore[assignment]
+    second_existing = MockModel()
+    second_existing.id = "second-id"  # type: ignore[assignment]
+    second_existing.name = "second"
+    second_existing.dob = None  # type: ignore[assignment]
+    service.repository.get = AsyncMock(side_effect=[first_existing, second_existing])  # type: ignore[method-assign]
+
+    first_result = await service.update(
+        AuthorSchema(name="First Updated"),
+        item_id="first-id",
+        schema_dump_config=SchemaDumpConfig(exclude_unset=False),
+    )
+    second_result = await service.update(AuthorSchema(name="Second Updated"), item_id="second-id")
+
+    assert first_result.dob == default_dob
+    assert second_result.name == "Second Updated"
+    assert second_result.dob is None
 
 
 @pytest.mark.skipif(not MSGSPEC_INSTALLED, reason="msgspec not installed")
@@ -261,8 +350,9 @@ async def test_update_propagates_with_for_update_flag() -> None:
     service = TrackingService()
     await service.update({"name": "updated"}, item_id="test-id", with_for_update=True)
 
-    service.repository.get.assert_awaited_once()
-    assert service.repository.get.call_args.kwargs["with_for_update"] is True
+    get_mock = cast(AsyncMock, service.repository.get)
+    get_mock.assert_awaited_once()
+    assert get_mock.call_args.kwargs["with_for_update"] is True
 
 
 # Tests for sync service
@@ -302,24 +392,48 @@ def test_sync_update_model_instance_calls_to_model_with_operation() -> None:
     assert data is model
 
 
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic not installed")
+def test_sync_update_pydantic_per_call_schema_dump_config_includes_unset_defaults() -> None:
+    """Sync services should honor per-call schema_dump_config for Pydantic defaults."""
+    from pydantic import BaseModel
+
+    default_dob = datetime.date(2000, 1, 1)
+
+    class AuthorSchema(BaseModel):
+        name: str
+        dob: datetime.date = default_dob
+
+    service = TrackingSyncService()
+
+    result = service.update(
+        AuthorSchema(name="Updated Name"),
+        item_id="test-id",
+        schema_dump_config=SchemaDumpConfig(exclude_unset=False),
+    )
+
+    assert result.name == "Updated Name"
+    assert result.dob == default_dob
+
+
 def test_sync_update_propagates_with_for_update_flag() -> None:
     """Ensure the sync service forwards the locking flag to its repository."""
 
     service = TrackingSyncService()
     service.update({"name": "updated"}, item_id="test-id", with_for_update=True)
 
-    service.repository.get.assert_called_once()
-    assert service.repository.get.call_args.kwargs["with_for_update"] is True
+    get_mock = cast(MagicMock, service.repository.get)
+    get_mock.assert_called_once()
+    assert get_mock.call_args.kwargs["with_for_update"] is True
 
 
-# Tests for backward compatibility
+# Tests for update lifecycle overrides
 
 
 @pytest.mark.asyncio
-async def test_backward_compat_to_model_on_update_only() -> None:
-    """Test backward compatibility - service with ONLY to_model_on_update() override."""
+async def test_update_invokes_overridden_to_model_on_update() -> None:
+    """An overridden update lifecycle hook should be invoked during update conversion."""
 
-    class LegacyService(SQLAlchemyAsyncRepositoryService[MockModel, MockRepository]):
+    class UpdateHookService(SQLAlchemyAsyncRepositoryService[MockModel, MockRepository]):
         repository_type = MockRepository
 
         def __init__(self) -> None:
@@ -336,23 +450,13 @@ async def test_backward_compat_to_model_on_update_only() -> None:
             return self._repository
 
         async def to_model_on_update(self, data: ModelDictT[MockModel]) -> ModelDictT[MockModel]:
-            """Legacy pattern - only override to_model_on_update."""
             self.update_hook_called = True
             return await super().to_model_on_update(data)
 
-    service = LegacyService()
+    service = UpdateHookService()
     await service.update({"name": "Updated Name"}, item_id="test-id")
 
-    # Verify to_model_on_update was called (backward compatible)
     assert service.update_hook_called
-
-
-# Real-world pattern tests using SlugBook fixtures are in integration tests
-# The SlugBookAsyncService and SlugBookSyncService in tests/fixtures/uuid/services.py
-# demonstrate the exact pattern this fix enables:
-# - Custom to_model() that checks operation == "update"
-# - Regenerates slug when title changes during update
-# - This pattern would have been broken before the fix for dict/Pydantic/msgspec/attrs data
 
 
 # Edge case tests
