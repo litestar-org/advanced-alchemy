@@ -161,7 +161,7 @@ def test_vector_process_result_value_returns_list_for_plain_iterable() -> None:
 
 def test_vector_distance_methods_exist_on_column() -> None:
     """``Vector`` columns expose pgvector-compatible distance comparator methods."""
-    column = Column("embedding", Vector(3))
+    column: Column[list[float]] = Column("embedding", Vector(3))
     assert hasattr(column, "cosine_distance")
     assert hasattr(column, "l2_distance")
     assert hasattr(column, "max_inner_product")
@@ -169,7 +169,7 @@ def test_vector_distance_methods_exist_on_column() -> None:
 
 def test_vector_cosine_distance_postgresql_emits_operator() -> None:
     """Cosine distance compiles to the pgvector ``<=>`` operator on PostgreSQL."""
-    column = Column("embedding", Vector(3))
+    column: Column[list[float]] = Column("embedding", Vector(3))
     statement = column.cosine_distance([1.0, 2.0, 3.0])
     sql = str(statement.compile(dialect=postgresql_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
     assert "<=>" in sql
@@ -177,7 +177,7 @@ def test_vector_cosine_distance_postgresql_emits_operator() -> None:
 
 def test_vector_l2_distance_postgresql_emits_operator() -> None:
     """L2 distance compiles to the pgvector ``<->`` operator on PostgreSQL."""
-    column = Column("embedding", Vector(3))
+    column: Column[list[float]] = Column("embedding", Vector(3))
     statement = column.l2_distance([1.0, 2.0, 3.0])
     sql = str(statement.compile(dialect=postgresql_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
     assert "<->" in sql
@@ -185,7 +185,7 @@ def test_vector_l2_distance_postgresql_emits_operator() -> None:
 
 def test_vector_max_inner_product_postgresql_emits_operator() -> None:
     """Negative inner product compiles to the pgvector ``<#>`` operator on PostgreSQL."""
-    column = Column("embedding", Vector(3))
+    column: Column[list[float]] = Column("embedding", Vector(3))
     statement = column.max_inner_product([1.0, 2.0, 3.0])
     sql = str(statement.compile(dialect=postgresql_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
     assert "<#>" in sql
@@ -193,7 +193,7 @@ def test_vector_max_inner_product_postgresql_emits_operator() -> None:
 
 def test_vector_cosine_distance_oracle_emits_vector_distance() -> None:
     """Cosine distance compiles to ``VECTOR_DISTANCE(..., COSINE)`` on Oracle 23ai."""
-    column = Column("embedding", Vector(3))
+    column: Column[list[float]] = Column("embedding", Vector(3))
     statement = column.cosine_distance([1.0, 2.0, 3.0])
     sql = str(statement.compile(dialect=oracle_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
     assert "VECTOR_DISTANCE" in sql
@@ -202,7 +202,7 @@ def test_vector_cosine_distance_oracle_emits_vector_distance() -> None:
 
 def test_vector_l2_distance_oracle_uses_euclidean_metric() -> None:
     """L2 distance maps to the Oracle ``EUCLIDEAN`` metric."""
-    column = Column("embedding", Vector(3))
+    column: Column[list[float]] = Column("embedding", Vector(3))
     statement = column.l2_distance([1.0, 2.0, 3.0])
     sql = str(statement.compile(dialect=oracle_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
     assert "VECTOR_DISTANCE" in sql
@@ -211,7 +211,7 @@ def test_vector_l2_distance_oracle_uses_euclidean_metric() -> None:
 
 def test_vector_max_inner_product_oracle_uses_dot_metric() -> None:
     """Negative inner product maps to the Oracle ``DOT`` metric."""
-    column = Column("embedding", Vector(3))
+    column: Column[list[float]] = Column("embedding", Vector(3))
     statement = column.max_inner_product([1.0, 2.0, 3.0])
     sql = str(statement.compile(dialect=oracle_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
     assert "VECTOR_DISTANCE" in sql
@@ -220,7 +220,7 @@ def test_vector_max_inner_product_oracle_uses_dot_metric() -> None:
 
 def test_vector_distance_unsupported_dialect_raises() -> None:
     """Distance operations require a native vector backend; JSON fallback raises clearly."""
-    column = Column("embedding", Vector(3))
+    column: Column[list[float]] = Column("embedding", Vector(3))
     statement = column.cosine_distance([1.0, 2.0, 3.0])
     with pytest.raises(NotImplementedError):
         str(statement.compile(dialect=sqlite_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
