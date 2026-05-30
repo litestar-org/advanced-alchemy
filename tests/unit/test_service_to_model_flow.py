@@ -27,7 +27,7 @@ class MockModel(UUIDAuditBase):
     """Minimal SQLAlchemy model for service flow tests."""
 
     name: Mapped[str] = mapped_column(String(length=100))  # pyright: ignore[reportUninitializedInstanceVariable]
-    dob: Mapped[datetime.date | None] = mapped_column(nullable=True)  # pyright: ignore[reportUninitializedInstanceVariable]
+    dob: Mapped[Optional[datetime.date]] = mapped_column(nullable=True)  # pyright: ignore[reportUninitializedInstanceVariable]
 
 
 class MockRepository(SQLAlchemyAsyncRepository[MockModel]):
