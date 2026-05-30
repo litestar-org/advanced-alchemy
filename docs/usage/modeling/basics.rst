@@ -272,3 +272,63 @@ letting you replace the primary key strategy.
         full_name: Mapped[str]
         is_active: Mapped[bool] = mapped_column(default=True)
         last_login: Mapped[Optional[datetime.datetime]] = mapped_column(default=None)
+
+.. _custom_primary_keys:
+
+Caller-Supplied Primary Keys with Audit Columns
+-----------------------------------------------
+
+The opinionated bases such as ``UUIDAuditBase`` and ``BigIntAuditBase`` generate the ``id`` value
+for you (a fresh UUID, a sequence value, and so on). When the primary key already exists -- for
+example when importing rows that carry their own identifiers from an external system -- combine
+``DefaultBase`` with the :class:`~advanced_alchemy.mixins.AuditColumns` mixin and declare the
+primary key yourself. ``DefaultBase`` supplies the Advanced Alchemy registry and table-name
+handling without adding a primary key, and ``AuditColumns`` adds the ``created_at`` and
+``updated_at`` timestamps on its own.
+
+.. code-block:: python
+
+    from advanced_alchemy.base import DefaultBase
+    from advanced_alchemy.mixins import AuditColumns
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    class ImportedProduct(DefaultBase, AuditColumns):
+        __tablename__ = "imported_product"
+
+        id: Mapped[str] = mapped_column(primary_key=True)
+        name: Mapped[str]
+
+The ``id`` column has no ``default`` and no server default, so the value is always taken from the
+instance you create. This is exactly what bulk imports need: each row keeps the identifier it
+already has.
+
+.. code-block:: python
+
+    session.add_all(
+        [
+            ImportedProduct(id="SKU-001", name="Widget"),
+            ImportedProduct(id="SKU-002", name="Gadget"),
+        ]
+    )
+    session.commit()
+
+The ``created_at`` and ``updated_at`` timestamps are still populated automatically.
+
+For an integer primary key whose values come from the caller, disable autoincrement so the
+database does not attempt to assign one:
+
+.. code-block:: python
+
+    from advanced_alchemy.base import DefaultBase
+    from advanced_alchemy.mixins import AuditColumns
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    class LegacyRecord(DefaultBase, AuditColumns):
+        __tablename__ = "legacy_record"
+
+        id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+        label: Mapped[str]
+
+If you want to set a UUID yourself rather than letting the base generate one, use the same
+pattern with a :class:`uuid.UUID`-typed column and pass the value explicitly when constructing the
+instance.
