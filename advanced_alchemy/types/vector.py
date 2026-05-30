@@ -15,12 +15,23 @@ inside ``load_dialect_impl`` so ``from advanced_alchemy.types import Vector``
 never requires ``pgvector`` or ``oracledb`` to be installed.
 """
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
+from sqlalchemy import Float, literal
 from sqlalchemy.engine import Dialect
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql.expression import ColumnElement
 from sqlalchemy.types import JSON, TypeDecorator, TypeEngine
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from sqlalchemy.sql.compiler import SQLCompiler
+
 __all__ = ("Vector",)
+
+_PGVECTOR_OPERATORS = {"cosine": "<=>", "l2": "<->", "inner_product": "<#>"}
+_ORACLE_METRICS = {"cosine": "COSINE", "l2": "EUCLIDEAN", "inner_product": "DOT"}
 
 
 class Vector(TypeDecorator[list[float]]):
@@ -65,3 +76,68 @@ class Vector(TypeDecorator[list[float]]):
         if hasattr(value, "tolist"):
             return list(value.tolist())
         return list(value)
+
+    class Comparator(TypeDecorator.Comparator[list[float]]):
+        """Dialect-aware vector distance operators for similarity search.
+
+        Method names and semantics mirror ``pgvector``'s SQLAlchemy comparator so
+        existing pgvector-based queries can swap to :class:`Vector` unchanged.
+        """
+
+        def _distance(self, other: "Sequence[float]", metric: str) -> "_VectorDistance":
+            operand = literal(list(other), type_=self.type)
+            return _VectorDistance(self.expr, operand, metric)
+
+        def cosine_distance(self, other: "Sequence[float]") -> "_VectorDistance":
+            return self._distance(other, "cosine")
+
+        def l2_distance(self, other: "Sequence[float]") -> "_VectorDistance":
+            return self._distance(other, "l2")
+
+        def max_inner_product(self, other: "Sequence[float]") -> "_VectorDistance":
+            return self._distance(other, "inner_product")
+
+    comparator_factory = Comparator  # pyright: ignore[reportIncompatibleMethodOverride,reportAssignmentType]
+
+
+class _VectorDistance(ColumnElement[float]):
+    """Dialect-deferred vector distance expression.
+
+    The SQL is chosen at compile time so the same expression compiles to native
+    operators on each backend:
+
+    - PostgreSQL / CockroachDB → ``<=>`` / ``<->`` / ``<#>`` (pgvector)
+    - Oracle 23ai → ``VECTOR_DISTANCE(col, :vec, COSINE | EUCLIDEAN | DOT)``
+    - other dialects → :exc:`NotImplementedError` (no native vector backend)
+    """
+
+    inherit_cache = False
+
+    def __init__(self, left: "ColumnElement[Any]", right: "ColumnElement[Any]", metric: str) -> None:
+        self.left = left
+        self.right = right
+        self.metric = metric
+        self.type = Float()
+
+
+@compiles(_VectorDistance)
+def compile_vector_distance(element: _VectorDistance, compiler: "SQLCompiler", **kw: Any) -> str:
+    msg = (
+        "Vector distance operations require a native vector backend "
+        "(PostgreSQL with pgvector, or Oracle 23ai). The current dialect stores "
+        "vectors as JSON and has no distance operator."
+    )
+    raise NotImplementedError(msg)
+
+
+@compiles(_VectorDistance, "postgresql")
+@compiles(_VectorDistance, "cockroachdb")
+def compile_vector_distance_pgvector(element: _VectorDistance, compiler: "SQLCompiler", **kw: Any) -> str:
+    operator = _PGVECTOR_OPERATORS[element.metric]
+    return f"({compiler.process(element.left, **kw)} {operator} {compiler.process(element.right, **kw)})"
+
+
+@compiles(_VectorDistance, "oracle")
+def compile_vector_distance_oracle(element: _VectorDistance, compiler: "SQLCompiler", **kw: Any) -> str:
+    metric = _ORACLE_METRICS[element.metric]
+    return f"VECTOR_DISTANCE({compiler.process(element.left, **kw)}, {compiler.process(element.right, **kw)}, {metric})"

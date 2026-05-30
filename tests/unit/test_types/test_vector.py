@@ -8,7 +8,7 @@ import textwrap
 from typing import Any, Optional, cast
 
 import pytest
-from sqlalchemy import Integer, Table, create_engine, insert, select
+from sqlalchemy import Column, Integer, Table, create_engine, insert, select
 from sqlalchemy.dialects import oracle as oracle_dialect_mod
 from sqlalchemy.dialects import postgresql as postgresql_dialect_mod
 from sqlalchemy.dialects import sqlite as sqlite_dialect_mod
@@ -157,6 +157,90 @@ def test_vector_process_result_value_returns_list_for_plain_iterable() -> None:
     """JSON fallback returns a plain ``list`` (or anything iterable) and stays a ``list``."""
     vec = Vector(3)
     assert vec.process_result_value([1.0, 2.0, 3.0], sqlite_dialect_mod.dialect()) == [1.0, 2.0, 3.0]  # type: ignore[no-untyped-call,unused-ignore]
+
+
+def test_vector_distance_methods_exist_on_column() -> None:
+    """``Vector`` columns expose pgvector-compatible distance comparator methods."""
+    column = Column("embedding", Vector(3))
+    assert hasattr(column, "cosine_distance")
+    assert hasattr(column, "l2_distance")
+    assert hasattr(column, "max_inner_product")
+
+
+def test_vector_cosine_distance_postgresql_emits_operator() -> None:
+    """Cosine distance compiles to the pgvector ``<=>`` operator on PostgreSQL."""
+    column = Column("embedding", Vector(3))
+    statement = column.cosine_distance([1.0, 2.0, 3.0])
+    sql = str(statement.compile(dialect=postgresql_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
+    assert "<=>" in sql
+
+
+def test_vector_l2_distance_postgresql_emits_operator() -> None:
+    """L2 distance compiles to the pgvector ``<->`` operator on PostgreSQL."""
+    column = Column("embedding", Vector(3))
+    statement = column.l2_distance([1.0, 2.0, 3.0])
+    sql = str(statement.compile(dialect=postgresql_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
+    assert "<->" in sql
+
+
+def test_vector_max_inner_product_postgresql_emits_operator() -> None:
+    """Negative inner product compiles to the pgvector ``<#>`` operator on PostgreSQL."""
+    column = Column("embedding", Vector(3))
+    statement = column.max_inner_product([1.0, 2.0, 3.0])
+    sql = str(statement.compile(dialect=postgresql_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
+    assert "<#>" in sql
+
+
+def test_vector_cosine_distance_oracle_emits_vector_distance() -> None:
+    """Cosine distance compiles to ``VECTOR_DISTANCE(..., COSINE)`` on Oracle 23ai."""
+    column = Column("embedding", Vector(3))
+    statement = column.cosine_distance([1.0, 2.0, 3.0])
+    sql = str(statement.compile(dialect=oracle_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
+    assert "VECTOR_DISTANCE" in sql
+    assert "COSINE" in sql
+
+
+def test_vector_l2_distance_oracle_uses_euclidean_metric() -> None:
+    """L2 distance maps to the Oracle ``EUCLIDEAN`` metric."""
+    column = Column("embedding", Vector(3))
+    statement = column.l2_distance([1.0, 2.0, 3.0])
+    sql = str(statement.compile(dialect=oracle_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
+    assert "VECTOR_DISTANCE" in sql
+    assert "EUCLIDEAN" in sql
+
+
+def test_vector_max_inner_product_oracle_uses_dot_metric() -> None:
+    """Negative inner product maps to the Oracle ``DOT`` metric."""
+    column = Column("embedding", Vector(3))
+    statement = column.max_inner_product([1.0, 2.0, 3.0])
+    sql = str(statement.compile(dialect=oracle_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
+    assert "VECTOR_DISTANCE" in sql
+    assert "DOT" in sql
+
+
+def test_vector_distance_unsupported_dialect_raises() -> None:
+    """Distance operations require a native vector backend; JSON fallback raises clearly."""
+    column = Column("embedding", Vector(3))
+    statement = column.cosine_distance([1.0, 2.0, 3.0])
+    with pytest.raises(NotImplementedError):
+        str(statement.compile(dialect=sqlite_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
+
+
+def test_vector_distance_usable_in_order_by_on_postgresql() -> None:
+    """Distance expressions work as ``ORDER BY`` keys for nearest-neighbour search."""
+
+    class _Base(DeclarativeBase):
+        pass
+
+    class _PgVectorModel(_Base):
+        __tablename__ = "pg_vector_order_by_model"
+        id: Mapped[int] = mapped_column(Integer, primary_key=True)
+        embedding: Mapped[list[float]] = mapped_column(Vector(3))
+
+    statement = select(_PgVectorModel).order_by(_PgVectorModel.embedding.cosine_distance([1.0, 2.0, 3.0]))
+    sql = str(statement.compile(dialect=postgresql_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
+    assert "ORDER BY" in sql
+    assert "<=>" in sql
 
 
 def test_vector_sqlite_round_trip_via_json_fallback() -> None:
