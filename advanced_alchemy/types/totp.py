@@ -2,9 +2,9 @@
 
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
 
-from advanced_alchemy._typing import PYOTP_INSTALLED
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.encrypted_string import EncryptedString, EncryptionBackend, FernetBackend
+from advanced_alchemy.typing import PYOTP_INSTALLED
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect

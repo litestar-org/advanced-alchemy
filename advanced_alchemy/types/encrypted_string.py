@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 from sqlalchemy import String, Text, TypeDecorator
 from sqlalchemy import func as sql_func
 
-from advanced_alchemy._typing import CRYPTOGRAPHY_INSTALLED
 from advanced_alchemy.exceptions import IntegrityError, MissingDependencyError
+from advanced_alchemy.typing import CRYPTOGRAPHY_INSTALLED
 from advanced_alchemy.utils.deprecation import warn_deprecation
 
 if TYPE_CHECKING:

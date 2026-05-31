@@ -2,9 +2,9 @@
 
 from typing import TYPE_CHECKING, Any, Union
 
-from advanced_alchemy._typing import PWDLIB_INSTALLED
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.password_hash.base import HashingBackend
+from advanced_alchemy.typing import PWDLIB_INSTALLED
 
 if TYPE_CHECKING:
     from pwdlib.hashers.base import HasherProtocol
