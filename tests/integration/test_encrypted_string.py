@@ -104,6 +104,43 @@ def test_pgcrypto_round_trip(engine: Engine) -> None:
         PGCryptoModel.metadata.drop_all(engine, tables=[cast("Table", PGCryptoModel.__table__)])
 
 
+@pytest.mark.parametrize("model", [FernetModel, PGCryptoModel])
+def test_backends_are_interchangeable(engine: Engine, model: "type[BigIntBase]") -> None:
+    """Fernet and PGCrypto must be drop-in interchangeable: same API, same external behavior.
+
+    Run on PostgreSQL where both backends work (pgcrypto is PostgreSQL-only) so the two are
+    exercised through identical assertions.
+    """
+    if engine.dialect.name != "postgresql":
+        pytest.skip("comparing both backends on PostgreSQL (pgcrypto is PostgreSQL-only)")
+
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
+
+    table = cast("Table", model.__table__)
+    model.metadata.create_all(engine, tables=[table])
+    session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
+    try:
+        with session_factory() as db_session:
+            for value in ["plain-value", "ünîcödé 🔐 secret", "", None]:
+                obj = model(name="x", secret=value)
+                db_session.add(obj)
+                db_session.commit()
+                db_session.refresh(obj)
+                assert obj.secret == value
+
+                raw = db_session.execute(
+                    text(f"SELECT secret FROM {model.__tablename__} WHERE id = :id"),
+                    {"id": obj.id},
+                ).scalar_one()
+                if value is None:
+                    assert raw is None
+                else:
+                    assert raw != value
+    finally:
+        model.metadata.drop_all(engine, tables=[table])
+
+
 @pytest.mark.skipif(not PYOTP_INSTALLED, reason="pyotp not installed")
 def test_totp_secret_round_trip(engine: Engine) -> None:
     import pyotp
