@@ -4,15 +4,10 @@ from typing import TYPE_CHECKING, Any, Union
 
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.password_hash.base import HashingBackend
+from advanced_alchemy.typing import ARGON2_INSTALLED
 
 if TYPE_CHECKING:
     from sqlalchemy import BinaryExpression, ColumnElement
-
-try:
-    from argon2 import PasswordHasher as Argon2PasswordHasher
-    from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
-except ImportError as e:
-    raise MissingDependencyError(package="argon2-cffi", install_package="argon2") from e
 
 __all__ = ("Argon2Hasher",)
 
@@ -27,8 +22,15 @@ class Argon2Hasher(HashingBackend):
             **kwargs: Optional keyword arguments to pass to the argon2.PasswordHasher constructor.
                       See argon2-cffi documentation for available parameters (e.g., time_cost,
                       memory_cost, parallelism, hash_len, salt_len, type).
+
+        Raises:
+            MissingDependencyError: If the ``argon2-cffi`` package is not installed.
         """
-        self.hasher = Argon2PasswordHasher(**kwargs)  # pyright: ignore
+        if not ARGON2_INSTALLED:
+            raise MissingDependencyError(package="argon2-cffi", install_package="argon2")
+        from argon2 import PasswordHasher
+
+        self.hasher = PasswordHasher(**kwargs)
 
     def hash(self, value: "Union[str, bytes]") -> str:
         """Hash the password using Argon2.
@@ -52,6 +54,8 @@ class Argon2Hasher(HashingBackend):
         Returns:
             True if the password matches the hash, False otherwise.
         """
+        from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
+
         if not isinstance(plain, (str, bytes)):
             return False
         try:

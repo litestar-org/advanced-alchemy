@@ -7,31 +7,22 @@ Create Date: ${create_date}
 """
 
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import sqlalchemy as sa
 from alembic import op
 from advanced_alchemy.types import Bool, EncryptedString, EncryptedText, GUID, JsonB, ORA_JSONB, DateTimeUTC, StoredObject, PasswordHash, FernetBackend, TOTPSecret, OneTimeCode
 from advanced_alchemy.types.encrypted_string import PGCryptoBackend
+from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+from advanced_alchemy.types.password_hash.passlib import PasslibHasher
+from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
 from sqlalchemy import Text  # noqa: F401
 ${imports if imports else ""}
-try:
-    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
-except ImportError:
-    Argon2Hasher = Any  # type: ignore
-try:
-    from advanced_alchemy.types.password_hash.passlib import PasslibHasher
-except ImportError:
-    PasslibHasher = Any  # type: ignore
-try:
-    from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
-except ImportError:
-    PwdlibHasher = Any  # type: ignore
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-__all__ = ["downgrade", "upgrade", "schema_upgrades", "schema_downgrades", "data_upgrades", "data_downgrades"]
+__all__ = ("downgrade", "upgrade", "schema_upgrades", "schema_downgrades", "data_upgrades", "data_downgrades")
 
 sa.GUID = GUID
 sa.Bool = Bool

@@ -29,11 +29,14 @@ def test_pwdlib_requires_pwdlib(monkeypatch: pytest.MonkeyPatch) -> None:
         pwdlib_module.PwdlibHasher(hasher=None)  # type: ignore[arg-type]
 
 
-def test_argon2_import_guarded() -> None:
-    """argon2-cffi is present in CI; the import-time guard follows the obstore pattern."""
-    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+def test_argon2_requires_argon2(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Importing the module is safe; construction guards on the facade flag."""
+    from advanced_alchemy.exceptions import MissingDependencyError
+    from advanced_alchemy.types.password_hash import argon2 as argon2_module
 
-    assert Argon2Hasher is not None
+    monkeypatch.setattr(argon2_module, "ARGON2_INSTALLED", False)
+    with pytest.raises(MissingDependencyError):
+        argon2_module.Argon2Hasher()
 
 
 @pytest.mark.skipif(not ARGON2_INSTALLED, reason="argon2-cffi not installed")
