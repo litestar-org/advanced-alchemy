@@ -143,8 +143,12 @@ class PasswordHash(TypeDecorator[str]):
         self.backend = backend
 
     def __repr__(self) -> str:
-        """Return a string representation of the PasswordHash."""
-        return f"PasswordHash(backend=sa.{self.backend.__class__.__name__}(), length={self.length})"
+        """Return a reconstructable representation of the type.
+
+        Uses ``type(self).__name__`` so subclasses (e.g. :class:`OneTimeCode`) render their
+        own name; this keeps Alembic autogenerate from reconstructing the wrong type.
+        """
+        return f"{type(self).__name__}(backend=sa.{self.backend.__class__.__name__}(), length={self.length})"
 
     @property
     def python_type(self) -> "type[str]":

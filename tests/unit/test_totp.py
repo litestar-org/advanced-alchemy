@@ -54,6 +54,17 @@ def test_totp_secret_requires_explicit_key() -> None:
 
 
 @pytest.mark.skipif(not PYOTP_INSTALLED, reason="pyotp not installed")
+def test_totp_secret_repr_includes_params() -> None:
+    """The repr must name TOTPSecret and carry its TOTP params so Alembic reconstructs faithfully."""
+    from advanced_alchemy.types import TOTPSecret
+
+    rendered = repr(TOTPSecret(key="k", issuer="ACME", digits=8, interval=60))
+    assert rendered == (
+        "TOTPSecret(key='k', backend=FernetBackend, digits=8, interval=60, digest=None, issuer='ACME', length=None)"
+    )
+
+
+@pytest.mark.skipif(not PYOTP_INSTALLED, reason="pyotp not installed")
 def test_totp_secret_distinct_params_distinct_cache_key() -> None:
     from advanced_alchemy.types import TOTPSecret
 

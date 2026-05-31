@@ -157,6 +157,19 @@ class TOTPSecret(EncryptedString):
         self.digest = digest
         self.issuer = issuer
 
+    def __repr__(self) -> str:
+        """Return a reconstructable representation including the TOTP parameters.
+
+        Overrides :class:`EncryptedString` so Alembic autogenerate reconstructs the type with
+        its configured ``digits``/``interval``/``digest``/``issuer`` rather than the defaults.
+        """
+        key_repr = self.key.__name__ if callable(self.key) else repr(self.key)
+        return (
+            f"{type(self).__name__}(key={key_repr}, backend={self.backend.__class__.__name__}, "
+            f"digits={self.digits}, interval={self.interval}, digest={self.digest!r}, "
+            f"issuer={self.issuer!r}, length={self.length})"
+        )
+
     def process_bind_param(self, value: Any, dialect: "Dialect") -> "Union[str, None]":
         """Accept a raw secret string or a :class:`TOTPProvider`, then encrypt as usual.
 
