@@ -2,13 +2,17 @@
 
 from typing import TYPE_CHECKING, Any, Union
 
+from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.password_hash.base import HashingBackend
 
 if TYPE_CHECKING:
     from sqlalchemy import BinaryExpression, ColumnElement
 
-from argon2 import PasswordHasher as Argon2PasswordHasher  # pyright: ignore
-from argon2.exceptions import InvalidHash, VerifyMismatchError  # pyright: ignore
+try:
+    from argon2 import PasswordHasher as Argon2PasswordHasher
+    from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
+except ImportError as e:
+    raise MissingDependencyError(package="argon2-cffi", install_package="argon2") from e
 
 __all__ = ("Argon2Hasher",)
 
@@ -37,24 +41,38 @@ class Argon2Hasher(HashingBackend):
         """
         return self.hasher.hash(self._ensure_bytes(value))
 
-    def verify(self, plain: "Union[str, bytes]", hashed: str) -> bool:
+    def verify(self, plain: Any, hashed: str) -> bool:
         """Verify a plain text password against an Argon2 hash.
 
         Args:
-            plain: The plain text password (will be encoded to UTF-8 if string).
+            plain: The plain text password (will be encoded to UTF-8 if string). Any other
+                type returns ``False`` rather than raising.
             hashed: The Argon2 hash string to verify against.
 
         Returns:
             True if the password matches the hash, False otherwise.
         """
+        if not isinstance(plain, (str, bytes)):
+            return False
         try:
             self.hasher.verify(hashed, self._ensure_bytes(plain))
-
-        except (VerifyMismatchError, InvalidHash):
-            return False
-        except Exception:  # noqa: BLE001
+        except (VerifyMismatchError, InvalidHash, VerificationError):
             return False
         return True
+
+    def needs_rehash(self, hashed: str) -> bool:
+        """Return True if the hash was produced with weaker parameters than the current config.
+
+        Args:
+            hashed: The stored Argon2 hash string.
+
+        Returns:
+            True if the hash should be regenerated; False for an unparsable or foreign hash.
+        """
+        try:
+            return self.hasher.check_needs_rehash(hashed)
+        except Exception:  # noqa: BLE001
+            return False
 
     def compare_expression(self, column: "ColumnElement[str]", plain: "Union[str, bytes]") -> "BinaryExpression[bool]":
         """Direct SQL comparison is not supported for Argon2.

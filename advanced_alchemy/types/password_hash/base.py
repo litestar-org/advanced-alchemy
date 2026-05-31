@@ -1,7 +1,7 @@
 """Base classes for password hashing backends."""
 
 import abc
-from typing import Any, Union, cast
+from typing import Any, Optional, Union, cast
 
 from sqlalchemy import BinaryExpression, ColumnElement, FunctionElement, String, TypeDecorator
 
@@ -43,8 +43,26 @@ class HashingBackend(abc.ABC):
         """
 
     @abc.abstractmethod
+    def needs_rehash(self, hashed: str) -> bool:
+        """Return True if the stored hash should be regenerated with current parameters.
+
+        Implementations MUST return False (never raise) for an unparsable or foreign
+        hash so verification flows stay robust.
+
+        Args:
+            hashed: The stored hash string.
+
+        Returns:
+            True if the hash is stale and should be replaced after a successful verify.
+        """
+
+    @abc.abstractmethod
     def compare_expression(self, column: "ColumnElement[str]", plain: "Union[str, bytes]") -> "BinaryExpression[bool]":
         """Generate a SQLAlchemy expression for comparing a column with a plain text value.
+
+        This is an optional advanced extension point for backends that can compare a hash
+        server-side (for example a future pgcrypto ``crypt()`` backend). All shipped backends
+        raise :exc:`NotImplementedError`; the standard client-side verify flow does not use it.
 
         Args:
             column: The SQLAlchemy column to compare.
@@ -85,6 +103,23 @@ class HashedPassword:
         """
         return self.backend.verify(plain_password, self.hash_string)
 
+    def verify_and_update(self, plain_password: "Union[str, bytes]") -> "tuple[bool, Optional[str]]":
+        """Verify a password and return a fresh hash when the stored one is stale.
+
+        Args:
+            plain_password: The plain text password to verify.
+
+        Returns:
+            ``(False, None)`` if the password does not match; ``(True, None)`` if it matches
+            and no rehash is needed; ``(True, new_hash)`` if it matches but the stored hash
+            should be replaced with the returned value.
+        """
+        if not self.backend.verify(plain_password, self.hash_string):
+            return (False, None)
+        if self.backend.needs_rehash(self.hash_string):
+            return (True, str(self.backend.hash(plain_password)))
+        return (True, None)
+
 
 class PasswordHash(TypeDecorator[str]):
     """SQLAlchemy TypeDecorator for storing hashed passwords in a database.
@@ -96,12 +131,12 @@ class PasswordHash(TypeDecorator[str]):
     impl = String
     cache_ok = True
 
-    def __init__(self, backend: "HashingBackend", length: int = 128) -> None:
+    def __init__(self, backend: "HashingBackend", length: int = 255) -> None:
         """Initialize the PasswordHash TypeDecorator.
 
         Args:
             backend: The hashing backend class to use
-            length: The maximum length of the hash string. Defaults to 128.
+            length: The maximum length of the hash string. Defaults to 255.
         """
         self.length = length
         super().__init__(length=length)
@@ -168,11 +203,19 @@ class PasswordHash(TypeDecorator[str]):
     ) -> "BinaryExpression[bool]":
         """Generate a SQLAlchemy expression for comparing a column with a plain text password.
 
+        This is an optional advanced extension point for backends that can compare a hash
+        server-side. All shipped backends (Argon2, Passlib, Pwdlib) raise
+        :exc:`NotImplementedError`; the standard verify flow is client-side via
+        :meth:`HashedPassword.verify` and does not use this.
+
         Args:
             column: The SQLAlchemy column to compare.
             plain_password: The plain text password to compare against.
 
         Returns:
             A SQLAlchemy binary expression for the comparison.
+
+        Raises:
+            NotImplementedError: For all shipped backends.
         """
         return self.backend.compare_expression(column, plain_password)

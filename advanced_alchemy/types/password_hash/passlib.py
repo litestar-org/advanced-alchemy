@@ -2,6 +2,8 @@
 
 from typing import TYPE_CHECKING, Any, Union
 
+from advanced_alchemy._typing import PASSLIB_INSTALLED
+from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.password_hash.base import HashingBackend
 
 if TYPE_CHECKING:
@@ -23,7 +25,12 @@ class PasslibHasher(HashingBackend):
 
         Args:
             context: The Passlib CryptContext to use for hashing and verification.
+
+        Raises:
+            MissingDependencyError: If the ``passlib`` package is not installed.
         """
+        if not PASSLIB_INSTALLED:
+            raise MissingDependencyError(package="passlib")
         self.context = context
 
     def hash(self, value: "Union[str, bytes]") -> str:
@@ -51,6 +58,20 @@ class PasslibHasher(HashingBackend):
             return self.context.verify(self._ensure_bytes(plain), hashed)
         except Exception:  # noqa: BLE001
             # Passlib can raise various errors for invalid hashes
+            return False
+
+    def needs_rehash(self, hashed: str) -> bool:
+        """Return True if the stored hash uses an outdated scheme or cost.
+
+        Args:
+            hashed: The stored hash string.
+
+        Returns:
+            True if the hash should be regenerated; False for an unparsable or foreign hash.
+        """
+        try:
+            return self.context.needs_update(hashed)
+        except Exception:  # noqa: BLE001
             return False
 
     def compare_expression(self, column: "ColumnElement[str]", plain: Any) -> "BinaryExpression[bool]":

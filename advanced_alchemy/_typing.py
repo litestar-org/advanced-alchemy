@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Feature-detection flags (use ``find_spec`` to avoid eagerly importing).
 # ---------------------------------------------------------------------------
+ARGON2_INSTALLED = find_spec("argon2") is not None
 ATTRS_INSTALLED = find_spec("attrs") is not None
 CATTRS_INSTALLED = find_spec("cattrs") is not None
 CRYPTOGRAPHY_INSTALLED = find_spec("cryptography") is not None
@@ -32,6 +33,8 @@ LITESTAR_INSTALLED = find_spec("litestar") is not None
 MSGSPEC_INSTALLED = find_spec("msgspec") is not None
 NUMPY_INSTALLED = find_spec("numpy") is not None
 ORJSON_INSTALLED = find_spec("orjson") is not None
+PASSLIB_INSTALLED = find_spec("passlib") is not None
+PWDLIB_INSTALLED = find_spec("pwdlib") is not None
 PYDANTIC_INSTALLED = find_spec("pydantic") is not None
 SQLMODEL_INSTALLED = find_spec("sqlmodel") is not None
 
@@ -376,6 +379,7 @@ Empty: Final = EmptyEnum.EMPTY
 
 
 __all__ = (
+    "ARGON2_INSTALLED",
     "ATTRS_INSTALLED",
     "ATTRS_NOTHING_STUB",
     "CATTRS_INSTALLED",
@@ -384,6 +388,8 @@ __all__ = (
     "MSGSPEC_INSTALLED",
     "NUMPY_INSTALLED",
     "ORJSON_INSTALLED",
+    "PASSLIB_INSTALLED",
+    "PWDLIB_INSTALLED",
     "PYDANTIC_INSTALLED",
     "SQLMODEL_INSTALLED",
     "UNSET",
