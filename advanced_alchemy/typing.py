@@ -9,13 +9,18 @@ shim) without reaching into private modules.
 from typing import Any
 
 from advanced_alchemy._typing import (
+    ARGON2_INSTALLED,
     ATTRS_INSTALLED,
     CATTRS_INSTALLED,
+    CRYPTOGRAPHY_INSTALLED,
     LITESTAR_INSTALLED,
     MSGSPEC_INSTALLED,
     NUMPY_INSTALLED,
     ORJSON_INSTALLED,
+    PASSLIB_INSTALLED,
+    PWDLIB_INSTALLED,
     PYDANTIC_INSTALLED,
+    PYOTP_INSTALLED,
     SQLMODEL_INSTALLED,
     UNSET,
     AttrsInstance,
@@ -44,13 +49,18 @@ from advanced_alchemy._typing import (
 )
 
 __all__ = (  # noqa: F822
+    "ARGON2_INSTALLED",
     "ATTRS_INSTALLED",
     "CATTRS_INSTALLED",
+    "CRYPTOGRAPHY_INSTALLED",
     "LITESTAR_INSTALLED",
     "MSGSPEC_INSTALLED",
     "NUMPY_INSTALLED",
     "ORJSON_INSTALLED",
+    "PASSLIB_INSTALLED",
+    "PWDLIB_INSTALLED",
     "PYDANTIC_INSTALLED",
+    "PYOTP_INSTALLED",
     "SQLMODEL_INSTALLED",
     "UNSET",
     "AttrsInstance",

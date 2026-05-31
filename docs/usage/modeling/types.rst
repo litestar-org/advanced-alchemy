@@ -82,6 +82,30 @@ For storing encrypted string values with configurable length.
 
         secret: Mapped[str] = mapped_column(EncryptedString(key="my-secret-key"))
 
+.. warning::
+
+    Always pass an explicit ``key``. Omitting it falls back to a random key generated
+    once per process, which changes on every restart and makes previously written rows
+    permanently undecryptable. Constructing the type without a ``key`` now emits a
+    ``DeprecationWarning``.
+
+The key may be a string, bytes, or a callable returning either. Use a callable to read
+the key from configuration at runtime so it is never hard-coded in the model:
+
+.. code-block:: python
+
+    import os
+
+    from advanced_alchemy.types import EncryptedString
+
+    secret: Mapped[str] = mapped_column(
+        EncryptedString(key=lambda: os.environ["APP_ENCRYPTION_KEY"])
+    )
+
+A callable key is re-resolved on every read and write, so rotating the value in the
+environment takes effect without code changes; a static (string/bytes) key derives the
+cipher once and reuses it.
+
 EncryptedText
 ~~~~~~~~~~~~~
 
@@ -104,8 +128,152 @@ Encryption Backends
 
 Two encryption backends are available:
 
-- :class:`FernetBackend <advanced_alchemy.types.encrypted_string.FernetBackend>`: Uses Python's ``cryptography`` library with Fernet encryption.
-- :class:`PGCryptoBackend <advanced_alchemy.types.encrypted_string.PGCryptoBackend>`: Uses PostgreSQL's ``pgcrypto`` extension (PostgreSQL only).
+- :class:`FernetBackend <advanced_alchemy.types.encrypted_string.FernetBackend>`: the
+  default. Uses Python's ``cryptography`` library with Fernet (AES-128-CBC + HMAC-SHA256).
+  Requires the ``cryptography`` extra (``pip install advanced_alchemy[cryptography]``);
+  constructing it without ``cryptography`` installed raises ``MissingDependencyError``.
+- :class:`PGCryptoBackend <advanced_alchemy.types.encrypted_string.PGCryptoBackend>`: Uses
+  PostgreSQL's ``pgcrypto`` extension (PostgreSQL only). Encryption and decryption run
+  server-side, so the ``pgcrypto`` extension must be enabled on the database first:
+
+  .. code-block:: sql
+
+      CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+Password Hashing
+----------------
+
+:class:`PasswordHash <advanced_alchemy.types.PasswordHash>` stores a password as a one-way
+hash (never reversibly encrypted) and returns a
+:class:`HashedPassword <advanced_alchemy.types.HashedPassword>` on read. Choose a backend
+explicitly — each pulls a different optional dependency:
+
+- :class:`Argon2Hasher <advanced_alchemy.types.password_hash.argon2.Argon2Hasher>` (``advanced_alchemy[argon2]``)
+- :class:`PasslibHasher <advanced_alchemy.types.password_hash.passlib.PasslibHasher>` (``advanced_alchemy[passlib]``)
+- :class:`PwdlibHasher <advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher>` (``advanced_alchemy[pwdlib]``)
+
+.. code-block:: python
+
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    from advanced_alchemy.base import BigIntBase
+    from advanced_alchemy.types import PasswordHash
+    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+
+    class Account(BigIntBase):
+        __tablename__ = "account"
+
+        password: Mapped[str] = mapped_column(PasswordHash(backend=Argon2Hasher()))
+
+On read, ``account.password`` is a :class:`HashedPassword <advanced_alchemy.types.HashedPassword>`.
+Verify with ``verify``, or use ``verify_and_update`` to transparently upgrade a hash created
+with weaker parameters after a successful login. The same wrapper can be built standalone:
+
+.. code-block:: python
+
+    from advanced_alchemy.types import HashedPassword
+    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+
+    backend = Argon2Hasher()
+    stored = HashedPassword(backend.hash("s3cret"), backend)
+
+    ok, new_hash = stored.verify_and_update("s3cret")
+    if ok and new_hash is not None:
+        ...  # persist new_hash back to the row
+
+The default column ``length`` is 255 to accommodate stacked passlib schemes.
+
+TOTP Secrets
+------------
+
+:class:`TOTPSecret <advanced_alchemy.types.TOTPSecret>` stores a base32 TOTP shared secret
+encrypted at rest (it extends ``EncryptedString``) and returns a
+:class:`TOTPProvider <advanced_alchemy.types.TOTPProvider>` on read. Requires the ``pyotp``
+extra (``pip install advanced_alchemy[pyotp]``); a ``key`` is mandatory.
+
+.. code-block:: python
+
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    from advanced_alchemy.base import BigIntBase
+    from advanced_alchemy.types import TOTPSecret, generate_totp_secret
+
+    class MfaEnrollment(BigIntBase):
+        __tablename__ = "mfa_enrollment"
+
+        seed: Mapped[str] = mapped_column(TOTPSecret(key="my-secret-key", issuer="ACME"))
+
+After loading a row, ``enrollment.seed`` is a
+:class:`TOTPProvider <advanced_alchemy.types.TOTPProvider>`. Build one directly to generate a
+provisioning URI (render it as a QR code) and verify submitted codes:
+
+.. code-block:: python
+
+    from advanced_alchemy.types import TOTPProvider, generate_totp_secret
+
+    provider = TOTPProvider(generate_totp_secret(), issuer="ACME")
+    uri = provider.provisioning_uri(name="alice@example.com")
+    is_valid = provider.verify("123456")  # tolerates one tick of clock drift by default
+
+One-Time Codes
+--------------
+
+:class:`OneTimeCode <advanced_alchemy.types.OneTimeCode>` stores a transient one-time code
+(email/SMS OTP) **hashed** in a JSON column that also holds its expiry, redemption, and
+attempt state — so the whole lifecycle lives in a single column. On read it returns a
+:class:`HashedOneTimeCode <advanced_alchemy.types.HashedOneTimeCode>` whose ``verify``
+succeeds only while the code is still redeemable (not expired, not already used, and not
+locked out after too many wrong guesses).
+
+.. code-block:: python
+
+    from typing import Any
+
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    from advanced_alchemy.base import BigIntBase
+    from advanced_alchemy.types import OneTimeCode
+    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+
+    class LoginCode(BigIntBase):
+        __tablename__ = "login_code"
+
+        # codes expire after 10 minutes and lock after 3 wrong guesses (the default)
+        code: Mapped[Any] = mapped_column(
+            OneTimeCode(backend=Argon2Hasher(), ttl_seconds=600, max_attempts=3)
+        )
+
+To issue a code, assign a freshly generated value; ``generate_one_time_code`` returns a
+cryptographically random code:
+
+.. code-block:: python
+
+    from advanced_alchemy.types import generate_one_time_code
+
+    code = generate_one_time_code()  # e.g. "418207" — send this to the user
+    login = LoginCode(code=code)     # stored hashed, with expiry + attempt state
+
+To redeem, ``redeem`` verifies the candidate and returns the updated value to persist — it
+marks the code used on success or records a failed attempt otherwise. Single-use and
+attempt limits are enforced after the value is committed and reloaded:
+
+.. code-block:: python
+
+    from advanced_alchemy.types import HashedOneTimeCode
+    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+
+    backend = Argon2Hasher()
+    otp = HashedOneTimeCode(backend.hash("418207"), backend, max_attempts=3)
+
+    ok, otp = otp.redeem("418207")   # assign back to the column and commit to persist
+    assert ok is True
+    assert otp.is_used is True       # a reloaded value now rejects the same code
+
+.. note::
+
+    Single-use is always enforced (a successful ``redeem`` marks the code used); a stateless
+    column type still cannot write to the database on its own, so persist the value returned
+    by ``redeem`` (assign it back and commit) for the used/attempt state to survive a reload.
 
 GUID
 ----

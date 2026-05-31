@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import os
 from collections.abc import Generator
 from typing import TYPE_CHECKING
 
@@ -15,6 +16,14 @@ from pytest_databases.docker.spanner import SpannerService
 
 if TYPE_CHECKING:
     pass
+
+# Disable Google Cloud Spanner's built-in Cloud Monitoring metrics export before any Spanner
+# client is created. Without GCP credentials its background exporter thread fails to
+# authenticate and logs errors during interpreter teardown (after the safe-logging handlers
+# are closed), which surfaces as "Failed to export metrics to Cloud Monitoring" /
+# "I/O operation on closed file" and can fail the job on a non-zero exit. The emulator used in
+# tests does not need these metrics.
+os.environ.setdefault("SPANNER_DISABLE_BUILTIN_METRICS", "true")
 
 pytest_plugins = [
     "pytest_databases.docker",

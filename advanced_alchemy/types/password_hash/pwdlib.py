@@ -2,7 +2,9 @@
 
 from typing import TYPE_CHECKING, Any, Union
 
+from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.password_hash.base import HashingBackend
+from advanced_alchemy.typing import PWDLIB_INSTALLED
 
 if TYPE_CHECKING:
     from pwdlib.hashers.base import HasherProtocol
@@ -19,7 +21,12 @@ class PwdlibHasher(HashingBackend):
 
         Args:
             hasher: The Pwdlib hasher to use for hashing and verification.
+
+        Raises:
+            MissingDependencyError: If the ``pwdlib`` package is not installed.
         """
+        if not PWDLIB_INSTALLED:
+            raise MissingDependencyError(package="pwdlib")
         self.hasher = hasher
 
     def hash(self, value: "Union[str, bytes]") -> str:
@@ -45,6 +52,20 @@ class PwdlibHasher(HashingBackend):
         """
         try:
             return self.hasher.verify(self._ensure_bytes(plain), hashed)
+        except Exception:  # noqa: BLE001
+            return False
+
+    def needs_rehash(self, hashed: str) -> bool:
+        """Return True if the wrapped hasher reports the stored hash as stale.
+
+        Args:
+            hashed: The stored hash string.
+
+        Returns:
+            True if the hash should be regenerated; False for an unparsable or foreign hash.
+        """
+        try:
+            return self.hasher.check_needs_rehash(hashed)
         except Exception:  # noqa: BLE001
             return False
 

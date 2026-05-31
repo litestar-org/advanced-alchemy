@@ -1,22 +1,17 @@
 import abc
 import base64
-import contextlib
 import os
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from sqlalchemy import String, Text, TypeDecorator
 from sqlalchemy import func as sql_func
 
-from advanced_alchemy.exceptions import IntegrityError
+from advanced_alchemy.exceptions import IntegrityError, MissingDependencyError
+from advanced_alchemy.typing import CRYPTOGRAPHY_INSTALLED
+from advanced_alchemy.utils.deprecation import warn_deprecation
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Dialect
-
-cryptography = None  # type: ignore[var-annotated,unused-ignore]
-with contextlib.suppress(ImportError):
-    from cryptography.fernet import Fernet
-    from cryptography.hazmat.backends import default_backend
-    from cryptography.hazmat.primitives import hashes
 
 
 __all__ = ("EncryptedString", "EncryptedText", "EncryptionBackend", "FernetBackend", "PGCryptoBackend")
@@ -40,6 +35,7 @@ class EncryptionBackend(abc.ABC):
         """
         if isinstance(key, str):
             key = key.encode()
+        self.init_engine(key)
 
     @abc.abstractmethod
     def init_engine(self, key: "Union[bytes, str]") -> None:  # pragma: no cover
@@ -80,15 +76,47 @@ class EncryptionBackend(abc.ABC):
             NotImplementedError: If the method is not implemented by the subclass.
         """
 
+    def bind_expression(self, bindvalue: Any) -> "Optional[Any]":
+        """Returns a SQL expression that encrypts the bound parameter server-side.
+
+        Client-side backends (which encrypt in :meth:`encrypt`) return ``None`` so the
+        bound value is stored verbatim. Server-side backends override this to wrap the
+        bind parameter in a database encryption function.
+
+        Args:
+            bindvalue (Any): The bound parameter element.
+
+        Returns:
+            Any | None: The wrapped SQL expression, or ``None`` for client-side backends.
+        """
+        return None
+
+    def column_expression(self, column: Any) -> "Optional[Any]":
+        """Returns a SQL expression that decrypts the column server-side.
+
+        Client-side backends (which decrypt in :meth:`decrypt`) return ``None`` so the
+        stored value is read verbatim. Server-side backends override this to wrap the
+        column in a database decryption function.
+
+        Args:
+            column (Any): The column element being read.
+
+        Returns:
+            Any | None: The wrapped SQL expression, or ``None`` for client-side backends.
+        """
+        return None
+
 
 class PGCryptoBackend(EncryptionBackend):
     """PostgreSQL pgcrypto-based encryption backend.
 
     This backend uses PostgreSQL's pgcrypto extension for encryption/decryption operations.
-    Requires the pgcrypto extension to be installed in the database.
+    Requires the pgcrypto extension to be installed in the database. Encryption and
+    decryption run server-side via :meth:`bind_expression` and :meth:`column_expression`;
+    the ASCII-armored ciphertext is stored as text so the column type is unchanged.
 
     Attributes:
-        passphrase (bytes): The base64-encoded passphrase used for encryption and decryption.
+        passphrase (str): The base64-encoded passphrase used for encryption and decryption.
     """
 
     def init_engine(self, key: "Union[bytes, str]") -> None:
@@ -99,47 +127,80 @@ class PGCryptoBackend(EncryptionBackend):
         """
         if isinstance(key, str):
             key = key.encode()
-        self.passphrase = base64.urlsafe_b64encode(key)
+        self.passphrase = base64.urlsafe_b64encode(key).decode("ascii")
 
     def encrypt(self, value: Any) -> str:
-        """Encrypts the given value using pgcrypto.
+        """Returns the plaintext value to bind; encryption happens server-side.
 
         Args:
             value (Any): The value to encrypt.
 
         Returns:
-            str: The encrypted value.
+            str: The plaintext value passed to :meth:`bind_expression`.
         """
         if not isinstance(value, str):  # pragma: no cover
-            value = repr(value)
-        value = value.encode()
-        return sql_func.pgp_sym_encrypt(value, self.passphrase)  # type: ignore[return-value]
+            return repr(value)
+        return value
 
     def decrypt(self, value: Any) -> str:
-        """Decrypts the given value using pgcrypto.
+        """Normalizes the server-decrypted value; decryption happens in SQL.
 
         Args:
-            value (Any): The value to decrypt.
+            value (Any): The value already decrypted by :meth:`column_expression`.
 
         Returns:
             str: The decrypted value.
         """
+        if isinstance(value, bytes):  # pragma: no cover
+            return value.decode("utf-8")
         if not isinstance(value, str):  # pragma: no cover
-            value = str(value)
-        return sql_func.pgp_sym_decrypt(value, self.passphrase)  # type: ignore[return-value]
+            return str(value)
+        return value
+
+    def bind_expression(self, bindvalue: Any) -> "Optional[Any]":
+        """Wraps the bound parameter in ``armor(pgp_sym_encrypt(...))``.
+
+        Args:
+            bindvalue (Any): The bound parameter element.
+
+        Returns:
+            Any: The SQL expression producing ASCII-armored ciphertext.
+        """
+        return sql_func.armor(sql_func.pgp_sym_encrypt(bindvalue, self.passphrase))
+
+    def column_expression(self, column: Any) -> "Optional[Any]":
+        """Wraps the column in ``pgp_sym_decrypt(dearmor(...))``.
+
+        Args:
+            column (Any): The column element being read.
+
+        Returns:
+            Any: The SQL expression producing the decrypted plaintext.
+        """
+        return sql_func.pgp_sym_decrypt(sql_func.dearmor(column), self.passphrase)
 
 
 class FernetBackend(EncryptionBackend):
     """Fernet-based encryption backend.
 
     This backend uses the Python cryptography library's Fernet implementation
-    for encryption/decryption operations. Provides symmetric encryption with
-    built-in rotation support.
+    for encryption/decryption operations. Provides authenticated symmetric
+    encryption (AES-128-CBC + HMAC-SHA256). The key is derived from the
+    provided passphrase with a single SHA256 digest.
 
     Attributes:
         key (bytes): The base64-encoded key used for encryption and decryption.
         fernet (cryptography.fernet.Fernet): The Fernet instance used for encryption/decryption.
     """
+
+    def __init__(self) -> None:
+        """Initializes the Fernet backend.
+
+        Raises:
+            MissingDependencyError: If the ``cryptography`` package is not installed.
+        """
+        if not CRYPTOGRAPHY_INSTALLED:
+            raise MissingDependencyError(package="cryptography")
 
     def mount_vault(self, key: "Union[str, bytes]") -> None:
         """Mounts the vault with the provided encryption key.
@@ -149,9 +210,12 @@ class FernetBackend(EncryptionBackend):
         Args:
             key (str | bytes): The encryption key.
         """
+        from cryptography.hazmat.backends import default_backend
+        from cryptography.hazmat.primitives import hashes
+
         if isinstance(key, str):
             key = key.encode()
-        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())  # pyright: ignore[reportPossiblyUnboundVariable]
+        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
         digest.update(key)
         engine_key = digest.finalize()
         self.init_engine(engine_key)
@@ -162,10 +226,12 @@ class FernetBackend(EncryptionBackend):
         Args:
             key (bytes | str): The encryption key.
         """
+        from cryptography.fernet import Fernet
+
         if isinstance(key, str):
             key = key.encode()
         self.key = base64.urlsafe_b64encode(key)
-        self.fernet = Fernet(self.key)  # pyright: ignore[reportPossiblyUnboundVariable]
+        self.fernet = Fernet(self.key)
 
     def encrypt(self, value: Any) -> str:
         """Encrypts the given value using Fernet.
@@ -239,14 +305,28 @@ class EncryptedString(TypeDecorator[str]):
             **kwargs (Any | None): Additional arguments passed to the underlying String type.
         """
         super().__init__()
+        if key is DEFAULT_ENCRYPTION_KEY:
+            warn_deprecation(
+                version="1.11.0",
+                deprecated_name="EncryptedString(key=<default>)",
+                kind="parameter",
+                removal_in="2.0.0",
+                alternative="an explicit key (str/bytes) or a callable returning one",
+                info="The random default key changes on every process restart, making previously written rows undecryptable. Provide a stable key.",
+            )
         self.key = key
         self.backend = backend()
         self.length = length
+        self._vault_mounted = False
 
     def __repr__(self) -> str:
-        """Return a string representation of the EncryptedString."""
+        """Return a reconstructable representation of the type.
+
+        Uses ``type(self).__name__`` so subclasses (e.g. :class:`EncryptedText`) render their
+        own name; this keeps Alembic autogenerate from reconstructing the wrong column type.
+        """
         key_repr = self.key.__name__ if callable(self.key) else repr(self.key)
-        return f"EncryptedString(key={key_repr}, backend={self.backend.__class__.__name__}, length={self.length})"
+        return f"{type(self).__name__}(key={key_repr}, backend={self.backend.__class__.__name__}, length={self.length})"
 
     @property
     def python_type(self) -> type[str]:
@@ -323,10 +403,46 @@ class EncryptedString(TypeDecorator[str]):
     def mount_vault(self) -> None:
         """Mounts the vault with the encryption key.
 
-        If the key is callable, it is called to retrieve the key. Otherwise, the key is used directly.
+        For a static key the cipher is derived once and reused. For a callable
+        key it is re-resolved on every call so rotated keys take effect.
         """
+        if self._vault_mounted and not callable(self.key):
+            return
         key = self.key() if callable(self.key) else self.key
         self.backend.mount_vault(key)
+        self._vault_mounted = True
+
+    def bind_expression(self, bindparam: Any) -> "Optional[Any]":
+        """Wraps the bound parameter with the backend's server-side encryption, if any.
+
+        For client-side backends the parameter is returned unchanged so it compiles to a
+        plain placeholder; server-side backends wrap it in a database encryption function.
+
+        Args:
+            bindparam (Any): The bound parameter element.
+
+        Returns:
+            Any: The wrapped SQL expression for server-side backends, otherwise the bound parameter.
+        """
+        self.mount_vault()
+        wrapped = self.backend.bind_expression(bindparam)
+        return wrapped if wrapped is not None else bindparam
+
+    def column_expression(self, column: Any) -> "Optional[Any]":
+        """Wraps the column read with the backend's server-side decryption, if any.
+
+        For client-side backends the column is returned unchanged; server-side backends
+        wrap it in a database decryption function.
+
+        Args:
+            column (Any): The column element being read.
+
+        Returns:
+            Any: The wrapped SQL expression for server-side backends, otherwise the column.
+        """
+        self.mount_vault()
+        wrapped = self.backend.column_expression(column)
+        return wrapped if wrapped is not None else column
 
 
 class EncryptedText(EncryptedString):

@@ -255,9 +255,8 @@ Start by registering a backend and mapping the file column:
     from sqlalchemy.orm import Mapped, mapped_column
 
     from advanced_alchemy.extensions.fastapi import base, repository, service
-    from advanced_alchemy.types import FileObject, storages
+    from advanced_alchemy.types import FileObject, storages, StoredObject
     from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
-    from advanced_alchemy.types.file_object.data_type import StoredObject
 
     documents_backend = ObstoreBackend(
         key="documents",

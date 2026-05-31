@@ -6,6 +6,26 @@
 .. changelog:: 1.11.0
     :date: 2026-05-30
 
+    .. change:: harden crypto column types and add TOTP and one-time-code storage
+        :type: feature
+        :pr: 758
+
+        Corrects ``PGCryptoBackend`` so encryption and decryption run server-side
+        via ``bind_expression``/``column_expression`` (``pgp_sym_encrypt`` /
+        ``pgp_sym_decrypt``), round-tripping correctly on PostgreSQL with the
+        ``pgcrypto`` extension enabled. Deprecates the random default encryption key:
+        constructing ``EncryptedString``/``EncryptedText`` without a ``key`` now
+        warns, since the random default changed per process restart and left rows
+        undecryptable. ``PasswordHash`` gains rehash-on-verify via
+        ``HashedPassword.verify_and_update`` (backends gained ``needs_rehash``). Adds
+        two new column types: ``TOTPSecret`` (a base32 TOTP secret encrypted at rest
+        with a pyotp-backed provider exposing ``now``/``verify``/``provisioning_uri``
+        and a ``generate_totp_secret`` helper) and ``OneTimeCode`` (a code hashed in
+        a JSON column that also tracks expiry, single-use redemption, and wrong-guess
+        lockout, with a ``generate_one_time_code`` helper). Adds the
+        ``cryptography`` and ``pyotp`` optional-dependency extras; ``FernetBackend``
+        now raises ``MissingDependencyError`` when ``cryptography`` is absent.
+
     .. change:: add configurable schema dump settings
         :type: feature
         :pr: 750
@@ -19,6 +39,7 @@
 
     .. change:: deprecate DictProtocol
         :type: misc
+        :pr: 757
         :issue: 583
 
         Deprecates ``advanced_alchemy.typing.DictProtocol`` and schedules it
