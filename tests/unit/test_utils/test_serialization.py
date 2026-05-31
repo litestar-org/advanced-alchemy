@@ -7,6 +7,7 @@ import importlib
 import json
 import threading
 import time
+import warnings
 from decimal import Decimal
 from enum import Enum
 from ipaddress import IPv4Address, IPv4Interface, IPv4Network, IPv6Address, IPv6Interface, IPv6Network
@@ -415,6 +416,62 @@ def test_schema_dump_skips_attrs_branch_when_attrs_not_installed(monkeypatch: py
     monkeypatch.setattr("advanced_alchemy.utils.serialization.ATTRS_INSTALLED", False)
 
     assert schema_dump(AttrsLike()) == {"name": "Ada"}
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        1,
+        [1, 2],
+        {},
+    ],
+)
+def test_has_dict_attribute_rejects_values_without_instance_dict(value: Any) -> None:
+    assert not serialization.has_dict_attribute(value)
+
+
+def test_has_dict_attribute_accepts_plain_object() -> None:
+    class PlainObject:
+        def __init__(self) -> None:
+            self.name = "Ada"
+
+    assert serialization.has_dict_attribute(PlainObject())
+
+
+def test_has_dict_attribute_rejects_slots_only_object() -> None:
+    class SlotsOnlyObject:
+        __slots__ = ("name",)
+
+        def __init__(self) -> None:
+            self.name = "Ada"
+
+    assert not serialization.has_dict_attribute(SlotsOnlyObject())
+
+
+def test_schema_dump_uses_instance_dict_fallback_for_plain_objects() -> None:
+    class PlainObject:
+        def __init__(self) -> None:
+            self.name = "Ada"
+
+    assert schema_dump(PlainObject()) == {"name": "Ada"}
+
+
+def test_schema_dump_passes_through_slots_only_objects() -> None:
+    class SlotsOnlyObject:
+        __slots__ = ("name",)
+
+        def __init__(self) -> None:
+            self.name = "Ada"
+
+    value = SlotsOnlyObject()
+    result: Any = schema_dump(value)
+
+    assert result is value
+
+
+def test_serialization_module_does_not_import_public_dict_protocol() -> None:
+    assert "DictProtocol" not in vars(serialization)
 
 
 @pytest.mark.parametrize(
@@ -978,14 +1035,34 @@ def test_legacy_service_typing_shim_emits_deprecation_warning(name: str, new_mod
     assert value is canonical
 
 
+def test_typing_dict_protocol_emits_deprecation_warning() -> None:
+    with pytest.warns(DeprecationWarning, match=r"DictProtocol.*1\.11\.0.*removed in 2\.0\.0"):
+        value = _import_attr("advanced_alchemy.typing", "DictProtocol")
+
+    assert value is _import_attr("advanced_alchemy._typing", "DictProtocol")
+
+
+def test_typing_canonical_exports_do_not_emit_deprecation_warning() -> None:
+    typing_module = importlib.import_module("advanced_alchemy.typing")
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert getattr(typing_module, "PYDANTIC_INSTALLED") is PYDANTIC_INSTALLED
+
+
+def test_legacy_service_typing_dict_protocol_remains_compatible() -> None:
+    with pytest.warns(DeprecationWarning, match="DictProtocol"):
+        value = _import_attr("advanced_alchemy.service.typing", "DictProtocol")
+
+    assert value is _import_attr("advanced_alchemy._typing", "DictProtocol")
+
+
 def test_legacy_service_typing_shim_unknown_attribute_raises() -> None:
     with pytest.raises(AttributeError, match="not_a_real_name"):
         _import_attr("advanced_alchemy.service.typing", "not_a_real_name")
 
 
 def test_legacy_service_typing_shim_keeps_pydantic_use_failfast() -> None:
-    import warnings
-
     import advanced_alchemy.service.typing as shim
 
     with warnings.catch_warnings():
