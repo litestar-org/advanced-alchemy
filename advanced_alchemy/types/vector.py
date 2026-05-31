@@ -21,6 +21,7 @@ from sqlalchemy import Float, literal
 from sqlalchemy.engine import Dialect
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.expression import ColumnElement
+from sqlalchemy.sql.visitors import InternalTraversal
 from sqlalchemy.types import JSON, TypeDecorator, TypeEngine
 
 if TYPE_CHECKING:
@@ -30,8 +31,8 @@ if TYPE_CHECKING:
 
 __all__ = ("Vector",)
 
-_PGVECTOR_OPERATORS = {"cosine": "<=>", "l2": "<->", "inner_product": "<#>"}
-_ORACLE_METRICS = {"cosine": "COSINE", "l2": "EUCLIDEAN", "inner_product": "DOT"}
+_PGVECTOR_OPERATORS = {"cosine": "<=>", "l2": "<->", "l1": "<+>", "inner_product": "<#>"}
+_ORACLE_METRICS = {"cosine": "COSINE", "l2": "EUCLIDEAN", "l1": "MANHATTAN", "inner_product": "DOT"}
 
 
 class Vector(TypeDecorator[list[float]]):
@@ -94,6 +95,9 @@ class Vector(TypeDecorator[list[float]]):
         def l2_distance(self, other: "Sequence[float]") -> "_VectorDistance":
             return self._distance(other, "l2")
 
+        def l1_distance(self, other: "Sequence[float]") -> "_VectorDistance":
+            return self._distance(other, "l1")
+
         def max_inner_product(self, other: "Sequence[float]") -> "_VectorDistance":
             return self._distance(other, "inner_product")
 
@@ -106,12 +110,23 @@ class _VectorDistance(ColumnElement[float]):
     The SQL is chosen at compile time so the same expression compiles to native
     operators on each backend:
 
-    - PostgreSQL / CockroachDB → ``<=>`` / ``<->`` / ``<#>`` (pgvector)
-    - Oracle 23ai → ``VECTOR_DISTANCE(col, :vec, COSINE | EUCLIDEAN | DOT)``
+    - PostgreSQL / CockroachDB → ``<=>`` / ``<->`` / ``<+>`` / ``<#>`` (pgvector)
+    - Oracle 23ai → ``VECTOR_DISTANCE(col, :vec, COSINE | EUCLIDEAN | MANHATTAN | DOT)``
     - other dialects → :exc:`NotImplementedError` (no native vector backend)
+
+    ``max_inner_product`` (pgvector ``<#>``, Oracle ``DOT``) returns the *negated*
+    inner product on both backends, so ascending order yields the nearest match.
+
+    ``_traverse_internals`` makes the expression cache-safe: statements containing
+    a vector distance participate in SQLAlchemy's compiled-statement cache keyed on
+    the operands and metric.
     """
 
-    inherit_cache = False
+    _traverse_internals = [
+        ("left", InternalTraversal.dp_clauseelement),
+        ("right", InternalTraversal.dp_clauseelement),
+        ("metric", InternalTraversal.dp_string),
+    ]
 
     def __init__(self, left: "ColumnElement[Any]", right: "ColumnElement[Any]", metric: str) -> None:
         self.left = left

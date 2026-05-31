@@ -164,6 +164,7 @@ def test_vector_distance_methods_exist_on_column() -> None:
     column: Column[list[float]] = Column("embedding", Vector(3))
     assert hasattr(column, "cosine_distance")
     assert hasattr(column, "l2_distance")
+    assert hasattr(column, "l1_distance")
     assert hasattr(column, "max_inner_product")
 
 
@@ -181,6 +182,14 @@ def test_vector_l2_distance_postgresql_emits_operator() -> None:
     statement = column.l2_distance([1.0, 2.0, 3.0])
     sql = str(statement.compile(dialect=postgresql_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
     assert "<->" in sql
+
+
+def test_vector_l1_distance_postgresql_emits_operator() -> None:
+    """L1 distance compiles to the pgvector ``<+>`` operator on PostgreSQL."""
+    column: Column[list[float]] = Column("embedding", Vector(3))
+    statement = column.l1_distance([1.0, 2.0, 3.0])
+    sql = str(statement.compile(dialect=postgresql_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
+    assert "<+>" in sql
 
 
 def test_vector_max_inner_product_postgresql_emits_operator() -> None:
@@ -209,6 +218,15 @@ def test_vector_l2_distance_oracle_uses_euclidean_metric() -> None:
     assert "EUCLIDEAN" in sql
 
 
+def test_vector_l1_distance_oracle_uses_manhattan_metric() -> None:
+    """L1 distance maps to the Oracle ``MANHATTAN`` metric."""
+    column: Column[list[float]] = Column("embedding", Vector(3))
+    statement = column.l1_distance([1.0, 2.0, 3.0])
+    sql = str(statement.compile(dialect=oracle_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
+    assert "VECTOR_DISTANCE" in sql
+    assert "MANHATTAN" in sql
+
+
 def test_vector_max_inner_product_oracle_uses_dot_metric() -> None:
     """Negative inner product maps to the Oracle ``DOT`` metric."""
     column: Column[list[float]] = Column("embedding", Vector(3))
@@ -216,6 +234,16 @@ def test_vector_max_inner_product_oracle_uses_dot_metric() -> None:
     sql = str(statement.compile(dialect=oracle_dialect_mod.dialect()))  # type: ignore[no-untyped-call,unused-ignore]
     assert "VECTOR_DISTANCE" in sql
     assert "DOT" in sql
+
+
+def test_vector_distance_is_cacheable() -> None:
+    """Distance expressions generate a SQLAlchemy cache key keyed on operands and metric."""
+    column: Column[list[float]] = Column("embedding", Vector(3))
+    cosine = column.cosine_distance([1.0, 2.0, 3.0])
+    l2 = column.l2_distance([1.0, 2.0, 3.0])
+    assert cosine._generate_cache_key() is not None  # pyright: ignore[reportPrivateUsage]
+    assert cosine._generate_cache_key() == column.cosine_distance([1.0, 2.0, 3.0])._generate_cache_key()  # pyright: ignore[reportPrivateUsage]
+    assert cosine._generate_cache_key() != l2._generate_cache_key()  # pyright: ignore[reportPrivateUsage]
 
 
 def test_vector_distance_unsupported_dialect_raises() -> None:
