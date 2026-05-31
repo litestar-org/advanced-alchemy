@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, cast
 
 import pytest
 from passlib.context import CryptContext
 from pwdlib.hashers.argon2 import Argon2Hasher as PwdlibArgon2Hasher
-from sqlalchemy import Engine, String
+from sqlalchemy import Engine, String, text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
@@ -14,6 +14,7 @@ from advanced_alchemy.types import EncryptedString, PasswordHash
 from advanced_alchemy.types.encrypted_string import FernetBackend, PGCryptoBackend
 from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
 from advanced_alchemy.types.password_hash.base import HashedPassword
+from advanced_alchemy.types.password_hash.one_time_code import HashedOneTimeCode, OneTimeCode
 from advanced_alchemy.types.password_hash.passlib import PasslibHasher
 from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
 from tests.integration.test_models import DatabaseCapabilities
@@ -38,6 +39,7 @@ class User(BigIntBase):
     pwdlib_password: Mapped[Optional[str]] = mapped_column(
         PasswordHash(backend=PwdlibHasher(hasher=PwdlibArgon2Hasher()))
     )
+    otp_code: Mapped[Optional[str]] = mapped_column(OneTimeCode(backend=Argon2Hasher()), nullable=True)
 
     __table_args__ = {"info": {"allow_eager": True}}
 
@@ -195,6 +197,37 @@ async def test_password_hash_async(
         await db_session.flush()
         await db_session.refresh(user2)
         assert user2.argon2_password is None
+
+
+def test_one_time_code_sync(engine: Engine, password_test_tables: None) -> None:
+    """One-time codes are stored hashed and verify like passwords."""
+    if DatabaseCapabilities.should_skip_bigint(engine.dialect.name):
+        pytest.skip(f"{engine.dialect.name} doesn't support bigint PKs well")
+    if engine.dialect.name == "mock":
+        pytest.skip("Mock engine doesn't support auto-generated primary keys")
+    if engine.dialect.name.startswith("spanner"):
+        pytest.skip("Spanner doesn't support direct UNIQUE constraints")
+    if engine.dialect.name.startswith("cockroach"):
+        pytest.skip("CockroachDB doesn't support BigInt primary keys")
+
+    session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
+    with session_factory() as db_session:
+        user = User(name="otp_user", otp_code="123456")
+        db_session.add(user)
+        db_session.flush()
+        row_id = user.id
+        db_session.refresh(user)
+
+        otp = cast("object", user.otp_code)
+        assert isinstance(otp, HashedOneTimeCode)
+        assert otp.verify("123456") is True
+        assert not otp.verify("000000")
+
+        stored = db_session.execute(
+            text("SELECT otp_code FROM test_user_password_hash WHERE id = :id"), {"id": row_id}
+        ).scalar_one()
+        assert stored != "123456"
+        assert stored.startswith("$argon2")
 
 
 def test_password_hash_repr() -> None:

@@ -23,6 +23,7 @@ from advanced_alchemy.types.identity import BigIntIdentity
 from advanced_alchemy.types.json import ORA_JSONB, JsonB
 from advanced_alchemy.types.mutables import MutableList
 from advanced_alchemy.types.password_hash.base import HashedPassword, PasswordHash
+from advanced_alchemy.types.password_hash.one_time_code import HashedOneTimeCode, OneTimeCode
 from advanced_alchemy.types.totp import TOTPProvider, TOTPSecret, generate_totp_secret
 from advanced_alchemy.types.vector import Vector
 
@@ -40,9 +41,11 @@ __all__ = (
     "FernetBackend",
     "FileObject",
     "FileObjectList",
+    "HashedOneTimeCode",
     "HashedPassword",
     "JsonB",
     "MutableList",
+    "OneTimeCode",
     "PasswordHash",
     "StorageBackend",
     "StorageBackendT",
