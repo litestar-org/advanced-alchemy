@@ -26,7 +26,7 @@ from advanced_alchemy.filters import StatementFilter
 from advanced_alchemy.repository import SQLAlchemySyncQueryRepository
 from advanced_alchemy.repository._util import LoadSpec, model_from_dict
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, SQLAlchemySyncRepositoryT
-from advanced_alchemy.service._util import ResultConverter
+from advanced_alchemy.service._util import ResultConverter, resolve_item_ids
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.deprecation import warn_deprecation
 from advanced_alchemy.utils.serialization import (
@@ -1375,24 +1375,15 @@ class SQLAlchemySyncRepositoryService(
             ...     ]
             ... )
         """
-        resolved_item_ids: list[PrimaryKeyType] = []
-        for item in item_ids:
-            if isinstance(item, self.model_type):
-                if self.repository.has_composite_pk:
-                    resolved_item_ids.append(self.repository.get_primary_key_value(item))
-                else:
-                    resolved_item_ids.append(
-                        cast(
-                            "PrimaryKeyType",
-                            self.repository.get_id_attribute_value(item=item, id_attribute=id_attribute),
-                        )
-                    )
-            else:
-                resolved_item_ids.append(item)
         return cast(
             "Sequence[ModelT]",
             self.repository.delete_many(
-                item_ids=resolved_item_ids,
+                item_ids=resolve_item_ids(
+                    item_ids,
+                    model_type=self.model_type,
+                    repository=self.repository,
+                    id_attribute=id_attribute,
+                ),
                 auto_commit=auto_commit,
                 auto_expunge=auto_expunge,
                 id_attribute=id_attribute,

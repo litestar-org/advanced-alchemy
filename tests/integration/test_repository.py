@@ -597,6 +597,23 @@ async def test_service_delete_many_accepts_mixed_instances_and_ids(
     assert len(remaining) == 0
 
 
+def test_sync_service_delete_many_accepts_instances(
+    seeded_test_session_sync: "tuple[Session, dict[str, type]]",
+) -> None:
+    """Test sync service delete_many accepts model instances."""
+    author_service = get_service_from_session(seeded_test_session_sync, "author")
+
+    authors = author_service.get_many()
+    assert len(authors) == 2
+
+    deleted = author_service.delete_many(list(authors))
+    assert len(deleted) == 2
+    assert {a.id for a in deleted} == {a.id for a in authors}
+
+    remaining = author_service.get_many()
+    assert len(remaining) == 0
+
+
 # Additional filter tests
 async def test_repo_filter_before_after(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
     """Test repository with BeforeAfter filter."""
@@ -1207,6 +1224,29 @@ async def test_composite_pk_delete_many_by_dicts(
         await maybe_async(user_role_repo.get((1, 10)))
     with pytest.raises(NotFoundError):
         await maybe_async(user_role_repo.get((2, 10)))
+
+
+async def test_composite_pk_service_delete_many_accepts_mixed_instances_and_ids(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test service delete_many accepts mixed model instances and raw composite keys."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_service = create_service(session, models["user_role"])
+
+    roles = await maybe_async(user_role_service.get_many())
+    assert len(roles) == 3
+
+    mixed = [roles[0], (roles[1].user_id, roles[1].role_id)]
+    deleted = await maybe_async(user_role_service.delete_many(mixed))
+
+    assert len(deleted) == 2
+    assert {(role.user_id, role.role_id) for role in deleted} == {
+        (roles[0].user_id, roles[0].role_id),
+        (roles[1].user_id, roles[1].role_id),
+    }
 
 
 async def test_composite_pk_count(
