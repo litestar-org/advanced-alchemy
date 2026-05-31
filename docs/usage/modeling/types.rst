@@ -82,6 +82,30 @@ For storing encrypted string values with configurable length.
 
         secret: Mapped[str] = mapped_column(EncryptedString(key="my-secret-key"))
 
+.. warning::
+
+    Always pass an explicit ``key``. Omitting it falls back to a random key generated
+    once per process, which changes on every restart and makes previously written rows
+    permanently undecryptable. Constructing the type without a ``key`` now emits a
+    ``DeprecationWarning``.
+
+The key may be a string, bytes, or a callable returning either. Use a callable to read
+the key from configuration at runtime so it is never hard-coded in the model:
+
+.. code-block:: python
+
+    import os
+
+    from advanced_alchemy.types import EncryptedString
+
+    secret: Mapped[str] = mapped_column(
+        EncryptedString(key=lambda: os.environ["APP_ENCRYPTION_KEY"])
+    )
+
+A callable key is re-resolved on every read and write, so rotating the value in the
+environment takes effect without code changes; a static (string/bytes) key derives the
+cipher once and reuses it.
+
 EncryptedText
 ~~~~~~~~~~~~~
 
@@ -104,8 +128,111 @@ Encryption Backends
 
 Two encryption backends are available:
 
-- :class:`FernetBackend <advanced_alchemy.types.encrypted_string.FernetBackend>`: Uses Python's ``cryptography`` library with Fernet encryption.
-- :class:`PGCryptoBackend <advanced_alchemy.types.encrypted_string.PGCryptoBackend>`: Uses PostgreSQL's ``pgcrypto`` extension (PostgreSQL only).
+- :class:`FernetBackend <advanced_alchemy.types.encrypted_string.FernetBackend>`: the
+  default. Uses Python's ``cryptography`` library with Fernet (AES-128-CBC + HMAC-SHA256).
+  Requires the ``cryptography`` extra (``pip install advanced_alchemy[cryptography]``);
+  constructing it without ``cryptography`` installed raises ``MissingDependencyError``.
+- :class:`PGCryptoBackend <advanced_alchemy.types.encrypted_string.PGCryptoBackend>`: Uses
+  PostgreSQL's ``pgcrypto`` extension (PostgreSQL only). Encryption and decryption run
+  server-side, so the ``pgcrypto`` extension must be enabled on the database first:
+
+  .. code-block:: sql
+
+      CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+Password Hashing
+----------------
+
+:class:`PasswordHash <advanced_alchemy.types.PasswordHash>` stores a password as a one-way
+hash (never reversibly encrypted) and returns a
+:class:`HashedPassword <advanced_alchemy.types.HashedPassword>` on read. Choose a backend
+explicitly — each pulls a different optional dependency:
+
+- :class:`Argon2Hasher <advanced_alchemy.types.password_hash.argon2.Argon2Hasher>` (``advanced_alchemy[argon2]``)
+- :class:`PasslibHasher <advanced_alchemy.types.password_hash.passlib.PasslibHasher>` (``advanced_alchemy[passlib]``)
+- :class:`PwdlibHasher <advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher>` (``advanced_alchemy[pwdlib]``)
+
+.. code-block:: python
+
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    from advanced_alchemy.base import BigIntBase
+    from advanced_alchemy.types import PasswordHash
+    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+
+    class Account(BigIntBase):
+        __tablename__ = "account"
+
+        password: Mapped[str] = mapped_column(PasswordHash(backend=Argon2Hasher()))
+
+On read, ``account.password`` is a ``HashedPassword``. Verify with ``verify``, or use
+``verify_and_update`` to transparently upgrade a hash that was created with weaker
+parameters after a successful login:
+
+.. code-block:: python
+
+    ok, new_hash = account.password.verify_and_update(submitted_password)
+    if ok and new_hash is not None:
+        account.password = new_hash  # re-hashed with current parameters; persist it
+
+The default column ``length`` is 255 to accommodate stacked passlib schemes.
+
+TOTP Secrets
+------------
+
+:class:`TOTPSecret <advanced_alchemy.types.TOTPSecret>` stores a base32 TOTP shared secret
+encrypted at rest (it extends ``EncryptedString``) and returns a
+:class:`TOTPProvider <advanced_alchemy.types.TOTPProvider>` on read. Requires the ``pyotp``
+extra (``pip install advanced_alchemy[pyotp]``); a ``key`` is mandatory.
+
+.. code-block:: python
+
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    from advanced_alchemy.base import BigIntBase
+    from advanced_alchemy.types import TOTPSecret, generate_totp_secret
+
+    class MfaEnrollment(BigIntBase):
+        __tablename__ = "mfa_enrollment"
+
+        seed: Mapped[str] = mapped_column(TOTPSecret(key="my-secret-key", issuer="ACME"))
+
+    # enrollment
+    enrollment = MfaEnrollment(seed=generate_totp_secret())
+    uri = enrollment.seed.provisioning_uri(name="alice@example.com")  # render as a QR code
+
+    # verification (tolerates one tick of clock drift by default)
+    is_valid = enrollment.seed.verify(submitted_code)
+
+One-Time Codes
+--------------
+
+:class:`OneTimeCode <advanced_alchemy.types.OneTimeCode>` stores a transient one-time code
+(email/SMS OTP) **hashed**, reusing the password-hash backends, and returns a
+:class:`HashedOneTimeCode <advanced_alchemy.types.HashedOneTimeCode>` on read.
+
+.. code-block:: python
+
+    from datetime import datetime
+
+    from sqlalchemy.orm import Mapped, mapped_column
+
+    from advanced_alchemy.base import BigIntBase
+    from advanced_alchemy.types import DateTimeUTC, OneTimeCode
+    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+
+    class LoginCode(BigIntBase):
+        __tablename__ = "login_code"
+
+        code: Mapped[str] = mapped_column(OneTimeCode(backend=Argon2Hasher()))
+        expires_at: Mapped[datetime] = mapped_column(DateTimeUTC)
+
+.. note::
+
+    The type only hashes and verifies. Expiry, single-use enforcement, and attempt
+    throttling are the caller's responsibility at the model/service layer — for example an
+    ``expires_at`` column checked before verifying, and deleting or nulling the code after a
+    successful ``verify`` so it cannot be reused.
 
 GUID
 ----

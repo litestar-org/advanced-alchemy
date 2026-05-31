@@ -52,6 +52,10 @@ argon2 = [
 cli = [
     { name = "rich-click" },
 ]
+cryptography = [
+    { name = "cryptography", version = "47.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version <= '3.9'" },
+    { name = "cryptography", version = "48.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version > '3.9'" },
+]
 dogpile = [
     { name = "dogpile-cache", version = "1.4.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "dogpile-cache", version = "1.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
@@ -73,6 +77,9 @@ passlib = [
 pwdlib = [
     { name = "pwdlib", version = "0.2.1", source = { registry = "https://pypi.org/simple" }, extra = ["argon2"], marker = "python_full_version < '3.10'" },
     { name = "pwdlib", version = "0.3.0", source = { registry = "https://pypi.org/simple" }, extra = ["argon2"], marker = "python_full_version >= '3.10'" },
+]
+pyotp = [
+    { name = "pyotp" },
 ]
 uuid = [
     { name = "uuid-utils", version = "0.15.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -107,6 +114,8 @@ dev = [
     { name = "click", version = "8.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "coverage", version = "7.10.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "coverage", version = "7.14.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+    { name = "cryptography", version = "47.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version <= '3.9'" },
+    { name = "cryptography", version = "48.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version > '3.9'" },
     { name = "dishka", marker = "python_full_version >= '3.10'" },
     { name = "dogpile-cache", version = "1.4.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "dogpile-cache", version = "1.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
@@ -336,6 +345,8 @@ test = [
     { name = "click", version = "8.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "coverage", version = "7.10.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "coverage", version = "7.14.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+    { name = "cryptography", version = "47.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version <= '3.9'" },
+    { name = "cryptography", version = "48.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version > '3.9'" },
     { name = "dishka", marker = "python_full_version >= '3.10'" },
     { name = "dogpile-cache", version = "1.4.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "dogpile-cache", version = "1.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
@@ -371,6 +382,7 @@ test = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.12.0" },
     { name = "argon2-cffi", marker = "extra == 'argon2'" },
+    { name = "cryptography", marker = "extra == 'cryptography'" },
     { name = "dogpile-cache", marker = "extra == 'dogpile'" },
     { name = "eval-type-backport", marker = "python_full_version < '3.10'" },
     { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
@@ -380,12 +392,13 @@ requires-dist = [
     { name = "obstore", marker = "extra == 'obstore'" },
     { name = "passlib", extras = ["argon2"], marker = "extra == 'passlib'" },
     { name = "pwdlib", extras = ["argon2"], marker = "extra == 'pwdlib'" },
+    { name = "pyotp", marker = "extra == 'pyotp'" },
     { name = "rich-click", marker = "extra == 'cli'" },
     { name = "sqlalchemy", specifier = ">=2.0.41" },
     { name = "typing-extensions", specifier = ">=4.0.0" },
     { name = "uuid-utils", marker = "extra == 'uuid'", specifier = ">=0.6.1" },
 ]
-provides-extras = ["argon2", "cli", "dogpile", "fsspec", "nanoid", "obstore", "passlib", "pwdlib", "uuid"]
+provides-extras = ["argon2", "cli", "cryptography", "dogpile", "fsspec", "nanoid", "obstore", "passlib", "pwdlib", "pyotp", "uuid"]
 
 [package.metadata.requires-dev]
 build = [{ name = "bump-my-version" }]
@@ -409,6 +422,7 @@ dev = [
     { name = "cattrs" },
     { name = "click" },
     { name = "coverage", specifier = ">=7.6.1" },
+    { name = "cryptography" },
     { name = "dishka", marker = "python_full_version >= '3.10'" },
     { name = "dogpile-cache" },
     { name = "duckdb", specifier = ">=1.1.2" },
@@ -555,6 +569,7 @@ test = [
     { name = "cattrs" },
     { name = "click" },
     { name = "coverage", specifier = ">=7.6.1" },
+    { name = "cryptography" },
     { name = "dishka", marker = "python_full_version >= '3.10'" },
     { name = "dogpile-cache" },
     { name = "fsspec", extras = ["s3"] },

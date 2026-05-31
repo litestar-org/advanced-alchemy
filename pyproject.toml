@@ -60,12 +60,14 @@ Source = "https://github.com/litestar-org/advanced-alchemy"
 [project.optional-dependencies]
 argon2 = ["argon2-cffi"]
 cli = ["rich-click"]
+cryptography = ["cryptography"]
 dogpile = ["dogpile.cache"]
 fsspec = ["fsspec"]
 nanoid = ["fastnanoid>=0.4.1"]
 obstore = ["obstore"]
 passlib = ["passlib[argon2]"]
 pwdlib = ["pwdlib[argon2]"]
+pyotp = ["pyotp"]
 uuid = ["uuid-utils>=0.6.1"]
 
 [project.scripts]
@@ -156,6 +158,7 @@ test = [
   "pydantic-extra-types",
   "numpy",
   "pgvector",
+  "cryptography",
   "pyotp>=2.9.0",
   "rich-click",
   "coverage>=7.6.1",

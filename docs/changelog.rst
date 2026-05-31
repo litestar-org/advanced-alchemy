@@ -6,6 +6,55 @@
 .. changelog:: 1.11.0
     :date: 2026-05-30
 
+    .. change:: fix non-functional PGCryptoBackend
+        :type: bugfix
+
+        ``PGCryptoBackend`` never initialized its engine (the base ``mount_vault``
+        did not call ``init_engine``), and even past that, the type encrypted via
+        ``process_bind_param`` which cannot bind a SQL function. ``PGCryptoBackend``
+        now runs ``pgp_sym_encrypt``/``pgp_sym_decrypt`` server-side via
+        ``bind_expression``/``column_expression`` and round-trips correctly against
+        PostgreSQL (the ``pgcrypto`` extension must be enabled on the database).
+
+    .. change:: deprecate the random default encryption key
+        :type: misc
+
+        ``EncryptedString`` and ``EncryptedText`` now emit a ``DeprecationWarning``
+        when constructed without an explicit ``key``. The previous random default
+        changes on every process restart, which makes previously written rows
+        undecryptable. Provide a stable key — a string, bytes, or a callable that
+        reads it from configuration. The new ``TOTPSecret`` type requires a key
+        outright. The default ``FernetBackend`` now raises ``MissingDependencyError``
+        when ``cryptography`` is not installed.
+
+    .. change:: add rehash-on-verify to PasswordHash
+        :type: feature
+
+        ``HashedPassword.verify_and_update`` returns a fresh hash when the stored
+        hash uses outdated parameters, enabling transparent upgrades on successful
+        login. The hashing backends gained ``needs_rehash``.
+
+    .. change:: add TOTPSecret column type
+        :type: feature
+
+        New ``TOTPSecret`` type stores a base32 TOTP secret encrypted at rest and
+        returns a pyotp-backed provider (``now``/``verify``/``provisioning_uri``),
+        plus a ``generate_totp_secret`` helper. Install with
+        ``advanced_alchemy[pyotp]``.
+
+    .. change:: add OneTimeCode column type
+        :type: feature
+
+        New ``OneTimeCode`` type stores transient one-time codes hashed, reusing the
+        password-hash backends. Expiry and single-use enforcement remain model-level
+        concerns.
+
+    .. change:: add cryptography and pyotp extras
+        :type: misc
+
+        Adds the ``advanced_alchemy[cryptography]`` and ``advanced_alchemy[pyotp]``
+        optional-dependency extras.
+
     .. change:: add configurable schema dump settings
         :type: feature
         :pr: 750
