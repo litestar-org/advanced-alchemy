@@ -74,7 +74,6 @@ from advanced_alchemy.typing import (
     AttrsLike,
     BaseModel,
     BaseModelLike,
-    DictProtocol,
     DTOData,
     DTODataLike,
     FailFast,
@@ -198,6 +197,10 @@ BulkModelDictT: TypeAlias = (
     "Union[Sequence[Union[dict[str, Any], ModelT, SupportedSchemaModel, Any]], DTODataLike[list[ModelT]]]"
 )
 """Type alias for bulk model dictionaries."""
+
+
+class _HasDictAttribute(Protocol):
+    __dict__: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -370,7 +373,7 @@ def is_dict(v: Any) -> TypeGuard[dict[str, Any]]:
     return isinstance(v, dict)
 
 
-def has_dict_attribute(obj: Any) -> "TypeGuard[DictProtocol]":
+def has_dict_attribute(obj: Any) -> "TypeGuard[_HasDictAttribute]":
     """Check if an object has a __dict__ attribute."""
     return obj is not None and hasattr(obj, "__dict__")
 

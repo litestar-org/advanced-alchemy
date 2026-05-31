@@ -17,6 +17,15 @@
         excluding unset values, ``None`` values, defaults, and sentinel values
         while preserving the existing partial-update defaults.
 
+    .. change:: deprecate DictProtocol
+        :type: misc
+        :issue: 583
+
+        Deprecates ``advanced_alchemy.typing.DictProtocol`` and schedules it
+        for removal in 2.0. Runtime code should rely on ``has_dict_attribute()``
+        or direct ``__dict__`` duck typing instead of Protocol-based instance
+        checks.
+
     .. change:: add choices and boolean filters
         :type: feature
         :pr: 723
