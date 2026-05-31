@@ -562,6 +562,41 @@ async def test_service_delete_method(seeded_test_session_async: "tuple[AsyncSess
     assert len(remaining_authors) == 1
 
 
+async def test_service_delete_many_accepts_instances(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test service delete_many accepts model instances as well as raw primary keys."""
+    author_service = get_service_from_session(seeded_test_session_async, "author")
+
+    authors = await maybe_async(author_service.get_many())
+    assert len(authors) == 2
+
+    deleted = await maybe_async(author_service.delete_many(list(authors)))
+    assert len(deleted) == 2
+    assert {a.id for a in deleted} == {a.id for a in authors}
+
+    remaining = await maybe_async(author_service.get_many())
+    assert len(remaining) == 0
+
+
+async def test_service_delete_many_accepts_mixed_instances_and_ids(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test service delete_many accepts a mixed list of model instances and raw primary keys."""
+    author_service = get_service_from_session(seeded_test_session_async, "author")
+
+    authors = await maybe_async(author_service.get_many())
+    assert len(authors) == 2
+
+    mixed = [authors[0], authors[1].id]
+    deleted = await maybe_async(author_service.delete_many(mixed))
+    assert len(deleted) == 2
+    assert {a.id for a in deleted} == {a.id for a in authors}
+
+    remaining = await maybe_async(author_service.get_many())
+    assert len(remaining) == 0
+
+
 # Additional filter tests
 async def test_repo_filter_before_after(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
     """Test repository with BeforeAfter filter."""
@@ -1172,6 +1207,29 @@ async def test_composite_pk_delete_many_by_dicts(
         await maybe_async(user_role_repo.get((1, 10)))
     with pytest.raises(NotFoundError):
         await maybe_async(user_role_repo.get((2, 10)))
+
+
+async def test_composite_pk_service_delete_many_accepts_mixed_instances_and_ids(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test service delete_many accepts mixed model instances and raw composite keys."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_service = create_service(session, models["user_role"])
+
+    roles = await maybe_async(user_role_service.get_many())
+    assert len(roles) == 3
+
+    mixed = [roles[0], (roles[1].user_id, roles[1].role_id)]
+    deleted = await maybe_async(user_role_service.delete_many(mixed))
+
+    assert len(deleted) == 2
+    assert {(role.user_id, role.role_id) for role in deleted} == {
+        (roles[0].user_id, roles[0].role_id),
+        (roles[1].user_id, roles[1].role_id),
+    }
 
 
 async def test_composite_pk_count(

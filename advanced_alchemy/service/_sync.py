@@ -26,7 +26,7 @@ from advanced_alchemy.filters import StatementFilter
 from advanced_alchemy.repository import SQLAlchemySyncQueryRepository
 from advanced_alchemy.repository._util import LoadSpec, model_from_dict
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, SQLAlchemySyncRepositoryT
-from advanced_alchemy.service._util import ResultConverter
+from advanced_alchemy.service._util import ResultConverter, resolve_item_ids
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.deprecation import warn_deprecation
 from advanced_alchemy.utils.serialization import (
@@ -1336,6 +1336,8 @@ class SQLAlchemySyncRepositoryService(
             item_ids: List of identifiers of instances to be deleted.
                 For single primary key models, pass a list of scalar values.
                 For composite primary key models, pass a list of tuples or dicts.
+                Model instances may also be passed in place of identifiers, and the list
+                may mix instances with raw identifier values.
             auto_expunge: Remove object from session before returning.
             auto_commit: Commit objects before returning.
             id_attribute: Allows customization of the unique identifier to use for model fetching.
@@ -1376,7 +1378,12 @@ class SQLAlchemySyncRepositoryService(
         return cast(
             "Sequence[ModelT]",
             self.repository.delete_many(
-                item_ids=item_ids,
+                item_ids=resolve_item_ids(
+                    item_ids,
+                    model_type=self.model_type,
+                    repository=self.repository,
+                    id_attribute=id_attribute,
+                ),
                 auto_commit=auto_commit,
                 auto_expunge=auto_expunge,
                 id_attribute=id_attribute,

@@ -1,7 +1,8 @@
-"""Unit tests for service.update() model conversion flow.
+"""Unit tests for service model conversion flow.
 
 These tests verify that update input types are routed through to_model(data, "update")
-and the update lifecycle hook before persistence.
+and the update lifecycle hook before persistence. They also cover service-level
+input normalization before repository delegation.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 from advanced_alchemy.repository._util import get_primary_key_info
+from advanced_alchemy.repository.typing import PrimaryKeyType
 from advanced_alchemy.service import SchemaDumpConfig, SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
 from advanced_alchemy.utils.serialization import ATTRS_INSTALLED, MSGSPEC_INSTALLED, PYDANTIC_INSTALLED, ModelDictT
 
@@ -139,6 +141,24 @@ class TrackingSyncService(SQLAlchemySyncRepositoryService[MockModel, MockSyncRep
 
 
 # Tests for async service
+
+
+@pytest.mark.asyncio
+async def test_delete_many_passes_id_only_input_through_without_copying() -> None:
+    """Id-only delete_many() input should keep the existing bulk-delete fast path."""
+    service = TrackingService()
+    captured: dict[str, Any] = {}
+
+    async def delete_many(item_ids: list[Any], **_: Any) -> list[MockModel]:
+        captured["item_ids"] = item_ids
+        return []
+
+    service.repository.delete_many = AsyncMock(side_effect=delete_many)  # type: ignore[method-assign]
+
+    item_ids: list[PrimaryKeyType] = ["first-id", "second-id"]
+    await service.delete_many(item_ids)
+
+    assert captured["item_ids"] is item_ids
 
 
 @pytest.mark.asyncio
@@ -356,6 +376,43 @@ async def test_update_propagates_with_for_update_flag() -> None:
 
 
 # Tests for sync service
+
+
+def test_sync_delete_many_passes_id_only_input_through_without_copying() -> None:
+    """Sync id-only delete_many() input should keep the existing bulk-delete fast path."""
+    service = TrackingSyncService()
+    captured: dict[str, Any] = {}
+
+    def delete_many(item_ids: list[Any], **_: Any) -> list[MockModel]:
+        captured["item_ids"] = item_ids
+        return []
+
+    service.repository.delete_many = MagicMock(side_effect=delete_many)  # type: ignore[method-assign]
+
+    item_ids: list[PrimaryKeyType] = ["first-id", "second-id"]
+    service.delete_many(item_ids)
+
+    assert captured["item_ids"] is item_ids
+
+
+def test_sync_delete_many_resolves_model_instances_before_delegating() -> None:
+    """Sync delete_many() should resolve model instances to primary key values."""
+    service = TrackingSyncService()
+    captured: dict[str, Any] = {}
+
+    def delete_many(item_ids: list[Any], **_: Any) -> list[MockModel]:
+        captured["item_ids"] = item_ids
+        return []
+
+    service.repository.delete_many = MagicMock(side_effect=delete_many)  # type: ignore[method-assign]
+
+    model = MockModel()
+    model.id = "model-id"  # type: ignore[assignment]
+    item_ids = cast("list[PrimaryKeyType]", [model, "raw-id"])
+    service.delete_many(item_ids)
+
+    assert captured["item_ids"] == ["model-id", "raw-id"]
+    assert captured["item_ids"] is not item_ids
 
 
 def test_sync_update_dict_calls_to_model_with_operation() -> None:

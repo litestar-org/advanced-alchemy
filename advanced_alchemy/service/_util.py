@@ -14,6 +14,7 @@ from uuid import UUID
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.filters import LimitOffset, StatementFilter
+from advanced_alchemy.repository.typing import PrimaryKeyType
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.typing import (
     ATTRS_INSTALLED,
@@ -41,7 +42,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.base import ModelProtocol
     from advanced_alchemy.repository.typing import ModelOrRowMappingT
 
-__all__ = ("ResultConverter", "find_filter")
+__all__ = ("ResultConverter", "find_filter", "resolve_item_ids")
 
 DEFAULT_TYPE_DECODERS = [  # pyright: ignore[reportUnknownVariableType]
     (lambda x: x is UUID, lambda t, v: t(v.hex)),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
@@ -69,6 +70,28 @@ def find_filter(
         (cast("Optional[FilterTypeT]", filter_) for filter_ in filters if isinstance(filter_, filter_type)),
         None,
     )
+
+
+def resolve_item_ids(
+    item_ids: list[PrimaryKeyType],
+    *,
+    model_type: type[Any],
+    repository: Any,
+    id_attribute: Any = None,
+) -> list[PrimaryKeyType]:
+    """Resolve model instances in ``item_ids`` without copying id-only input."""
+    resolved_item_ids: Optional[list[PrimaryKeyType]] = None
+    for index, item in enumerate(item_ids):
+        if isinstance(item, model_type):
+            if resolved_item_ids is None:
+                resolved_item_ids = item_ids[:index]
+            if repository.has_composite_pk:
+                resolved_item_ids.append(repository.get_primary_key_value(item))
+            else:
+                resolved_item_ids.append(repository.get_id_attribute_value(item=item, id_attribute=id_attribute))
+        elif resolved_item_ids is not None:
+            resolved_item_ids.append(item)
+    return item_ids if resolved_item_ids is None else resolved_item_ids
 
 
 class ResultConverter:
