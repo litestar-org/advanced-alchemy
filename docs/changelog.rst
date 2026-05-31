@@ -10,12 +10,10 @@
         :type: feature
         :pr: 758
 
-        Fixes the previously non-functional ``PGCryptoBackend`` — it never
-        initialized its engine and encrypted through ``process_bind_param`` (which
-        cannot bind a SQL function); it now runs
-        ``pgp_sym_encrypt``/``pgp_sym_decrypt`` server-side via
-        ``bind_expression``/``column_expression`` and round-trips on PostgreSQL with
-        the ``pgcrypto`` extension. Deprecates the random default encryption key:
+        Corrects ``PGCryptoBackend`` so encryption and decryption run server-side
+        via ``bind_expression``/``column_expression`` (``pgp_sym_encrypt`` /
+        ``pgp_sym_decrypt``), round-tripping correctly on PostgreSQL with the
+        ``pgcrypto`` extension enabled. Deprecates the random default encryption key:
         constructing ``EncryptedString``/``EncryptedText`` without a ``key`` now
         warns, since the random default changed per process restart and left rows
         undecryptable. ``PasswordHash`` gains rehash-on-verify via
