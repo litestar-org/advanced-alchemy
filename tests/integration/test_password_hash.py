@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 import pytest
 from passlib.context import CryptContext
@@ -39,7 +39,7 @@ class User(BigIntBase):
     pwdlib_password: Mapped[Optional[str]] = mapped_column(
         PasswordHash(backend=PwdlibHasher(hasher=PwdlibArgon2Hasher()))
     )
-    otp_code: Mapped[Optional[str]] = mapped_column(OneTimeCode(backend=Argon2Hasher()), nullable=True)
+    otp_code: Mapped[Any] = mapped_column(OneTimeCode(backend=Argon2Hasher(), ttl_seconds=600), nullable=True)
 
     __table_args__ = {"info": {"allow_eager": True}}
 
@@ -200,7 +200,7 @@ async def test_password_hash_async(
 
 
 def test_one_time_code_sync(engine: Engine, password_test_tables: None) -> None:
-    """One-time codes are stored hashed and verify like passwords."""
+    """One-time codes are hashed in JSON and are single-use after redemption."""
     if DatabaseCapabilities.should_skip_bigint(engine.dialect.name):
         pytest.skip(f"{engine.dialect.name} doesn't support bigint PKs well")
     if engine.dialect.name == "mock":
@@ -214,20 +214,29 @@ def test_one_time_code_sync(engine: Engine, password_test_tables: None) -> None:
     with session_factory() as db_session:
         user = User(name="otp_user", otp_code="123456")
         db_session.add(user)
-        db_session.flush()
+        db_session.commit()
         row_id = user.id
         db_session.refresh(user)
 
-        otp = cast("object", user.otp_code)
+        otp = cast("Any", user.otp_code)
         assert isinstance(otp, HashedOneTimeCode)
         assert otp.verify("123456") is True
         assert not otp.verify("000000")
 
+        # the column stores JSON holding the hash, never the plaintext code
         stored = db_session.execute(
             text("SELECT otp_code FROM test_user_password_hash WHERE id = :id"), {"id": row_id}
         ).scalar_one()
-        assert stored != "123456"
-        assert stored.startswith("$argon2")
+        assert "123456" not in str(stored)
+
+        # redeem marks it used; after commit + reload the code can no longer be verified
+        ok, user.otp_code = otp.redeem("123456")
+        assert ok is True
+        db_session.commit()
+        db_session.refresh(user)
+        reloaded = cast("Any", user.otp_code)
+        assert reloaded.is_used is True
+        assert reloaded.verify("123456") is False
 
 
 def test_password_hash_repr() -> None:

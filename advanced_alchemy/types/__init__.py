@@ -23,7 +23,11 @@ from advanced_alchemy.types.identity import BigIntIdentity
 from advanced_alchemy.types.json import ORA_JSONB, JsonB
 from advanced_alchemy.types.mutables import MutableList
 from advanced_alchemy.types.password_hash.base import HashedPassword, PasswordHash
-from advanced_alchemy.types.password_hash.one_time_code import HashedOneTimeCode, OneTimeCode
+from advanced_alchemy.types.password_hash.one_time_code import (
+    HashedOneTimeCode,
+    OneTimeCode,
+    generate_one_time_code,
+)
 from advanced_alchemy.types.totp import TOTPProvider, TOTPSecret, generate_totp_secret
 from advanced_alchemy.types.vector import Vector
 
@@ -56,6 +60,7 @@ __all__ = (
     "Vector",
     "encrypted_string",
     "file_object",
+    "generate_one_time_code",
     "generate_totp_secret",
     "password_hash",
     "storages",

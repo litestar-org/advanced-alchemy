@@ -49,7 +49,7 @@ offering:
 - Custom encrypted text type with multiple backend support including [`pgcrypto`](https://www.postgresql.org/docs/current/pgcrypto.html) for PostgreSQL and the Fernet implementation from [`cryptography`](https://cryptography.io/en/latest/) for other databases
 - Custom password hashing type with multiple backend support including [`Argon2`](https://github.com/P-H-C/phc-winner-argon2), [`Passlib`](https://passlib.readthedocs.io/en/stable/), and [`Pwdlib`](https://pwdlib.readthedocs.io/en/stable/) with automatic salt generation and rehash-on-verify for transparent hash upgrades on login
 - Custom TOTP shared-secret type that stores an authenticator seed encrypted at rest and verifies time-based one-time passwords via [`pyotp`](https://github.com/pyauth/pyotp) (install with the `pyotp` extra)
-- Custom one-time-code type for hashed, single-use email/SMS verification codes, reusing the password-hash backends
+- Custom one-time-code type that stores email/SMS verification codes hashed in JSON with built-in expiry, single-use redemption, attempt lockout, and a secure code generator
 - Pre-configured base classes with audit columns UUID or Big Integer primary keys and
   a [sentinel column](https://docs.sqlalchemy.org/en/20/core/connections.html#configuring-sentinel-columns).
 - Synchronous and asynchronous repositories featuring:

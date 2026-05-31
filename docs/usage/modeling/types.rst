@@ -219,31 +219,61 @@ One-Time Codes
 --------------
 
 :class:`OneTimeCode <advanced_alchemy.types.OneTimeCode>` stores a transient one-time code
-(email/SMS OTP) **hashed**, reusing the password-hash backends, and returns a
-:class:`HashedOneTimeCode <advanced_alchemy.types.HashedOneTimeCode>` on read.
+(email/SMS OTP) **hashed** in a JSON column that also holds its expiry, redemption, and
+attempt state — so the whole lifecycle lives in a single column. On read it returns a
+:class:`HashedOneTimeCode <advanced_alchemy.types.HashedOneTimeCode>` whose ``verify``
+succeeds only while the code is still redeemable (not expired, not already used, and not
+locked out after too many wrong guesses).
 
 .. code-block:: python
 
-    from datetime import datetime
+    from typing import Any
 
     from sqlalchemy.orm import Mapped, mapped_column
 
     from advanced_alchemy.base import BigIntBase
-    from advanced_alchemy.types import DateTimeUTC, OneTimeCode
+    from advanced_alchemy.types import OneTimeCode
     from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
 
     class LoginCode(BigIntBase):
         __tablename__ = "login_code"
 
-        code: Mapped[str] = mapped_column(OneTimeCode(backend=Argon2Hasher()))
-        expires_at: Mapped[datetime] = mapped_column(DateTimeUTC)
+        # codes expire after 10 minutes and lock after 3 wrong guesses (the default)
+        code: Mapped[Any] = mapped_column(
+            OneTimeCode(backend=Argon2Hasher(), ttl_seconds=600, max_attempts=3)
+        )
+
+To issue a code, assign a freshly generated value; ``generate_one_time_code`` returns a
+cryptographically random code:
+
+.. code-block:: python
+
+    from advanced_alchemy.types import generate_one_time_code
+
+    code = generate_one_time_code()  # e.g. "418207" — send this to the user
+    login = LoginCode(code=code)     # stored hashed, with expiry + attempt state
+
+To redeem, ``redeem`` verifies the candidate and returns the updated value to persist — it
+marks the code used on success or records a failed attempt otherwise. Single-use and
+attempt limits are enforced after the value is committed and reloaded:
+
+.. code-block:: python
+
+    from advanced_alchemy.types import HashedOneTimeCode
+    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+
+    backend = Argon2Hasher()
+    otp = HashedOneTimeCode(backend.hash("418207"), backend, max_attempts=3)
+
+    ok, otp = otp.redeem("418207")   # assign back to the column and commit to persist
+    assert ok is True
+    assert otp.is_used is True       # a reloaded value now rejects the same code
 
 .. note::
 
-    The type only hashes and verifies. Expiry, single-use enforcement, and attempt
-    throttling are the caller's responsibility at the model/service layer — for example an
-    ``expires_at`` column checked before verifying, and deleting or nulling the code after a
-    successful ``verify`` so it cannot be reused.
+    Single-use is always enforced (a successful ``redeem`` marks the code used); a stateless
+    column type still cannot write to the database on its own, so persist the value returned
+    by ``redeem`` (assign it back and commit) for the used/attempt state to survive a reload.
 
 GUID
 ----
