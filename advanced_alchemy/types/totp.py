@@ -57,7 +57,12 @@ class TOTPProvider:
             interval: Time step in seconds. Defaults to 30.
             digest: Hash algorithm passed to pyotp (None selects SHA1).
             issuer: Default issuer used for provisioning URIs.
+
+        Raises:
+            MissingDependencyError: If the ``pyotp`` package is not installed.
         """
+        if not PYOTP_INSTALLED:
+            raise MissingDependencyError(package="pyotp")
         self._secret = secret
         self._digits = digits
         self._interval = interval

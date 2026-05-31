@@ -44,6 +44,15 @@ def test_totp_secret_requires_pyotp(monkeypatch: pytest.MonkeyPatch) -> None:
         totp.TOTPSecret(key="k")
 
 
+def test_totp_provider_requires_pyotp(monkeypatch: pytest.MonkeyPatch) -> None:
+    from advanced_alchemy.exceptions import MissingDependencyError
+    from advanced_alchemy.types import totp
+
+    monkeypatch.setattr(totp, "PYOTP_INSTALLED", False)
+    with pytest.raises(MissingDependencyError):
+        totp.TOTPProvider("ABCDEFGH")
+
+
 @pytest.mark.skipif(not PYOTP_INSTALLED, reason="pyotp not installed")
 def test_totp_secret_requires_explicit_key() -> None:
     """The new type has no deprecated random default; key is required."""

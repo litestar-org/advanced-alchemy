@@ -39,6 +39,7 @@
 
     .. change:: deprecate DictProtocol
         :type: misc
+        :pr: 757
         :issue: 583
 
         Deprecates ``advanced_alchemy.typing.DictProtocol`` and schedules it
