@@ -597,23 +597,6 @@ async def test_service_delete_many_accepts_mixed_instances_and_ids(
     assert len(remaining) == 0
 
 
-def test_sync_service_delete_many_accepts_instances(
-    seeded_test_session_sync: "tuple[Session, dict[str, type]]",
-) -> None:
-    """Test sync service delete_many accepts model instances."""
-    author_service = get_service_from_session(seeded_test_session_sync, "author")
-
-    authors = author_service.get_many()
-    assert len(authors) == 2
-
-    deleted = author_service.delete_many(list(authors))
-    assert len(deleted) == 2
-    assert {a.id for a in deleted} == {a.id for a in authors}
-
-    remaining = author_service.get_many()
-    assert len(remaining) == 0
-
-
 # Additional filter tests
 async def test_repo_filter_before_after(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
     """Test repository with BeforeAfter filter."""

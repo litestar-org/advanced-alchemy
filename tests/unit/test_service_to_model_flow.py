@@ -395,6 +395,26 @@ def test_sync_delete_many_passes_id_only_input_through_without_copying() -> None
     assert captured["item_ids"] is item_ids
 
 
+def test_sync_delete_many_resolves_model_instances_before_delegating() -> None:
+    """Sync delete_many() should resolve model instances to primary key values."""
+    service = TrackingSyncService()
+    captured: dict[str, Any] = {}
+
+    def delete_many(item_ids: list[Any], **_: Any) -> list[MockModel]:
+        captured["item_ids"] = item_ids
+        return []
+
+    service.repository.delete_many = MagicMock(side_effect=delete_many)  # type: ignore[method-assign]
+
+    model = MockModel()
+    model.id = "model-id"  # type: ignore[assignment]
+    item_ids = cast("list[PrimaryKeyType]", [model, "raw-id"])
+    service.delete_many(item_ids)
+
+    assert captured["item_ids"] == ["model-id", "raw-id"]
+    assert captured["item_ids"] is not item_ids
+
+
 def test_sync_update_dict_calls_to_model_with_operation() -> None:
     """Test that sync update() with dict data calls to_model(data, 'update')."""
     service = TrackingSyncService()
