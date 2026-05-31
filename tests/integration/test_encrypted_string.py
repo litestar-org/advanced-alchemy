@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 from advanced_alchemy.base import BigIntBase
 from advanced_alchemy.types import EncryptedString
 from advanced_alchemy.types.encrypted_string import FernetBackend, PGCryptoBackend
+from advanced_alchemy.typing import PYOTP_INSTALLED
 
 pytestmark = [
     pytest.mark.integration,
@@ -34,6 +35,19 @@ class PGCryptoModel(BigIntBase):
     )
 
     __table_args__ = {"info": {"allow_eager": True}}
+
+
+if PYOTP_INSTALLED:
+    from advanced_alchemy.types import TOTPSecret
+
+    class TOTPModel(BigIntBase):
+        __tablename__ = "test_encrypted_totp"
+        name: Mapped[str] = mapped_column(String(50))
+        seed: Mapped[Optional[str]] = mapped_column(  # type: ignore[assignment]
+            TOTPSecret(key="totp-key", issuer="ACME"), nullable=True
+        )
+
+        __table_args__ = {"info": {"allow_eager": True}}
 
 
 def _should_skip(engine: Engine) -> Optional[str]:
@@ -88,3 +102,37 @@ def test_pgcrypto_round_trip(engine: Engine) -> None:
             assert obj.secret == "pg-secret-value"
     finally:
         PGCryptoModel.metadata.drop_all(engine, tables=[cast("Table", PGCryptoModel.__table__)])
+
+
+@pytest.mark.skipif(not PYOTP_INSTALLED, reason="pyotp not installed")
+def test_totp_secret_round_trip(engine: Engine) -> None:
+    import pyotp
+
+    from advanced_alchemy.types.totp import TOTPProvider
+
+    skip_reason = _should_skip(engine)
+    if skip_reason is not None:
+        pytest.skip(skip_reason)
+
+    secret = pyotp.random_base32()
+    TOTPModel.metadata.create_all(engine, tables=[cast("Table", TOTPModel.__table__)])
+    session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
+    try:
+        with session_factory() as db_session:
+            obj = TOTPModel(name="totp", seed=secret)
+            db_session.add(obj)
+            db_session.commit()
+            row_id = obj.id
+            db_session.refresh(obj)
+
+            provider = cast("object", obj.seed)
+            assert isinstance(provider, TOTPProvider)
+            assert provider.secret == secret
+            assert provider.verify(pyotp.TOTP(secret).now()) is True
+
+            stored = db_session.execute(
+                text("SELECT seed FROM test_encrypted_totp WHERE id = :id"), {"id": row_id}
+            ).scalar_one()
+            assert stored != secret
+    finally:
+        TOTPModel.metadata.drop_all(engine, tables=[cast("Table", TOTPModel.__table__)])

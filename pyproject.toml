@@ -156,6 +156,7 @@ test = [
   "pydantic-extra-types",
   "numpy",
   "pgvector",
+  "pyotp>=2.9.0",
   "rich-click",
   "coverage>=7.6.1",
   "fsspec[s3]",

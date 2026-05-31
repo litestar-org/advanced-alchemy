@@ -36,6 +36,7 @@ ORJSON_INSTALLED = find_spec("orjson") is not None
 PASSLIB_INSTALLED = find_spec("passlib") is not None
 PWDLIB_INSTALLED = find_spec("pwdlib") is not None
 PYDANTIC_INSTALLED = find_spec("pydantic") is not None
+PYOTP_INSTALLED = find_spec("pyotp") is not None
 SQLMODEL_INSTALLED = find_spec("sqlmodel") is not None
 
 
@@ -391,6 +392,7 @@ __all__ = (
     "PASSLIB_INSTALLED",
     "PWDLIB_INSTALLED",
     "PYDANTIC_INSTALLED",
+    "PYOTP_INSTALLED",
     "SQLMODEL_INSTALLED",
     "UNSET",
     "UNSET_STUB",

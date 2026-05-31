@@ -1,6 +1,6 @@
 """SQLAlchemy custom types for use with the ORM."""
 
-from advanced_alchemy.types import encrypted_string, file_object, password_hash
+from advanced_alchemy.types import encrypted_string, file_object, password_hash, totp
 from advanced_alchemy.types.boolean import Bool
 from advanced_alchemy.types.datetime import DateTimeUTC
 from advanced_alchemy.types.encrypted_string import (
@@ -23,6 +23,7 @@ from advanced_alchemy.types.identity import BigIntIdentity
 from advanced_alchemy.types.json import ORA_JSONB, JsonB
 from advanced_alchemy.types.mutables import MutableList
 from advanced_alchemy.types.password_hash.base import HashedPassword, PasswordHash
+from advanced_alchemy.types.totp import TOTPProvider, TOTPSecret, generate_totp_secret
 from advanced_alchemy.types.vector import Vector
 
 __all__ = (
@@ -47,9 +48,13 @@ __all__ = (
     "StorageBackendT",
     "StorageRegistry",
     "StoredObject",
+    "TOTPProvider",
+    "TOTPSecret",
     "Vector",
     "encrypted_string",
     "file_object",
+    "generate_totp_secret",
     "password_hash",
     "storages",
+    "totp",
 )
