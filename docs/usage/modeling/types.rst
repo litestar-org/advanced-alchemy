@@ -165,15 +165,21 @@ explicitly — each pulls a different optional dependency:
 
         password: Mapped[str] = mapped_column(PasswordHash(backend=Argon2Hasher()))
 
-On read, ``account.password`` is a ``HashedPassword``. Verify with ``verify``, or use
-``verify_and_update`` to transparently upgrade a hash that was created with weaker
-parameters after a successful login:
+On read, ``account.password`` is a :class:`HashedPassword <advanced_alchemy.types.HashedPassword>`.
+Verify with ``verify``, or use ``verify_and_update`` to transparently upgrade a hash created
+with weaker parameters after a successful login. The same wrapper can be built standalone:
 
 .. code-block:: python
 
-    ok, new_hash = account.password.verify_and_update(submitted_password)
+    from advanced_alchemy.types import HashedPassword
+    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+
+    backend = Argon2Hasher()
+    stored = HashedPassword(backend.hash("s3cret"), backend)
+
+    ok, new_hash = stored.verify_and_update("s3cret")
     if ok and new_hash is not None:
-        account.password = new_hash  # re-hashed with current parameters; persist it
+        ...  # persist new_hash back to the row
 
 The default column ``length`` is 255 to accommodate stacked passlib schemes.
 
@@ -197,12 +203,17 @@ extra (``pip install advanced_alchemy[pyotp]``); a ``key`` is mandatory.
 
         seed: Mapped[str] = mapped_column(TOTPSecret(key="my-secret-key", issuer="ACME"))
 
-    # enrollment
-    enrollment = MfaEnrollment(seed=generate_totp_secret())
-    uri = enrollment.seed.provisioning_uri(name="alice@example.com")  # render as a QR code
+After loading a row, ``enrollment.seed`` is a
+:class:`TOTPProvider <advanced_alchemy.types.TOTPProvider>`. Build one directly to generate a
+provisioning URI (render it as a QR code) and verify submitted codes:
 
-    # verification (tolerates one tick of clock drift by default)
-    is_valid = enrollment.seed.verify(submitted_code)
+.. code-block:: python
+
+    from advanced_alchemy.types import TOTPProvider, generate_totp_secret
+
+    provider = TOTPProvider(generate_totp_secret(), issuer="ACME")
+    uri = provider.provisioning_uri(name="alice@example.com")
+    is_valid = provider.verify("123456")  # tolerates one tick of clock drift by default
 
 One-Time Codes
 --------------

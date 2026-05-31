@@ -996,9 +996,8 @@ The pattern below mirrors ``examples/litestar/litestar_fileobject.py``:
         repository,
         service,
     )
-    from advanced_alchemy.types import FileObject, storages
+    from advanced_alchemy.types import FileObject, storages, StoredObject
     from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
-    from advanced_alchemy.types.file_object.data_type import StoredObject
 
     # Configure file storage backend
     documents_backend = ObstoreBackend(
