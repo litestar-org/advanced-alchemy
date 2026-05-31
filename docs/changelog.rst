@@ -46,6 +46,17 @@
         values are normalized to ``list[float]`` so callers can use one API
         across supported dialects.
 
+    .. change:: add vector distance operators for similarity search
+        :type: feature
+        :pr: 756
+
+        Adds ``cosine_distance``, ``l2_distance``, ``l1_distance``, and
+        ``max_inner_product`` comparator methods to the ``Vector`` type so a
+        vector column can be ordered by similarity directly. Each compiles to
+        native SQL per dialect — pgvector operators on PostgreSQL/CockroachDB
+        and ``VECTOR_DISTANCE`` on Oracle 23ai — and raises a clear
+        ``NotImplementedError`` on JSON-fallback dialects.
+
     .. change:: use native Oracle JSON when available
         :type: feature
         :pr: 741
