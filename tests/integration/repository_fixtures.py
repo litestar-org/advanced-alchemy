@@ -95,7 +95,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
             __mapper_args__ = {"polymorphic_identity": f"uuid_secret_{worker_id}"}
 
             secret: Mapped[str] = mapped_column(EncryptedString(key="test_secret_key"))
-            long_secret: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+            long_secret: Mapped[Optional[str]] = mapped_column(EncryptedText(key="test_secret_key"), nullable=True)
 
         class IntegrationUUIDSlugBook(BaseClass):  # type: ignore[valid-type,misc]
             """The SlugBook domain object."""
@@ -227,7 +227,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
             __mapper_args__ = {"polymorphic_identity": f"bigint_secret_{worker_id}"}
 
             secret: Mapped[str] = mapped_column(EncryptedString(key="test_secret_key"))
-            long_secret: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+            long_secret: Mapped[Optional[str]] = mapped_column(EncryptedText(key="test_secret_key"), nullable=True)
 
         class BigIntSlugBook(BaseClass):  # type: ignore[valid-type,misc]
             """The SlugBook domain object."""
