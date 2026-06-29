@@ -1,4 +1,4 @@
-# ruff: noqa: BLE001, C901, PLR0915
+# ruff: noqa: BLE001
 """Application ORM configuration."""
 
 import asyncio
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
     from advanced_alchemy.cache import CacheManager
     from advanced_alchemy.types.file_object import FileObject, FileObjectSessionTracker, StorageRegistry
+    from advanced_alchemy.types.mutables import MutableList
 
 _active_file_operations: set[asyncio.Task[Any]] = set()
 """Stores active file operations to prevent them from being garbage collected."""
@@ -204,25 +205,17 @@ class FileObjectInspector:
             tracker.add_pending_delete(original_value)
 
     @staticmethod
-    def handle_multiple_attribute(
-        instance: Any,
-        attr_name: str,
-        attr_state: Any,
-        tracker: "FileObjectSessionTracker",
-    ) -> None:
-        """Handle inspection of multiple FileObject attributes (MutableList)."""
+    def _collect_deletions(
+        current_list_instance: "Optional[MutableList[FileObject]]",
+        original_list_from_history: "Optional[MutableList[FileObject]]",
+        current_list_from_history: "Optional[MutableList[FileObject]]",
+    ) -> "set[FileObject]":
+        """Collect items to delete from mutations and replacements."""
         from advanced_alchemy.types.file_object import FileObject
         from advanced_alchemy.types.mutables import MutableList
 
-        history = attr_state.history
         items_to_delete: set[FileObject] = set()
-        items_to_save: dict[FileObject, Any] = {}
 
-        current_list_instance: Optional[MutableList[FileObject]] = getattr(instance, attr_name, None)
-        original_list_from_history: Optional[MutableList[FileObject]] = history.deleted[0] if history.deleted else None
-        current_list_from_history: Optional[MutableList[FileObject]] = history.added[0] if history.added else None
-
-        # 1. Deletions from Mutations (Primary source: _pending_removed set)
         if isinstance(current_list_instance, MutableList):
             removed_items_internal: set[FileObject] = getattr(
                 current_list_instance,
@@ -237,8 +230,7 @@ class FileObjectInspector:
                 )
                 items_to_delete.update(valid_removed_internal)
 
-        # 2. Deletions from Replacements (Secondary source: history)
-        if original_list_from_history:  # Indicates list replacement
+        if original_list_from_history:
             logger.debug("[Multiple-Replacement] Processing list replacement via history.")
             original_items_set = {item for item in original_list_from_history if item.path}
             current_items_set = (
@@ -254,8 +246,19 @@ class FileObjectInspector:
                 )
                 items_to_delete.update(removed_due_to_replacement)
 
-        # 3. Determine items to save
-        # Saves from pending appends (Mutation or New)
+        return items_to_delete
+
+    @staticmethod
+    def _collect_saves(
+        current_list_instance: "Optional[MutableList[FileObject]]",
+        current_list_from_history: "Optional[MutableList[FileObject]]",
+        original_list_from_history: "Optional[MutableList[FileObject]]",
+    ) -> "dict[FileObject, Any]":
+        """Collect items to save from pending appends and history."""
+        from advanced_alchemy.types.mutables import MutableList
+
+        items_to_save: dict[FileObject, Any] = {}
+
         if isinstance(current_list_instance, MutableList):
             pending_append = getattr(current_list_instance, "_pending_append", [])
             if pending_append:
@@ -268,7 +271,6 @@ class FileObjectInspector:
                     elif pending_source_path is not None:
                         items_to_save[item] = pending_source_path
 
-        # Saves from newly added list items (New Instance or Replacement)
         if current_list_from_history:
             log_prefix = "[Multiple-New]" if not original_list_from_history else "[Multiple-Replacement]"
             logger.debug(
@@ -286,14 +288,48 @@ class FileObjectInspector:
                     logger.debug("%s Found pending source path for %r", log_prefix, item.filename)
                     items_to_save[item] = pending_source_path
 
-        # 4. Finalize MutableList state (if applicable)
+        return items_to_save
+
+    @staticmethod
+    def _finalize_mutable_list(
+        current_list_instance: "Optional[MutableList[FileObject]]",
+    ) -> None:
+        """Finalize MutableList state if applicable."""
+        from advanced_alchemy.types.mutables import MutableList
+
         if isinstance(current_list_instance, MutableList):
             finalize_method = getattr(current_list_instance, "_finalize_pending", None)
             if finalize_method:
                 logger.debug("[Multiple] Calling _finalize_pending on list instance.")
                 finalize_method()
 
-        # 5. Schedule all collected operations
+    @staticmethod
+    def handle_multiple_attribute(
+        instance: Any,
+        attr_name: str,
+        attr_state: Any,
+        tracker: "FileObjectSessionTracker",
+    ) -> None:
+        """Handle inspection of multiple FileObject attributes (MutableList)."""
+
+        history = attr_state.history
+
+        current_list_instance: Optional[MutableList[FileObject]] = getattr(instance, attr_name, None)
+        original_list_from_history: Optional[MutableList[FileObject]] = history.deleted[0] if history.deleted else None
+        current_list_from_history: Optional[MutableList[FileObject]] = history.added[0] if history.added else None
+
+        items_to_delete = FileObjectInspector._collect_deletions(
+            current_list_instance,
+            original_list_from_history,
+            current_list_from_history,
+        )
+        items_to_save = FileObjectInspector._collect_saves(
+            current_list_instance,
+            current_list_from_history,
+            original_list_from_history,
+        )
+        FileObjectInspector._finalize_mutable_list(current_list_instance)
+
         if items_to_delete:
             logger.debug("[Multiple] Scheduling %d items for deletion.", len(items_to_delete))
             for item_to_delete in items_to_delete:

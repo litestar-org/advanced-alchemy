@@ -355,7 +355,213 @@ def _create_order_by_filter_provider(
     return provide_order_by
 
 
-def _create_statement_filters(  # noqa: C901, PLR0915
+def _create_not_in_filter_providers(
+    config: FilterConfig,
+) -> dict[str, Provide]:
+    """Create not-in filter providers based on configuration."""
+    filters: dict[str, Provide] = {}
+    if not_in_fields := config.get("not_in_fields"):
+        # Get all field names, handling both strings and FieldNameType objects
+        not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
+
+        for field_def in not_in_fields:
+            field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+
+            # Capture field_def by value to avoid Python closure late binding gotcha
+            # Without default parameter, all closures would reference the loop variable's final value
+            def create_not_in_filter_provider(  # pyright: ignore
+                field_name: FieldNameType = field_def,  # type: ignore[assignment]
+            ) -> Callable[..., Optional[NotInCollectionFilter[Any]]]:
+                param_name = f"{field_name.name}_not_in"
+
+                def provide_not_in_filter(  # pyright: ignore
+                    **kwargs: Any,
+                ) -> Optional[NotInCollectionFilter[field_name.type_hint]]:  # type: ignore
+                    values = kwargs.get(param_name)
+                    return (
+                        NotInCollectionFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore
+                        if values
+                        else None
+                    )
+
+                annotation = Annotated[
+                    Optional[list[field_name.type_hint]],  # type: ignore
+                    QueryParameter(name=camelize(param_name)),
+                ]
+                provide_not_in_filter.__name__ = f"provide_not_in_filter_{field_name.name}"
+                provide_not_in_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+                    parameters=[
+                        inspect.Parameter(
+                            name=param_name,
+                            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                            default=None,
+                            annotation=annotation,
+                        )
+                    ],
+                    return_annotation=Optional[NotInCollectionFilter[field_name.type_hint]],  # type: ignore
+                )
+                provide_not_in_filter.__annotations__ = {
+                    param_name: annotation,
+                    "return": Optional[NotInCollectionFilter[field_name.type_hint]],  # type: ignore
+                }
+                return provide_not_in_filter  # pyright: ignore
+
+            provider = create_not_in_filter_provider(field_def)  # pyright: ignore
+            filters[f"{field_def.name}_not_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
+    return filters
+
+
+def _create_in_filter_providers(
+    config: FilterConfig,
+) -> dict[str, Provide]:
+    """Create in-filter providers based on configuration."""
+    filters: dict[str, Provide] = {}
+    if in_fields := config.get("in_fields"):
+        # Get all field names, handling both strings and FieldNameType objects
+        in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
+
+        for field_def in in_fields:
+            field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+
+            # Capture field_def by value to avoid Python closure late binding gotcha
+            # Without default parameter, all closures would reference the loop variable's final value
+            def create_in_filter_provider(  # pyright: ignore
+                field_name: FieldNameType = field_def,  # type: ignore[assignment]
+            ) -> Callable[..., Optional[CollectionFilter[Any]]]:
+                param_name = f"{field_name.name}_in"
+
+                def provide_in_filter(  # pyright: ignore
+                    **kwargs: Any,
+                ) -> Optional[CollectionFilter[field_name.type_hint]]:  # type: ignore # pyright: ignore
+                    values = kwargs.get(param_name)
+                    return (
+                        CollectionFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore  # pyright: ignore
+                        if values
+                        else None
+                    )
+
+                provide_in_filter.__name__ = f"provide_in_filter_{field_name.name}"
+                annotation = Annotated[
+                    Optional[list[field_name.type_hint]],  # type: ignore
+                    QueryParameter(
+                        name=camelize(param_name),
+                    ),
+                ]
+                provide_in_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+                    parameters=[
+                        inspect.Parameter(
+                            name=param_name,
+                            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                            default=None,
+                            annotation=annotation,
+                        )
+                    ],
+                    return_annotation=Optional[CollectionFilter[field_name.type_hint]],  # type: ignore
+                )
+                provide_in_filter.__annotations__ = {
+                    param_name: annotation,
+                    "return": Optional[CollectionFilter[field_name.type_hint]],  # type: ignore
+                }
+                return provide_in_filter  # pyright: ignore
+
+            provider = create_in_filter_provider(field_def)
+            filters[f"{field_def.name}_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
+    return filters
+
+
+def _create_boolean_filter_providers(
+    config: FilterConfig,
+) -> dict[str, Provide]:
+    """Create boolean filter providers based on configuration."""
+    filters: dict[str, Provide] = {}
+    if boolean_fields := config.get("boolean_fields"):
+        for boolean_field_def in normalize_field_name_types(boolean_fields):
+
+            def create_boolean_filter_provider(
+                field_name: FieldNameType = boolean_field_def,
+            ) -> Callable[..., Optional[BooleanFilter]]:
+                param_name = f"{field_name.name}_boolean"
+
+                def provide_boolean_filter(**kwargs: Any) -> Optional[BooleanFilter]:
+                    value = kwargs.get(param_name)
+                    return BooleanFilter(field_name=field_name.name, value=value) if value is not None else None
+
+                annotation = Annotated[
+                    BooleanOrNone,
+                    QueryParameter(name=camelize(field_name.name)),
+                ]
+                provide_boolean_filter.__name__ = f"provide_boolean_filter_{field_name.name}"
+                provide_boolean_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+                    parameters=[
+                        inspect.Parameter(
+                            name=param_name,
+                            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                            default=None,
+                            annotation=annotation,
+                        )
+                    ],
+                    return_annotation=Optional[BooleanFilter],
+                )
+                provide_boolean_filter.__annotations__ = {
+                    param_name: annotation,
+                    "return": Optional[BooleanFilter],
+                }
+                return provide_boolean_filter
+
+            boolean_provider = create_boolean_filter_provider(boolean_field_def)
+            filters[f"{boolean_field_def.name}_boolean_filter"] = Provide(boolean_provider, sync_to_thread=False)
+    return filters
+
+
+def _create_choices_filter_providers(
+    config: FilterConfig,
+) -> dict[str, Provide]:
+    """Create choices filter providers based on configuration."""
+    filters: dict[str, Provide] = {}
+    if choice_fields := config.get("choice_fields"):
+        for choice_field_def in normalize_choice_field_types(choice_fields):
+
+            def create_choices_filter_provider(
+                field_name: FieldNameType = choice_field_def,
+            ) -> Callable[..., Optional[ChoicesFilter[Any]]]:
+                param_name = f"{field_name.name}_choices"
+
+                def provide_choices_filter(**kwargs: Any) -> Optional[ChoicesFilter[Any]]:
+                    values = kwargs.get(param_name)
+                    return (
+                        ChoicesFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore
+                        if values
+                        else None
+                    )
+
+                annotation = Annotated[
+                    Optional[list[field_name.type_hint]],  # type: ignore
+                    QueryParameter(name=camelize(field_name.name)),
+                ]
+                provide_choices_filter.__name__ = f"provide_choices_filter_{field_name.name}"
+                provide_choices_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+                    parameters=[
+                        inspect.Parameter(
+                            name=param_name,
+                            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                            default=None,
+                            annotation=annotation,
+                        )
+                    ],
+                    return_annotation=Optional[ChoicesFilter[Any]],
+                )
+                provide_choices_filter.__annotations__ = {
+                    param_name: annotation,
+                    "return": Optional[ChoicesFilter[Any]],
+                }
+                return provide_choices_filter
+
+            choices_provider = create_choices_filter_provider(choice_field_def)
+            filters[f"{choice_field_def.name}_choices_filter"] = Provide(choices_provider, sync_to_thread=False)
+    return filters
+
+
+def _create_statement_filters(
     config: FilterConfig, dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS
 ) -> dict[str, Provide]:
     """Create filter dependencies based on configuration.
@@ -451,185 +657,10 @@ def _create_statement_filters(  # noqa: C901, PLR0915
             sync_to_thread=False,
         )
 
-    # Add not_in filter providers
-    if not_in_fields := config.get("not_in_fields"):
-        # Get all field names, handling both strings and FieldNameType objects
-        not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
-
-        for field_def in not_in_fields:
-            field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
-
-            # Capture field_def by value to avoid Python closure late binding gotcha
-            # Without default parameter, all closures would reference the loop variable's final value
-            def create_not_in_filter_provider(  # pyright: ignore
-                field_name: FieldNameType = field_def,  # type: ignore[assignment]
-            ) -> Callable[..., Optional[NotInCollectionFilter[Any]]]:
-                param_name = f"{field_name.name}_not_in"
-
-                def provide_not_in_filter(  # pyright: ignore
-                    **kwargs: Any,
-                ) -> Optional[NotInCollectionFilter[field_name.type_hint]]:  # type: ignore
-                    values = kwargs.get(param_name)
-                    return (
-                        NotInCollectionFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore
-                        if values
-                        else None
-                    )
-
-                annotation = Annotated[
-                    Optional[list[field_name.type_hint]],  # type: ignore
-                    QueryParameter(name=camelize(param_name)),
-                ]
-                provide_not_in_filter.__name__ = f"provide_not_in_filter_{field_name.name}"
-                provide_not_in_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
-                    parameters=[
-                        inspect.Parameter(
-                            name=param_name,
-                            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                            default=None,
-                            annotation=annotation,
-                        )
-                    ],
-                    return_annotation=Optional[NotInCollectionFilter[field_name.type_hint]],  # type: ignore
-                )
-                provide_not_in_filter.__annotations__ = {
-                    param_name: annotation,
-                    "return": Optional[NotInCollectionFilter[field_name.type_hint]],  # type: ignore
-                }
-                return provide_not_in_filter  # pyright: ignore
-
-            provider = create_not_in_filter_provider(field_def)  # pyright: ignore
-            filters[f"{field_def.name}_not_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
-
-    # Add in filter providers
-    if in_fields := config.get("in_fields"):
-        # Get all field names, handling both strings and FieldNameType objects
-        in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
-
-        for field_def in in_fields:
-            field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
-
-            # Capture field_def by value to avoid Python closure late binding gotcha
-            # Without default parameter, all closures would reference the loop variable's final value
-            def create_in_filter_provider(  # pyright: ignore
-                field_name: FieldNameType = field_def,  # type: ignore[assignment]
-            ) -> Callable[..., Optional[CollectionFilter[Any]]]:
-                param_name = f"{field_name.name}_in"
-
-                def provide_in_filter(  # pyright: ignore
-                    **kwargs: Any,
-                ) -> Optional[CollectionFilter[field_name.type_hint]]:  # type: ignore # pyright: ignore
-                    values = kwargs.get(param_name)
-                    return (
-                        CollectionFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore  # pyright: ignore
-                        if values
-                        else None
-                    )
-
-                provide_in_filter.__name__ = f"provide_in_filter_{field_name.name}"
-                annotation = Annotated[
-                    Optional[list[field_name.type_hint]],  # type: ignore
-                    QueryParameter(
-                        name=camelize(param_name),
-                    ),
-                ]
-                provide_in_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
-                    parameters=[
-                        inspect.Parameter(
-                            name=param_name,
-                            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                            default=None,
-                            annotation=annotation,
-                        )
-                    ],
-                    return_annotation=Optional[CollectionFilter[field_name.type_hint]],  # type: ignore
-                )
-                provide_in_filter.__annotations__ = {
-                    param_name: annotation,
-                    "return": Optional[CollectionFilter[field_name.type_hint]],  # type: ignore
-                }
-                return provide_in_filter  # pyright: ignore
-
-            provider = create_in_filter_provider(field_def)  # type: ignore
-            filters[f"{field_def.name}_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
-
-    if boolean_fields := config.get("boolean_fields"):
-        for boolean_field_def in normalize_field_name_types(boolean_fields):
-
-            def create_boolean_filter_provider(
-                field_name: FieldNameType = boolean_field_def,
-            ) -> Callable[..., Optional[BooleanFilter]]:
-                param_name = f"{field_name.name}_boolean"
-
-                def provide_boolean_filter(**kwargs: Any) -> Optional[BooleanFilter]:
-                    value = kwargs.get(param_name)
-                    return BooleanFilter(field_name=field_name.name, value=value) if value is not None else None
-
-                annotation = Annotated[
-                    BooleanOrNone,
-                    QueryParameter(name=camelize(field_name.name)),
-                ]
-                provide_boolean_filter.__name__ = f"provide_boolean_filter_{field_name.name}"
-                provide_boolean_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
-                    parameters=[
-                        inspect.Parameter(
-                            name=param_name,
-                            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                            default=None,
-                            annotation=annotation,
-                        )
-                    ],
-                    return_annotation=Optional[BooleanFilter],
-                )
-                provide_boolean_filter.__annotations__ = {
-                    param_name: annotation,
-                    "return": Optional[BooleanFilter],
-                }
-                return provide_boolean_filter
-
-            boolean_provider = create_boolean_filter_provider(boolean_field_def)
-            filters[f"{boolean_field_def.name}_boolean_filter"] = Provide(boolean_provider, sync_to_thread=False)
-
-    if choice_fields := config.get("choice_fields"):
-        for choice_field_def in normalize_choice_field_types(choice_fields):
-
-            def create_choices_filter_provider(
-                field_name: FieldNameType = choice_field_def,
-            ) -> Callable[..., Optional[ChoicesFilter[Any]]]:
-                param_name = f"{field_name.name}_choices"
-
-                def provide_choices_filter(**kwargs: Any) -> Optional[ChoicesFilter[Any]]:
-                    values = kwargs.get(param_name)
-                    return (
-                        ChoicesFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore
-                        if values
-                        else None
-                    )
-
-                annotation = Annotated[
-                    Optional[list[field_name.type_hint]],  # type: ignore
-                    QueryParameter(name=camelize(field_name.name)),
-                ]
-                provide_choices_filter.__name__ = f"provide_choices_filter_{field_name.name}"
-                provide_choices_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
-                    parameters=[
-                        inspect.Parameter(
-                            name=param_name,
-                            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                            default=None,
-                            annotation=annotation,
-                        )
-                    ],
-                    return_annotation=Optional[ChoicesFilter[Any]],
-                )
-                provide_choices_filter.__annotations__ = {
-                    param_name: annotation,
-                    "return": Optional[ChoicesFilter[Any]],
-                }
-                return provide_choices_filter
-
-            choices_provider = create_choices_filter_provider(choice_field_def)
-            filters[f"{choice_field_def.name}_choices_filter"] = Provide(choices_provider, sync_to_thread=False)
+    filters.update(_create_not_in_filter_providers(config))
+    filters.update(_create_in_filter_providers(config))
+    filters.update(_create_boolean_filter_providers(config))
+    filters.update(_create_choices_filter_providers(config))
 
     if filters:
         filters[dep_defaults.FILTERS_DEPENDENCY_KEY] = Provide(
@@ -639,7 +670,149 @@ def _create_statement_filters(  # noqa: C901, PLR0915
     return filters
 
 
-def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., list[FilterTypes]]:  # noqa: C901, PLR0915
+def _build_parameter(
+    parameters: dict[str, inspect.Parameter],
+    annotations: dict[str, Any],
+    name: str,
+    annotation_type: Any,
+    *,
+    use_named_dependency: bool = True,
+) -> None:
+    annotation: Any = (
+        NamedDependency[SkipValidation[annotation_type]]  # type: ignore[misc]
+        if use_named_dependency
+        else annotation_type
+    )
+    parameters[name] = inspect.Parameter(
+        name=name,
+        kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        annotation=annotation,
+    )
+    annotations[name] = annotation_type
+
+
+def _collect_builtin_filters(kwargs: dict[str, FilterTypes]) -> list[FilterTypes]:
+    filters: list[FilterTypes] = []
+    if id_filter := kwargs.get("id_filter"):
+        filters.append(id_filter)
+    if created_filter := kwargs.get("created_filter"):
+        filters.append(created_filter)
+    if limit_offset := kwargs.get("limit_offset_filter"):
+        filters.append(limit_offset)
+    if updated_filter := kwargs.get("updated_filter"):
+        filters.append(updated_filter)
+    if (
+        (search_filter := cast("Optional[SearchFilter]", kwargs.get("search_filter")))
+        and search_filter is not None  # pyright: ignore[reportUnnecessaryComparison]
+        and search_filter.field_name is not None  # pyright: ignore[reportUnnecessaryComparison]
+        and search_filter.value is not None  # pyright: ignore[reportUnnecessaryComparison]
+    ):
+        filters.append(search_filter)
+    if (
+        (order_by := cast("Optional[OrderBy]", kwargs.get("order_by_filter")))
+        and order_by is not None  # pyright: ignore[reportUnnecessaryComparison]
+        and order_by.field_name is not None  # pyright: ignore[reportUnnecessaryComparison]
+    ):
+        filters.append(order_by)
+    return filters
+
+
+def _collect_field_filters(config: FilterConfig, kwargs: dict[str, FilterTypes]) -> list[FilterTypes]:
+    filters: list[FilterTypes] = []
+    if not_in_fields := config.get("not_in_fields"):
+        filters.extend(
+            filter_
+            for field_def in normalize_field_name_types(not_in_fields)
+            if (filter_ := kwargs.get(f"{field_def.name}_not_in_filter")) is not None
+        )
+    if in_fields := config.get("in_fields"):
+        filters.extend(
+            filter_
+            for field_def in normalize_field_name_types(in_fields)
+            if (filter_ := kwargs.get(f"{field_def.name}_in_filter")) is not None
+        )
+    if boolean_fields := config.get("boolean_fields"):
+        filters.extend(
+            filter_
+            for field_def in normalize_field_name_types(boolean_fields)
+            if (filter_ := kwargs.get(f"{field_def.name}_boolean_filter")) is not None
+        )
+    if choice_fields := config.get("choice_fields"):
+        filters.extend(
+            filter_
+            for field_def in normalize_choice_field_types(choice_fields)
+            if (filter_ := kwargs.get(f"{field_def.name}_choices_filter")) is not None
+        )
+    return filters
+
+
+def _collect_filters(config: FilterConfig, **kwargs: FilterTypes) -> list[FilterTypes]:
+    return _collect_builtin_filters(kwargs) + _collect_field_filters(config, kwargs)
+
+
+def _build_builtin_parameters(
+    config: FilterConfig,
+    parameters: dict[str, inspect.Parameter],
+    annotations: dict[str, Any],
+) -> None:
+    if cls := config.get("id_filter"):
+        _build_parameter(parameters, annotations, "id_filter", CollectionFilter[cls])  # type: ignore[valid-type]
+
+    if config.get("created_at"):
+        _build_parameter(parameters, annotations, "created_filter", BeforeAfter)
+
+    if config.get("updated_at"):
+        _build_parameter(parameters, annotations, "updated_filter", BeforeAfter)
+
+    if config.get("search"):
+        _build_parameter(parameters, annotations, "search_filter", SearchFilter)
+
+    if config.get("pagination_type") == "limit_offset":
+        _build_parameter(parameters, annotations, "limit_offset_filter", LimitOffset)
+
+    if config.get("sort_field"):
+        _build_parameter(parameters, annotations, "order_by_filter", OrderBy)
+
+
+def _build_field_parameters(
+    config: FilterConfig,
+    parameters: dict[str, inspect.Parameter],
+    annotations: dict[str, Any],
+) -> None:
+    if not_in_fields := config.get("not_in_fields"):
+        for field_def in normalize_field_name_types(not_in_fields):
+            _build_parameter(
+                parameters,
+                annotations,
+                f"{field_def.name}_not_in_filter",
+                NotInCollectionFilter[field_def.type_hint],  # type: ignore[name-defined]
+            )
+
+    if in_fields := config.get("in_fields"):
+        for field_def in normalize_field_name_types(in_fields):
+            _build_parameter(
+                parameters,
+                annotations,
+                f"{field_def.name}_in_filter",
+                CollectionFilter[field_def.type_hint],  # type: ignore[name-defined]
+                use_named_dependency=False,
+            )
+
+    if boolean_fields := config.get("boolean_fields"):
+        for boolean_field_def in normalize_field_name_types(boolean_fields):
+            _build_parameter(parameters, annotations, f"{boolean_field_def.name}_boolean_filter", BooleanFilter)
+
+    if choice_fields := config.get("choice_fields"):
+        for choice_field_def in normalize_choice_field_types(choice_fields):
+            _build_parameter(
+                parameters,
+                annotations,
+                f"{choice_field_def.name}_choices_filter",
+                ChoicesFilter[choice_field_def.type_hint],  # type: ignore[name-defined]
+            )
+
+
+def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., list[FilterTypes]]:
     """Create a filter function based on the provided configuration.
 
     Args:
@@ -652,152 +825,11 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
     parameters: dict[str, inspect.Parameter] = {}
     annotations: dict[str, Any] = {}
 
-    # Build parameters based on config
-    if cls := config.get("id_filter"):
-        parameters["id_filter"] = inspect.Parameter(
-            name="id_filter",
-            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            annotation=NamedDependency[SkipValidation[CollectionFilter[cls]]],  # type: ignore[valid-type]
-        )
-        annotations["id_filter"] = CollectionFilter[cls]  # type: ignore[valid-type]
+    _build_builtin_parameters(config, parameters, annotations)
+    _build_field_parameters(config, parameters, annotations)
 
-    if config.get("created_at"):
-        parameters["created_filter"] = inspect.Parameter(
-            name="created_filter",
-            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            annotation=NamedDependency[SkipValidation[BeforeAfter]],
-        )
-        annotations["created_filter"] = BeforeAfter
-
-    if config.get("updated_at"):
-        parameters["updated_filter"] = inspect.Parameter(
-            name="updated_filter",
-            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            annotation=NamedDependency[SkipValidation[BeforeAfter]],
-        )
-        annotations["updated_filter"] = BeforeAfter
-
-    if config.get("search"):
-        parameters["search_filter"] = inspect.Parameter(
-            name="search_filter",
-            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            annotation=NamedDependency[SkipValidation[SearchFilter]],
-        )
-        annotations["search_filter"] = SearchFilter
-
-    if config.get("pagination_type") == "limit_offset":
-        parameters["limit_offset_filter"] = inspect.Parameter(
-            name="limit_offset_filter",
-            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            annotation=NamedDependency[SkipValidation[LimitOffset]],
-        )
-        annotations["limit_offset_filter"] = LimitOffset
-
-    if config.get("sort_field"):
-        parameters["order_by_filter"] = inspect.Parameter(
-            name="order_by_filter",
-            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            annotation=NamedDependency[SkipValidation[OrderBy,]],
-        )
-        annotations["order_by_filter"] = OrderBy
-
-    # Add parameters for not_in filters
-    if not_in_fields := config.get("not_in_fields"):
-        for field_def in normalize_field_name_types(not_in_fields):
-            annotation = NamedDependency[SkipValidation[NotInCollectionFilter[field_def.type_hint]]]  # type: ignore[name-defined]
-            parameters[f"{field_def.name}_not_in_filter"] = inspect.Parameter(
-                name=f"{field_def.name}_not_in_filter",
-                kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                annotation=annotation,
-            )
-            annotations[f"{field_def.name}_not_in_filter"] = annotation
-
-    # Add parameters for in filters
-    if in_fields := config.get("in_fields"):
-        for field_def in normalize_field_name_types(in_fields):
-            annotation = CollectionFilter[field_def.type_hint]  # type: ignore
-
-            parameters[f"{field_def.name}_in_filter"] = inspect.Parameter(
-                name=f"{field_def.name}_in_filter", kind=inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=annotation
-            )
-            annotations[f"{field_def.name}_in_filter"] = annotation
-
-    if boolean_fields := config.get("boolean_fields"):
-        for boolean_field_def in normalize_field_name_types(boolean_fields):
-            boolean_annotation = NamedDependency[SkipValidation[BooleanFilter]]
-            parameters[f"{boolean_field_def.name}_boolean_filter"] = inspect.Parameter(
-                name=f"{boolean_field_def.name}_boolean_filter",
-                kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                annotation=boolean_annotation,
-            )
-            annotations[f"{boolean_field_def.name}_boolean_filter"] = boolean_annotation
-
-    if choice_fields := config.get("choice_fields"):
-        for choice_field_def in normalize_choice_field_types(choice_fields):
-            choices_annotation = NamedDependency[SkipValidation[ChoicesFilter[choice_field_def.type_hint]]]  # type: ignore[name-defined]
-            parameters[f"{choice_field_def.name}_choices_filter"] = inspect.Parameter(
-                name=f"{choice_field_def.name}_choices_filter",
-                kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                annotation=choices_annotation,
-            )
-            annotations[f"{choice_field_def.name}_choices_filter"] = choices_annotation
-
-    def provide_filters(**kwargs: FilterTypes) -> list[FilterTypes]:  # noqa: C901
-        """Provide filter dependencies based on configuration.
-
-        Args:
-            **kwargs: Filter parameters dynamically provided based on configuration.
-
-        Returns:
-            list[FilterTypes]: List of configured filters.
-        """
-        filters: list[FilterTypes] = []
-        if id_filter := kwargs.get("id_filter"):
-            filters.append(id_filter)
-        if created_filter := kwargs.get("created_filter"):
-            filters.append(created_filter)
-        if limit_offset := kwargs.get("limit_offset_filter"):
-            filters.append(limit_offset)
-        if updated_filter := kwargs.get("updated_filter"):
-            filters.append(updated_filter)
-        if (
-            (search_filter := cast("Optional[SearchFilter]", kwargs.get("search_filter")))
-            and search_filter is not None  # pyright: ignore[reportUnnecessaryComparison]
-            and search_filter.field_name is not None  # pyright: ignore[reportUnnecessaryComparison]
-            and search_filter.value is not None  # pyright: ignore[reportUnnecessaryComparison]
-        ):
-            filters.append(search_filter)
-        if (
-            (order_by := cast("Optional[OrderBy]", kwargs.get("order_by_filter")))
-            and order_by is not None  # pyright: ignore[reportUnnecessaryComparison]
-            and order_by.field_name is not None  # pyright: ignore[reportUnnecessaryComparison]
-        ):
-            filters.append(order_by)
-
-        # Add not_in filters
-        if not_in_fields := config.get("not_in_fields"):
-            for field_def in normalize_field_name_types(not_in_fields):
-                filter_ = kwargs.get(f"{field_def.name}_not_in_filter")
-                if filter_ is not None:
-                    filters.append(filter_)
-
-        # Add in filters
-        if in_fields := config.get("in_fields"):
-            for field_def in normalize_field_name_types(in_fields):
-                filter_ = kwargs.get(f"{field_def.name}_in_filter")
-                if filter_ is not None:
-                    filters.append(filter_)
-        if boolean_fields := config.get("boolean_fields"):
-            for field_def in normalize_field_name_types(boolean_fields):
-                filter_ = kwargs.get(f"{field_def.name}_boolean_filter")
-                if filter_ is not None:
-                    filters.append(filter_)
-        if choice_fields := config.get("choice_fields"):
-            for field_def in normalize_choice_field_types(choice_fields):
-                filter_ = kwargs.get(f"{field_def.name}_choices_filter")
-                if filter_ is not None:
-                    filters.append(filter_)
-        return filters
+    def provide_filters(**kwargs: FilterTypes) -> list[FilterTypes]:
+        return _collect_filters(config, **kwargs)
 
     # Set both signature and annotations
     provide_filters.__signature__ = inspect.Signature(  # type: ignore

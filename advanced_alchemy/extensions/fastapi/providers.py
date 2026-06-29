@@ -137,6 +137,80 @@ def _should_commit_for_status(status_code: int, commit_mode: str) -> bool:
     return False
 
 
+async def _cleanup_async_session(
+    db_session: AsyncSession,
+    request: Request,
+    session_key: str,
+    exc_info: Optional[BaseException],
+    commit_mode: str,
+) -> None:
+    response_status = getattr(request.state, f"{session_key}_response_status", None)
+    should_commit = (
+        exc_info is None and response_status is not None and _should_commit_for_status(response_status, commit_mode)
+    )
+    try:
+        if should_commit:
+            await db_session.commit()
+        else:
+            await db_session.rollback()
+    except Exception:
+        if exc_info is not None:
+            logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
+        else:
+            raise
+    try:
+        await db_session.close()
+    except Exception:
+        if exc_info is not None:
+            logger.debug("Session close failed during cleanup", exc_info=True)
+        else:
+            raise
+    for attr in [
+        session_key,
+        f"{session_key}_generator_managed",
+        f"{session_key}_response_status",
+    ]:
+        with contextlib.suppress(Exception):
+            delattr(request.state, attr)
+
+
+def _cleanup_sync_session(
+    db_session: Session,
+    request: Request,
+    session_key: str,
+    exc_info: Optional[BaseException],
+    commit_mode: str,
+) -> None:
+    response_status = getattr(request.state, f"{session_key}_response_status", None)
+    should_commit = (
+        exc_info is None and response_status is not None and _should_commit_for_status(response_status, commit_mode)
+    )
+    try:
+        if should_commit:
+            db_session.commit()
+        else:
+            db_session.rollback()
+    except Exception:
+        if exc_info is not None:
+            logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
+        else:
+            raise
+    try:
+        db_session.close()
+    except Exception:
+        if exc_info is not None:
+            logger.debug("Session close failed during cleanup", exc_info=True)
+        else:
+            raise
+    for attr in [
+        session_key,
+        f"{session_key}_generator_managed",
+        f"{session_key}_response_status",
+    ]:
+        with contextlib.suppress(Exception):
+            delattr(request.state, attr)
+
+
 @overload
 def provide_service(
     service_class: type["AsyncServiceT_co"],
@@ -167,7 +241,7 @@ def provide_service(
 ) -> Callable[..., Generator[SyncServiceT_co, None, None]]: ...
 
 
-def provide_service(  # noqa: C901, PLR0915
+def provide_service(
     service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
     /,
     extension: AdvancedAlchemy,
@@ -218,45 +292,8 @@ def provide_service(  # noqa: C901, PLR0915
                 exc_info = e
                 raise
             finally:
-                # Get response status stored by middleware
-                response_status = getattr(request.state, f"{session_key}_response_status", None)
                 commit_mode = async_config.commit_mode if async_config else "manual"
-
-                should_commit = (
-                    exc_info is None
-                    and response_status is not None
-                    and _should_commit_for_status(response_status, commit_mode)
-                )
-
-                # Each cleanup operation is individually protected so that failures
-                # in one step do not prevent subsequent steps or mask the original exception.
-                try:
-                    if should_commit:
-                        await db_session.commit()
-                    else:
-                        await db_session.rollback()
-                except Exception:
-                    if exc_info is not None:
-                        logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
-                    else:
-                        raise
-
-                try:
-                    await db_session.close()
-                except Exception:
-                    if exc_info is not None:
-                        logger.debug("Session close failed during cleanup", exc_info=True)
-                    else:
-                        raise
-
-                # Clean up request state
-                for attr in [
-                    session_key,
-                    f"{session_key}_generator_managed",
-                    f"{session_key}_response_status",
-                ]:
-                    with contextlib.suppress(Exception):
-                        delattr(request.state, attr)
+                await _cleanup_async_session(db_session, request, session_key, exc_info, commit_mode)
 
         return provide_async_service
 
@@ -288,45 +325,8 @@ def provide_service(  # noqa: C901, PLR0915
             exc_info = e
             raise
         finally:
-            # Get response status stored by middleware
-            response_status = getattr(request.state, f"{session_key}_response_status", None)
             commit_mode = sync_config.commit_mode if sync_config else "manual"
-
-            should_commit = (
-                exc_info is None
-                and response_status is not None
-                and _should_commit_for_status(response_status, commit_mode)
-            )
-
-            # Each cleanup operation is individually protected so that failures
-            # in one step do not prevent subsequent steps or mask the original exception.
-            try:
-                if should_commit:
-                    db_session.commit()
-                else:
-                    db_session.rollback()
-            except Exception:
-                if exc_info is not None:
-                    logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
-                else:
-                    raise
-
-            try:
-                db_session.close()
-            except Exception:
-                if exc_info is not None:
-                    logger.debug("Session close failed during cleanup", exc_info=True)
-                else:
-                    raise
-
-            # Clean up request state
-            for attr in [
-                session_key,
-                f"{session_key}_generator_managed",
-                f"{session_key}_response_status",
-            ]:
-                with contextlib.suppress(Exception):
-                    delattr(request.state, attr)
+            _cleanup_sync_session(db_session, request, session_key, exc_info, commit_mode)
 
     return provide_sync_service
 
@@ -377,388 +377,462 @@ def provide_filters(
     return dep
 
 
-def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
+def _create_id_filter_provider_fastapi(
+    config: FilterConfig,
+    dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
+) -> Optional[tuple[str, inspect.Parameter, Any]]:
+    id_filter = config.get("id_filter", False)
+    if id_filter is False:
+        return None
+
+    def provide_id_filter(  # pyright: ignore[reportUnknownParameterType]
+        ids: Annotated[  # type: ignore
+            Optional[list[id_filter]],  # pyright: ignore
+            Query(
+                alias="ids",
+                required=False,
+                description="IDs to filter by.",
+            ),
+        ] = None,
+    ) -> Optional[CollectionFilter[id_filter]]:  # type: ignore
+        return CollectionFilter[id_filter](field_name=config.get("id_field", "id"), values=ids) if ids else None  # type: ignore
+
+    param_name = dep_defaults.ID_FILTER_DEPENDENCY_KEY
+    annotation: Any = Annotated[
+        Optional[CollectionFilter[id_filter]], Depends(provide_id_filter)  # type: ignore
+    ]
+    param = inspect.Parameter(
+        name=param_name,
+        kind=inspect.Parameter.KEYWORD_ONLY,
+        annotation=annotation,
+    )
+    return param_name, param, annotation
+
+
+def _create_created_at_filter_provider_fastapi(
+    config: FilterConfig,
+    dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
+) -> Optional[tuple[str, inspect.Parameter, Any]]:
+    if not config.get("created_at", False):
+        return None
+
+    def provide_created_at_filter(
+        before: Annotated[
+            Optional[str],
+            Query(
+                alias="createdBefore",
+                description="Filter by created date before this timestamp.",
+                json_schema_extra={"format": "date-time"},
+            ),
+        ] = None,
+        after: Annotated[
+            Optional[str],
+            Query(
+                alias="createdAfter",
+                description="Filter by created date after this timestamp.",
+                json_schema_extra={"format": "date-time"},
+            ),
+        ] = None,
+    ) -> Optional[BeforeAfter]:
+        before_dt = None
+        after_dt = None
+
+        if before is not None:
+            try:
+                before_dt = datetime.datetime.fromisoformat(before.replace("Z", "+00:00"))
+            except (ValueError, TypeError, AttributeError) as e:
+                raise RequestValidationError(
+                    errors=[{"loc": ["query", "createdBefore"], "msg": "Invalid date format"}]
+                ) from e
+
+        if after is not None:
+            try:
+                after_dt = datetime.datetime.fromisoformat(after.replace("Z", "+00:00"))
+            except (ValueError, TypeError, AttributeError) as e:
+                raise RequestValidationError(
+                    errors=[{"loc": ["query", "createdAfter"], "msg": "Invalid date format"}]
+                ) from e
+
+        return (
+            BeforeAfter(field_name="created_at", before=before_dt, after=after_dt) if before_dt or after_dt else None  # pyright: ignore
+        )
+
+    param_name = dep_defaults.CREATED_FILTER_DEPENDENCY_KEY
+    annotation: Any = Annotated[Optional[BeforeAfter], Depends(provide_created_at_filter)]
+    param = inspect.Parameter(
+        name=param_name,
+        kind=inspect.Parameter.KEYWORD_ONLY,
+        annotation=annotation,
+    )
+    return param_name, param, annotation
+
+
+def _create_updated_at_filter_provider_fastapi(
+    config: FilterConfig,
+    dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
+) -> Optional[tuple[str, inspect.Parameter, Any]]:
+    if not config.get("updated_at", False):
+        return None
+
+    def provide_updated_at_filter(
+        before: Annotated[
+            Optional[str],
+            Query(
+                alias="updatedBefore",
+                description="Filter by updated date before this timestamp.",
+                json_schema_extra={"format": "date-time"},
+            ),
+        ] = None,
+        after: Annotated[
+            Optional[str],
+            Query(
+                alias="updatedAfter",
+                description="Filter by updated date after this timestamp.",
+                json_schema_extra={"format": "date-time"},
+            ),
+        ] = None,
+    ) -> Optional[BeforeAfter]:
+        before_dt = None
+        after_dt = None
+
+        if before is not None:
+            try:
+                before_dt = datetime.datetime.fromisoformat(before.replace("Z", "+00:00"))
+            except (ValueError, TypeError, AttributeError) as e:
+                raise RequestValidationError(
+                    errors=[{"loc": ["query", "updatedBefore"], "msg": "Invalid date format"}]
+                ) from e
+
+        if after is not None:
+            try:
+                after_dt = datetime.datetime.fromisoformat(after.replace("Z", "+00:00"))
+            except (ValueError, TypeError, AttributeError) as e:
+                raise RequestValidationError(
+                    errors=[{"loc": ["query", "updatedAfter"], "msg": "Invalid date format"}]
+                ) from e
+
+        return (
+            BeforeAfter(field_name="updated_at", before=before_dt, after=after_dt) if before_dt or after_dt else None  # pyright: ignore
+        )
+
+    param_name = dep_defaults.UPDATED_FILTER_DEPENDENCY_KEY
+    annotation: Any = Annotated[Optional[BeforeAfter], Depends(provide_updated_at_filter)]
+    param = inspect.Parameter(
+        name=param_name,
+        kind=inspect.Parameter.KEYWORD_ONLY,
+        annotation=annotation,
+    )
+    return param_name, param, annotation
+
+
+def _create_limit_offset_pagination_provider_fastapi(
+    config: FilterConfig,
+    dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
+) -> Optional[tuple[str, inspect.Parameter, Any]]:
+    if config.get("pagination_type") != "limit_offset":
+        return None
+
+    def provide_limit_offset_pagination(
+        current_page: Annotated[
+            int,
+            Query(
+                ge=1,
+                alias="currentPage",
+                description="Page number for pagination.",
+            ),
+        ] = 1,
+        page_size: Annotated[
+            int,
+            Query(
+                ge=1,
+                alias="pageSize",
+                description="Number of items per page.",
+            ),
+        ] = config.get("pagination_size", dep_defaults.DEFAULT_PAGINATION_SIZE),
+    ) -> LimitOffset:
+        return LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
+
+    param_name = dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY
+    annotation: Any = Annotated[LimitOffset, Depends(provide_limit_offset_pagination)]
+    param = inspect.Parameter(
+        name=param_name,
+        kind=inspect.Parameter.KEYWORD_ONLY,
+        annotation=annotation,
+    )
+    return param_name, param, annotation
+
+
+def _create_search_filter_provider_fastapi(
+    config: FilterConfig,
+    dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
+) -> Optional[tuple[str, inspect.Parameter, Any]]:
+    search_fields = config.get("search")
+    if not search_fields:
+        return None
+
+    def provide_search_filter(
+        search_string: Annotated[
+            Optional[str],
+            Query(
+                required=False,
+                alias="searchString",
+                description="Search term.",
+            ),
+        ] = None,
+        ignore_case: Annotated[
+            Optional[bool],
+            Query(
+                required=False,
+                alias="searchIgnoreCase",
+                description="Whether search should be case-insensitive.",
+            ),
+        ] = config.get("search_ignore_case", False),
+    ) -> SearchFilter:
+        field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else set(search_fields)
+
+        return SearchFilter(
+            field_name=field_names,
+            value=search_string,  # type: ignore[arg-type]
+            ignore_case=ignore_case or False,
+        )
+
+    param_name = dep_defaults.SEARCH_FILTER_DEPENDENCY_KEY
+    annotation: Any = Annotated[Optional[SearchFilter], Depends(provide_search_filter)]
+    param = inspect.Parameter(
+        name=param_name,
+        kind=inspect.Parameter.KEYWORD_ONLY,
+        annotation=annotation,
+    )
+    return param_name, param, annotation
+
+
+def _create_order_by_filter_provider_fastapi(
+    config: FilterConfig,
+    dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
+) -> Optional[tuple[str, inspect.Parameter, Any]]:
+    sort_field = config.get("sort_field")
+    if not sort_field:
+        return None
+
+    sort_field_default = normalize_sort_field(sort_field)
+    sort_order_default = config.get("sort_order", "desc")
+
+    def provide_order_by(
+        field_name: Annotated[
+            str,
+            Query(
+                alias="orderBy",
+                description="Field to order by.",
+                required=False,
+            ),
+        ] = sort_field_default,
+        sort_order: Annotated[
+            Optional[SortOrder],
+            Query(
+                alias="sortOrder",
+                description="Sort order ('asc' or 'desc').",
+                required=False,
+            ),
+        ] = sort_order_default,
+    ) -> OrderBy:
+        return OrderBy(field_name=field_name, sort_order=sort_order or sort_order_default)
+
+    param_name = dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY
+    annotation: Any = Annotated[OrderBy, Depends(provide_order_by)]
+    param = inspect.Parameter(
+        name=param_name,
+        kind=inspect.Parameter.KEYWORD_ONLY,
+        annotation=annotation,
+    )
+    return param_name, param, annotation
+
+
+def _create_not_in_filter_providers_fastapi(
+    config: FilterConfig,
+) -> list[tuple[str, inspect.Parameter, Any]]:
+    results: list[tuple[str, inspect.Parameter, Any]] = []
+    not_in_fields = config.get("not_in_fields")
+    if not not_in_fields:
+        return results
+
+    for field_def in normalize_field_name_types(not_in_fields):
+
+        def create_not_in_filter_provider(  # pyright: ignore
+            field_name: FieldNameType = field_def,
+        ) -> Callable[..., Optional[NotInCollectionFilter[Any]]]:
+            def provide_not_in_filter(  # pyright: ignore
+                values: Annotated[  # type: ignore
+                    Optional[set[field_name.type_hint]],  # pyright: ignore
+                    Query(
+                        alias=camelize(f"{field_name.name}_not_in"),
+                        description=f"Filter {field_name.name} not in values",
+                    ),
+                ] = None,
+            ) -> Optional[NotInCollectionFilter[field_name.type_hint]]:  # type: ignore
+                return NotInCollectionFilter(field_name=field_name.name, values=values) if values else None  # pyright: ignore
+
+            return provide_not_in_filter  # pyright: ignore
+
+        provider = create_not_in_filter_provider()  # pyright: ignore
+        param_name = f"{field_def.name}_not_in_filter"
+        annotation: Any = Annotated[Optional[NotInCollectionFilter[field_def.type_hint]], Depends(provider)]  # type: ignore
+        param = inspect.Parameter(
+            name=param_name,
+            kind=inspect.Parameter.KEYWORD_ONLY,
+            annotation=annotation,
+        )
+        results.append((param_name, param, annotation))
+
+    return results
+
+
+def _create_in_filter_providers_fastapi(
+    config: FilterConfig,
+) -> list[tuple[str, inspect.Parameter, Any]]:
+    results: list[tuple[str, inspect.Parameter, Any]] = []
+    in_fields = config.get("in_fields")
+    if not in_fields:
+        return results
+
+    for field_def in normalize_field_name_types(in_fields):
+
+        def create_in_filter_provider(  # pyright: ignore
+            field_name: FieldNameType = field_def,
+        ) -> Callable[..., Optional[CollectionFilter[Any]]]:
+            def provide_in_filter(  # pyright: ignore
+                values: Annotated[  # type: ignore
+                    Optional[set[field_name.type_hint]],  # pyright: ignore
+                    Query(
+                        alias=camelize(f"{field_name.name}_in"),
+                        description=f"Filter {field_name.name} in values",
+                    ),
+                ] = None,
+            ) -> Optional[CollectionFilter[field_name.type_hint]]:  # type: ignore
+                return CollectionFilter(field_name=field_name.name, values=values) if values else None  # pyright: ignore
+
+            return provide_in_filter  # pyright: ignore
+
+        provider = create_in_filter_provider()
+        param_name = f"{field_def.name}_in_filter"
+        annotation: Any = Annotated[Optional[CollectionFilter[field_def.type_hint]], Depends(provider)]  # type: ignore
+        param = inspect.Parameter(
+            name=param_name,
+            kind=inspect.Parameter.KEYWORD_ONLY,
+            annotation=annotation,
+        )
+        results.append((param_name, param, annotation))
+
+    return results
+
+
+def _create_boolean_filter_providers_fastapi(
+    config: FilterConfig,
+) -> list[tuple[str, inspect.Parameter, Any]]:
+    results: list[tuple[str, inspect.Parameter, Any]] = []
+    boolean_fields = config.get("boolean_fields")
+    if not boolean_fields:
+        return results
+
+    for boolean_field_def in normalize_field_name_types(boolean_fields):
+
+        def create_boolean_filter_provider(
+            field_name: FieldNameType = boolean_field_def,
+        ) -> Callable[..., Optional[BooleanFilter]]:
+            def provide_boolean_filter(
+                value: Annotated[
+                    Optional[bool],
+                    Query(
+                        alias=camelize(field_name.name),
+                        description=f"Filter {field_name.name} by boolean value",
+                    ),
+                ] = None,
+            ) -> Optional[BooleanFilter]:
+                return BooleanFilter(field_name=field_name.name, value=value) if value is not None else None
+
+            return provide_boolean_filter
+
+        boolean_provider = create_boolean_filter_provider()
+        param_name = f"{boolean_field_def.name}_boolean_filter"
+        annotation: Any = Annotated[Optional[BooleanFilter], Depends(boolean_provider)]
+        param = inspect.Parameter(
+            name=param_name,
+            kind=inspect.Parameter.KEYWORD_ONLY,
+            annotation=annotation,
+        )
+        results.append((param_name, param, annotation))
+
+    return results
+
+
+def _create_choices_filter_providers_fastapi(
+    config: FilterConfig,
+) -> list[tuple[str, inspect.Parameter, Any]]:
+    results: list[tuple[str, inspect.Parameter, Any]] = []
+    choice_fields = config.get("choice_fields")
+    if not choice_fields:
+        return results
+
+    for choice_field_def in normalize_choice_field_types(choice_fields):
+
+        def create_choices_filter_provider(  # pyright: ignore
+            field_name: FieldNameType = choice_field_def,
+        ) -> Callable[..., Optional[ChoicesFilter[Any]]]:
+            def provide_choices_filter(  # pyright: ignore
+                values: Annotated[  # type: ignore
+                    Optional[list[field_name.type_hint]],  # pyright: ignore
+                    Query(
+                        alias=camelize(field_name.name),
+                        description=f"Filter {field_name.name} by allowed choices",
+                    ),
+                ] = None,
+            ) -> Optional[ChoicesFilter[field_name.type_hint]]:  # type: ignore
+                return ChoicesFilter(field_name=field_name.name, values=values) if values else None  # pyright: ignore
+
+            return provide_choices_filter  # pyright: ignore
+
+        choices_provider = create_choices_filter_provider()  # pyright: ignore
+        param_name = f"{choice_field_def.name}_choices_filter"
+        annotation: Any = Annotated[Optional[ChoicesFilter[Any]], Depends(choices_provider)]
+        param = inspect.Parameter(
+            name=param_name,
+            kind=inspect.Parameter.KEYWORD_ONLY,
+            annotation=annotation,
+        )
+        results.append((param_name, param, annotation))
+
+    return results
+
+
+def _create_filter_aggregate_function_fastapi(
     config: FilterConfig,
     dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
 ) -> Callable[..., list[FilterTypes]]:
-    """Create a FastAPI dependency provider function that aggregates multiple filter dependencies.
-
-    Returns:
-        A FastAPI dependency provider function that aggregates multiple filter dependencies.
-    """
     params: list[inspect.Parameter] = []
     annotations: dict[str, Any] = {}
 
-    # Add id filter providers
-    if (id_filter := config.get("id_filter", False)) is not False:
+    for factory in (
+        _create_id_filter_provider_fastapi,
+        _create_created_at_filter_provider_fastapi,
+        _create_updated_at_filter_provider_fastapi,
+        _create_limit_offset_pagination_provider_fastapi,
+        _create_search_filter_provider_fastapi,
+        _create_order_by_filter_provider_fastapi,
+    ):
+        result = factory(config, dep_defaults)
+        if result is not None:
+            param_name, param, annotation = result
+            params.append(param)
+            annotations[param_name] = annotation
 
-        def provide_id_filter(  # pyright: ignore[reportUnknownParameterType]
-            ids: Annotated[  # type: ignore
-                Optional[list[id_filter]],  # pyright: ignore
-                Query(
-                    alias="ids",
-                    required=False,
-                    description="IDs to filter by.",
-                ),
-            ] = None,
-        ) -> Optional[CollectionFilter[id_filter]]:  # type: ignore
-            return CollectionFilter[id_filter](field_name=config.get("id_field", "id"), values=ids) if ids else None  # type: ignore
-
-        params.append(
-            inspect.Parameter(
-                name=dep_defaults.ID_FILTER_DEPENDENCY_KEY,
-                kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[Optional[CollectionFilter[id_filter]], Depends(provide_id_filter)],  # type: ignore
-            )
-        )
-        annotations[dep_defaults.ID_FILTER_DEPENDENCY_KEY] = Annotated[
-            Optional[CollectionFilter[id_filter]], Depends(provide_id_filter)  # type: ignore
-        ]
-
-    # Add created_at filter providers
-    if config.get("created_at", False):
-
-        def provide_created_at_filter(
-            before: Annotated[
-                Optional[str],
-                Query(
-                    alias="createdBefore",
-                    description="Filter by created date before this timestamp.",
-                    json_schema_extra={"format": "date-time"},
-                ),
-            ] = None,
-            after: Annotated[
-                Optional[str],
-                Query(
-                    alias="createdAfter",
-                    description="Filter by created date after this timestamp.",
-                    json_schema_extra={"format": "date-time"},
-                ),
-            ] = None,
-        ) -> Optional[BeforeAfter]:
-            before_dt = None
-            after_dt = None
-
-            # Validate both parameters regardless of endpoint path
-            if before is not None:
-                try:
-                    before_dt = datetime.datetime.fromisoformat(before.replace("Z", "+00:00"))
-                except (ValueError, TypeError, AttributeError) as e:
-                    raise RequestValidationError(
-                        errors=[{"loc": ["query", "createdBefore"], "msg": "Invalid date format"}]
-                    ) from e
-
-            if after is not None:
-                try:
-                    after_dt = datetime.datetime.fromisoformat(after.replace("Z", "+00:00"))
-                except (ValueError, TypeError, AttributeError) as e:
-                    raise RequestValidationError(
-                        errors=[{"loc": ["query", "createdAfter"], "msg": "Invalid date format"}]
-                    ) from e
-
-            return (
-                BeforeAfter(field_name="created_at", before=before_dt, after=after_dt)
-                if before_dt or after_dt
-                else None  # pyright: ignore
-            )
-
-        param_name = dep_defaults.CREATED_FILTER_DEPENDENCY_KEY
-        params.append(
-            inspect.Parameter(
-                name=param_name,
-                kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[Optional[BeforeAfter], Depends(provide_created_at_filter)],
-            )
-        )
-        annotations[param_name] = Annotated[Optional[BeforeAfter], Depends(provide_created_at_filter)]
-
-    # Add updated_at filter providers
-    if config.get("updated_at", False):
-
-        def provide_updated_at_filter(
-            before: Annotated[
-                Optional[str],
-                Query(
-                    alias="updatedBefore",
-                    description="Filter by updated date before this timestamp.",
-                    json_schema_extra={"format": "date-time"},
-                ),
-            ] = None,
-            after: Annotated[
-                Optional[str],
-                Query(
-                    alias="updatedAfter",
-                    description="Filter by updated date after this timestamp.",
-                    json_schema_extra={"format": "date-time"},
-                ),
-            ] = None,
-        ) -> Optional[BeforeAfter]:
-            before_dt = None
-            after_dt = None
-
-            # Validate both parameters regardless of endpoint path
-            if before is not None:
-                try:
-                    before_dt = datetime.datetime.fromisoformat(before.replace("Z", "+00:00"))
-                except (ValueError, TypeError, AttributeError) as e:
-                    raise RequestValidationError(
-                        errors=[{"loc": ["query", "updatedBefore"], "msg": "Invalid date format"}]
-                    ) from e
-
-            if after is not None:
-                try:
-                    after_dt = datetime.datetime.fromisoformat(after.replace("Z", "+00:00"))
-                except (ValueError, TypeError, AttributeError) as e:
-                    raise RequestValidationError(
-                        errors=[{"loc": ["query", "updatedAfter"], "msg": "Invalid date format"}]
-                    ) from e
-
-            return (
-                BeforeAfter(field_name="updated_at", before=before_dt, after=after_dt)
-                if before_dt or after_dt
-                else None  # pyright: ignore
-            )
-
-        param_name = dep_defaults.UPDATED_FILTER_DEPENDENCY_KEY
-        params.append(
-            inspect.Parameter(
-                name=param_name,
-                kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[Optional[BeforeAfter], Depends(provide_updated_at_filter)],
-            )
-        )
-        annotations[param_name] = Annotated[Optional[BeforeAfter], Depends(provide_updated_at_filter)]
-
-    # Add pagination filter providers
-    if config.get("pagination_type") == "limit_offset":
-
-        def provide_limit_offset_pagination(
-            current_page: Annotated[
-                int,
-                Query(
-                    ge=1,
-                    alias="currentPage",
-                    description="Page number for pagination.",
-                ),
-            ] = 1,
-            page_size: Annotated[
-                int,
-                Query(
-                    ge=1,
-                    alias="pageSize",
-                    description="Number of items per page.",
-                ),
-            ] = config.get("pagination_size", dep_defaults.DEFAULT_PAGINATION_SIZE),
-        ) -> LimitOffset:
-            return LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
-
-        param_name = dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY
-        params.append(
-            inspect.Parameter(
-                name=param_name,
-                kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[LimitOffset, Depends(provide_limit_offset_pagination)],
-            )
-        )
-        annotations[param_name] = Annotated[LimitOffset, Depends(provide_limit_offset_pagination)]
-
-    # Add search filter providers
-    if search_fields := config.get("search"):
-
-        def provide_search_filter(
-            search_string: Annotated[
-                Optional[str],
-                Query(
-                    required=False,
-                    alias="searchString",
-                    description="Search term.",
-                ),
-            ] = None,
-            ignore_case: Annotated[
-                Optional[bool],
-                Query(
-                    required=False,
-                    alias="searchIgnoreCase",
-                    description="Whether search should be case-insensitive.",
-                ),
-            ] = config.get("search_ignore_case", False),
-        ) -> SearchFilter:
-            field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else set(search_fields)
-
-            return SearchFilter(
-                field_name=field_names,
-                value=search_string,  # type: ignore[arg-type]
-                ignore_case=ignore_case or False,
-            )
-
-        param_name = dep_defaults.SEARCH_FILTER_DEPENDENCY_KEY
-        params.append(
-            inspect.Parameter(
-                name=param_name,
-                kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[Optional[SearchFilter], Depends(provide_search_filter)],
-            )
-        )
-        annotations[param_name] = Annotated[Optional[SearchFilter], Depends(provide_search_filter)]
-
-    # Add sort filter providers
-    if sort_field := config.get("sort_field"):
-        sort_field_default = normalize_sort_field(sort_field)
-        sort_order_default = config.get("sort_order", "desc")
-
-        def provide_order_by(
-            field_name: Annotated[
-                str,
-                Query(
-                    alias="orderBy",
-                    description="Field to order by.",
-                    required=False,
-                ),
-            ] = sort_field_default,
-            sort_order: Annotated[
-                Optional[SortOrder],
-                Query(
-                    alias="sortOrder",
-                    description="Sort order ('asc' or 'desc').",
-                    required=False,
-                ),
-            ] = sort_order_default,
-        ) -> OrderBy:
-            return OrderBy(field_name=field_name, sort_order=sort_order or sort_order_default)
-
-        param_name = dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY
-        params.append(
-            inspect.Parameter(
-                name=param_name,
-                kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[OrderBy, Depends(provide_order_by)],
-            )
-        )
-        annotations[param_name] = Annotated[OrderBy, Depends(provide_order_by)]
-
-    # Add not_in filter providers
-    if not_in_fields := config.get("not_in_fields"):
-        for field_def in normalize_field_name_types(not_in_fields):
-            # Capture field_def by value to avoid Python closure late binding gotcha
-            # Without default parameter, all closures would reference the loop variable's final value
-            def create_not_in_filter_provider(  # pyright: ignore
-                field_name: FieldNameType = field_def,
-            ) -> Callable[..., Optional[NotInCollectionFilter[Any]]]:
-                def provide_not_in_filter(  # pyright: ignore
-                    values: Annotated[  # type: ignore
-                        Optional[set[field_name.type_hint]],  # pyright: ignore
-                        Query(
-                            alias=camelize(f"{field_name.name}_not_in"),
-                            description=f"Filter {field_name.name} not in values",
-                        ),
-                    ] = None,
-                ) -> Optional[NotInCollectionFilter[field_name.type_hint]]:  # type: ignore
-                    return NotInCollectionFilter(field_name=field_name.name, values=values) if values else None  # pyright: ignore
-
-                return provide_not_in_filter  # pyright: ignore
-
-            provider = create_not_in_filter_provider()  # pyright: ignore
-            param_name = f"{field_def.name}_not_in_filter"
-            params.append(
-                inspect.Parameter(
-                    name=param_name,
-                    kind=inspect.Parameter.KEYWORD_ONLY,
-                    annotation=Annotated[Optional[NotInCollectionFilter[field_def.type_hint]], Depends(provider)],  # type: ignore
-                )
-            )
-            annotations[param_name] = Annotated[Optional[NotInCollectionFilter[field_def.type_hint]], Depends(provider)]  # type: ignore
-
-    # Add in filter providers
-    if in_fields := config.get("in_fields"):
-        for field_def in normalize_field_name_types(in_fields):
-            # Capture field_def by value to avoid Python closure late binding gotcha
-            # Without default parameter, all closures would reference the loop variable's final value
-            def create_in_filter_provider(  # pyright: ignore
-                field_name: FieldNameType = field_def,
-            ) -> Callable[..., Optional[CollectionFilter[Any]]]:
-                def provide_in_filter(  # pyright: ignore
-                    values: Annotated[  # type: ignore
-                        Optional[set[field_name.type_hint]],  # pyright: ignore
-                        Query(
-                            alias=camelize(f"{field_name.name}_in"),
-                            description=f"Filter {field_name.name} in values",
-                        ),
-                    ] = None,
-                ) -> Optional[CollectionFilter[field_name.type_hint]]:  # type: ignore
-                    return CollectionFilter(field_name=field_name.name, values=values) if values else None  # pyright: ignore
-
-                return provide_in_filter  # pyright: ignore
-
-            provider = create_in_filter_provider()  # type: ignore
-            param_name = f"{field_def.name}_in_filter"
-            params.append(
-                inspect.Parameter(
-                    name=param_name,
-                    kind=inspect.Parameter.KEYWORD_ONLY,
-                    annotation=Annotated[Optional[CollectionFilter[field_def.type_hint]], Depends(provider)],  # type: ignore
-                )
-            )
-            annotations[param_name] = Annotated[Optional[CollectionFilter[field_def.type_hint]], Depends(provider)]  # type: ignore
-
-    if boolean_fields := config.get("boolean_fields"):
-        for boolean_field_def in normalize_field_name_types(boolean_fields):
-
-            def create_boolean_filter_provider(
-                field_name: FieldNameType = boolean_field_def,
-            ) -> Callable[..., Optional[BooleanFilter]]:
-                def provide_boolean_filter(
-                    value: Annotated[
-                        Optional[bool],
-                        Query(
-                            alias=camelize(field_name.name),
-                            description=f"Filter {field_name.name} by boolean value",
-                        ),
-                    ] = None,
-                ) -> Optional[BooleanFilter]:
-                    return BooleanFilter(field_name=field_name.name, value=value) if value is not None else None
-
-                return provide_boolean_filter
-
-            boolean_provider = create_boolean_filter_provider()
-            param_name = f"{boolean_field_def.name}_boolean_filter"
-            params.append(
-                inspect.Parameter(
-                    name=param_name,
-                    kind=inspect.Parameter.KEYWORD_ONLY,
-                    annotation=Annotated[Optional[BooleanFilter], Depends(boolean_provider)],
-                )
-            )
-            annotations[param_name] = Annotated[Optional[BooleanFilter], Depends(boolean_provider)]
-
-    if choice_fields := config.get("choice_fields"):
-        for choice_field_def in normalize_choice_field_types(choice_fields):
-
-            def create_choices_filter_provider(  # pyright: ignore
-                field_name: FieldNameType = choice_field_def,
-            ) -> Callable[..., Optional[ChoicesFilter[Any]]]:
-                def provide_choices_filter(  # pyright: ignore
-                    values: Annotated[  # type: ignore
-                        Optional[list[field_name.type_hint]],  # pyright: ignore
-                        Query(
-                            alias=camelize(field_name.name),
-                            description=f"Filter {field_name.name} by allowed choices",
-                        ),
-                    ] = None,
-                ) -> Optional[ChoicesFilter[field_name.type_hint]]:  # type: ignore
-                    return ChoicesFilter(field_name=field_name.name, values=values) if values else None  # pyright: ignore
-
-                return provide_choices_filter  # pyright: ignore
-
-            choices_provider = create_choices_filter_provider()  # pyright: ignore
-            param_name = f"{choice_field_def.name}_choices_filter"
-            params.append(
-                inspect.Parameter(
-                    name=param_name,
-                    kind=inspect.Parameter.KEYWORD_ONLY,
-                    annotation=Annotated[Optional[ChoicesFilter[Any]], Depends(choices_provider)],
-                )
-            )
-            annotations[param_name] = Annotated[Optional[ChoicesFilter[Any]], Depends(choices_provider)]
+    for providers_factory in (
+        _create_not_in_filter_providers_fastapi,
+        _create_in_filter_providers_fastapi,
+        _create_boolean_filter_providers_fastapi,
+        _create_choices_filter_providers_fastapi,
+    ):
+        for param_name, param, annotation in providers_factory(config):
+            params.append(param)
+            annotations[param_name] = annotation
 
     _aggregate_filter_function.__signature__ = inspect.Signature(  # type: ignore
         parameters=params,

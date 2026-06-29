@@ -247,8 +247,74 @@ def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) 
     return template  # pyright: ignore[reportUnknownVariableType]
 
 
+def _raise_from_error(
+    exc: Exception,
+    error_messages: Optional[ErrorMessages],
+    key: str,
+    default_message: str,
+    exception_cls: type[RepositoryError],
+) -> None:
+    if error_messages is not None:
+        msg = _get_error_message(error_messages=error_messages, key=key, exc=exc)
+    else:
+        msg = default_message
+    raise exception_cls(detail=msg) from exc
+
+
+def _handle_integrity_error(
+    exc: SQLAlchemyIntegrityError,
+    error_messages: Optional[ErrorMessages],
+    dialect_name: Optional[str],
+) -> None:
+    if error_messages is not None and dialect_name is not None:
+        keys_to_regex = {
+            "duplicate_key": (DUPLICATE_KEY_REGEXES.get(dialect_name, []), DuplicateKeyError),
+            "check_constraint": (CHECK_CONSTRAINT_REGEXES.get(dialect_name, []), IntegrityError),
+            "foreign_key": (FOREIGN_KEY_REGEXES.get(dialect_name, []), ForeignKeyError),
+        }
+        detail = " - ".join(str(exc_arg) for exc_arg in exc.orig.args) if exc.orig.args else ""  # type: ignore[union-attr] # pyright: ignore[reportArgumentType,reportOptionalMemberAccess]
+        for key, (regexes, exception) in keys_to_regex.items():
+            for regex in regexes:
+                if (match := regex.findall(detail)) and match[0]:
+                    raise exception(
+                        detail=_get_error_message(error_messages=error_messages, key=key, exc=exc),
+                    ) from exc
+
+        raise IntegrityError(
+            detail=_get_error_message(error_messages=error_messages, key="integrity", exc=exc),
+        ) from exc
+    raise IntegrityError(detail=f"An integrity error occurred: {exc}") from exc
+
+
+def _raise_wrapped_exception(
+    exc: Exception,
+    error_messages: Optional[ErrorMessages] = None,
+    dialect_name: Optional[str] = None,
+) -> None:
+    if isinstance(exc, NotFoundError):
+        _raise_from_error(exc, error_messages, "not_found", "No rows matched the specified data", NotFoundError)
+    if isinstance(exc, MultipleResultsFound):
+        _raise_from_error(
+            exc, error_messages, "multiple_rows", "Multiple rows matched the specified data", MultipleResultsFoundError
+        )
+    if isinstance(exc, SQLAlchemyIntegrityError):
+        _handle_integrity_error(exc, error_messages, dialect_name)
+    if isinstance(exc, SQLAlchemyInvalidRequestError):
+        raise InvalidRequestError(detail="An invalid request was made.") from exc
+    if isinstance(exc, StatementError):
+        raise IntegrityError(
+            detail=cast("str", getattr(exc.orig, "detail", "There was an issue processing the statement."))
+        ) from exc
+    if isinstance(exc, SQLAlchemyError):
+        _raise_from_error(exc, error_messages, "other", f"An exception occurred: {exc}", RepositoryError)
+    if isinstance(exc, AttributeError):
+        _raise_from_error(
+            exc, error_messages, "other", f"An attribute error occurred during processing: {exc}", RepositoryError
+        )
+
+
 @contextmanager
-def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
+def wrap_sqlalchemy_exception(
     error_messages: Optional[ErrorMessages] = None,
     dialect_name: Optional[str] = None,
     wrap_exceptions: bool = True,
@@ -285,66 +351,15 @@ def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
     try:
         yield
 
-    except NotFoundError as exc:
+    except (
+        NotFoundError,
+        MultipleResultsFound,
+        SQLAlchemyIntegrityError,
+        SQLAlchemyInvalidRequestError,
+        StatementError,
+        SQLAlchemyError,
+        AttributeError,
+    ) as exc:
         if wrap_exceptions is False:
             raise
-        if error_messages is not None:
-            msg = _get_error_message(error_messages=error_messages, key="not_found", exc=exc)
-        else:
-            msg = "No rows matched the specified data"
-        raise NotFoundError(detail=msg) from exc
-    except MultipleResultsFound as exc:
-        if wrap_exceptions is False:
-            raise
-        if error_messages is not None:
-            msg = _get_error_message(error_messages=error_messages, key="multiple_rows", exc=exc)
-        else:
-            msg = "Multiple rows matched the specified data"
-        raise MultipleResultsFoundError(detail=msg) from exc
-    except SQLAlchemyIntegrityError as exc:
-        if wrap_exceptions is False:
-            raise
-        if error_messages is not None and dialect_name is not None:
-            keys_to_regex = {
-                "duplicate_key": (DUPLICATE_KEY_REGEXES.get(dialect_name, []), DuplicateKeyError),
-                "check_constraint": (CHECK_CONSTRAINT_REGEXES.get(dialect_name, []), IntegrityError),
-                "foreign_key": (FOREIGN_KEY_REGEXES.get(dialect_name, []), ForeignKeyError),
-            }
-            detail = " - ".join(str(exc_arg) for exc_arg in exc.orig.args) if exc.orig.args else ""  # type: ignore[union-attr] # pyright: ignore[reportArgumentType,reportOptionalMemberAccess]
-            for key, (regexes, exception) in keys_to_regex.items():
-                for regex in regexes:
-                    if (match := regex.findall(detail)) and match[0]:
-                        raise exception(
-                            detail=_get_error_message(error_messages=error_messages, key=key, exc=exc),
-                        ) from exc
-
-            raise IntegrityError(
-                detail=_get_error_message(error_messages=error_messages, key="integrity", exc=exc),
-            ) from exc
-        raise IntegrityError(detail=f"An integrity error occurred: {exc}") from exc
-    except SQLAlchemyInvalidRequestError as exc:
-        if wrap_exceptions is False:
-            raise
-        raise InvalidRequestError(detail="An invalid request was made.") from exc
-    except StatementError as exc:
-        if wrap_exceptions is False:
-            raise
-        raise IntegrityError(
-            detail=cast("str", getattr(exc.orig, "detail", "There was an issue processing the statement."))
-        ) from exc
-    except SQLAlchemyError as exc:
-        if wrap_exceptions is False:
-            raise
-        if error_messages is not None:
-            msg = _get_error_message(error_messages=error_messages, key="other", exc=exc)
-        else:
-            msg = f"An exception occurred: {exc}"
-        raise RepositoryError(detail=msg) from exc
-    except AttributeError as exc:
-        if wrap_exceptions is False:
-            raise
-        if error_messages is not None:
-            msg = _get_error_message(error_messages=error_messages, key="other", exc=exc)
-        else:
-            msg = f"An attribute error occurred during processing: {exc}"
-        raise RepositoryError(detail=msg) from exc
+        _raise_wrapped_exception(exc, error_messages, dialect_name)
