@@ -121,8 +121,6 @@ class RoutingConfig:
     (``engine_groups``, ``behavior``) for backward compatibility.
     """
 
-    __hash__ = None  # type: ignore[assignment]
-
     def __init__(
         self,
         primary_connection_string: Optional[str] = None,
@@ -186,6 +184,8 @@ class RoutingConfig:
             and self.engine_groups == other.engine_groups
             and self.behavior == other.behavior
         )
+
+    __hash__ = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         """Normalize configuration."""

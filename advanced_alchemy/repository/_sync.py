@@ -97,9 +97,9 @@ class _RepositoryExecutionSettings:
 @dataclass
 class _RepositoryQueryDefaults:
     order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None
-    loader_options: List[_AbstractLoad] = dataclass_field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
+    loader_options: List[_AbstractLoad] = dataclass_field(default_factory=list)
     loader_options_have_wildcards: bool = False
-    execution_options: dict[str, Any] = dataclass_field(default_factory=dict)  # pyright: ignore[reportUnknownVariableType]
+    execution_options: dict[str, Any] = dataclass_field(default_factory=dict)
 
 
 @dataclass
@@ -124,37 +124,11 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
     match_fields: Optional[Union[List[str], str]] = None
     statement: Select[tuple[ModelT]]
     session: Union[Session, scoped_session[Session]]
-
-    @property
-    def auto_expunge(self) -> bool: ...
-
-    @auto_expunge.setter
-    def auto_expunge(self, value: bool) -> None: ...
-
-    @property
-    def auto_refresh(self) -> bool: ...
-
-    @auto_refresh.setter
-    def auto_refresh(self, value: bool) -> None: ...
-
-    @property
-    def auto_commit(self) -> bool: ...
-
-    @auto_commit.setter
-    def auto_commit(self, value: bool) -> None: ...
-
-    @property
-    def wrap_exceptions(self) -> bool: ...
-
-    @wrap_exceptions.setter
-    def wrap_exceptions(self, value: bool) -> None: ...
-
-    @property
-    def order_by(self) -> Optional[Union[List[OrderingPair], OrderingPair]]: ...
-
-    @order_by.setter
-    def order_by(self, value: Optional[Union[List[OrderingPair], OrderingPair]]) -> None: ...
-
+    auto_expunge: bool
+    auto_refresh: bool
+    auto_commit: bool
+    wrap_exceptions: bool
+    order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None
     error_messages: Optional[ErrorMessages] = None
 
     @property

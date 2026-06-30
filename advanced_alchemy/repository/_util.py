@@ -663,14 +663,8 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     prefer_any_dialects: Optional[tuple[str]] = ("postgresql",)
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
 
-    @property
-    def order_by(self) -> Optional[Union[list[OrderingPair], OrderingPair]]:
-        """List or single :class:`~advanced_alchemy.repository.typing.OrderingPair` to use for sorting."""
-        return None
-
-    @order_by.setter
-    def order_by(self, value: Optional[Union[list[OrderingPair], OrderingPair]]) -> None:
-        pass
+    order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None
+    """List or single :class:`~advanced_alchemy.repository.typing.OrderingPair` to use for sorting."""
 
     _prefer_any: bool = False
     """Whether to prefer ANY() over IN() in queries."""

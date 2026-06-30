@@ -179,15 +179,6 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         self._execution.uniquify = bool(value)
 
     @property
-    def order_by(self) -> Optional[Union[List[OrderingPair], OrderingPair]]:
-        """Set default order options for queries."""
-        return self._default_order_by
-
-    @order_by.setter
-    def order_by(self, value: Optional[Union[List[OrderingPair], OrderingPair]]) -> None:
-        self._default_order_by = value
-
-    @property
     def _pk_columns(self) -> tuple[Any, ...]:
         """Get primary key columns from the model mapper.
 

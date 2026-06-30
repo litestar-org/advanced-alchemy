@@ -142,7 +142,7 @@ class GenericSessionConfig(Generic[ConnectionT, EngineT, SessionT]):
         SessionT: :class:`sqlalchemy.Session` | :class:`sqlalchemy.ext.asyncio.AsyncSession`
     """
 
-    bind_config: "SessionBindConfig[ConnectionT, EngineT]" = field(default_factory=cast("Any", SessionBindConfig))
+    bind_config: "SessionBindConfig[ConnectionT, EngineT]" = field(default_factory=SessionBindConfig)
     """Configuration for session engine/connection binding.
 
     .. seealso::
