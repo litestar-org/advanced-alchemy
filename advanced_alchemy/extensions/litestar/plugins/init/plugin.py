@@ -108,9 +108,9 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPlugin, _slots_base.SlotsBase)
 
     def _validate_config(self) -> None:
         configs = self._config if isinstance(self._config, Sequence) else [self._config]
-        scope_keys = {config.session_scope_key for config in configs}
-        engine_keys = {config.engine_dependency_key for config in configs}
-        session_keys = {config.session_dependency_key for config in configs}
+        scope_keys = {config.session_key_config.session_scope_key for config in configs}
+        engine_keys = {config.session_key_config.engine_dependency_key for config in configs}
+        session_keys = {config.session_key_config.session_dependency_key for config in configs}
         if len(configs) > 1 and any(len(i) != len(configs) for i in (scope_keys, engine_keys, session_keys)):
             raise ImproperConfigurationError(
                 detail="When using multiple configurations, please ensure the `session_dependency_key` and `engine_dependency_key` settings are unique across all configs.  Additionally, iF you are using a custom `before_send` handler, ensure `session_scope_key` is unique.",
@@ -144,8 +144,12 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPlugin, _slots_base.SlotsBase)
 
             app_config.dependencies.update(
                 {
-                    config.engine_dependency_key: Provide(config.provide_engine, sync_to_thread=False),
-                    config.session_dependency_key: Provide(config.provide_session, sync_to_thread=False),
+                    config.session_key_config.engine_dependency_key: Provide(
+                        config.provide_engine, sync_to_thread=False
+                    ),
+                    config.session_key_config.session_dependency_key: Provide(
+                        config.provide_session, sync_to_thread=False
+                    ),
                 },
             )
             app_config.before_send.append(cast("BeforeMessageSendHookHandler", config.before_send_handler))

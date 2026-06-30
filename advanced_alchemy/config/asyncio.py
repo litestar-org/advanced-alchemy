@@ -8,9 +8,11 @@ from sqlalchemy.orm import sessionmaker as sync_sessionmaker
 
 from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.config.common import (
+    ConnectionConfig,
     GenericAlembicConfig,
     GenericSessionConfig,
     GenericSQLAlchemyConfig,
+    SessionFactoryConfig,
 )
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.utils.dataclass import Empty
@@ -79,14 +81,16 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
             )
     """
 
-    create_engine_callable: "Callable[[str], AsyncEngine]" = create_async_engine
-    """Callable that creates an :class:`AsyncEngine <sqlalchemy.ext.asyncio.AsyncEngine>` instance or instance of its
-    subclass.
-    """
+    connection_config: ConnectionConfig = field(
+        default_factory=lambda: ConnectionConfig(create_engine_callable=create_async_engine),
+    )  # pyright: ignore[reportIncompatibleVariableOverride]
+    """Configuration for database engine connection and creation."""
     session_config: AsyncSessionConfig = field(default_factory=AsyncSessionConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration options for the :class:`async_sessionmaker<sqlalchemy.ext.asyncio.async_sessionmaker>`."""
-    session_maker_class: "type[async_sessionmaker[AsyncSession]]" = async_sessionmaker  # pyright: ignore[reportIncompatibleVariableOverride]
-    """Sessionmaker class to use."""
+    session_factory_config: SessionFactoryConfig = field(
+        default_factory=lambda: SessionFactoryConfig(session_maker_class=async_sessionmaker),
+    )  # pyright: ignore[reportIncompatibleVariableOverride]
+    """Configuration for session maker creation."""
     alembic_config: "AlembicAsyncConfig" = field(default_factory=AlembicAsyncConfig)
     """Configuration for the SQLAlchemy Alembic migrations.
 
@@ -104,18 +108,23 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
     """
 
     def __post_init__(self) -> None:
+        # Apply defaults when sub-config objects are provided without engine/session maker
+        if self.connection_config.create_engine_callable is None:
+            self.connection_config.create_engine_callable = create_async_engine
+        if self.session_factory_config.session_maker_class is None:
+            self.session_factory_config.session_maker_class = async_sessionmaker
         # Validate routing config vs connection_string
-        if self.routing_config is not None and self.connection_string is not None:
+        if self.routing_config is not None and self.connection_config.connection_string is not None:
             msg = "Provide either 'connection_string' or 'routing_config', not both"
             raise ImproperConfigurationError(msg)
         # If routing_config is set, use its primary as the connection_string for compatibility
         if self.routing_config is not None:
-            self.connection_string = self.routing_config.primary_connection_string
-            if self.connection_string is None:
+            self.connection_config.connection_string = self.routing_config.primary_connection_string
+            if self.connection_config.connection_string is None:
                 # Try to get from default group engines
-                configs = self.routing_config.get_engine_configs(self.routing_config.default_group)
+                configs = self.routing_config.get_engine_configs(self.routing_config.engine_groups.default_group)
                 if configs:
-                    self.connection_string = configs[0].connection_string
+                    self.connection_config.connection_string = configs[0].connection_string
 
         super().__post_init__()
 
@@ -134,8 +143,8 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
         Returns:
             A callable that creates session instances.
         """
-        if self.session_maker:
-            return self.session_maker
+        if self.session_factory_config.session_maker:
+            return cast("Callable[[], AsyncSession]", self.session_factory_config.session_maker)
 
         from sqlalchemy import event
 
@@ -154,34 +163,34 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
                 engine_config=self.engine_config_dict,
                 session_config=self.session_config_dict,
             )
-            self.session_maker = routing_maker
+            self.session_factory_config.session_maker = routing_maker
         else:
-            self.session_maker = cast("Callable[[], AsyncSession]", super().create_session_maker())  # type: ignore[redundant-cast]
+            self.session_factory_config.session_maker = super().create_session_maker()
 
-        if isinstance(self.session_maker, async_sessionmaker):
+        if isinstance(self.session_factory_config.session_maker, async_sessionmaker):
             session_maker = cast(
                 "async_sessionmaker[AsyncSession]",
-                self.session_maker,  # pyright: ignore[reportUnknownMemberType]
+                self.session_factory_config.session_maker,  # pyright: ignore[reportUnknownMemberType]
             )
 
             # async_sessionmaker does not support Session-level events directly.
             # Create a sync sessionmaker, register events on it, and inject it
             # as sync_session_class so events fire on the underlying sync Session.
             sync_maker = sync_sessionmaker()
-            if self.enable_file_object_listener:
+            if self.listener_config.enable_file_object_listener:
                 event.listen(sync_maker, "before_flush", AsyncFileObjectListener.before_flush)
                 event.listen(sync_maker, "after_commit", AsyncFileObjectListener.after_commit)
                 event.listen(sync_maker, "after_rollback", AsyncFileObjectListener.after_rollback)
-            if self.enable_touch_updated_timestamp_listener:
+            if self.listener_config.enable_touch_updated_timestamp_listener:
                 event.listen(sync_maker, "before_flush", touch_updated_timestamp)
             event.listen(sync_maker, "after_commit", AsyncCacheListener.after_commit)
             event.listen(sync_maker, "after_rollback", AsyncCacheListener.after_rollback)
             session_maker.configure(sync_session_class=sync_maker)
 
-        if self.session_maker is None:  # pyright: ignore
+        if self.session_factory_config.session_maker is None:  # pyright: ignore
             msg = "Session maker was not initialized."  # type: ignore[unreachable]
             raise ImproperConfigurationError(msg)
-        return cast("async_sessionmaker[AsyncSession]", self.session_maker)  # pyright: ignore[reportUnknownMemberType]
+        return cast("async_sessionmaker[AsyncSession]", self.session_factory_config.session_maker)  # pyright: ignore[reportUnknownMemberType]
 
     @asynccontextmanager
     async def get_session(

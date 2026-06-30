@@ -9,6 +9,7 @@ from litestar.params import Body, Dependency
 from pydantic import BaseModel, Field, computed_field
 from sqlalchemy.orm import Mapped, mapped_column
 
+from advanced_alchemy.config.common import ConnectionConfig, SessionTransactionConfig
 from advanced_alchemy.extensions.litestar import (
     AsyncSessionConfig,
     SQLAlchemyAsyncConfig,
@@ -165,8 +166,8 @@ class DocumentController(Controller):
 
 
 alchemy_config = SQLAlchemyAsyncConfig(
-    connection_string="sqlite+aiosqlite:///test.sqlite",
-    session_config=AsyncSessionConfig(expire_on_commit=False),
+    connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///test.sqlite"),
+    session_config=AsyncSessionConfig(transaction_config=SessionTransactionConfig(expire_on_commit=False)),
     before_send_handler="autocommit",
     create_all=True,
 )

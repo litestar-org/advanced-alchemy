@@ -578,9 +578,13 @@ async def test_async_config_cache_config_repo_auto_pickup(
         await conn.run_sync(CachedAuthor.metadata.create_all)
 
     try:
+        from advanced_alchemy.config.common import CacheOptions, ConnectionConfig
+
         config = SQLAlchemyAsyncConfig(
-            engine_instance=aiosqlite_engine,
-            cache_config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300, key_prefix="cfg:"),
+            connection_config=ConnectionConfig(engine_instance=aiosqlite_engine),
+            cache_options=CacheOptions(
+                config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300, key_prefix="cfg:")
+            ),
         )
 
         class CachedAuthorRepository(SQLAlchemyAsyncRepository[Any]):
@@ -588,7 +592,7 @@ async def test_async_config_cache_config_repo_auto_pickup(
 
         async with config.get_session() as session:
             repo = CachedAuthorRepository(session=session, auto_expunge=True)
-            assert repo._cache_manager is config.cache_manager
+            assert repo._infra.cache_manager is config.cache_options.manager
 
             author = CachedAuthor(name="Cfg Async")
             await repo.add(author)
@@ -597,8 +601,8 @@ async def test_async_config_cache_config_repo_auto_pickup(
 
             first = await repo.get(author_id)
             assert first.name == "Cfg Async"
-            assert config.cache_manager is not None
-            cached_region = config.cache_manager.get_entity_sync(table_name, author_id, CachedAuthor)
+            assert config.cache_options.manager is not None
+            cached_region = config.cache_options.manager.get_entity_sync(table_name, author_id, CachedAuthor)
             assert cached_region is not None and cached_region.name == "Cfg Async"
 
         # Delete the row out from under SQLAlchemy. Cache survives, so the next get() can only
@@ -635,9 +639,13 @@ async def test_async_config_cache_config_same_session_double_get(
         await conn.run_sync(CachedAuthor.metadata.create_all)
 
     try:
+        from advanced_alchemy.config.common import CacheOptions, ConnectionConfig
+
         config = SQLAlchemyAsyncConfig(
-            engine_instance=aiosqlite_engine,
-            cache_config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300, key_prefix="same:"),
+            connection_config=ConnectionConfig(engine_instance=aiosqlite_engine),
+            cache_options=CacheOptions(
+                config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300, key_prefix="same:")
+            ),
         )
 
         class CachedAuthorRepository(SQLAlchemyAsyncRepository[Any]):
@@ -680,9 +688,13 @@ def test_sync_config_cache_config_repo_auto_pickup(
     CachedAuthor.metadata.create_all(sqlite_engine)
 
     try:
+        from advanced_alchemy.config.common import CacheOptions, ConnectionConfig
+
         config = SQLAlchemySyncConfig(
-            engine_instance=sqlite_engine,
-            cache_config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300, key_prefix="cfg:"),
+            connection_config=ConnectionConfig(engine_instance=sqlite_engine),
+            cache_options=CacheOptions(
+                config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300, key_prefix="cfg:")
+            ),
         )
 
         class CachedAuthorRepository(SQLAlchemySyncRepository[Any]):
@@ -690,7 +702,7 @@ def test_sync_config_cache_config_repo_auto_pickup(
 
         with config.get_session() as session:
             repo = CachedAuthorRepository(session=session, auto_expunge=True)
-            assert repo._cache_manager is config.cache_manager
+            assert repo.defaults.cache_manager is config.cache_options.manager
 
             author = CachedAuthor(name="Cfg Sync")
             repo.add(author)
@@ -699,8 +711,8 @@ def test_sync_config_cache_config_repo_auto_pickup(
 
             first = repo.get(author_id)
             assert first.name == "Cfg Sync"
-            assert config.cache_manager is not None
-            cached_region = config.cache_manager.get_entity_sync(table_name, author_id, CachedAuthor)
+            assert config.cache_options.manager is not None
+            cached_region = config.cache_options.manager.get_entity_sync(table_name, author_id, CachedAuthor)
             assert cached_region is not None and cached_region.name == "Cfg Sync"
 
         with sqlite_engine.begin() as conn:
@@ -729,9 +741,13 @@ def test_sync_config_cache_config_same_session_double_get(
     CachedAuthor.metadata.create_all(sqlite_engine)
 
     try:
+        from advanced_alchemy.config.common import CacheOptions, ConnectionConfig
+
         config = SQLAlchemySyncConfig(
-            engine_instance=sqlite_engine,
-            cache_config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300, key_prefix="same:"),
+            connection_config=ConnectionConfig(engine_instance=sqlite_engine),
+            cache_options=CacheOptions(
+                config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300, key_prefix="same:")
+            ),
         )
 
         class CachedAuthorRepository(SQLAlchemySyncRepository[Any]):

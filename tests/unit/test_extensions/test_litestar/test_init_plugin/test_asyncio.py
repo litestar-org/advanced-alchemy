@@ -30,6 +30,7 @@ from advanced_alchemy.extensions.litestar._utils import set_aa_scope_state
 from advanced_alchemy.extensions.litestar.exception_handler import exception_to_http_response
 from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemyInitPlugin
 from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import (
+    SessionKeyConfig,
     autocommit_before_send_handler,
     autocommit_handler_maker,
 )
@@ -51,12 +52,12 @@ def test_default_before_send_handler() -> None:
     async def test_handler(db_session: AsyncSession, scope: Scope) -> None:
         nonlocal captured_scope_state
         captured_scope_state = scope["state"]
-        assert db_session is captured_scope_state[config.session_dependency_key]
+        assert db_session is captured_scope_state[config.session_key_config.session_dependency_key]
 
     with create_test_client(route_handlers=[test_handler], plugins=[plugin]) as client:
         client.get("/")
         assert captured_scope_state is not None
-        assert config.session_dependency_key not in captured_scope_state  # pyright: ignore
+        assert config.session_key_config.session_dependency_key not in captured_scope_state  # pyright: ignore
 
 
 def test_default_before_send_handle_multi() -> None:
@@ -66,9 +67,11 @@ def test_default_before_send_handle_multi() -> None:
     config1 = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
     config2 = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite://",
-        session_dependency_key="other_session",
-        session_scope_key="_sqlalchemy_state_2",
-        engine_dependency_key="other_engine",
+        session_key_config=SessionKeyConfig(
+            session_dependency_key="other_session",
+            session_scope_key="_sqlalchemy_state_2",
+            engine_dependency_key="other_engine",
+        ),
     )
     plugin = SQLAlchemyInitPlugin(config=[config1, config2])
 
@@ -76,12 +79,12 @@ def test_default_before_send_handle_multi() -> None:
     async def test_handler(db_session: AsyncSession, scope: Scope) -> None:
         nonlocal captured_scope_state
         captured_scope_state = scope["state"]
-        assert db_session is captured_scope_state[config1.session_dependency_key]
+        assert db_session is captured_scope_state[config1.session_key_config.session_dependency_key]
 
     with create_test_client(route_handlers=[test_handler], plugins=[plugin]) as client:
         client.get("/")
         assert captured_scope_state is not None
-        assert config1.session_dependency_key not in captured_scope_state
+        assert config1.session_key_config.session_dependency_key not in captured_scope_state
 
 
 async def test_create_all_default(monkeypatch: MonkeyPatch) -> None:
@@ -120,7 +123,7 @@ async def test_before_send_handler_success_response(create_scope: Callable[..., 
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
     mock_session = MagicMock(spec=AsyncSession)
     http_scope = create_scope(app=app)
-    set_aa_scope_state(http_scope, config.session_scope_key, mock_session)
+    set_aa_scope_state(http_scope, config.session_key_config.session_scope_key, mock_session)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": random.randint(200, 299),
@@ -139,7 +142,7 @@ async def test_before_send_handler_success_response_autocommit(create_scope: Cal
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
     mock_session = MagicMock(spec=AsyncSession)
     http_scope = create_scope(app=app)
-    set_aa_scope_state(http_scope, config.session_scope_key, mock_session)
+    set_aa_scope_state(http_scope, config.session_key_config.session_scope_key, mock_session)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": random.randint(200, 299),
@@ -158,7 +161,7 @@ async def test_before_send_handler_error_response(create_scope: Callable[..., Sc
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
     mock_session = MagicMock(spec=AsyncSession)
     http_scope = create_scope(app=app)
-    set_aa_scope_state(http_scope, config.session_scope_key, mock_session)
+    set_aa_scope_state(http_scope, config.session_key_config.session_scope_key, mock_session)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": random.randint(300, 599),
@@ -178,7 +181,7 @@ async def test_autocommit_handler_maker_redirect_response(create_scope: Callable
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
     mock_session = MagicMock(spec=AsyncSession)
     http_scope = create_scope(app=app)
-    set_aa_scope_state(http_scope, config.session_scope_key, mock_session)
+    set_aa_scope_state(http_scope, config.session_key_config.session_scope_key, mock_session)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": random.randint(300, 399),
@@ -198,7 +201,7 @@ async def test_autocommit_handler_maker_commit_statuses(create_scope: Callable[.
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
     mock_session = MagicMock(spec=AsyncSession)
     http_scope = create_scope(app=app)
-    set_aa_scope_state(http_scope, config.session_scope_key, mock_session)
+    set_aa_scope_state(http_scope, config.session_key_config.session_scope_key, mock_session)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": random.randint(302, 303),
@@ -218,7 +221,7 @@ async def test_autocommit_handler_maker_rollback_statuses(create_scope: Callable
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config)])
     mock_session = MagicMock(spec=AsyncSession)
     http_scope = create_scope(app=app)
-    set_aa_scope_state(http_scope, config.session_scope_key, mock_session)
+    set_aa_scope_state(http_scope, config.session_key_config.session_scope_key, mock_session)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": random.randint(307, 308),
@@ -241,16 +244,18 @@ async def test_autocommit_handler_maker_rollback_statuses_multi(create_scope: Ca
     config2 = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite://",
         before_send_handler=custom_autocommit_handler,
-        session_dependency_key="other_session",
-        engine_dependency_key="other_engine",
-        session_scope_key="_sqlalchemy_state_2",
+        session_key_config=SessionKeyConfig(
+            session_dependency_key="other_session",
+            engine_dependency_key="other_engine",
+            session_scope_key="_sqlalchemy_state_2",
+        ),
     )
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config=[config1, config2])])
     mock_session1 = MagicMock(spec=AsyncSession)
     mock_session2 = MagicMock(spec=AsyncSession)
     http_scope = create_scope(app=app)
-    set_aa_scope_state(http_scope, config1.session_scope_key, mock_session1)
-    set_aa_scope_state(http_scope, config2.session_scope_key, mock_session2)
+    set_aa_scope_state(http_scope, config1.session_key_config.session_scope_key, mock_session1)
+    set_aa_scope_state(http_scope, config2.session_key_config.session_scope_key, mock_session2)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": random.randint(307, 308),
@@ -276,15 +281,17 @@ async def test_autocommit_handler_maker_rollback_statuses_multi_bad_config(creat
         config2 = SQLAlchemyAsyncConfig(
             connection_string="sqlite+aiosqlite://",
             before_send_handler=custom_autocommit_handler,
-            session_dependency_key="other_session",
-            session_scope_key="_sqlalchemy_state_2",
+            session_key_config=SessionKeyConfig(
+                session_dependency_key="other_session",
+                session_scope_key="_sqlalchemy_state_2",
+            ),
         )
         app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config=[config1, config2])])
         mock_session1 = MagicMock(spec=AsyncSession)
         mock_session2 = MagicMock(spec=AsyncSession)
         http_scope = create_scope(app=app)
-        set_aa_scope_state(http_scope, config1.session_scope_key, mock_session1)
-        set_aa_scope_state(http_scope, config2.session_scope_key, mock_session2)
+        set_aa_scope_state(http_scope, config1.session_key_config.session_scope_key, mock_session1)
+        set_aa_scope_state(http_scope, config2.session_key_config.session_scope_key, mock_session2)
         http_response_start: HTTPResponseStartEvent = {
             "type": "http.response.start",
             "status": random.randint(307, 308),
@@ -306,15 +313,17 @@ async def test_autocommit_handler_maker_multi(create_scope: Callable[..., Scope]
     config2 = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite://",
         before_send_handler="autocommit",
-        session_dependency_key="other_session",
-        engine_dependency_key="other_engine",
+        session_key_config=SessionKeyConfig(
+            session_dependency_key="other_session",
+            engine_dependency_key="other_engine",
+        ),
     )
     app = Litestar(route_handlers=[], plugins=[SQLAlchemyInitPlugin(config=[config1, config2])])
     mock_session1 = MagicMock(spec=AsyncSession)
     mock_session2 = MagicMock(spec=AsyncSession)
     http_scope = create_scope(app=app)
-    set_aa_scope_state(http_scope, config1.session_scope_key, mock_session1)
-    set_aa_scope_state(http_scope, config2.session_scope_key, mock_session2)
+    set_aa_scope_state(http_scope, config1.session_key_config.session_scope_key, mock_session1)
+    set_aa_scope_state(http_scope, config2.session_key_config.session_scope_key, mock_session2)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": random.randint(307, 308),
@@ -341,9 +350,11 @@ def test_repository_exception_to_http_response(exc: type[RepositoryError], statu
     config1 = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
     config2 = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite://",
-        session_dependency_key="other_session",
-        session_scope_key="_sqlalchemy_state_2",
-        engine_dependency_key="other_engine",
+        session_key_config=SessionKeyConfig(
+            session_dependency_key="other_session",
+            session_scope_key="_sqlalchemy_state_2",
+            engine_dependency_key="other_engine",
+        ),
     )
     plugin = SQLAlchemyInitPlugin(config=[config1, config2])
     app = Litestar(route_handlers=[], plugins=[plugin])
@@ -373,9 +384,11 @@ def test_existing_repository_exception_to_http_response(exc: type[RepositoryErro
     config1 = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
     config2 = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite://",
-        session_dependency_key="other_session",
-        session_scope_key="_sqlalchemy_state_2",
-        engine_dependency_key="other_engine",
+        session_key_config=SessionKeyConfig(
+            session_dependency_key="other_session",
+            session_scope_key="_sqlalchemy_state_2",
+            engine_dependency_key="other_engine",
+        ),
     )
     plugin = SQLAlchemyInitPlugin(config=[config1, config2])
     app = Litestar(route_handlers=[], plugins=[plugin], exception_handlers={RepositoryError: handler})
@@ -403,9 +416,11 @@ def test_repository_disabled_exception_to_http_response(exc: type[RepositoryErro
     config1 = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://", set_default_exception_handler=False)
     config2 = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite://",
-        session_dependency_key="other_session",
-        session_scope_key="_sqlalchemy_state_2",
-        engine_dependency_key="other_engine",
+        session_key_config=SessionKeyConfig(
+            session_dependency_key="other_session",
+            session_scope_key="_sqlalchemy_state_2",
+            engine_dependency_key="other_engine",
+        ),
         set_default_exception_handler=False,
     )
     plugin = SQLAlchemyInitPlugin(config=[config1, config2])
@@ -424,7 +439,7 @@ async def test_autocommit_handler_rollback_failure_still_closes(create_scope: Ca
     mock_session = MagicMock(spec=AsyncSession)
     mock_session.rollback.side_effect = RuntimeError("rollback failed")
     http_scope = create_scope(app=app)
-    set_aa_scope_state(http_scope, config.session_scope_key, mock_session)
+    set_aa_scope_state(http_scope, config.session_key_config.session_scope_key, mock_session)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": 500,
@@ -446,7 +461,7 @@ async def test_autocommit_handler_commit_failure_does_not_crash(create_scope: Ca
     mock_session = MagicMock(spec=AsyncSession)
     mock_session.commit.side_effect = RuntimeError("commit failed")
     http_scope = create_scope(app=app)
-    set_aa_scope_state(http_scope, config.session_scope_key, mock_session)
+    set_aa_scope_state(http_scope, config.session_key_config.session_scope_key, mock_session)
     http_response_start: HTTPResponseStartEvent = {
         "type": "http.response.start",
         "status": 200,

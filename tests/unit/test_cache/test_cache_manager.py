@@ -348,8 +348,8 @@ def test_cache_manager_custom_serializers(memory_config: CacheConfig) -> None:
     def custom_deserializer(data: bytes, model_class: type) -> Any:
         return "deserialized"
 
-    memory_config.serializer = custom_serializer
-    memory_config.deserializer = custom_deserializer
+    memory_config.serializer_config.serializer = custom_serializer
+    memory_config.serializer_config.deserializer = custom_deserializer
 
     manager = CacheManager(memory_config)
 

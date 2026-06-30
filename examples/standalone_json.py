@@ -7,7 +7,12 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from advanced_alchemy.base import UUIDBase
-from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
+from advanced_alchemy.config import (
+    AsyncSessionConfig,
+    ConnectionConfig,
+    SessionTransactionConfig,
+    SQLAlchemyAsyncConfig,
+)
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
 if TYPE_CHECKING:
@@ -27,8 +32,10 @@ class ItemRepository(SQLAlchemyAsyncRepository[Item]):
 
 
 alchemy_config = SQLAlchemyAsyncConfig(
-    engine_instance=create_async_engine("postgresql+psycopg://app:super-secret@localhost:5432/app"),
-    session_config=AsyncSessionConfig(expire_on_commit=False),
+    connection_config=ConnectionConfig(
+        engine_instance=create_async_engine("postgresql+psycopg://app:super-secret@localhost:5432/app"),
+    ),
+    session_config=AsyncSessionConfig(transaction_config=SessionTransactionConfig(expire_on_commit=False)),
 )
 
 

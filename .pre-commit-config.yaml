@@ -20,7 +20,7 @@ repos:
     rev: "v0.10.0"
     hooks:
       - id: unasyncd
-        additional_dependencies: ["ruff"]
+        additional_dependencies: ["ruff", "anyio<4.14.0"]
   - repo: https://github.com/charliermarsh/ruff-pre-commit
     rev: "v0.15.15"
     hooks:

@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
+from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SessionKeyConfig, SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.store import SQLAlchemyStore, StoreModelMixin
 from tests.integration.helpers import async_clean_tables, clean_tables
@@ -154,18 +154,22 @@ async def async_test_store_model(
 @pytest.fixture
 def sync_store_config(engine: Engine) -> SQLAlchemySyncConfig:
     """Create sync config with test engine."""
+    from advanced_alchemy.config.common import ConnectionConfig
+
     return SQLAlchemySyncConfig(
-        engine_instance=engine,
-        session_dependency_key="db_session",
+        connection_config=ConnectionConfig(engine_instance=engine),
+        session_key_config=SessionKeyConfig(session_dependency_key="db_session"),
     )
 
 
 @pytest.fixture
 async def async_store_config(async_engine: AsyncEngine) -> SQLAlchemyAsyncConfig:
     """Create async config with test engine."""
+    from advanced_alchemy.config.common import ConnectionConfig
+
     return SQLAlchemyAsyncConfig(
-        engine_instance=async_engine,
-        session_dependency_key="db_session",
+        connection_config=ConnectionConfig(engine_instance=async_engine),
+        session_key_config=SessionKeyConfig(session_dependency_key="db_session"),
     )
 
 

@@ -41,10 +41,10 @@ def test_routing_config_defaults() -> None:
 
     assert config.primary_connection_string == "postgresql://primary:5432/db"
     assert config.read_replicas == []
-    assert config.routing_strategy == RoutingStrategy.ROUND_ROBIN
-    assert config.enabled is True
-    assert config.sticky_after_write is True
-    assert config.reset_stickiness_on_commit is True
+    assert config.behavior.routing_strategy == RoutingStrategy.ROUND_ROBIN
+    assert config.behavior.enabled is True
+    assert config.behavior.sticky_after_write is True
+    assert config.behavior.reset_stickiness_on_commit is True
 
 
 def test_routing_config_with_string_replicas() -> None:
@@ -112,7 +112,7 @@ def test_routing_config_custom_strategy() -> None:
         routing_strategy=RoutingStrategy.RANDOM,
     )
 
-    assert config.routing_strategy == RoutingStrategy.RANDOM
+    assert config.behavior.routing_strategy == RoutingStrategy.RANDOM
 
 
 def test_routing_config_disabled() -> None:
@@ -123,7 +123,7 @@ def test_routing_config_disabled() -> None:
         enabled=False,
     )
 
-    assert config.enabled is False
+    assert config.behavior.enabled is False
 
 
 def test_routing_config_no_sticky_after_write() -> None:
@@ -134,7 +134,7 @@ def test_routing_config_no_sticky_after_write() -> None:
         sticky_after_write=False,
     )
 
-    assert config.sticky_after_write is False
+    assert config.behavior.sticky_after_write is False
 
 
 def test_routing_config_no_reset_on_commit() -> None:
@@ -145,14 +145,14 @@ def test_routing_config_no_reset_on_commit() -> None:
         reset_stickiness_on_commit=False,
     )
 
-    assert config.reset_stickiness_on_commit is False
+    assert config.behavior.reset_stickiness_on_commit is False
 
 
 def test_get_replica_connection_strings_empty() -> None:
     """Test get_engine_configs with no replicas."""
     config = RoutingConfig(primary_connection_string="postgresql://primary:5432/db")
 
-    connection_strings = [c.connection_string for c in config.get_engine_configs(config.read_group)]
+    connection_strings = [c.connection_string for c in config.get_engine_configs(config.engine_groups.read_group)]
 
     assert connection_strings == []
 
@@ -167,7 +167,7 @@ def test_get_replica_connection_strings_from_strings() -> None:
         ],
     )
 
-    connection_strings = [c.connection_string for c in config.get_engine_configs(config.read_group)]
+    connection_strings = [c.connection_string for c in config.get_engine_configs(config.engine_groups.read_group)]
 
     assert connection_strings == [
         "postgresql://replica1:5432/db",
@@ -185,7 +185,7 @@ def test_get_replica_connection_strings_from_configs() -> None:
         ],
     )
 
-    connection_strings = [c.connection_string for c in config.get_engine_configs(config.read_group)]
+    connection_strings = [c.connection_string for c in config.get_engine_configs(config.engine_groups.read_group)]
 
     assert connection_strings == [
         "postgresql://replica1:5432/db",
@@ -203,7 +203,7 @@ def test_get_replica_connection_strings_mixed() -> None:
         ],
     )
 
-    connection_strings = [c.connection_string for c in config.get_engine_configs(config.read_group)]
+    connection_strings = [c.connection_string for c in config.get_engine_configs(config.engine_groups.read_group)]
 
     assert connection_strings == [
         "postgresql://replica1:5432/db",
@@ -215,7 +215,7 @@ def test_get_replica_configs_empty() -> None:
     """Test get_engine_configs with no replicas."""
     config = RoutingConfig(primary_connection_string="postgresql://primary:5432/db")
 
-    replica_configs = config.get_engine_configs(config.read_group)
+    replica_configs = config.get_engine_configs(config.engine_groups.read_group)
 
     assert replica_configs == []
 
@@ -230,7 +230,7 @@ def test_get_replica_configs_from_strings() -> None:
         ],
     )
 
-    replica_configs = config.get_engine_configs(config.read_group)
+    replica_configs = config.get_engine_configs(config.engine_groups.read_group)
 
     assert len(replica_configs) == 2
     assert all(isinstance(r, ReplicaConfig) for r in replica_configs)
@@ -258,7 +258,7 @@ def test_get_replica_configs_from_configs() -> None:
         ],
     )
 
-    replica_configs = config.get_engine_configs(config.read_group)
+    replica_configs = config.get_engine_configs(config.engine_groups.read_group)
 
     assert len(replica_configs) == 2
     assert replica_configs[0].weight == 2
@@ -281,7 +281,7 @@ def test_get_replica_configs_mixed() -> None:
         ],
     )
 
-    replica_configs = config.get_engine_configs(config.read_group)
+    replica_configs = config.get_engine_configs(config.engine_groups.read_group)
 
     assert len(replica_configs) == 2
     assert all(isinstance(r, ReplicaConfig) for r in replica_configs)

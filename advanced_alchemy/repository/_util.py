@@ -662,8 +662,16 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     """The SQLAlchemy model class this repository manages."""
     prefer_any_dialects: Optional[tuple[str]] = ("postgresql",)
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
-    order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None
-    """List or single :class:`~advanced_alchemy.repository.typing.OrderingPair` to use for sorting."""
+
+    @property
+    def order_by(self) -> Optional[Union[list[OrderingPair], OrderingPair]]:
+        """List or single :class:`~advanced_alchemy.repository.typing.OrderingPair` to use for sorting."""
+        return None
+
+    @order_by.setter
+    def order_by(self, value: Optional[Union[list[OrderingPair], OrderingPair]]) -> None:
+        pass
+
     _prefer_any: bool = False
     """Whether to prefer ANY() over IN() in queries."""
     _dialect: Dialect

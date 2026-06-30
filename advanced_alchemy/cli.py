@@ -388,7 +388,11 @@ def _drop_all_tables(bind_key: Optional[str], no_prompt: bool) -> None:
     ) -> None:
         for config in configs:
             engine = config.get_engine()
-            await drop_all(engine, config.alembic_config.version_table_name, metadata_registry.get(config.bind_key))
+            await drop_all(
+                engine,
+                config.alembic_config.version_table_config.version_table_name,
+                metadata_registry.get(config.bind_key),
+            )
 
     if input_confirmed:
         configs = [_get_config_by_bind_key(ctx, bind_key)] if bind_key is not None else ctx.obj["configs"]

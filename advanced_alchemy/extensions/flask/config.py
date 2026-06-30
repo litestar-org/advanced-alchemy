@@ -91,10 +91,10 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Returns:
             Callable[[], Session]: Session factory used by the plugin.
         """
-        if self.session_maker:
-            return self.session_maker
-        if self.engine_instance is None:
-            self.engine_instance = self.get_engine()
+        if self.session_factory_config.session_maker:
+            return self.session_factory_config.session_maker
+        if self.connection_config.engine_instance is None:
+            self.connection_config.engine_instance = self.get_engine()
         return super().create_session_maker()
 
     def init_app(self, app: "Flask", portal: "Optional[Portal]" = None) -> None:
@@ -105,8 +105,8 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             portal: The portal to use for thread-safe communication. Unused in synchronous configurations.
         """
         self.app = app
-        self.bind_key = self.bind_key or "default"
-        if self.create_all:
+        self.metadata_config.bind_key = self.metadata_config.bind_key or "default"
+        if self.metadata_config.create_all:
             self.create_all_metadata()
         if self.commit_mode != "manual":
             self._setup_session_handling(app)
@@ -124,7 +124,9 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             if not has_request_context():
                 return response
 
-            db_session = cast("Optional[Session]", g.pop(f"advanced_alchemy_session_{self.bind_key}", None))
+            db_session = cast(
+                "Optional[Session]", g.pop(f"advanced_alchemy_session_{self.metadata_config.bind_key}", None)
+            )
             if db_session is not None:
                 if (self.commit_mode == "autocommit" and 200 <= response.status_code < 300) or (  # noqa: PLR2004
                     self.commit_mode == "autocommit_include_redirect" and 200 <= response.status_code < 400  # noqa: PLR2004
@@ -139,17 +141,19 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Args:
             portal: The portal to use for thread-safe communication.
         """
-        if self.engine_instance is not None:
-            self.engine_instance.dispose()
-        dispose_session_maker_sync(self.session_maker)
+        if self.connection_config.engine_instance is not None:
+            self.connection_config.engine_instance.dispose()
+        dispose_session_maker_sync(self.session_factory_config.session_maker)
 
     def create_all_metadata(self) -> None:  # pragma: no cover
         """Create all metadata tables in the database."""
-        if self.engine_instance is None:
-            self.engine_instance = self.get_engine()
-        with self.engine_instance.begin() as conn:
+        if self.connection_config.engine_instance is None:
+            self.connection_config.engine_instance = self.get_engine()
+        with self.connection_config.engine_instance.begin() as conn:
             try:
-                metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all(conn)
+                metadata_registry.get(
+                    None if self.metadata_config.bind_key == "default" else self.metadata_config.bind_key
+                ).create_all(conn)
             except OperationalError as exc:
                 echo(f" * Could not create target metadata. Reason: {exc}")
             else:
@@ -179,10 +183,10 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Returns:
             Callable[[], AsyncSession]: Session factory used by the plugin.
         """
-        if self.session_maker:
-            return self.session_maker
-        if self.engine_instance is None:
-            self.engine_instance = self.get_engine()
+        if self.session_factory_config.session_maker:
+            return self.session_factory_config.session_maker
+        if self.connection_config.engine_instance is None:
+            self.connection_config.engine_instance = self.get_engine()
         return super().create_session_maker()
 
     def init_app(self, app: "Flask", portal: "Optional[Portal]" = None) -> None:
@@ -196,11 +200,11 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             ImproperConfigurationError: If portal is not provided for async configuration.
         """
         self.app = app
-        self.bind_key = self.bind_key or "default"
+        self.metadata_config.bind_key = self.metadata_config.bind_key or "default"
         if portal is None:
             msg = "Portal is required for asynchronous configurations"
             raise ImproperConfigurationError(msg)
-        if self.create_all:
+        if self.metadata_config.create_all:
             _ = portal.call(self.create_all_metadata)
         self._setup_session_handling(app, portal)
 
@@ -218,7 +222,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             if not has_request_context():
                 return response
 
-            db_session = cast("Optional[AsyncSession]", g.pop(f"advanced_alchemy_session_{self.bind_key}", None))
+            db_session = cast(
+                "Optional[AsyncSession]", g.pop(f"advanced_alchemy_session_{self.metadata_config.bind_key}", None)
+            )
             if db_session is not None:
                 p = getattr(db_session, "_session_portal", None) or portal
                 if (self.commit_mode == "autocommit" and 200 <= response.status_code < 300) or (  # noqa: PLR2004
@@ -231,7 +237,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         @app.teardown_appcontext
         def close_db_session(_: "Optional[BaseException]" = None) -> None:  # pyright: ignore[reportUnusedFunction]
             """Close the session at the end of the request."""
-            db_session = cast("Optional[AsyncSession]", g.pop(f"advanced_alchemy_session_{self.bind_key}", None))
+            db_session = cast(
+                "Optional[AsyncSession]", g.pop(f"advanced_alchemy_session_{self.metadata_config.bind_key}", None)
+            )
             if db_session is not None:
                 p = getattr(db_session, "_session_portal", None) or portal
                 _ = p.call(db_session.close)
@@ -242,19 +250,21 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Args:
             portal: The portal to use for thread-safe communication.
         """
-        if self.engine_instance is not None:
-            _ = portal.call(self.engine_instance.dispose)
-        if self.session_maker is not None:
-            _ = portal.call(dispose_session_maker_async, self.session_maker)
+        if self.connection_config.engine_instance is not None:
+            _ = portal.call(self.connection_config.engine_instance.dispose)
+        if self.session_factory_config.session_maker is not None:
+            _ = portal.call(dispose_session_maker_async, self.session_factory_config.session_maker)
 
     async def create_all_metadata(self) -> None:  # pragma: no cover
         """Create all metadata tables in the database."""
-        if self.engine_instance is None:
-            self.engine_instance = self.get_engine()
-        async with self.engine_instance.begin() as conn:
+        if self.connection_config.engine_instance is None:
+            self.connection_config.engine_instance = self.get_engine()
+        async with self.connection_config.engine_instance.begin() as conn:
             try:
                 await conn.run_sync(
-                    metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all
+                    metadata_registry.get(
+                        None if self.metadata_config.bind_key == "default" else self.metadata_config.bind_key
+                    ).create_all
                 )
                 await conn.commit()
             except OperationalError as exc:

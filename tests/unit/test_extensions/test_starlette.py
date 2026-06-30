@@ -19,8 +19,14 @@ from starlette.routing import Route
 from starlette.testclient import TestClient
 from typing_extensions import Literal, assert_type
 
+from advanced_alchemy.config.common import ConnectionConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
-from advanced_alchemy.extensions.starlette import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+from advanced_alchemy.extensions.starlette import (
+    AdvancedAlchemy,
+    SQLAlchemyAsyncConfig,
+    SQLAlchemySyncConfig,
+    StarletteSessionConfig,
+)
 
 if TYPE_CHECKING:
     from pytest import FixtureRequest
@@ -47,12 +53,16 @@ def client(app: Starlette) -> Generator[TestClient, None, None]:
 
 @pytest.fixture()
 def sync_config() -> SQLAlchemySyncConfig:
-    return SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:")
+    from advanced_alchemy.config.common import ConnectionConfig
+
+    return SQLAlchemySyncConfig(connection_config=ConnectionConfig(connection_string="sqlite+pysqlite:///:memory:"))
 
 
 @pytest.fixture()
 def async_config() -> SQLAlchemyAsyncConfig:
-    return SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+    from advanced_alchemy.config.common import ConnectionConfig
+
+    return SQLAlchemyAsyncConfig(connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"))
 
 
 @pytest.fixture(params=["sync_config", "async_config"])
@@ -68,10 +78,15 @@ def alchemy(config: AnyConfig, app: Starlette) -> Generator[AdvancedAlchemy, Non
 
 @pytest.fixture()
 def multi_alchemy(app: Starlette) -> Generator[AdvancedAlchemy, None, None]:
+    from advanced_alchemy.config.common import ConnectionConfig, MetadataConfig
+
     alchemy = AdvancedAlchemy(
         [
-            SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:", bind_key="sync"),
-            SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+            SQLAlchemySyncConfig(
+                connection_config=ConnectionConfig(connection_string="sqlite+pysqlite:///:memory:"),
+                metadata_config=MetadataConfig(bind_key="sync"),
+            ),
+            SQLAlchemyAsyncConfig(connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:")),
         ],
         app=app,
     )
@@ -103,7 +118,11 @@ def test_init_app_not_called_raises(client: TestClient, config: SQLAlchemySyncCo
 
 def test_inject_engine(app: Starlette) -> None:
     mock = MagicMock()
-    config = SQLAlchemySyncConfig(engine_instance=create_engine("sqlite+aiosqlite://"))
+    from advanced_alchemy.config.common import ConnectionConfig
+
+    config = SQLAlchemySyncConfig(
+        connection_config=ConnectionConfig(engine_instance=create_engine("sqlite+aiosqlite://"))
+    )
     alchemy = AdvancedAlchemy(config=config, app=app)
 
     async def handler(request: Request) -> Response:
@@ -115,7 +134,7 @@ def test_inject_engine(app: Starlette) -> None:
 
     with TestClient(app=app) as client:
         assert client.get("/").status_code == 200
-        assert mock.call_args[0][0] is config.engine_instance
+        assert mock.call_args[0][0] is config.connection_config.engine_instance
 
 
 def test_inject_session(app: Starlette, alchemy: AdvancedAlchemy, client: TestClient) -> None:
@@ -173,7 +192,10 @@ def test_sync_session_autocommit_success_status(
     mock_close = mocker.patch("sqlalchemy.orm.Session.close")
     mock_rollback = mocker.patch("sqlalchemy.orm.Session.rollback")
     app = Starlette()
-    config = SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:", commit_mode="autocommit")
+    config = SQLAlchemySyncConfig(
+        connection_config=ConnectionConfig(connection_string="sqlite+pysqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode="autocommit"),
+    )
     alchemy = AdvancedAlchemy(config, app=app)
 
     async def handler(request: Request) -> Response:
@@ -199,7 +221,8 @@ def test_sync_session_autocommit_include_redirect_success_status(
     mock_rollback = mocker.patch("sqlalchemy.orm.Session.rollback")
     app = Starlette()
     config = SQLAlchemySyncConfig(
-        connection_string="sqlite+pysqlite:///:memory:", commit_mode="autocommit_include_redirect"
+        connection_config=ConnectionConfig(connection_string="sqlite+pysqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode="autocommit_include_redirect"),
     )
     alchemy = AdvancedAlchemy(config, app=app)
 
@@ -225,7 +248,10 @@ def test_async_session_autocommit_success_status(
     mock_close = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.close")
     mock_rollback = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
     app = Starlette()
-    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:", commit_mode="autocommit")
+    config = SQLAlchemyAsyncConfig(
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode="autocommit"),
+    )
     alchemy = AdvancedAlchemy(config, app=app)
 
     async def handler(request: Request) -> Response:
@@ -251,7 +277,8 @@ def test_async_session_autocommit_include_redirect_success_status(
     mock_rollback = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
     app = Starlette()
     config = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:", commit_mode="autocommit_include_redirect"
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode="autocommit_include_redirect"),
     )
     alchemy = AdvancedAlchemy(config, app=app)
 
@@ -277,7 +304,10 @@ def test_sync_session_autocommit_rollback_for_status(
     mock_close = mocker.patch("sqlalchemy.orm.Session.close")
     mock_rollback = mocker.patch("sqlalchemy.orm.Session.rollback")
     app = Starlette()
-    config = SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:", commit_mode="autocommit")
+    config = SQLAlchemySyncConfig(
+        connection_config=ConnectionConfig(connection_string="sqlite+pysqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode="autocommit"),
+    )
     alchemy = AdvancedAlchemy(config, app=app)
 
     async def handler(request: Request) -> Response:
@@ -309,7 +339,8 @@ def test_sync_session_autocommit_include_redirect_rollback_for_status(
     mock_rollback = mocker.patch("sqlalchemy.orm.Session.rollback")
     app = Starlette()
     config = SQLAlchemySyncConfig(
-        connection_string="sqlite+pysqlite:///:memory:", commit_mode="autocommit_include_redirect"
+        connection_config=ConnectionConfig(connection_string="sqlite+pysqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode="autocommit_include_redirect"),
     )
     alchemy = AdvancedAlchemy(config, app=app)
 
@@ -341,7 +372,10 @@ def test_async_session_autocommit_rollback_for_status(
     mock_close = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.close")
     mock_rollback = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
     app = Starlette()
-    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:", commit_mode="autocommit")
+    config = SQLAlchemyAsyncConfig(
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode="autocommit"),
+    )
     alchemy = AdvancedAlchemy(config, app=app)
 
     async def handler(request: Request) -> Response:
@@ -373,7 +407,8 @@ def test_async_session_autocommit_include_redirect_rollback_for_status(
     mock_rollback = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
     app = Starlette()
     config = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:", commit_mode="autocommit_include_redirect"
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode="autocommit_include_redirect"),
     )
     alchemy = AdvancedAlchemy(config, app=app)
 
@@ -409,7 +444,10 @@ def test_sync_session_autocommit_close_on_exception(
         return Response(status_code=exc.status_code)
 
     app = Starlette(exception_handlers={HTTPException: http_exception})  # type: ignore
-    config = SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:", commit_mode=autocommit_strategy)
+    config = SQLAlchemySyncConfig(
+        connection_config=ConnectionConfig(connection_string="sqlite+pysqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode=autocommit_strategy),
+    )
     alchemy = AdvancedAlchemy(config, app=app)
 
     async def handler(request: Request) -> None:
@@ -438,7 +476,10 @@ async def test_async_session_autocommit_close_on_exception(
         return Response(status_code=exc.status_code)
 
     app = Starlette(exception_handlers={HTTPException: http_exception})  # type: ignore
-    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:", commit_mode=autocommit_strategy)
+    config = SQLAlchemyAsyncConfig(
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode=autocommit_strategy),
+    )
     alchemy = AdvancedAlchemy(config, app=app)
 
     async def handler(request: Request) -> None:
@@ -456,8 +497,13 @@ async def test_async_session_autocommit_close_on_exception(
 
 def test_multiple_instances(app: Starlette) -> None:
     mock = MagicMock()
-    config_1 = SQLAlchemySyncConfig(connection_string="sqlite:///other.db")
-    config_2 = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///test.db", bind_key="other")
+    from advanced_alchemy.config.common import ConnectionConfig, MetadataConfig
+
+    config_1 = SQLAlchemySyncConfig(connection_config=ConnectionConfig(connection_string="sqlite:///other.db"))
+    config_2 = SQLAlchemyAsyncConfig(
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///test.db"),
+        metadata_config=MetadataConfig(bind_key="other"),
+    )
 
     alchemy_1 = AdvancedAlchemy([config_1, config_2], app=app)
 
@@ -531,7 +577,10 @@ def test_async_session_handler_rollback_failure_still_closes(
         side_effect=RuntimeError("rollback failed"),
     )
     app = Starlette()
-    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:", commit_mode="autocommit")
+    config = SQLAlchemyAsyncConfig(
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode="autocommit"),
+    )
     alchemy = AdvancedAlchemy(config, app=app)
 
     async def handler(request: Request) -> Response:
@@ -557,7 +606,10 @@ def test_sync_session_handler_rollback_failure_still_closes(
         side_effect=RuntimeError("rollback failed"),
     )
     app = Starlette()
-    config = SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:", commit_mode="autocommit")
+    config = SQLAlchemySyncConfig(
+        connection_config=ConnectionConfig(connection_string="sqlite+pysqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode="autocommit"),
+    )
     alchemy = AdvancedAlchemy(config, app=app)
 
     async def handler(request: Request) -> Response:
@@ -583,7 +635,10 @@ def test_async_session_handler_commit_failure_still_closes(
     mock_close = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.close")
     mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.rollback")
     app = Starlette()
-    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:", commit_mode="autocommit")
+    config = SQLAlchemyAsyncConfig(
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode="autocommit"),
+    )
     alchemy = AdvancedAlchemy(config, app=app)
 
     async def handler(request: Request) -> Response:

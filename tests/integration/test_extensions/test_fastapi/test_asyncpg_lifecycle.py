@@ -40,7 +40,9 @@ class LifecycleWidgetService(SQLAlchemyAsyncRepositoryService[LifecycleWidget, L
 @pytest.mark.integration
 def test_no_gc_warning_on_service_create(asyncpg_engine: AsyncEngine) -> None:
     """Verify generator-managed services do not leave GC warnings."""
-    config = SQLAlchemyAsyncConfig(engine_instance=asyncpg_engine)
+    from advanced_alchemy.config.common import ConnectionConfig
+
+    config = SQLAlchemyAsyncConfig(connection_config=ConnectionConfig(engine_instance=asyncpg_engine))
     app = FastAPI()
     alchemy = AdvancedAlchemy(config=config, app=app)
 
@@ -63,7 +65,9 @@ def test_no_gc_warning_on_service_create(asyncpg_engine: AsyncEngine) -> None:
 @pytest.mark.integration
 def test_connection_returned_to_pool(asyncpg_engine: AsyncEngine) -> None:
     """Verify asyncpg connections are returned after generator cleanup."""
-    config = SQLAlchemyAsyncConfig(engine_instance=asyncpg_engine)
+    from advanced_alchemy.config.common import ConnectionConfig
+
+    config = SQLAlchemyAsyncConfig(connection_config=ConnectionConfig(engine_instance=asyncpg_engine))
     app = FastAPI()
     alchemy = AdvancedAlchemy(config=config, app=app)
 
@@ -87,7 +91,9 @@ def test_connection_returned_to_pool(asyncpg_engine: AsyncEngine) -> None:
 @pytest.mark.integration
 def test_pool_not_exhausted_under_load(asyncpg_engine: AsyncEngine) -> None:
     """Verify multiple requests do not exhaust the asyncpg pool."""
-    config = SQLAlchemyAsyncConfig(engine_instance=asyncpg_engine)
+    from advanced_alchemy.config.common import ConnectionConfig
+
+    config = SQLAlchemyAsyncConfig(connection_config=ConnectionConfig(engine_instance=asyncpg_engine))
     app = FastAPI()
     alchemy = AdvancedAlchemy(config=config, app=app)
 

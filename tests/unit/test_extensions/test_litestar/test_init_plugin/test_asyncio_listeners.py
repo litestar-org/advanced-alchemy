@@ -46,9 +46,11 @@ def test_create_session_maker_registers_all_listeners() -> None:
 def test_create_session_maker_file_object_listener_disabled() -> None:
     """With file-object listener disabled, only timestamp + cache listeners register (3)."""
     mock_session_maker = MagicMock(spec=async_sessionmaker)
+    from advanced_alchemy.config.common import ListenerConfig
+
     config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///",
-        enable_file_object_listener=False,
+        listener_config=ListenerConfig(enable_file_object_listener=False),
     )
 
     with (
@@ -68,9 +70,11 @@ def test_create_session_maker_file_object_listener_disabled() -> None:
 def test_create_session_maker_timestamp_listener_disabled() -> None:
     """With timestamp listener disabled, only file-object + cache listeners register (5)."""
     mock_session_maker = MagicMock(spec=async_sessionmaker)
+    from advanced_alchemy.config.common import ListenerConfig
+
     config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///",
-        enable_touch_updated_timestamp_listener=False,
+        listener_config=ListenerConfig(enable_touch_updated_timestamp_listener=False),
     )
 
     with (

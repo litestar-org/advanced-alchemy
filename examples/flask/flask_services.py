@@ -9,6 +9,7 @@ from msgspec import Struct
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from advanced_alchemy.config.common import ConnectionConfig, MetadataConfig
 from advanced_alchemy.extensions.flask import (
     AdvancedAlchemy,
     FlaskServiceMixin,
@@ -56,7 +57,11 @@ class AuthorSchema(Struct):
 
 
 app = Flask(__name__)
-alchemy_config = SQLAlchemySyncConfig(connection_string="sqlite:///local.db", commit_mode="autocommit", create_all=True)
+alchemy_config = SQLAlchemySyncConfig(
+    connection_config=ConnectionConfig(connection_string="sqlite:///local.db"),
+    commit_mode="autocommit",
+    metadata_config=MetadataConfig(create_all=True),
+)
 alchemy = AdvancedAlchemy(alchemy_config, app)
 
 

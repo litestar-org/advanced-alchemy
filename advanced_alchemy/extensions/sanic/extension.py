@@ -101,9 +101,9 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         """
         mapped_configs: dict[str, Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]] = {}
         for config in self.sqlalchemy_config:
-            if config.bind_key is None:
-                config.bind_key = "default"
-            mapped_configs[config.bind_key] = config
+            if config.metadata_config.bind_key is None:
+                config.metadata_config.bind_key = "default"
+            mapped_configs[config.metadata_config.bind_key] = config
         return mapped_configs
 
     def get_config(self, key: Optional[str] = None) -> Union["SQLAlchemyAsyncConfig", "SQLAlchemySyncConfig"]:

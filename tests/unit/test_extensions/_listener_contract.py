@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import sessionmaker
 
-from advanced_alchemy.config.common import GenericSQLAlchemyConfig
+from advanced_alchemy.config.common import ConnectionConfig, GenericSQLAlchemyConfig, ListenerConfig
 
 __all__ = (
     "assert_async_file_object_listener_disabled",
@@ -38,15 +38,15 @@ def _make_async_config(config_cls: type, **kwargs: Any) -> Any:
     from the aiosqlite dialect's internal ``event.listen`` calls that
     would otherwise fire during ``get_engine()``.
     """
-    config = config_cls(connection_string=_ASYNC_URL, **kwargs)
-    config.engine_instance = MagicMock()
+    config = config_cls(connection_config=ConnectionConfig(connection_string=_ASYNC_URL), **kwargs)
+    config.connection_config.engine_instance = MagicMock()
     return config
 
 
 def _make_sync_config(config_cls: type, **kwargs: Any) -> Any:
     """Build a sync config with ``engine_instance`` pre-populated."""
-    config = config_cls(connection_string=_SYNC_URL, **kwargs)
-    config.engine_instance = MagicMock()
+    config = config_cls(connection_config=ConnectionConfig(connection_string=_SYNC_URL), **kwargs)
+    config.connection_config.engine_instance = MagicMock()
     return config
 
 
@@ -80,7 +80,7 @@ def assert_async_registers_all_listeners(config_cls: type) -> None:
 def assert_async_file_object_listener_disabled(config_cls: type) -> None:
     """With file-object listener disabled, only timestamp + cache listeners register (3)."""
     mock_session_maker = MagicMock(spec=async_sessionmaker)
-    config = _make_async_config(config_cls, enable_file_object_listener=False)
+    config = _make_async_config(config_cls, listener_config=ListenerConfig(enable_file_object_listener=False))
 
     with (
         patch.object(
@@ -99,7 +99,9 @@ def assert_async_file_object_listener_disabled(config_cls: type) -> None:
 def assert_async_timestamp_listener_disabled(config_cls: type) -> None:
     """With timestamp listener disabled, only file-object + cache listeners register (5)."""
     mock_session_maker = MagicMock(spec=async_sessionmaker)
-    config = _make_async_config(config_cls, enable_touch_updated_timestamp_listener=False)
+    config = _make_async_config(
+        config_cls, listener_config=ListenerConfig(enable_touch_updated_timestamp_listener=False)
+    )
 
     with (
         patch.object(
@@ -137,7 +139,7 @@ def assert_sync_registers_all_listeners(config_cls: type) -> None:
 def assert_sync_file_object_listener_disabled(config_cls: type) -> None:
     """With file-object listener disabled, only timestamp + cache listeners register (3)."""
     mock_session_maker = MagicMock(spec=sessionmaker)
-    config = _make_sync_config(config_cls, enable_file_object_listener=False)
+    config = _make_sync_config(config_cls, listener_config=ListenerConfig(enable_file_object_listener=False))
 
     with (
         patch.object(
@@ -155,7 +157,9 @@ def assert_sync_file_object_listener_disabled(config_cls: type) -> None:
 def assert_sync_timestamp_listener_disabled(config_cls: type) -> None:
     """With timestamp listener disabled, only file-object + cache listeners register (5)."""
     mock_session_maker = MagicMock(spec=sessionmaker)
-    config = _make_sync_config(config_cls, enable_touch_updated_timestamp_listener=False)
+    config = _make_sync_config(
+        config_cls, listener_config=ListenerConfig(enable_touch_updated_timestamp_listener=False)
+    )
 
     with (
         patch.object(

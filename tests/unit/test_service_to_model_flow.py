@@ -17,6 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
+from advanced_alchemy.repository._sync import _RepositoryPrimaryKeyInfo
 from advanced_alchemy.repository._util import get_primary_key_info
 from advanced_alchemy.repository.typing import PrimaryKeyType
 from advanced_alchemy.service import SchemaDumpConfig, SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
@@ -53,9 +54,8 @@ class MockSyncRepository(SQLAlchemySyncRepository[MockModel]):
     def __init__(self) -> None:
         # Don't call super().__init__ to avoid needing session
         self.model_type = MockModel
-        self.id_attribute = "id"
         # Initialize PK info for composite PK support
-        self._pk_columns, self._pk_attr_names = get_primary_key_info(MockModel)
+        self._pk = _RepositoryPrimaryKeyInfo(*get_primary_key_info(MockModel))
 
 
 class TrackingService(SQLAlchemyAsyncRepositoryService[MockModel, MockRepository]):

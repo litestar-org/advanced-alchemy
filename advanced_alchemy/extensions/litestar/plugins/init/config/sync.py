@@ -16,6 +16,7 @@ from advanced_alchemy.extensions.litestar._utils import (
     get_aa_scope_state,
     set_aa_scope_state,
 )
+from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SessionKeyConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.common import (
     SESSION_SCOPE_KEY,
     SESSION_TERMINUS_ASGI_EVENTS,
@@ -35,6 +36,7 @@ if TYPE_CHECKING:
 
 __all__ = (
     "SQLAlchemySyncConfig",
+    "SessionKeyConfig",
     "autocommit_before_send_handler",
     "autocommit_handler_maker",
     "default_before_send_handler",
@@ -150,20 +152,8 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     The handler should handle closing the session stored in the ASGI scope, if it's still open, and committing and
     uncommitted data.
     """
-    engine_dependency_key: str = "db_engine"
-    """Key to use for the dependency injection of database engines."""
-    session_dependency_key: str = "db_session"
-    """Key to use for the dependency injection of database sessions."""
-    engine_app_state_key: str = "db_engine"
-    """Key under which to store the SQLAlchemy engine in the application :class:`State <.datastructures.State>`
-    instance.
-    """
-    session_maker_app_state_key: str = "session_maker_class"
-    """Key under which to store the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>` in the application
-    :class:`State <.datastructures.State>` instance.
-    """
-    session_scope_key: str = SESSION_SCOPE_KEY
-    """Key under which to store the SQLAlchemy scope in the application."""
+    session_key_config: SessionKeyConfig = field(default_factory=SessionKeyConfig)
+    """Configuration for session/engine key names used for dependency injection and application state."""
     engine_config: EngineConfig = field(default_factory=EngineConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration for the SQLAlchemy engine.
 
@@ -172,30 +162,18 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     set_default_exception_handler: bool = True
     """Sets the default exception handler on application start."""
 
-    def _ensure_unique(self, registry_name: str, key: str, new_key: Optional[str] = None, _iter: int = 0) -> str:
-        new_key = new_key if new_key is not None else key
-        if new_key in getattr(self.__class__, registry_name, {}):
-            _iter += 1
-            new_key = self._ensure_unique(registry_name, key, f"{key}_{_iter}", _iter)
-        return new_key
-
     def __post_init__(self) -> None:
-        self.session_scope_key = self._ensure_unique("_SESSION_SCOPE_KEY_REGISTRY", self.session_scope_key)
-        self.engine_app_state_key = self._ensure_unique("_ENGINE_APP_STATE_KEY_REGISTRY", self.engine_app_state_key)
-        self.session_maker_app_state_key = self._ensure_unique(
-            "_SESSIONMAKER_APP_STATE_KEY_REGISTRY",
-            self.session_maker_app_state_key,
-        )
-        self.__class__._SESSION_SCOPE_KEY_REGISTRY.add(self.session_scope_key)  # noqa: SLF001
-        self.__class__._ENGINE_APP_STATE_KEY_REGISTRY.add(self.engine_app_state_key)  # noqa: SLF001
-        self.__class__._SESSIONMAKER_APP_STATE_KEY_REGISTRY.add(self.session_maker_app_state_key)  # noqa: SLF001
         if self.before_send_handler is None:
-            self.before_send_handler = default_handler_maker(session_scope_key=self.session_scope_key)
+            self.before_send_handler = default_handler_maker(
+                session_scope_key=self.session_key_config.session_scope_key
+            )
         if self.before_send_handler == "autocommit":
-            self.before_send_handler = autocommit_handler_maker(session_scope_key=self.session_scope_key)
+            self.before_send_handler = autocommit_handler_maker(
+                session_scope_key=self.session_key_config.session_scope_key
+            )
         if self.before_send_handler == "autocommit_include_redirects":
             self.before_send_handler = autocommit_handler_maker(
-                session_scope_key=self.session_scope_key,
+                session_scope_key=self.session_key_config.session_scope_key,
                 commit_on_redirect=True,
             )
         super().__post_init__()
@@ -210,8 +188,8 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Returns:
             Session factory used by the plugin.
         """
-        if self.session_maker:
-            return self.session_maker
+        if self.session_factory_config.session_maker:
+            return self.session_factory_config.session_maker
         return super().create_session_maker()
 
     @asynccontextmanager
@@ -222,15 +200,15 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         deps = self.create_app_state_items()
         app.state.update(deps)
         try:
-            if self.create_all:
+            if self.metadata_config.create_all:
                 self.create_all_metadata(app)
             yield
         finally:
-            if self.engine_dependency_key in deps:
-                engine = deps[self.engine_dependency_key]
+            if self.session_key_config.engine_dependency_key in deps:
+                engine = deps[self.session_key_config.engine_dependency_key]
                 if hasattr(engine, "dispose"):
                     cast("Engine", engine).dispose()
-            dispose_session_maker_sync(self.session_maker)
+            dispose_session_maker_sync(self.session_factory_config.session_maker)
 
     def provide_engine(self, state: "State") -> "Engine":
         """Create an engine instance.
@@ -241,7 +219,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Returns:
             An engine instance.
         """
-        return cast("Engine", state.get(self.engine_app_state_key))
+        return cast("Engine", state.get(self.session_key_config.engine_app_state_key))
 
     def provide_session(self, state: "State", scope: "Scope") -> "Session":
         """Create a session instance.
@@ -256,13 +234,13 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         # Import locally to avoid potential circular dependency issues at module level
         from advanced_alchemy._listeners import set_async_context
 
-        session = cast("Optional[Session]", get_aa_scope_state(scope, self.session_scope_key))
+        session = cast("Optional[Session]", get_aa_scope_state(scope, self.session_key_config.session_scope_key))
         if session is None:
             # Reset routing context for request-scoped isolation when creating a new session
             reset_routing_context()
-            session_maker = cast("Callable[[], Session]", state[self.session_maker_app_state_key])
+            session_maker = cast("Callable[[], Session]", state[self.session_key_config.session_maker_app_state_key])
             session = session_maker()
-            set_aa_scope_state(scope, self.session_scope_key, session)
+            set_aa_scope_state(scope, self.session_key_config.session_scope_key, session)
 
         set_async_context(False)  # Set context before yielding
         return session
@@ -284,7 +262,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         """
         with self.get_engine().begin() as conn:
             try:
-                metadata_registry.get(self.bind_key).create_all(bind=conn)
+                metadata_registry.get(self.metadata_config.bind_key).create_all(bind=conn)
             except OperationalError as exc:
                 console.print(f"[bold red] * Could not create target metadata.  Reason: {exc}")
 
@@ -295,8 +273,8 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             A dictionary of key/value pairs to be stored in application state.
         """
         return {
-            self.engine_app_state_key: self.get_engine(),
-            self.session_maker_app_state_key: self.create_session_maker(),
+            self.session_key_config.engine_app_state_key: self.get_engine(),
+            self.session_key_config.session_maker_app_state_key: self.create_session_maker(),
         }
 
     def update_app_state(self, app: "Litestar") -> None:

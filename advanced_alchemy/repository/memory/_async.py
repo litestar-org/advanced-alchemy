@@ -4,6 +4,7 @@ import re
 import string
 from collections import abc
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any, List, Optional, Union, cast, overload
 from unittest.mock import create_autospec
 
@@ -56,6 +57,15 @@ from advanced_alchemy.utils.deprecation import warn_deprecation
 from advanced_alchemy.utils.text import slugify
 
 
+@dataclass
+class _MockRepositoryExecutionSettings:
+    auto_expunge: bool = False
+    auto_refresh: bool = True
+    auto_commit: bool = False
+    wrap_exceptions: bool = True
+    uniquify: bool = False
+
+
 class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
     """In memory repository."""
 
@@ -68,7 +78,6 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
     model_type: type[ModelT]
     id_attribute: Any = "id"
     match_fields: Optional[Union[List[str], str]] = None
-    uniquify: bool = False
     _exclude_kwargs: set[str] = {
         "statement",
         "session",
@@ -106,25 +115,77 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
     ) -> None:
         self.session = session
         self.statement = create_autospec("Select[Tuple[ModelT]]", instance=True)
-        self.auto_expunge = auto_expunge
-        self.auto_refresh = auto_refresh
-        self.auto_commit = auto_commit
         self.error_messages = self._get_error_messages(
             error_messages=error_messages, default_messages=self.error_messages
         )
-        self.wrap_exceptions = wrap_exceptions
         self.order_by = order_by
         self._dialect: Dialect = create_autospec(Dialect, instance=True)
         self._dialect.name = "mock"
         self.__filtered_store__: InMemoryStore[ModelT] = self.__database__.store_type()
-        self._default_options: Any = []
-        self._default_execution_options: Any = {}
-        self._loader_options: Any = []
-        self._loader_options_have_wildcards = False
-        self.uniquify = bool(uniquify)
+        self._execution = _MockRepositoryExecutionSettings(
+            auto_expunge=auto_expunge,
+            auto_refresh=auto_refresh,
+            auto_commit=auto_commit,
+            wrap_exceptions=wrap_exceptions,
+            uniquify=bool(uniquify),
+        )
 
     def __init_subclass__(cls) -> None:
         cls.__database_registry__[cls] = cls.__database__  # type: ignore[index]
+
+    @property
+    def auto_expunge(self) -> bool:
+        """Remove object from session before returning."""
+        return self._execution.auto_expunge
+
+    @auto_expunge.setter
+    def auto_expunge(self, value: bool) -> None:
+        self._execution.auto_expunge = value
+
+    @property
+    def auto_refresh(self) -> bool:
+        """Refresh object from session before returning."""
+        return self._execution.auto_refresh
+
+    @auto_refresh.setter
+    def auto_refresh(self, value: bool) -> None:
+        self._execution.auto_refresh = value
+
+    @property
+    def auto_commit(self) -> bool:
+        """Commit objects before returning."""
+        return self._execution.auto_commit
+
+    @auto_commit.setter
+    def auto_commit(self, value: bool) -> None:
+        self._execution.auto_commit = value
+
+    @property
+    def wrap_exceptions(self) -> bool:
+        """Wrap SQLAlchemy exceptions in a ``RepositoryError``."""
+        return self._execution.wrap_exceptions
+
+    @wrap_exceptions.setter
+    def wrap_exceptions(self, value: bool) -> None:
+        self._execution.wrap_exceptions = value
+
+    @property
+    def uniquify(self) -> bool:
+        """Remove duplicates from query results."""
+        return self._execution.uniquify
+
+    @uniquify.setter
+    def uniquify(self, value: bool) -> None:
+        self._execution.uniquify = bool(value)
+
+    @property
+    def order_by(self) -> Optional[Union[List[OrderingPair], OrderingPair]]:
+        """Set default order options for queries."""
+        return self._default_order_by
+
+    @order_by.setter
+    def order_by(self, value: Optional[Union[List[OrderingPair], OrderingPair]]) -> None:
+        self._default_order_by = value
 
     @property
     def _pk_columns(self) -> tuple[Any, ...]:

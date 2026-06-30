@@ -3,11 +3,41 @@
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-__all__ = ("CacheConfig",)
+__all__ = (
+    "CacheConfig",
+    "CacheSerializerConfig",
+)
 
 
 def _default_arguments() -> dict[str, Any]:
     return {}
+
+
+@dataclass
+class CacheSerializerConfig:
+    """Configuration for cache serialization.
+
+    Holds the serializer and deserializer callables used to transform
+    cached objects to/from bytes.
+    """
+
+    serializer: Optional[Callable[[Any], bytes]] = None
+    """Custom serializer function.
+
+    If ``None``, uses the default JSON serializer which handles
+    SQLAlchemy models, datetime objects, and UUIDs.
+
+    The function should accept any value and return bytes.
+    """
+
+    deserializer: Optional[Callable[[bytes, "type[Any]"], Any]] = None
+    """Custom deserializer function.
+
+    If ``None``, uses the default JSON deserializer.
+
+    The function should accept bytes and a model class,
+    returning an instance of that class.
+    """
 
 
 @dataclass
@@ -86,22 +116,12 @@ class CacheConfig:
     debugging or testing.
     """
 
-    serializer: Optional[Callable[[Any], bytes]] = None
-    """Custom serializer function.
+    serializer_config: CacheSerializerConfig = field(default_factory=CacheSerializerConfig)
+    """Serialization configuration.
 
-    If ``None``, uses the default JSON serializer which handles
-    SQLAlchemy models, datetime objects, and UUIDs.
-
-    The function should accept any value and return bytes.
-    """
-
-    deserializer: Optional[Callable[[bytes, "type[Any]"], Any]] = None
-    """Custom deserializer function.
-
-    If ``None``, uses the default JSON deserializer.
-
-    The function should accept bytes and a model class,
-    returning an instance of that class.
+    Holds the optional ``serializer`` and ``deserializer`` callables.
+    When both are ``None`` (the default), the built-in JSON serializer
+    is used.
     """
 
     region_factory: Optional[Callable[["CacheConfig"], Any]] = None

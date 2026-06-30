@@ -70,7 +70,7 @@ class AdvancedAlchemy:
                 If the application is not initialized.
         """
         self._app = app
-        unique_bind_keys = {config.bind_key for config in self.config}
+        unique_bind_keys = {config.metadata_config.bind_key for config in self.config}
         if len(unique_bind_keys) != len(self.config):  # pragma: no cover
             msg = "Please ensure that each config has a unique name for the `bind_key` attribute.  The default is `default` and can only be bound to a single engine."
             raise ImproperConfigurationError(msg)
@@ -145,9 +145,9 @@ class AdvancedAlchemy:
         """
         mapped_configs: dict[str, Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]] = {}
         for config in self.config:
-            if config.bind_key is None:
-                config.bind_key = "default"
-            mapped_configs[config.bind_key] = config
+            if config.metadata_config.bind_key is None:
+                config.metadata_config.bind_key = "default"
+            mapped_configs[config.metadata_config.bind_key] = config
         return mapped_configs
 
     def get_config(self, key: Optional[str] = None) -> Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]:

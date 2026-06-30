@@ -29,12 +29,16 @@ def client(app: Sanic[Any, Any]) -> SanicTestClient:
 
 @pytest.fixture()
 def sync_config() -> SQLAlchemySyncConfig:
-    return SQLAlchemySyncConfig(connection_string="sqlite+pysqlite://")
+    from advanced_alchemy.config.common import ConnectionConfig
+
+    return SQLAlchemySyncConfig(connection_config=ConnectionConfig(connection_string="sqlite+pysqlite://"))
 
 
 @pytest.fixture()
 def async_config() -> SQLAlchemyAsyncConfig:
-    return SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite://")
+    from advanced_alchemy.config.common import ConnectionConfig
+
+    return SQLAlchemyAsyncConfig(connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite://"))
 
 
 @pytest.fixture(params=["sync_config", "async_config"])

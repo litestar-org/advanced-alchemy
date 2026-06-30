@@ -184,13 +184,16 @@ class EngineConfig(_EngineConfig):
 
 
 @dataclass
-class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
-    """SQLAlchemy Async config for Starlette."""
+class AppStateKeys:
+    """Keys for storing engine, session, and session maker in application/request state.
 
-    app: "Optional[Starlette]" = None
-    """The Starlette application instance."""
-    commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
-    """The commit mode to use for database sessions."""
+    Attributes:
+        engine_key: Key to use for the dependency injection of database engines.
+        session_key: Key to use for the dependency injection of database sessions.
+        session_maker_key: Key under which to store the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>`
+            in the application state instance.
+    """
+
     engine_key: str = "db_engine"
     """Key to use for the dependency injection of database engines."""
     session_key: str = "db_session"
@@ -199,20 +202,114 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
     """Key under which to store the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>` in the application state instance.
     """
 
+
+@dataclass
+class StarletteSessionConfig:
+    """Starlette-specific session configuration.
+
+    Attributes:
+        app: The Starlette application instance.
+        commit_mode: The commit mode to use for database sessions.
+    """
+
+    app: "Optional[Starlette]" = field(default=None, repr=False)
+    """The Starlette application instance."""
+    commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
+    """The commit mode to use for database sessions."""
+
+
+@dataclass
+class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
+    """SQLAlchemy Async config for Starlette."""
+
+    starlette_session_config: StarletteSessionConfig = field(default_factory=StarletteSessionConfig)
+    """Configuration for Starlette-specific session settings."""
+    key_config: AppStateKeys = field(default_factory=AppStateKeys)
+    """Configuration for engine, session, and session maker state keys."""
+
     engine_config: EngineConfig = field(default_factory=EngineConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration for the SQLAlchemy engine.
 
     The configuration options are documented in the SQLAlchemy documentation.
     """
 
+    @property
+    def app(self) -> "Starlette":
+        """The Starlette application instance.
+
+        Raises:
+            ImproperConfigurationError: If the application is not initialized.
+        """
+        if self.starlette_session_config.app is None:
+            from advanced_alchemy.exceptions import ImproperConfigurationError
+
+            msg = "Application not initialized. Did you forget to call init_app?"
+            raise ImproperConfigurationError(msg)
+        return self.starlette_session_config.app
+
+    @app.setter
+    def app(self, value: "Optional[Starlette]") -> None:
+        self.starlette_session_config.app = value
+
+    # -- Backward-compatible property accessors for starlette_session_config --
+
+    @property
+    def _app(self) -> "Optional[Starlette]":
+        """The Starlette application instance."""
+        return self.starlette_session_config.app
+
+    @_app.setter
+    def _app(self, value: "Optional[Starlette]") -> None:
+        self.starlette_session_config.app = value
+
+    @property
+    def commit_mode(self) -> Literal["manual", "autocommit", "autocommit_include_redirect"]:
+        """The commit mode to use for database sessions."""
+        return self.starlette_session_config.commit_mode
+
+    @commit_mode.setter
+    def commit_mode(self, value: Literal["manual", "autocommit", "autocommit_include_redirect"]) -> None:
+        self.starlette_session_config.commit_mode = value
+
+    # -- Backward-compatible property accessors for key_config --
+
+    @property
+    def engine_key(self) -> str:
+        """Key to use for the dependency injection of database engines."""
+        return self.key_config.engine_key
+
+    @engine_key.setter
+    def engine_key(self, value: str) -> None:
+        self.key_config.engine_key = value
+
+    @property
+    def session_key(self) -> str:
+        """Key to use for the dependency injection of database sessions."""
+        return self.key_config.session_key
+
+    @session_key.setter
+    def session_key(self, value: str) -> None:
+        self.key_config.session_key = value
+
+    @property
+    def session_maker_key(self) -> str:
+        """Key under which to store the SQLAlchemy sessionmaker in the application state."""
+        return self.key_config.session_maker_key
+
+    @session_maker_key.setter
+    def session_maker_key(self, value: str) -> None:
+        self.key_config.session_maker_key = value
+
     async def create_all_metadata(self) -> None:  # pragma: no cover
         """Create all metadata tables in the database."""
-        if self.engine_instance is None:
-            self.engine_instance = self.get_engine()
-        async with self.engine_instance.begin() as conn:
+        if self.connection_config.engine_instance is None:
+            self.connection_config.engine_instance = self.get_engine()
+        async with self.connection_config.engine_instance.begin() as conn:
             try:
                 await conn.run_sync(
-                    metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all
+                    metadata_registry.get(
+                        None if self.metadata_config.bind_key == "default" else self.metadata_config.bind_key
+                    ).create_all
                 )
                 await conn.commit()
             except OperationalError as exc:
@@ -226,20 +323,24 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Args:
             app: The Starlette application instance.
         """
-        self.app = app
-        self.bind_key = self.bind_key or "default"
+        self.starlette_session_config.app = app
+        self.metadata_config.bind_key = self.metadata_config.bind_key or "default"
         _ = self.create_session_maker()
-        self.session_key = _make_unique_state_key(app, f"advanced_alchemy_async_session_{self.session_key}")
-        self.engine_key = _make_unique_state_key(app, f"advanced_alchemy_async_engine_{self.engine_key}")
-        self.session_maker_key = _make_unique_state_key(
-            app, f"advanced_alchemy_async_session_maker_{self.session_maker_key}"
+        self.key_config.session_key = _make_unique_state_key(
+            app, f"advanced_alchemy_async_session_{self.key_config.session_key}"
+        )
+        self.key_config.engine_key = _make_unique_state_key(
+            app, f"advanced_alchemy_async_engine_{self.key_config.engine_key}"
+        )
+        self.key_config.session_maker_key = _make_unique_state_key(
+            app, f"advanced_alchemy_async_session_maker_{self.key_config.session_maker_key}"
         )
 
         app.add_middleware(SessionMiddleware, config=self)  # pyright: ignore[reportUnknownMemberType]
 
     async def on_startup(self) -> None:
         """Initialize the Starlette application with this configuration."""
-        if self.create_all:
+        if self.metadata_config.create_all:
             await self.create_all_metadata()
 
     def create_session_maker(self) -> Callable[[], "AsyncSession"]:
@@ -252,10 +353,10 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Returns:
             Callable[[], Session]: Session factory used by the plugin.
         """
-        if self.session_maker:
-            return self.session_maker
-        if self.engine_instance is None:
-            self.engine_instance = self.get_engine()
+        if self.session_factory_config.session_maker:
+            return self.session_factory_config.session_maker
+        if self.connection_config.engine_instance is None:
+            self.connection_config.engine_instance = self.get_engine()
         return super().create_session_maker()
 
     async def session_handler(
@@ -331,9 +432,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 
     async def close_engine(self) -> None:  # pragma: no cover
         """Close the engine."""
-        if self.engine_instance is not None:
-            await self.engine_instance.dispose()
-        await dispose_session_maker_async(self.session_maker)
+        if self.connection_config.engine_instance is not None:
+            await self.connection_config.engine_instance.dispose()
+        await dispose_session_maker_async(self.session_factory_config.session_maker)
 
     async def on_shutdown(self) -> None:  # pragma: no cover
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
@@ -341,28 +442,21 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Ensures that all connections are properly closed during application shutdown.
         """
         await self.close_engine()
-        if self.app is not None:
+        if self.starlette_session_config.app is not None:
             with contextlib.suppress(AttributeError, KeyError):
-                delattr(self.app.state, self.engine_key)
-                delattr(self.app.state, self.session_maker_key)
-                delattr(self.app.state, self.session_key)
+                delattr(self.starlette_session_config.app.state, self.engine_key)
+                delattr(self.starlette_session_config.app.state, self.session_maker_key)
+                delattr(self.starlette_session_config.app.state, self.session_key)
 
 
 @dataclass
 class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     """SQLAlchemy Sync config for Starlette."""
 
-    app: "Optional[Starlette]" = None
-    """The Starlette application instance."""
-    commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
-    """The commit mode to use for database sessions."""
-    engine_key: str = "db_engine"
-    """Key to use for the dependency injection of database engines."""
-    session_key: str = "db_session"
-    """Key to use for the dependency injection of database sessions."""
-    session_maker_key: str = "session_maker_class"
-    """Key under which to store the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>` in the application state instance.
-    """
+    starlette_session_config: StarletteSessionConfig = field(default_factory=StarletteSessionConfig)
+    """Configuration for Starlette-specific session settings."""
+    key_config: AppStateKeys = field(default_factory=AppStateKeys)
+    """Configuration for engine, session, and session maker state keys."""
 
     engine_config: EngineConfig = field(default_factory=EngineConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration for the SQLAlchemy engine.
@@ -370,16 +464,83 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     The configuration options are documented in the SQLAlchemy documentation.
     """
 
+    @property
+    def app(self) -> "Starlette":
+        """The Starlette application instance.
+
+        Raises:
+            ImproperConfigurationError: If the application is not initialized.
+        """
+        if self.starlette_session_config.app is None:
+            from advanced_alchemy.exceptions import ImproperConfigurationError
+
+            msg = "Application not initialized. Did you forget to call init_app?"
+            raise ImproperConfigurationError(msg)
+        return self.starlette_session_config.app
+
+    @app.setter
+    def app(self, value: "Optional[Starlette]") -> None:
+        self.starlette_session_config.app = value
+
+    # -- Backward-compatible property accessors for starlette_session_config --
+
+    @property
+    def _app(self) -> "Optional[Starlette]":
+        """The Starlette application instance."""
+        return self.starlette_session_config.app
+
+    @_app.setter
+    def _app(self, value: "Optional[Starlette]") -> None:
+        self.starlette_session_config.app = value
+
+    @property
+    def commit_mode(self) -> Literal["manual", "autocommit", "autocommit_include_redirect"]:
+        """The commit mode to use for database sessions."""
+        return self.starlette_session_config.commit_mode
+
+    @commit_mode.setter
+    def commit_mode(self, value: Literal["manual", "autocommit", "autocommit_include_redirect"]) -> None:
+        self.starlette_session_config.commit_mode = value
+
+    # -- Backward-compatible property accessors for key_config --
+
+    @property
+    def engine_key(self) -> str:
+        """Key to use for the dependency injection of database engines."""
+        return self.key_config.engine_key
+
+    @engine_key.setter
+    def engine_key(self, value: str) -> None:
+        self.key_config.engine_key = value
+
+    @property
+    def session_key(self) -> str:
+        """Key to use for the dependency injection of database sessions."""
+        return self.key_config.session_key
+
+    @session_key.setter
+    def session_key(self, value: str) -> None:
+        self.key_config.session_key = value
+
+    @property
+    def session_maker_key(self) -> str:
+        """Key under which to store the SQLAlchemy sessionmaker in the application state."""
+        return self.key_config.session_maker_key
+
+    @session_maker_key.setter
+    def session_maker_key(self, value: str) -> None:
+        self.key_config.session_maker_key = value
+
     async def create_all_metadata(self) -> None:  # pragma: no cover
         """Create all metadata tables in the database."""
-        if self.engine_instance is None:
-            self.engine_instance = self.get_engine()
-        with self.engine_instance.begin() as conn:
+        if self.connection_config.engine_instance is None:
+            self.connection_config.engine_instance = self.get_engine()
+        with self.connection_config.engine_instance.begin() as conn:
             try:
                 await run_in_threadpool(
-                    lambda: metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all(
-                        conn
-                    )
+                    lambda: metadata_registry.get(
+                        None if self.metadata_config.bind_key == "default" else self.metadata_config.bind_key
+                    ).create_all(conn)
                 )
             except OperationalError as exc:
                 _echo(f" * Could not create target metadata. Reason: {exc}")
@@ -390,19 +551,23 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Args:
             app: The Starlette application instance.
         """
-        self.app = app
-        self.bind_key = self.bind_key or "default"
-        self.session_key = _make_unique_state_key(app, f"advanced_alchemy_sync_session_{self.session_key}")
-        self.engine_key = _make_unique_state_key(app, f"advanced_alchemy_sync_engine_{self.engine_key}")
-        self.session_maker_key = _make_unique_state_key(
-            app, f"advanced_alchemy_sync_session_maker_{self.session_maker_key}"
+        self.starlette_session_config.app = app
+        self.metadata_config.bind_key = self.metadata_config.bind_key or "default"
+        self.key_config.session_key = _make_unique_state_key(
+            app, f"advanced_alchemy_sync_session_{self.key_config.session_key}"
+        )
+        self.key_config.engine_key = _make_unique_state_key(
+            app, f"advanced_alchemy_sync_engine_{self.key_config.engine_key}"
+        )
+        self.key_config.session_maker_key = _make_unique_state_key(
+            app, f"advanced_alchemy_sync_session_maker_{self.key_config.session_maker_key}"
         )
         _ = self.create_session_maker()
         app.add_middleware(SessionMiddleware, config=self)  # pyright: ignore[reportUnknownMemberType]
 
     async def on_startup(self) -> None:
         """Initialize the Starlette application with this configuration."""
-        if self.create_all:
+        if self.metadata_config.create_all:
             await self.create_all_metadata()
 
     def create_session_maker(self) -> Callable[[], "Session"]:
@@ -415,10 +580,10 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Returns:
             Callable[[], Session]: Session factory used by the plugin.
         """
-        if self.session_maker:
-            return self.session_maker
-        if self.engine_instance is None:
-            self.engine_instance = self.get_engine()
+        if self.session_factory_config.session_maker:
+            return self.session_factory_config.session_maker
+        if self.connection_config.engine_instance is None:
+            self.connection_config.engine_instance = self.get_engine()
         return super().create_session_maker()
 
     async def session_handler(
@@ -494,9 +659,9 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
 
     async def close_engine(self) -> None:  # pragma: no cover
         """Close the engines."""
-        if self.engine_instance is not None:
-            await run_in_threadpool(self.engine_instance.dispose)
-        await run_in_threadpool(lambda: dispose_session_maker_sync(self.session_maker))
+        if self.connection_config.engine_instance is not None:
+            await run_in_threadpool(self.connection_config.engine_instance.dispose)
+        await run_in_threadpool(lambda: dispose_session_maker_sync(self.session_factory_config.session_maker))
 
     async def on_shutdown(self) -> None:  # pragma: no cover
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
@@ -504,8 +669,8 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Ensures that all connections are properly closed during application shutdown.
         """
         await self.close_engine()
-        if self.app is not None:
+        if self.starlette_session_config.app is not None:
             with contextlib.suppress(AttributeError, KeyError):
-                delattr(self.app.state, self.engine_key)
-                delattr(self.app.state, self.session_maker_key)
-                delattr(self.app.state, self.session_key)
+                delattr(self.starlette_session_config.app.state, self.engine_key)
+                delattr(self.starlette_session_config.app.state, self.session_maker_key)
+                delattr(self.starlette_session_config.app.state, self.session_key)

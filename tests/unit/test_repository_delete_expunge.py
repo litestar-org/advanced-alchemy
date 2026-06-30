@@ -272,7 +272,7 @@ class TestDeleteMethodsStateChecking:
         session.scalars = mock_scalars
 
         # Mock dialect to support returning
-        repo._dialect.delete_executemany_returning = True
+        repo._infra.dialect.delete_executemany_returning = True
 
         # Mock inspect to simulate deleted state
         mock_state = MagicMock()

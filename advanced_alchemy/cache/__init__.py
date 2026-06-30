@@ -88,7 +88,7 @@ Manual Setup:
 """
 
 from advanced_alchemy._listeners import setup_cache_listeners
-from advanced_alchemy.cache.config import CacheConfig
+from advanced_alchemy.cache.config import CacheConfig, CacheSerializerConfig
 from advanced_alchemy.cache.manager import DOGPILE_CACHE_INSTALLED, CacheManager
 from advanced_alchemy.cache.serializers import default_deserializer, default_serializer
 
@@ -96,6 +96,7 @@ __all__ = (
     "DOGPILE_CACHE_INSTALLED",
     "CacheConfig",
     "CacheManager",
+    "CacheSerializerConfig",
     "default_deserializer",
     "default_serializer",
     "setup_cache_listeners",

@@ -104,10 +104,12 @@ pytestmark = [
 def sync_sqlalchemy_config(request: FixtureRequest) -> Generator[SQLAlchemySyncConfig, None, None]:
     engine = cast(Engine, request.getfixturevalue(request.param))
     orm_registry = base.create_registry()
+    from advanced_alchemy.config.common import ConnectionConfig, MetadataConfig, SessionFactoryConfig
+
     yield SQLAlchemySyncConfig(
-        engine_instance=engine,
-        session_maker=sessionmaker(bind=engine, expire_on_commit=False),
-        metadata=orm_registry.metadata,
+        connection_config=ConnectionConfig(engine_instance=engine),
+        session_factory_config=SessionFactoryConfig(session_maker=sessionmaker(bind=engine, expire_on_commit=False)),
+        metadata_config=MetadataConfig(metadata=orm_registry.metadata),
     )
 
 
@@ -184,10 +186,14 @@ def async_sqlalchemy_config(
 ) -> Generator[SQLAlchemyAsyncConfig, None, None]:
     async_engine = cast(AsyncEngine, request.getfixturevalue(request.param))
     orm_registry = base.create_registry()
+    from advanced_alchemy.config.common import ConnectionConfig, MetadataConfig, SessionFactoryConfig
+
     yield SQLAlchemyAsyncConfig(
-        engine_instance=async_engine,
-        session_maker=async_sessionmaker(bind=async_engine, expire_on_commit=False),
-        metadata=orm_registry.metadata,
+        connection_config=ConnectionConfig(engine_instance=async_engine),
+        session_factory_config=SessionFactoryConfig(
+            session_maker=async_sessionmaker(bind=async_engine, expire_on_commit=False)
+        ),
+        metadata_config=MetadataConfig(metadata=orm_registry.metadata),
     )
 
 
@@ -258,17 +264,17 @@ async def test_drop_all(
 
     await maybe_async(any_config.create_all_metadata(app))
     if isinstance(any_config, SQLAlchemySyncConfig):
-        assert any_config.metadata
-        any_config.metadata.create_all(any_config.get_engine())
+        assert any_config.metadata_config.metadata
+        any_config.metadata_config.metadata.create_all(any_config.get_engine())
     else:
         async with any_config.get_engine().begin() as conn:
-            assert any_config.metadata
-            await conn.run_sync(any_config.metadata.create_all)
+            assert any_config.metadata_config.metadata
+            await conn.run_sync(any_config.metadata_config.metadata.create_all)
 
     await drop_all(
         alembic_commands.config.engine,
-        alembic_commands.config.version_table_name,
-        base.metadata_registry.get(alembic_commands.config.bind_key),
+        alembic_commands.config.version_config.version_table_name,
+        base.metadata_registry.get(alembic_commands.config.metadata_config.bind_key),
     )
     result = capfd.readouterr()
     assert "Successfully dropped all objects" in result.out

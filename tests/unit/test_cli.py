@@ -27,7 +27,7 @@ def cli_runner() -> Generator[CliRunner, None, None]:
 def mock_config() -> Generator[MagicMock, None, None]:
     """Create a mock SQLAlchemy config."""
     config = MagicMock()
-    config.bind_key = "default"
+    config.metadata_config.bind_key = "default"
     config.alembic_config.script_location = "migrations"
     config.get_engine.return_value = MagicMock(spec=AsyncEngine)
     yield config
@@ -340,11 +340,12 @@ def test_external_config_loading(cli_runner: CliRunner) -> None:
         # Create an external config file in the temp directory
         config_file = temp_path / "external_config.py"
         config_file.write_text("""
-from advanced_alchemy.config import SQLAlchemyAsyncConfig
+from advanced_alchemy.config import MetadataConfig, SQLAlchemyAsyncConfig
+from advanced_alchemy.config.common import ConnectionConfig
 
 config = SQLAlchemyAsyncConfig(
-    connection_string="sqlite+aiosqlite:///:memory:",
-    bind_key="external",
+    connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+    metadata_config=MetadataConfig(bind_key="external"),
 )
 """)
 
@@ -377,16 +378,17 @@ def test_external_config_loading_multiple_configs(cli_runner: CliRunner) -> None
         # Create an external config file with multiple configs
         config_file = temp_path / "multi_config.py"
         config_file.write_text("""
-from advanced_alchemy.config import SQLAlchemyAsyncConfig
+from advanced_alchemy.config import MetadataConfig, SQLAlchemyAsyncConfig
+from advanced_alchemy.config.common import ConnectionConfig
 
 configs = [
     SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:",
-        bind_key="primary",
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        metadata_config=MetadataConfig(bind_key="primary"),
     ),
     SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:",
-        bind_key="secondary",
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        metadata_config=MetadataConfig(bind_key="secondary"),
     ),
 ]
 """)

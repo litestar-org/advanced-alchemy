@@ -337,7 +337,7 @@ class CacheManager:
             self.delete_sync(key)
             return None
 
-        deserializer = self.config.deserializer or default_deserializer
+        deserializer = self.config.serializer_config.deserializer or default_deserializer
         try:
             payload = bytes(cached) if isinstance(cached, bytearray) else cached
             result: T = deserializer(payload, model_class)
@@ -367,7 +367,7 @@ class CacheManager:
                 prevent data leaks between database shards/replicas.
         """
         key = f"{model_name}:{bind_group}:get:{entity_id}" if bind_group else f"{model_name}:get:{entity_id}"
-        serializer = self.config.serializer or default_serializer
+        serializer = self.config.serializer_config.serializer or default_serializer
 
         try:
             serialized = serializer(entity)
@@ -457,7 +457,7 @@ class CacheManager:
             return None
 
         cached_list = cast("list[Any]", cached)  # type: ignore[redundant-cast]
-        deserializer = self.config.deserializer or default_deserializer
+        deserializer = self.config.serializer_config.deserializer or default_deserializer
         results: list[T] = []
         try:
             for item in cached_list:
@@ -478,7 +478,7 @@ class CacheManager:
             key: Cache key (without prefix).
             items: List of entities to cache.
         """
-        serializer = self.config.serializer or default_serializer
+        serializer = self.config.serializer_config.serializer or default_serializer
         try:
             payload = [base64.b64encode(serializer(item)).decode("ascii") for item in items]
             self.set_sync(key, payload)
@@ -500,7 +500,7 @@ class CacheManager:
             return None
 
         items_list = cast("list[Any]", items_raw)  # type: ignore[redundant-cast]
-        deserializer = self.config.deserializer or default_deserializer
+        deserializer = self.config.serializer_config.deserializer or default_deserializer
         results: list[T] = []
         try:
             for item in items_list:
@@ -516,7 +516,7 @@ class CacheManager:
 
     def set_many_and_count_sync(self, key: str, items: list[Any], count: int) -> None:
         """Cache a list+count payload (sync)."""
-        serializer = self.config.serializer or default_serializer
+        serializer = self.config.serializer_config.serializer or default_serializer
         try:
             payload = {
                 "items": [base64.b64encode(serializer(item)).decode("ascii") for item in items],

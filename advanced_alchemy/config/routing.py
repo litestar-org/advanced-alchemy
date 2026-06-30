@@ -7,10 +7,12 @@ write operations to the primary database.
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 __all__ = (
+    "EngineGroupConfig",
     "ReplicaConfig",
+    "RoutingBehavior",
     "RoutingConfig",
     "RoutingStrategy",
 )
@@ -59,21 +61,11 @@ ReplicaConfig = EngineConfig
 
 
 @dataclass
-class RoutingConfig:
-    """Read/Write routing configuration.
+class EngineGroupConfig:
+    """Engine group topology configuration.
 
-    This configuration enables automatic routing of database operations
-    to different engine groups (e.g., writer, reader, analytics).
-    """
-
-    primary_connection_string: Optional[str] = None
-    """Legacy: Connection string for the primary (write) database.
-    Mapped to ``engines[default_group]``.
-    """
-
-    read_replicas: list[Union[str, EngineConfig]] = field(default_factory=_default_read_replicas)
-    """Legacy: Read replica connection strings or configs.
-    Mapped to ``engines[read_group]``.
+    Defines the available engine groups and which groups to use
+    for read and write operations.
     """
 
     engines: dict[str, list[Union[str, EngineConfig]]] = field(default_factory=_default_engines)
@@ -95,6 +87,15 @@ class RoutingConfig:
     read_group: str = "read"
     """Name of the group to use for read operations."""
 
+
+@dataclass
+class RoutingBehavior:
+    """Routing behavior configuration.
+
+    Controls how the routing layer selects engines and manages
+    read-your-writes consistency.
+    """
+
     routing_strategy: RoutingStrategy = RoutingStrategy.ROUND_ROBIN
     """Strategy for selecting engines within a group."""
 
@@ -107,20 +108,99 @@ class RoutingConfig:
     reset_stickiness_on_commit: bool = True
     """Reset stickiness after commit."""
 
+
+class RoutingConfig:
+    """Read/Write routing configuration.
+
+    This configuration enables automatic routing of database operations
+    to different engine groups (e.g., writer, reader, analytics).
+
+    Accepts both legacy keyword arguments (``engines``, ``default_group``,
+    ``read_group``, ``routing_strategy``, ``enabled``, ``sticky_after_write``,
+    ``reset_stickiness_on_commit``) and the new structured arguments
+    (``engine_groups``, ``behavior``) for backward compatibility.
+    """
+
+    __hash__ = None  # type: ignore[assignment]
+
+    def __init__(
+        self,
+        primary_connection_string: Optional[str] = None,
+        read_replicas: Optional[list[Union[str, EngineConfig]]] = None,
+        engine_groups: Optional[EngineGroupConfig] = None,
+        behavior: Optional[RoutingBehavior] = None,
+        engines: Optional[dict[str, list[Union[str, EngineConfig]]]] = None,
+        default_group: Optional[str] = None,
+        read_group: Optional[str] = None,
+        routing_strategy: Optional[RoutingStrategy] = None,
+        enabled: Optional[bool] = None,
+        sticky_after_write: Optional[bool] = None,
+        reset_stickiness_on_commit: Optional[bool] = None,
+    ) -> None:
+        self.primary_connection_string = primary_connection_string
+        self.read_replicas = read_replicas if read_replicas is not None else _default_read_replicas()
+
+        if engine_groups is not None:
+            self.engine_groups = engine_groups
+        else:
+            eg_kwargs: dict[str, Any] = {}
+            if engines is not None:
+                eg_kwargs["engines"] = engines
+            if default_group is not None:
+                eg_kwargs["default_group"] = default_group
+            if read_group is not None:
+                eg_kwargs["read_group"] = read_group
+            self.engine_groups = EngineGroupConfig(**eg_kwargs)
+
+        if behavior is not None:
+            self.behavior = behavior
+        else:
+            bh_kwargs: dict[str, Any] = {}
+            if routing_strategy is not None:
+                bh_kwargs["routing_strategy"] = routing_strategy
+            if enabled is not None:
+                bh_kwargs["enabled"] = enabled
+            if sticky_after_write is not None:
+                bh_kwargs["sticky_after_write"] = sticky_after_write
+            if reset_stickiness_on_commit is not None:
+                bh_kwargs["reset_stickiness_on_commit"] = reset_stickiness_on_commit
+            self.behavior = RoutingBehavior(**bh_kwargs)
+
+        self.__post_init__()
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"primary_connection_string={self.primary_connection_string!r}, "
+            f"read_replicas={self.read_replicas!r}, "
+            f"engine_groups={self.engine_groups!r}, "
+            f"behavior={self.behavior!r})"
+        )
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, RoutingConfig):
+            return NotImplemented
+        return (
+            self.primary_connection_string == other.primary_connection_string
+            and self.read_replicas == other.read_replicas
+            and self.engine_groups == other.engine_groups
+            and self.behavior == other.behavior
+        )
+
     def __post_init__(self) -> None:
         """Normalize configuration."""
         # Migrate legacy config to engines map
         if self.primary_connection_string:
-            if self.default_group not in self.engines:
-                self.engines[self.default_group] = []
-            self.engines[self.default_group].insert(
+            if self.engine_groups.default_group not in self.engine_groups.engines:
+                self.engine_groups.engines[self.engine_groups.default_group] = []
+            self.engine_groups.engines[self.engine_groups.default_group].insert(
                 0, EngineConfig(connection_string=self.primary_connection_string, name="primary")
             )
 
         if self.read_replicas:
-            if self.read_group not in self.engines:
-                self.engines[self.read_group] = []
-            self.engines[self.read_group].extend(self.read_replicas)
+            if self.engine_groups.read_group not in self.engine_groups.engines:
+                self.engine_groups.engines[self.engine_groups.read_group] = []
+            self.engine_groups.engines[self.engine_groups.read_group].extend(self.read_replicas)
 
     def get_engine_configs(self, group: str) -> list[EngineConfig]:
         """Get engine configs for a specific group.
@@ -131,10 +211,10 @@ class RoutingConfig:
         Returns:
             List of :class:`EngineConfig` instances.
         """
-        if group not in self.engines:
+        if group not in self.engine_groups.engines:
             return []
 
-        configs = self.engines[group]
+        configs = self.engine_groups.engines[group]
         return [
             config if isinstance(config, EngineConfig) else EngineConfig(connection_string=config) for config in configs
         ]

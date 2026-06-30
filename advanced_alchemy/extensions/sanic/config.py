@@ -93,6 +93,24 @@ class EngineConfig(_EngineConfig):
 
 
 @dataclass
+class AppStateKeys:
+    """Keys for storing engine, session, and session maker in application/request state.
+
+    Attributes:
+        engine_key: Key to use for the dependency injection of database engines.
+        session_key: Key to use for the dependency injection of database sessions.
+        session_maker_key: Key under which to store the SQLAlchemy sessionmaker in the application state instance.
+    """
+
+    engine_key: str = "db_engine"
+    """Key to use for the dependency injection of database engines."""
+    session_key: str = "db_session"
+    """Key to use for the dependency injection of database sessions."""
+    session_maker_key: str = "session_maker_class"
+    """Key under which to store the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>` in the application state instance."""
+
+
+@dataclass
 class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
     """SQLAlchemy Async config for Sanic."""
 
@@ -100,13 +118,8 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
     """The Sanic application instance."""
     commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
     """The commit mode to use for database sessions."""
-    engine_key: str = "db_engine"
-    """Key to use for the dependency injection of database engines."""
-    session_key: str = "db_session"
-    """Key to use for the dependency injection of database sessions."""
-    session_maker_key: str = "session_maker_class"
-    """Key under which to store the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>` in the application state instance.
-    """
+    key_config: AppStateKeys = field(default_factory=AppStateKeys)
+    """Configuration for engine, session, and session maker state keys."""
 
     engine_config: EngineConfig = field(default_factory=EngineConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration for the SQLAlchemy engine.
@@ -116,12 +129,14 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 
     async def create_all_metadata(self) -> None:  # pragma: no cover
         """Create all metadata tables in the database."""
-        if self.engine_instance is None:
-            self.engine_instance = self.get_engine()
-        async with self.engine_instance.begin() as conn:
+        if self.connection_config.engine_instance is None:
+            self.connection_config.engine_instance = self.get_engine()
+        async with self.connection_config.engine_instance.begin() as conn:
             try:
                 await conn.run_sync(
-                    metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all
+                    metadata_registry.get(
+                        None if self.metadata_config.bind_key == "default" else self.metadata_config.bind_key
+                    ).create_all
                 )
                 await conn.commit()
             except OperationalError as exc:
@@ -141,6 +156,35 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             raise ImproperConfigurationError(msg)
         return self._app
 
+    # -- Backward-compatible property accessors for key_config --
+
+    @property
+    def engine_key(self) -> str:
+        """Key to use for the dependency injection of database engines."""
+        return self.key_config.engine_key
+
+    @engine_key.setter
+    def engine_key(self, value: str) -> None:
+        self.key_config.engine_key = value
+
+    @property
+    def session_key(self) -> str:
+        """Key to use for the dependency injection of database sessions."""
+        return self.key_config.session_key
+
+    @session_key.setter
+    def session_key(self, value: str) -> None:
+        self.key_config.session_key = value
+
+    @property
+    def session_maker_key(self) -> str:
+        """Key under which to store the SQLAlchemy sessionmaker in the application state."""
+        return self.key_config.session_maker_key
+
+    @session_maker_key.setter
+    def session_maker_key(self, value: str) -> None:
+        self.key_config.session_maker_key = value
+
     def init_app(self, app: "Sanic[Any, Any]", bootstrap: "Extend") -> None:  # pyright: ignore[reportUnknownParameterType,reportInvalidTypeForm]
         """Initialize the Sanic application with this configuration.
 
@@ -149,12 +193,16 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             bootstrap: The Sanic extension bootstrap.
         """
         self._app = app
-        self.bind_key = self.bind_key or "default"
+        self.metadata_config.bind_key = self.metadata_config.bind_key or "default"
         _ = self.create_session_maker()
-        self.session_key = _make_unique_context_key(app, f"advanced_alchemy_async_session_{self.session_key}")
-        self.engine_key = _make_unique_context_key(app, f"advanced_alchemy_async_engine_{self.engine_key}")
-        self.session_maker_key = _make_unique_context_key(
-            app, f"advanced_alchemy_async_session_maker_{self.session_maker_key}"
+        self.key_config.session_key = _make_unique_context_key(
+            app, f"advanced_alchemy_async_session_{self.key_config.session_key}"
+        )
+        self.key_config.engine_key = _make_unique_context_key(
+            app, f"advanced_alchemy_async_engine_{self.key_config.engine_key}"
+        )
+        self.key_config.session_maker_key = _make_unique_context_key(
+            app, f"advanced_alchemy_async_session_maker_{self.key_config.session_maker_key}"
         )
         self.startup(bootstrap)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
 
@@ -167,8 +215,8 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 
         @self.app.before_server_start  # pyright: ignore[reportUnknownMemberType]
         async def on_startup(_: Any) -> None:  # pyright: ignore[reportUnusedFunction]
-            setattr(self.app.ctx, self.engine_key, self.get_engine())  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
-            setattr(self.app.ctx, self.session_maker_key, self.create_session_maker())  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+            setattr(self.app.ctx, self.key_config.engine_key, self.get_engine())  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+            setattr(self.app.ctx, self.key_config.session_maker_key, self.create_session_maker())  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
             bootstrap.add_dependency(  # pyright: ignore[reportUnknownMemberType]
                 AsyncEngine,
                 self.get_engine_from_request,
@@ -185,30 +233,30 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 
         @self.app.after_server_stop  # pyright: ignore[reportUnknownMemberType]
         async def on_shutdown(_: Any) -> None:  # pyright: ignore[reportUnusedFunction]
-            if self.engine_instance is not None:
-                await self.engine_instance.dispose()
-            await dispose_session_maker_async(self.session_maker)
-            if hasattr(self.app.ctx, self.engine_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
-                delattr(self.app.ctx, self.engine_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
-            if hasattr(self.app.ctx, self.session_maker_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
-                delattr(self.app.ctx, self.session_maker_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+            if self.connection_config.engine_instance is not None:
+                await self.connection_config.engine_instance.dispose()
+            await dispose_session_maker_async(self.session_factory_config.session_maker)
+            if hasattr(self.app.ctx, self.key_config.engine_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+                delattr(self.app.ctx, self.key_config.engine_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+            if hasattr(self.app.ctx, self.key_config.session_maker_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+                delattr(self.app.ctx, self.key_config.session_maker_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
 
         @self.app.middleware("request")  # type: ignore[misc,untyped-decorator]  # pyright: ignore[reportUnknownMemberType]
         async def on_request(request: Request) -> None:  # pyright: ignore[reportUnusedFunction]
-            session = cast("Optional[AsyncSession]", getattr(request.ctx, self.session_key, None))
+            session = cast("Optional[AsyncSession]", getattr(request.ctx, self.key_config.session_key, None))
             if session is None:
-                setattr(request.ctx, self.session_key, self.get_session())
+                setattr(request.ctx, self.key_config.session_key, self.get_session())
                 set_async_context(True)
 
         @self.app.middleware("response")  # type: ignore[misc,untyped-decorator]
         async def on_response(request: Request, response: HTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
-            session = cast("Optional[AsyncSession]", getattr(request.ctx, self.session_key, None))
+            session = cast("Optional[AsyncSession]", getattr(request.ctx, self.key_config.session_key, None))
             if session is not None:
                 await self.session_handler(session=session, request=request, response=response)
 
     async def on_startup(self) -> None:
         """Initialize the Sanic application with this configuration."""
-        if self.create_all:
+        if self.metadata_config.create_all:
             await self.create_all_metadata()
 
     def create_session_maker(self) -> Callable[[], "AsyncSession"]:
@@ -221,10 +269,10 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Returns:
             Callable[[], Session]: Session factory used by the plugin.
         """
-        if self.session_maker:
-            return self.session_maker
-        if self.engine_instance is None:
-            self.engine_instance = self.get_engine()
+        if self.session_factory_config.session_maker:
+            return self.session_factory_config.session_maker
+        if self.connection_config.engine_instance is None:
+            self.connection_config.engine_instance = self.get_engine()
         return super().create_session_maker()
 
     async def session_handler(
@@ -257,7 +305,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             except Exception:  # noqa: BLE001
                 logger.debug("Session close failed during cleanup", exc_info=True)
             with contextlib.suppress(AttributeError, KeyError):
-                delattr(request.ctx, self.session_key)
+                delattr(request.ctx, self.key_config.session_key)
 
     def get_engine_from_request(self, request: "Request") -> AsyncEngine:
         """Retrieve the engine from the request context.
@@ -268,7 +316,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Returns:
             AsyncEngine: The SQLAlchemy engine.
         """
-        return cast("AsyncEngine", getattr(request.app.ctx, self.engine_key, self.get_engine()))  # pragma: no cover
+        return cast(
+            "AsyncEngine", getattr(request.app.ctx, self.key_config.engine_key, self.get_engine())
+        )  # pragma: no cover
 
     def get_sessionmaker_from_request(self, request: "Request") -> async_sessionmaker[AsyncSession]:
         """Retrieve the session maker from the request context.
@@ -280,7 +330,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             SessionMakerT: The session maker.
         """
         return cast(
-            "async_sessionmaker[AsyncSession]", getattr(request.app.ctx, self.session_maker_key, None)
+            "async_sessionmaker[AsyncSession]", getattr(request.app.ctx, self.key_config.session_maker_key, None)
         )  # pragma: no cover
 
     def get_session_from_request(self, request: Request) -> AsyncSession:
@@ -292,13 +342,13 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Returns:
             SessionT: The session associated with the request.
         """
-        return cast("AsyncSession", getattr(request.ctx, self.session_key, None))  # pragma: no cover
+        return cast("AsyncSession", getattr(request.ctx, self.key_config.session_key, None))  # pragma: no cover
 
     async def close_engine(self) -> None:  # pragma: no cover
         """Close the engine."""
-        if self.engine_instance is not None:
-            await self.engine_instance.dispose()
-        await dispose_session_maker_async(self.session_maker)
+        if self.connection_config.engine_instance is not None:
+            await self.connection_config.engine_instance.dispose()
+        await dispose_session_maker_async(self.session_factory_config.session_maker)
 
     async def on_shutdown(self) -> None:  # pragma: no cover
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
@@ -307,10 +357,10 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 
         """
         await self.close_engine()
-        if hasattr(self.app.ctx, self.engine_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
-            delattr(self.app.ctx, self.engine_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
-        if hasattr(self.app.ctx, self.session_maker_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
-            delattr(self.app.ctx, self.session_maker_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+        if hasattr(self.app.ctx, self.key_config.engine_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+            delattr(self.app.ctx, self.key_config.engine_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+        if hasattr(self.app.ctx, self.key_config.session_maker_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+            delattr(self.app.ctx, self.key_config.session_maker_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
 
 
 @dataclass
@@ -321,13 +371,8 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     """The Sanic application instance."""
     commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
     """The commit mode to use for database sessions."""
-    engine_key: str = "db_engine"
-    """Key to use for the dependency injection of database engines."""
-    session_key: str = "db_session"
-    """Key to use for the dependency injection of database sessions."""
-    session_maker_key: str = "session_maker_class"
-    """Key under which to store the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>` in the application state instance.
-    """
+    key_config: AppStateKeys = field(default_factory=AppStateKeys)
+    """Configuration for engine, session, and session maker state keys."""
 
     engine_config: EngineConfig = field(default_factory=EngineConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration for the SQLAlchemy engine.
@@ -347,15 +392,48 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             raise ImproperConfigurationError(msg)
         return self._app
 
+    # -- Backward-compatible property accessors for key_config --
+
+    @property
+    def engine_key(self) -> str:
+        """Key to use for the dependency injection of database engines."""
+        return self.key_config.engine_key
+
+    @engine_key.setter
+    def engine_key(self, value: str) -> None:
+        self.key_config.engine_key = value
+
+    @property
+    def session_key(self) -> str:
+        """Key to use for the dependency injection of database sessions."""
+        return self.key_config.session_key
+
+    @session_key.setter
+    def session_key(self, value: str) -> None:
+        self.key_config.session_key = value
+
+    @property
+    def session_maker_key(self) -> str:
+        """Key under which to store the SQLAlchemy sessionmaker in the application state."""
+        return self.key_config.session_maker_key
+
+    @session_maker_key.setter
+    def session_maker_key(self, value: str) -> None:
+        self.key_config.session_maker_key = value
+
     async def create_all_metadata(self) -> None:  # pragma: no cover
         """Create all metadata tables in the database."""
-        if self.engine_instance is None:
-            self.engine_instance = self.get_engine()
-        with self.engine_instance.begin() as conn:
+        if self.connection_config.engine_instance is None:
+            self.connection_config.engine_instance = self.get_engine()
+        with self.connection_config.engine_instance.begin() as conn:
             try:
                 loop = asyncio.get_event_loop()
                 await loop.run_in_executor(
-                    None, metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all, conn
+                    None,
+                    metadata_registry.get(
+                        None if self.metadata_config.bind_key == "default" else self.metadata_config.bind_key
+                    ).create_all,
+                    conn,
                 )
             except OperationalError as exc:
                 echo(f" * Could not create target metadata. Reason: {exc}")
@@ -368,12 +446,16 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             bootstrap: The Sanic extension bootstrap.
         """
         self._app = app
-        self.bind_key = self.bind_key or "default"
+        self.metadata_config.bind_key = self.metadata_config.bind_key or "default"
         _ = self.create_session_maker()
-        self.session_key = _make_unique_context_key(app, f"advanced_alchemy_sync_session_{self.session_key}")
-        self.engine_key = _make_unique_context_key(app, f"advanced_alchemy_sync_engine_{self.engine_key}")
-        self.session_maker_key = _make_unique_context_key(
-            app, f"advanced_alchemy_sync_session_maker_{self.session_maker_key}"
+        self.key_config.session_key = _make_unique_context_key(
+            app, f"advanced_alchemy_sync_session_{self.key_config.session_key}"
+        )
+        self.key_config.engine_key = _make_unique_context_key(
+            app, f"advanced_alchemy_sync_engine_{self.key_config.engine_key}"
+        )
+        self.key_config.session_maker_key = _make_unique_context_key(
+            app, f"advanced_alchemy_sync_session_maker_{self.key_config.session_maker_key}"
         )
         self.startup(bootstrap)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
 
@@ -386,8 +468,8 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
 
         @self.app.before_server_start  # pyright: ignore[reportUnknownMemberType]
         async def on_startup(_: Any) -> None:  # pyright: ignore[reportUnusedFunction]
-            setattr(self.app.ctx, self.engine_key, self.get_engine())  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
-            setattr(self.app.ctx, self.session_maker_key, self.create_session_maker())  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+            setattr(self.app.ctx, self.key_config.engine_key, self.get_engine())  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+            setattr(self.app.ctx, self.key_config.session_maker_key, self.create_session_maker())  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
             bootstrap.add_dependency(  # pyright: ignore[reportUnknownMemberType]
                 AsyncEngine,
                 self.get_engine_from_request,
@@ -408,20 +490,20 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
 
         @self.app.middleware("request")  # type: ignore[misc,untyped-decorator]  # pyright: ignore[reportUnknownMemberType]
         async def on_request(request: Request) -> None:  # pyright: ignore[reportUnusedFunction]
-            session = cast("Optional[Session]", getattr(request.ctx, self.session_key, None))
+            session = cast("Optional[Session]", getattr(request.ctx, self.key_config.session_key, None))
             if session is None:
-                setattr(request.ctx, self.session_key, self.get_session())
+                setattr(request.ctx, self.key_config.session_key, self.get_session())
                 set_async_context(False)
 
         @self.app.middleware("response")  # type: ignore[misc,untyped-decorator]
         async def on_response(request: Request, response: HTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
-            session = cast("Optional[Session]", getattr(request.ctx, self.session_key, None))
+            session = cast("Optional[Session]", getattr(request.ctx, self.key_config.session_key, None))
             if session is not None:
                 await self.session_handler(session=session, request=request, response=response)
 
     async def on_startup(self) -> None:
         """Initialize the Sanic application with this configuration."""
-        if self.create_all:
+        if self.metadata_config.create_all:
             await self.create_all_metadata()
 
     def create_session_maker(self) -> Callable[[], "Session"]:
@@ -434,10 +516,10 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Returns:
             Callable[[], Session]: Session factory used by the plugin.
         """
-        if self.session_maker:
-            return self.session_maker
-        if self.engine_instance is None:
-            self.engine_instance = self.get_engine()
+        if self.session_factory_config.session_maker:
+            return self.session_factory_config.session_maker
+        if self.connection_config.engine_instance is None:
+            self.connection_config.engine_instance = self.get_engine()
         return super().create_session_maker()
 
     async def session_handler(
@@ -471,7 +553,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             except Exception:  # noqa: BLE001
                 logger.debug("Session close failed during cleanup", exc_info=True)
             with contextlib.suppress(AttributeError, KeyError):
-                delattr(request.ctx, self.session_key)
+                delattr(request.ctx, self.key_config.session_key)
 
     def get_engine_from_request(self, request: Request) -> "AsyncEngine":
         """Retrieve the engine from the request context.
@@ -482,7 +564,9 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Returns:
             AsyncEngine: The SQLAlchemy engine.
         """
-        return cast("AsyncEngine", getattr(request.app.ctx, self.engine_key, self.get_engine()))  # pragma: no cover
+        return cast(
+            "AsyncEngine", getattr(request.app.ctx, self.key_config.engine_key, self.get_engine())
+        )  # pragma: no cover
 
     def get_sessionmaker_from_request(self, request: Request) -> sessionmaker[Session]:
         """Retrieve the session maker from the request context.
@@ -493,7 +577,9 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Returns:
             SessionMakerT: The session maker.
         """
-        return cast("sessionmaker[Session]", getattr(request.app.ctx, self.session_maker_key, None))  # pragma: no cover
+        return cast(
+            "sessionmaker[Session]", getattr(request.app.ctx, self.key_config.session_maker_key, None)
+        )  # pragma: no cover
 
     def get_session_from_request(self, request: Request) -> "Session":
         """Retrieve the session from the request context.
@@ -504,15 +590,15 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Returns:
             SessionT: The session associated with the request.
         """
-        return cast("Session", getattr(request.ctx, self.session_key, None))  # pragma: no cover
+        return cast("Session", getattr(request.ctx, self.key_config.session_key, None))  # pragma: no cover
 
     async def close_engine(self) -> None:  # pragma: no cover
         """Close the engine."""
         loop = asyncio.get_event_loop()
-        if self.engine_instance is not None:
-            await loop.run_in_executor(None, self.engine_instance.dispose)
-        if self.session_maker is not None:
-            await loop.run_in_executor(None, dispose_session_maker_sync, self.session_maker)
+        if self.connection_config.engine_instance is not None:
+            await loop.run_in_executor(None, self.connection_config.engine_instance.dispose)
+        if self.session_factory_config.session_maker is not None:
+            await loop.run_in_executor(None, dispose_session_maker_sync, self.session_factory_config.session_maker)
 
     async def on_shutdown(self) -> None:  # pragma: no cover
         """Handles the shutdown event by disposing of the SQLAlchemy engine.
@@ -520,7 +606,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Ensures that all connections are properly closed during application shutdown.
         """
         await self.close_engine()
-        if hasattr(self.app.ctx, self.engine_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
-            delattr(self.app.ctx, self.engine_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
-        if hasattr(self.app.ctx, self.session_maker_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
-            delattr(self.app.ctx, self.session_maker_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+        if hasattr(self.app.ctx, self.key_config.engine_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+            delattr(self.app.ctx, self.key_config.engine_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+        if hasattr(self.app.ctx, self.key_config.session_maker_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
+            delattr(self.app.ctx, self.key_config.session_maker_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]

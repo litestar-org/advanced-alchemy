@@ -17,6 +17,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from advanced_alchemy import base, mixins
 from advanced_alchemy._listeners import is_async_context
+from advanced_alchemy.config.common import MetadataConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.flask import (
     AdvancedAlchemy,
@@ -83,7 +84,9 @@ def tmp_path_session(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def setup_database(tmp_path_session: Path) -> Generator[Path, None, None]:
     # Create a new database for each test
     db_path = tmp_path_session / "test.db"
-    config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{db_path}", metadata=metadata)
+    config = SQLAlchemySyncConfig(
+        connection_string=f"sqlite:///{db_path}", metadata_config=MetadataConfig(metadata=metadata)
+    )
     engine = config.get_engine()
     User._sa_registry.metadata.create_all(engine)  # pyright: ignore[reportPrivateUsage]
     with config.get_session() as session:
@@ -97,7 +100,9 @@ def test_sync_extension_init(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
-        config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", metadata=metadata)
+        config = SQLAlchemySyncConfig(
+            connection_string=f"sqlite:///{setup_database}", metadata_config=MetadataConfig(metadata=metadata)
+        )
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
         assert isinstance(extension, AdvancedAlchemy)
@@ -110,7 +115,9 @@ def test_sync_extension_init_with_app(setup_database: Path) -> None:
     app = Flask(__name__)
 
     with app.app_context():
-        config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", metadata=metadata)
+        config = SQLAlchemySyncConfig(
+            connection_string=f"sqlite:///{setup_database}", metadata_config=MetadataConfig(metadata=metadata)
+        )
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
         assert isinstance(extension, AdvancedAlchemy)
@@ -126,7 +133,9 @@ def test_sync_extension_multiple_init(setup_database: Path) -> None:
         app.app_context(),
         pytest.raises(ImproperConfigurationError, match="Advanced Alchemy extension is already registered"),
     ):
-        config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", metadata=metadata)
+        config = SQLAlchemySyncConfig(
+            connection_string=f"sqlite:///{setup_database}", metadata_config=MetadataConfig(metadata=metadata)
+        )
         extension = AdvancedAlchemy(config, app)
         extension.init_app(app)
 
@@ -136,7 +145,8 @@ def test_async_extension_init(setup_database: Path) -> None:
 
     with app.app_context():
         config = SQLAlchemyAsyncConfig(
-            bind_key="async", connection_string=f"sqlite+aiosqlite:///{setup_database}", metadata=metadata
+            connection_string=f"sqlite+aiosqlite:///{setup_database}",
+            metadata_config=MetadataConfig(bind_key="async", metadata=metadata),
         )
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
@@ -158,7 +168,9 @@ def test_async_extension_init_single_config_no_bind_key(setup_database: Path) ->
     app = Flask(__name__)
 
     with app.app_context():
-        config = SQLAlchemyAsyncConfig(connection_string=f"sqlite+aiosqlite:///{setup_database}", metadata=metadata)
+        config = SQLAlchemyAsyncConfig(
+            connection_string=f"sqlite+aiosqlite:///{setup_database}", metadata_config=MetadataConfig(metadata=metadata)
+        )
         extension = AdvancedAlchemy(config, app)
         assert "advanced_alchemy" in app.extensions
         session = extension.get_session()
@@ -258,11 +270,17 @@ def test_multiple_binds_async(setup_database: Path) -> None:
 def test_mixed_binds(setup_database: Path) -> None:
     app = Flask(__name__)
 
+    from advanced_alchemy.config.common import MetadataConfig
+
     with app.app_context():
         configs: Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig] = [
-            SQLAlchemySyncConfig(connection_string=f"sqlite:///{setup_database}", bind_key="sync", metadata=metadata),
+            SQLAlchemySyncConfig(
+                connection_string=f"sqlite:///{setup_database}",
+                metadata_config=MetadataConfig(bind_key="sync", metadata=metadata),
+            ),
             SQLAlchemyAsyncConfig(
-                connection_string=f"sqlite+aiosqlite:///{setup_database}", bind_key="async", metadata=metadata
+                connection_string=f"sqlite+aiosqlite:///{setup_database}",
+                metadata_config=MetadataConfig(bind_key="async", metadata=metadata),
             ),
         ]
         extension = AdvancedAlchemy(configs, app)

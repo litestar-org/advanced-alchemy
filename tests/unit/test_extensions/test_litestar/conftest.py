@@ -33,8 +33,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from typing_extensions import TypeVar
 
 from advanced_alchemy.alembic.commands import AlembicCommands
-from advanced_alchemy.config.common import GenericSQLAlchemyConfig
+from advanced_alchemy.config.common import ConnectionConfig, GenericSQLAlchemyConfig, SessionFactoryConfig
 from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin, SQLAlchemySyncConfig
+from advanced_alchemy.extensions.litestar.plugins.init.config import asyncio as asyncio_config_module
 
 
 @pytest.fixture(autouse=True)
@@ -43,6 +44,9 @@ def reload_package() -> Generator[None, None, None]:
     GenericSQLAlchemyConfig._SESSION_SCOPE_KEY_REGISTRY = set()  # type: ignore
     GenericSQLAlchemyConfig._ENGINE_APP_STATE_KEY_REGISTRY = set()  # type: ignore
     GenericSQLAlchemyConfig._SESSIONMAKER_APP_STATE_KEY_REGISTRY = set()  # type: ignore
+    asyncio_config_module._SESSION_SCOPE_KEY_REGISTRY.clear()
+    asyncio_config_module._ENGINE_APP_STATE_KEY_REGISTRY.clear()
+    asyncio_config_module._SESSIONMAKER_APP_STATE_KEY_REGISTRY.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -250,7 +254,12 @@ async def sync_sqlalchemy_plugin(
     engine: Engine,
     session_maker: sessionmaker[Session] | None = None,
 ) -> AsyncGenerator[SQLAlchemyPlugin, None]:
-    yield SQLAlchemyPlugin(config=SQLAlchemySyncConfig(engine_instance=engine, session_maker=session_maker))
+    yield SQLAlchemyPlugin(
+        config=SQLAlchemySyncConfig(
+            connection_config=ConnectionConfig(engine_instance=engine),
+            session_factory_config=SessionFactoryConfig(session_maker=session_maker),
+        )
+    )
 
 
 @pytest.fixture()
@@ -273,7 +282,10 @@ async def async_sqlalchemy_plugin(
     async_session_maker: async_sessionmaker[AsyncSession] | None = None,
 ) -> AsyncGenerator[SQLAlchemyPlugin, None]:
     yield SQLAlchemyPlugin(
-        config=SQLAlchemyAsyncConfig(engine_instance=async_engine, session_maker=async_session_maker),
+        config=SQLAlchemyAsyncConfig(
+            connection_config=ConnectionConfig(engine_instance=async_engine),
+            session_factory_config=SessionFactoryConfig(session_maker=async_session_maker),
+        ),
     )
 
 

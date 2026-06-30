@@ -17,8 +17,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from advanced_alchemy.base import UUIDBase
-from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+from advanced_alchemy.config.common import ConnectionConfig, MetadataConfig
+from advanced_alchemy.extensions.fastapi import (
+    AdvancedAlchemy,
+    AppStateKeys,
+    SQLAlchemyAsyncConfig,
+    SQLAlchemySyncConfig,
+)
 from advanced_alchemy.extensions.fastapi.providers import _should_commit_for_status
+from advanced_alchemy.extensions.starlette import StarletteSessionConfig
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
 
@@ -68,8 +75,8 @@ class WidgetSyncService(SQLAlchemySyncRepositoryService[Widget, WidgetSyncReposi
 def _make_async_app(commit_mode: CommitMode = "manual") -> tuple[FastAPI, SQLAlchemyAsyncConfig, AdvancedAlchemy]:
     app = FastAPI()
     config = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:",
-        commit_mode=commit_mode,
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode=commit_mode),
     )
     alchemy = AdvancedAlchemy(config=config, app=app)
     return app, config, alchemy
@@ -78,8 +85,8 @@ def _make_async_app(commit_mode: CommitMode = "manual") -> tuple[FastAPI, SQLAlc
 def _make_sync_app(commit_mode: CommitMode = "manual") -> tuple[FastAPI, SQLAlchemySyncConfig, AdvancedAlchemy]:
     app = FastAPI()
     config = SQLAlchemySyncConfig(
-        connection_string="sqlite:///:memory:",
-        commit_mode=commit_mode,
+        connection_config=ConnectionConfig(connection_string="sqlite:///:memory:"),
+        starlette_session_config=StarletteSessionConfig(commit_mode=commit_mode),
     )
     alchemy = AdvancedAlchemy(config=config, app=app)
     return app, config, alchemy
@@ -560,14 +567,14 @@ def test_multiple_generator_sessions_tracked_independently() -> None:
     """Verify multiple configs track generator-managed sessions separately."""
     app = FastAPI()
     config_one = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:",
-        bind_key="db1",
-        session_key="db1_session",
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        metadata_config=MetadataConfig(bind_key="db1"),
+        key_config=AppStateKeys(session_key="db1_session"),
     )
     config_two = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:",
-        bind_key="db2",
-        session_key="db2_session",
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        metadata_config=MetadataConfig(bind_key="db2"),
+        key_config=AppStateKeys(session_key="db2_session"),
     )
     alchemy = AdvancedAlchemy(config=[config_one, config_two], app=app)
 

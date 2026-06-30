@@ -199,7 +199,9 @@ def test_create_sync_service_provider() -> None:
 
 def test_create_sync_service_provider_custom() -> None:
     """Test creating a sync service provider."""
-    provider = create_service_provider(MockSyncService, config=MagicMock(session_dependency_key="testing_session"))
+    provider = create_service_provider(
+        MockSyncService, config=MagicMock(session_key_config=MagicMock(session_dependency_key="testing_session"))
+    )
 
     # Ensure the provider is callable
     assert callable(provider)
@@ -209,7 +211,9 @@ def test_create_sync_service_provider_custom() -> None:
 
 def test_create_sync_service_provider_positional() -> None:
     """Test creating an async service provider."""
-    provider = create_service_provider(MockSyncService, config=MagicMock(session_dependency_key="testing_session"))
+    provider = create_service_provider(
+        MockSyncService, config=MagicMock(session_key_config=MagicMock(session_dependency_key="testing_session"))
+    )
 
     # Ensure the provider is callable
     assert callable(provider)
@@ -229,7 +233,9 @@ async def test_create_async_service_provider() -> None:
 
 async def test_create_async_service_provider_custom() -> None:
     """Test creating an async service provider."""
-    provider = create_service_provider(MockAsyncService, config=MagicMock(session_dependency_key="testing_session"))
+    provider = create_service_provider(
+        MockAsyncService, config=MagicMock(session_key_config=MagicMock(session_dependency_key="testing_session"))
+    )
 
     # Ensure the provider is callable
     assert callable(provider)
@@ -239,7 +245,9 @@ async def test_create_async_service_provider_custom() -> None:
 
 async def test_create_async_service_provider_positional() -> None:
     """Test creating an async service provider."""
-    provider = create_service_provider(MockAsyncService, config=MagicMock(session_dependency_key="testing_session"))
+    provider = create_service_provider(
+        MockAsyncService, config=MagicMock(session_key_config=MagicMock(session_dependency_key="testing_session"))
+    )
 
     # Ensure the provider is callable
     assert callable(provider)

@@ -8,7 +8,13 @@ from sqlalchemy import Connection, Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from advanced_alchemy._listeners import set_async_context
-from advanced_alchemy.config.common import GenericAlembicConfig, GenericSessionConfig, GenericSQLAlchemyConfig
+from advanced_alchemy.config.common import (
+    ConnectionConfig,
+    GenericAlembicConfig,
+    GenericSessionConfig,
+    GenericSQLAlchemyConfig,
+    SessionFactoryConfig,
+)
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 if TYPE_CHECKING:
@@ -64,12 +70,16 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
             )
     """
 
-    create_engine_callable: "Callable[[str], Engine]" = create_engine
-    """Callable that creates an :class:`Engine <sqlalchemy.Engine>` instance or instance of its subclass."""
+    connection_config: ConnectionConfig = field(
+        default_factory=lambda: ConnectionConfig(create_engine_callable=create_engine),
+    )  # pyright: ignore[reportIncompatibleVariableOverride]
+    """Configuration for database engine connection and creation."""
     session_config: SyncSessionConfig = field(default_factory=SyncSessionConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration options for the :class:`sessionmaker<sqlalchemy.orm.sessionmaker>`."""
-    session_maker_class: type[sessionmaker[Session]] = sessionmaker  # pyright: ignore[reportIncompatibleVariableOverride]
-    """Sessionmaker class to use."""
+    session_factory_config: SessionFactoryConfig = field(
+        default_factory=lambda: SessionFactoryConfig(session_maker_class=sessionmaker),
+    )  # pyright: ignore[reportIncompatibleVariableOverride]
+    """Configuration for session maker creation."""
     alembic_config: AlembicSyncConfig = field(default_factory=AlembicSyncConfig)
     """Configuration for the SQLAlchemy Alembic migrations.
 
@@ -87,18 +97,23 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
     """
 
     def __post_init__(self) -> None:
+        # Apply defaults when sub-config objects are provided without engine/session maker
+        if self.connection_config.create_engine_callable is None:
+            self.connection_config.create_engine_callable = create_engine
+        if self.session_factory_config.session_maker_class is None:
+            self.session_factory_config.session_maker_class = sessionmaker
         # Validate routing config vs connection_string
-        if self.routing_config is not None and self.connection_string is not None:
+        if self.routing_config is not None and self.connection_config.connection_string is not None:
             msg = "Provide either 'connection_string' or 'routing_config', not both"
             raise ImproperConfigurationError(msg)
         # If routing_config is set, use its primary as the connection_string for compatibility
         if self.routing_config is not None:
-            self.connection_string = self.routing_config.primary_connection_string
-            if self.connection_string is None:
+            self.connection_config.connection_string = self.routing_config.primary_connection_string
+            if self.connection_config.connection_string is None:
                 # Try to get from default group engines
-                configs = self.routing_config.get_engine_configs(self.routing_config.default_group)
+                configs = self.routing_config.get_engine_configs(self.routing_config.engine_groups.default_group)
                 if configs:
-                    self.connection_string = configs[0].connection_string
+                    self.connection_config.connection_string = configs[0].connection_string
 
         super().__post_init__()
 
@@ -117,8 +132,8 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
         Returns:
             A callable that creates session instances.
         """
-        if self.session_maker:
-            return self.session_maker
+        if self.session_factory_config.session_maker:
+            return cast("Callable[[], Session]", self.session_factory_config.session_maker)
 
         from sqlalchemy import event
 
@@ -137,28 +152,28 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
                 engine_config=self.engine_config_dict,
                 session_config=self.session_config_dict,
             )
-            self.session_maker = routing_maker
+            self.session_factory_config.session_maker = routing_maker
         else:
-            self.session_maker = super().create_session_maker()
+            self.session_factory_config.session_maker = super().create_session_maker()
 
-        if isinstance(self.session_maker, sessionmaker):
+        if isinstance(self.session_factory_config.session_maker, sessionmaker):
             session_maker = cast(
                 "sessionmaker[Session]",
-                self.session_maker,  # pyright: ignore[reportUnknownMemberType]
+                self.session_factory_config.session_maker,  # pyright: ignore[reportUnknownMemberType]
             )
-            if self.enable_file_object_listener:
+            if self.listener_config.enable_file_object_listener:
                 event.listen(session_maker, "before_flush", SyncFileObjectListener.before_flush)
                 event.listen(session_maker, "after_commit", SyncFileObjectListener.after_commit)
                 event.listen(session_maker, "after_rollback", SyncFileObjectListener.after_rollback)
-            if self.enable_touch_updated_timestamp_listener:
+            if self.listener_config.enable_touch_updated_timestamp_listener:
                 event.listen(session_maker, "before_flush", touch_updated_timestamp)
             event.listen(session_maker, "after_commit", SyncCacheListener.after_commit)
             event.listen(session_maker, "after_rollback", SyncCacheListener.after_rollback)
 
-        if self.session_maker is None:  # pyright: ignore
+        if self.session_factory_config.session_maker is None:  # pyright: ignore
             msg = "Session maker was not initialized."  # type: ignore[unreachable]
             raise ImproperConfigurationError(msg)
-        return cast("sessionmaker[Session]", self.session_maker)  # pyright: ignore[reportUnknownMemberType]
+        return cast("sessionmaker[Session]", self.session_factory_config.session_maker)  # pyright: ignore[reportUnknownMemberType]
 
     @contextmanager
     def get_session(self) -> "Generator[Session, None, None]":

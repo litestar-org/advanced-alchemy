@@ -61,7 +61,7 @@ def routing_session(
     """Create a routing session for testing."""
     reset_routing_context()
 
-    selectors: dict[str, EngineSelector[Engine]] = {routing_config.read_group: mock_replica_selector}
+    selectors: dict[str, EngineSelector[Engine]] = {routing_config.engine_groups.read_group: mock_replica_selector}
     return RoutingSyncSession(
         default_engine=mock_primary_engine,
         selectors=selectors,
@@ -75,7 +75,7 @@ def test_routing_session_initialization(
     routing_config: RoutingConfig,
 ) -> None:
     """Test RoutingSyncSession initialization."""
-    selectors: dict[str, EngineSelector[Engine]] = {routing_config.read_group: mock_replica_selector}
+    selectors: dict[str, EngineSelector[Engine]] = {routing_config.engine_groups.read_group: mock_replica_selector}
     session = RoutingSyncSession(
         default_engine=mock_primary_engine,
         selectors=selectors,
@@ -83,7 +83,7 @@ def test_routing_session_initialization(
     )
 
     assert session._default_engine is mock_primary_engine
-    assert session._selectors[routing_config.read_group] is mock_replica_selector
+    assert session._selectors[routing_config.engine_groups.read_group] is mock_replica_selector
     assert session._routing_config is routing_config
 
 
@@ -177,7 +177,7 @@ def test_get_bind_with_routing_disabled(
         enabled=False,
     )
 
-    selectors: dict[str, EngineSelector[Engine]] = {config.read_group: mock_replica_selector}
+    selectors: dict[str, EngineSelector[Engine]] = {config.engine_groups.read_group: mock_replica_selector}
     session = RoutingSyncSession(
         default_engine=mock_primary_engine,
         selectors=selectors,
@@ -250,7 +250,7 @@ def test_get_bind_no_replicas_falls_back_to_primary(
 
     selector: RoundRobinSelector[Engine] = RoundRobinSelector([])
 
-    selectors: dict[str, EngineSelector[Engine]] = {config.read_group: selector}
+    selectors: dict[str, EngineSelector[Engine]] = {config.engine_groups.read_group: selector}
 
     session = RoutingSyncSession(
         default_engine=mock_primary_engine,
@@ -312,7 +312,7 @@ def test_commit_no_reset_when_disabled(
         reset_stickiness_on_commit=False,
     )
 
-    selectors: dict[str, EngineSelector[Engine]] = {config.read_group: mock_replica_selector}
+    selectors: dict[str, EngineSelector[Engine]] = {config.engine_groups.read_group: mock_replica_selector}
     session = RoutingSyncSession(
         default_engine=mock_primary_engine,
         selectors=selectors,
@@ -364,7 +364,7 @@ def test_sticky_disabled_writes_dont_set_flag(
         sticky_after_write=False,
     )
 
-    selectors: dict[str, EngineSelector[Engine]] = {config.read_group: mock_replica_selector}
+    selectors: dict[str, EngineSelector[Engine]] = {config.engine_groups.read_group: mock_replica_selector}
     session = RoutingSyncSession(
         default_engine=mock_primary_engine,
         selectors=selectors,
@@ -403,7 +403,7 @@ def test_get_bind_with_none_clause_and_no_replicas(
 
     selector: RoundRobinSelector[Engine] = RoundRobinSelector([])
 
-    selectors: dict[str, EngineSelector[Engine]] = {config.read_group: selector}
+    selectors: dict[str, EngineSelector[Engine]] = {config.engine_groups.read_group: selector}
 
     session = RoutingSyncSession(
         default_engine=mock_primary_engine,
@@ -422,7 +422,7 @@ def test_has_for_update_detects_for_update_clause() -> None:
     primary_engine: Engine = MagicMock()
     selector: RoundRobinSelector[Engine] = RoundRobinSelector([])
 
-    selectors: dict[str, EngineSelector[Engine]] = {config.read_group: selector}
+    selectors: dict[str, EngineSelector[Engine]] = {config.engine_groups.read_group: selector}
     session = RoutingSyncSession(
         default_engine=primary_engine,
         selectors=selectors,

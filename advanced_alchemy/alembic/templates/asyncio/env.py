@@ -38,11 +38,11 @@ def run_migrations_offline() -> None:
         target_metadata=metadata_registry.get(config.bind_key),
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        compare_type=config.compare_type,
-        version_table=config.version_table_name,
-        version_table_pk=config.version_table_pk,
-        user_module_prefix=config.user_module_prefix,
-        render_as_batch=config.render_as_batch,
+        compare_type=config.migration_config.compare_type,
+        version_table=config.version_config.version_table_name,
+        version_table_pk=config.version_config.version_table_pk,
+        user_module_prefix=config.migration_config.user_module_prefix,
+        render_as_batch=config.migration_config.render_as_batch,
         process_revision_directives=writer,
     )
 
@@ -55,11 +55,11 @@ def do_run_migrations(connection: "Connection") -> None:
     context.configure(
         connection=connection,
         target_metadata=metadata_registry.get(config.bind_key),
-        compare_type=config.compare_type,
-        version_table=config.version_table_name,
-        version_table_pk=config.version_table_pk,
-        user_module_prefix=config.user_module_prefix,
-        render_as_batch=config.render_as_batch,
+        compare_type=config.migration_config.compare_type,
+        version_table=config.version_config.version_table_name,
+        version_table_pk=config.version_config.version_table_pk,
+        user_module_prefix=config.migration_config.user_module_prefix,
+        render_as_batch=config.migration_config.render_as_batch,
         process_revision_directives=writer,
     )
 

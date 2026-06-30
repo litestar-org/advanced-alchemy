@@ -106,7 +106,7 @@ class AdvancedAlchemy:
         # Initialize each config with the app
         for config in self.config:
             config.init_app(app, self.portal_provider.portal)
-            bind_key = config.bind_key if config.bind_key is not None else "default"
+            bind_key = config.metadata_config.bind_key if config.metadata_config.bind_key is not None else "default"
             session_maker = config.create_session_maker()
             self._session_makers[bind_key] = session_maker
 

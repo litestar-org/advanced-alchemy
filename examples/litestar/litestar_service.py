@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from advanced_alchemy.config.common import ConnectionConfig, SessionTransactionConfig
 from advanced_alchemy.extensions.litestar import (
     AsyncSessionConfig,
     SQLAlchemyAsyncConfig,
@@ -147,9 +148,9 @@ class AuthorController(Controller):
 
 
 alchemy_config = SQLAlchemyAsyncConfig(
-    connection_string="sqlite+aiosqlite:///test.sqlite",
+    connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///test.sqlite"),
     before_send_handler="autocommit",
-    session_config=AsyncSessionConfig(expire_on_commit=False),
+    session_config=AsyncSessionConfig(transaction_config=SessionTransactionConfig(expire_on_commit=False)),
     create_all=True,
 )
 

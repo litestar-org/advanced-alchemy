@@ -15,7 +15,8 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
-from advanced_alchemy.config import AsyncSessionConfig
+from advanced_alchemy.config import AsyncSessionConfig, SessionTransactionConfig
+from advanced_alchemy.config.common import ConnectionConfig
 from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
 from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
@@ -197,9 +198,9 @@ class AuthorController(Controller):
         await authors_repo.session.commit()
 
 
-session_config = AsyncSessionConfig(expire_on_commit=False)
+session_config = AsyncSessionConfig(transaction_config=SessionTransactionConfig(expire_on_commit=False))
 alchemy_config = SQLAlchemyAsyncConfig(
-    connection_string="sqlite+aiosqlite:///test.sqlite",
+    connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///test.sqlite"),
     session_config=session_config,
     create_all=True,
 )  # Auto creates 'db_session' dependency.

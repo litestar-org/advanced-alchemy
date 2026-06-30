@@ -15,10 +15,12 @@ from pydantic import BaseModel
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from advanced_alchemy.config.common import ConnectionConfig, SessionTransactionConfig
 from advanced_alchemy.extensions.fastapi import (
     AdvancedAlchemy,
     AsyncSessionConfig,
     SQLAlchemyAsyncConfig,
+    StarletteSessionConfig,
     base,
     filters,
     repository,
@@ -27,9 +29,9 @@ from advanced_alchemy.extensions.fastapi import (
 from advanced_alchemy.utils.serialization import ModelDictT, is_dict, schema_dump
 
 alchemy_config = SQLAlchemyAsyncConfig(
-    connection_string="sqlite+aiosqlite:///test.sqlite",
-    session_config=AsyncSessionConfig(expire_on_commit=False),
-    commit_mode="autocommit",
+    connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///test.sqlite"),
+    session_config=AsyncSessionConfig(transaction_config=SessionTransactionConfig(expire_on_commit=False)),
+    starlette_session_config=StarletteSessionConfig(commit_mode="autocommit"),
     create_all=True,
 )
 app = FastAPI()

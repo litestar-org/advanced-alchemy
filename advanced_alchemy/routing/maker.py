@@ -76,7 +76,7 @@ class RoutingSyncSessionMaker:
         self._selectors: dict[str, EngineSelector[Engine]] = {}
 
         # Initialize engines and selectors for all groups
-        for group in routing_config.engines:
+        for group in routing_config.engine_groups.engines:
             engines_for_group: list[Engine] = []
             for config in routing_config.get_engine_configs(group):
                 engine = self._create_engine(config.connection_string, create_engine_callable)
@@ -86,11 +86,11 @@ class RoutingSyncSessionMaker:
                 self._engines[group] = engines_for_group
                 self._selectors[group] = self._create_selector(
                     engines_for_group,
-                    routing_config.routing_strategy,
+                    routing_config.behavior.routing_strategy,
                 )
 
         # Set default engine (required)
-        default_group = routing_config.default_group
+        default_group = routing_config.engine_groups.default_group
         if (
             default_group not in self._engines or not self._engines[default_group]
         ) and not routing_config.primary_connection_string:
@@ -178,7 +178,7 @@ class RoutingSyncSessionMaker:
         Returns:
             List of replica database engines.
         """
-        return self._engines.get(self._routing_config.read_group, [])
+        return self._engines.get(self._routing_config.engine_groups.read_group, [])
 
     def close_all(self) -> None:
         """Close all engines and release connections.
@@ -245,7 +245,7 @@ class RoutingAsyncSessionMaker:
         self._selectors: dict[str, EngineSelector[AsyncEngine]] = {}
 
         # Initialize engines and selectors for all groups
-        for group in routing_config.engines:
+        for group in routing_config.engine_groups.engines:
             engines_for_group: list[AsyncEngine] = []
             for config in routing_config.get_engine_configs(group):
                 engine = self._create_engine(config.connection_string, create_engine_callable)
@@ -255,11 +255,11 @@ class RoutingAsyncSessionMaker:
                 self._engines[group] = engines_for_group
                 self._selectors[group] = self._create_selector(
                     engines_for_group,
-                    routing_config.routing_strategy,
+                    routing_config.behavior.routing_strategy,
                 )
 
         # Set default engine (required)
-        default_group = routing_config.default_group
+        default_group = routing_config.engine_groups.default_group
         if default_group not in self._engines or not self._engines[default_group]:
             msg = (
                 f"Default group '{default_group}' has no engines configured. "
@@ -343,7 +343,7 @@ class RoutingAsyncSessionMaker:
         Returns:
             List of replica database async engines.
         """
-        return self._engines.get(self._routing_config.read_group, [])
+        return self._engines.get(self._routing_config.engine_groups.read_group, [])
 
     async def close_all(self) -> None:
         """Close all engines and release connections.

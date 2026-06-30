@@ -127,7 +127,7 @@ def alembic_cmds(
         from sqlalchemy.ext.asyncio import AsyncEngine
 
         engine = test_config.get_engine()
-        table_name = test_config.alembic_config.version_table_name
+        table_name = test_config.alembic_config.version_table_config.version_table_name
 
         if isinstance(engine, AsyncEngine):
             import asyncio

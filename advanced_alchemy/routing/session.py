@@ -106,10 +106,10 @@ class RoutingSyncSession(Session):
 
         # 3. Check if we should force/stick to default (writer)
         if self._should_use_default_group(clause):
-            return self._get_engine_for_group(self._routing_config.default_group)
+            return self._get_engine_for_group(self._routing_config.engine_groups.default_group)
 
         # 4. Read operation -> use read group
-        return self._get_engine_for_group(self._routing_config.read_group)
+        return self._get_engine_for_group(self._routing_config.engine_groups.read_group)
 
     def _get_engine_for_group(self, group: str) -> "Engine":
         """Get an engine for the specified group.
@@ -138,7 +138,7 @@ class RoutingSyncSession(Session):
         Returns:
             ``True`` if default group should be used.
         """
-        if not self._routing_config.enabled:
+        if not self._routing_config.behavior.enabled:
             return True
 
         if force_primary_var.get():
@@ -148,12 +148,12 @@ class RoutingSyncSession(Session):
             return True
 
         if self._flushing:
-            if self._routing_config.sticky_after_write:
+            if self._routing_config.behavior.sticky_after_write:
                 set_sticky_primary()
             return True
 
         if clause is not None and isinstance(clause, (Insert, Update, Delete)):
-            if self._routing_config.sticky_after_write:
+            if self._routing_config.behavior.sticky_after_write:
                 set_sticky_primary()
             return True
 
@@ -176,7 +176,7 @@ class RoutingSyncSession(Session):
     def commit(self) -> None:
         """Commit the transaction and reset routing state."""
         super().commit()
-        if self._routing_config.reset_stickiness_on_commit:
+        if self._routing_config.behavior.reset_stickiness_on_commit:
             reset_routing_context()
 
     def rollback(self) -> None:

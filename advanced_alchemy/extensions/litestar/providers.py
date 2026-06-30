@@ -173,7 +173,7 @@ def create_service_provider(
         A dependency provider function suitable for Litestar's DI system.
     """
 
-    session_dependency_key = config.session_dependency_key if config else "db_session"
+    session_dependency_key = config.session_key_config.session_dependency_key if config else "db_session"
 
     if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
         async_session_type_annotation = NamedDependency[SkipValidation[Optional["AsyncSession"]]]

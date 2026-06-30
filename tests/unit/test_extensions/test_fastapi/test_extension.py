@@ -20,6 +20,7 @@ from typing_extensions import assert_type
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+from advanced_alchemy.extensions.starlette import StarletteSessionConfig
 
 AnyConfig = Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]
 pytestmark = pytest.mark.xfail(
@@ -252,7 +253,10 @@ def test_sync_commit_strategies(
     autocommit_strategy: Literal["manual", "autocommit", "autocommit_include_redirect"],
 ) -> None:
     app = FastAPI()
-    config = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:", commit_mode=autocommit_strategy)
+    config = SQLAlchemySyncConfig(
+        connection_string="sqlite:///:memory:",
+        starlette_session_config=StarletteSessionConfig(commit_mode=autocommit_strategy),
+    )
     alchemy = AdvancedAlchemy(config=config, app=app)
     mock_commit = mocker.patch("sqlalchemy.orm.Session.commit")
     mock_close = mocker.patch("sqlalchemy.orm.Session.close")
@@ -299,7 +303,10 @@ def test_async_commit_strategies(
     autocommit_strategy: Literal["manual", "autocommit", "autocommit_include_redirect"],
 ) -> None:
     app = FastAPI()
-    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:", commit_mode=autocommit_strategy)
+    config = SQLAlchemyAsyncConfig(
+        connection_string="sqlite+aiosqlite:///:memory:",
+        starlette_session_config=StarletteSessionConfig(commit_mode=autocommit_strategy),
+    )
     alchemy = AdvancedAlchemy(config=config, app=app)
     mock_commit = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.commit")
     mock_close = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.close")
@@ -343,7 +350,7 @@ def test_sync_session_close_on_exception(
     app = FastAPI()
     config = SQLAlchemySyncConfig(
         connection_string="sqlite+pysqlite://",
-        commit_mode=autocommit_strategy,
+        starlette_session_config=StarletteSessionConfig(commit_mode=autocommit_strategy),
     )
     alchemy = AdvancedAlchemy(config=config, app=app)
     mock_commit = mocker.patch("sqlalchemy.orm.Session.commit")
@@ -374,7 +381,7 @@ def test_async_session_close_on_exception(
     app = FastAPI()
     config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite://",
-        commit_mode=autocommit_strategy,
+        starlette_session_config=StarletteSessionConfig(commit_mode=autocommit_strategy),
     )
     alchemy = AdvancedAlchemy(config=config, app=app)
     mock_commit = mocker.patch("sqlalchemy.ext.asyncio.AsyncSession.commit")
@@ -399,8 +406,13 @@ def test_async_session_close_on_exception(
 
 def test_multiple_sync_instances(app: FastAPI) -> None:
     mock = MagicMock()
+    from advanced_alchemy.config.common import MetadataConfig
+
     config_1 = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:")
-    config_2 = SQLAlchemySyncConfig(connection_string="sqlite:///temp.db", bind_key="config_2")
+    config_2 = SQLAlchemySyncConfig(
+        connection_string="sqlite:///temp.db",
+        metadata_config=MetadataConfig(bind_key="config_2"),
+    )
 
     alchemy_1 = AdvancedAlchemy([config_1, config_2], app=app)
 
@@ -424,8 +436,14 @@ def test_multiple_sync_instances(app: FastAPI) -> None:
 
     with TestClient(app=app) as client:
         client.get("/")
-        assert alchemy_1.get_sync_config().bind_key != alchemy_1.get_sync_config("config_2").bind_key
-        assert alchemy_1.get_sync_config().session_maker != alchemy_1.get_sync_config("config_2").session_maker
+        assert (
+            alchemy_1.get_sync_config().metadata_config.bind_key
+            != alchemy_1.get_sync_config("config_2").metadata_config.bind_key
+        )
+        assert (
+            alchemy_1.get_sync_config().session_factory_config.session_maker
+            != alchemy_1.get_sync_config("config_2").session_factory_config.session_maker
+        )
 
         assert alchemy_1.get_sync_config().get_engine() is not alchemy_1.get_sync_config("config_2").get_engine()
         assert (

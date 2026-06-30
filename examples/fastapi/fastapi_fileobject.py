@@ -15,10 +15,12 @@ from fastapi import APIRouter, Depends, FastAPI, File, Form, UploadFile
 from pydantic import BaseModel, Field, computed_field
 from sqlalchemy.orm import Mapped, mapped_column
 
+from advanced_alchemy.config.common import ConnectionConfig, SessionTransactionConfig
 from advanced_alchemy.extensions.fastapi import (
     AdvancedAlchemy,
     AsyncSessionConfig,
     SQLAlchemyAsyncConfig,
+    StarletteSessionConfig,
     base,
     filters,
     repository,
@@ -29,9 +31,9 @@ from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
 from advanced_alchemy.types.file_object.data_type import StoredObject
 
 alchemy_config = SQLAlchemyAsyncConfig(
-    connection_string="sqlite+aiosqlite:///test.sqlite",
-    session_config=AsyncSessionConfig(expire_on_commit=False),
-    commit_mode="autocommit",
+    connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///test.sqlite"),
+    session_config=AsyncSessionConfig(transaction_config=SessionTransactionConfig(expire_on_commit=False)),
+    starlette_session_config=StarletteSessionConfig(commit_mode="autocommit"),
     create_all=True,
 )
 app = FastAPI()

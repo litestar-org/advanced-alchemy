@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from advanced_alchemy.cache.config import CacheConfig
+from advanced_alchemy.cache.config import CacheConfig, CacheSerializerConfig
 
 
 def test_cache_config_defaults() -> None:
@@ -14,8 +14,8 @@ def test_cache_config_defaults() -> None:
     assert config.arguments == {}
     assert config.key_prefix == "aa:"
     assert config.enabled is True
-    assert config.serializer is None
-    assert config.deserializer is None
+    assert config.serializer_config.serializer is None
+    assert config.serializer_config.deserializer is None
     assert config.region_factory is None
 
 
@@ -72,12 +72,14 @@ def test_cache_config_custom_serializers() -> None:
         return model_class()
 
     config = CacheConfig(
-        serializer=custom_serializer,
-        deserializer=custom_deserializer,
+        serializer_config=CacheSerializerConfig(
+            serializer=custom_serializer,
+            deserializer=custom_deserializer,
+        ),
     )
 
-    assert config.serializer is custom_serializer
-    assert config.deserializer is custom_deserializer
+    assert config.serializer_config.serializer is custom_serializer
+    assert config.serializer_config.deserializer is custom_deserializer
 
 
 def test_cache_config_no_expiration() -> None:

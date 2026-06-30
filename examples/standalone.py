@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import create_engine
 
 from advanced_alchemy.base import UUIDBase
-from advanced_alchemy.config import SQLAlchemySyncConfig, SyncSessionConfig
+from advanced_alchemy.config import ConnectionConfig, SessionTransactionConfig, SQLAlchemySyncConfig, SyncSessionConfig
 from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemySyncRepository
 from advanced_alchemy.utils.fixtures import open_fixture
@@ -17,7 +17,8 @@ if TYPE_CHECKING:
 
 here = Path(__file__).parent
 alchemy_config = SQLAlchemySyncConfig(
-    engine_instance=create_engine("duckdb:///:memory:"), session_config=SyncSessionConfig(expire_on_commit=False)
+    connection_config=ConnectionConfig(engine_instance=create_engine("duckdb:///:memory:")),
+    session_config=SyncSessionConfig(transaction_config=SessionTransactionConfig(expire_on_commit=False)),
 )
 
 

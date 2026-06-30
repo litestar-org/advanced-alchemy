@@ -1,5 +1,6 @@
 import inspect  # Added import
 import sys
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional, TextIO, Union
 
 from alembic.config import Config as _AlembicCommandConfig
@@ -33,6 +34,24 @@ class AlembicDuckDBImpl(DefaultImpl):
     """Alembic implementation for DuckDB."""
 
     __dialect__ = "duckdb"
+
+
+@dataclass
+class _AlembicVersionTableConfig:
+    """Configuration for the Alembic version table."""
+
+    version_table_name: str
+    version_table_pk: bool
+    version_table_schema: "Optional[str]" = None
+
+
+@dataclass
+class _AlembicMigrationConfig:
+    """Configuration for Alembic migration behavior."""
+
+    render_as_batch: bool = True
+    compare_type: bool = False
+    user_module_prefix: "Optional[str]" = "sa."
 
 
 class AlembicCommandConfig(_AlembicCommandConfig):
@@ -77,12 +96,16 @@ class AlembicCommandConfig(_AlembicCommandConfig):
         """
         self.template_directory = template_directory
         self.bind_key = bind_key
-        self.version_table_name = version_table_name
-        self.version_table_pk = engine.dialect.name != "spanner+spanner"
-        self.version_table_schema = version_table_schema
-        self.render_as_batch = render_as_batch
-        self.user_module_prefix = user_module_prefix
-        self.compare_type = compare_type
+        self.version_config = _AlembicVersionTableConfig(
+            version_table_name=version_table_name,
+            version_table_pk=engine.dialect.name != "spanner+spanner",
+            version_table_schema=version_table_schema,
+        )
+        self.migration_config = _AlembicMigrationConfig(
+            render_as_batch=render_as_batch,
+            compare_type=compare_type,
+            user_module_prefix=user_module_prefix,
+        )
         self.engine = engine
         self.db_url = engine.url.render_as_string(hide_password=False)
 
@@ -383,7 +406,7 @@ class AlembicCommands:
         kwargs.update(
             {
                 "engine": self.sqlalchemy_config.get_engine(),
-                "version_table_name": self.sqlalchemy_config.alembic_config.version_table_name,
+                "version_table_name": self.sqlalchemy_config.alembic_config.version_table_config.version_table_name,
             },
         )
         self.config = AlembicCommandConfig(**kwargs)

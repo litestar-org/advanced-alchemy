@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Session
 
 from advanced_alchemy.extensions.litestar import SQLAlchemyPlugin
-from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
+from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SessionKeyConfig, SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.session import (
     SessionModelMixin,
@@ -169,18 +169,22 @@ def mock_store() -> Store:
 @pytest.fixture
 def sync_session_config(engine: Engine) -> SQLAlchemySyncConfig:
     """Create sync config with test engine."""
+    from advanced_alchemy.config.common import ConnectionConfig
+
     return SQLAlchemySyncConfig(
-        engine_instance=engine,
-        session_dependency_key="db_session",
+        connection_config=ConnectionConfig(engine_instance=engine),
+        session_key_config=SessionKeyConfig(session_dependency_key="db_session"),
     )
 
 
 @pytest.fixture
 async def async_session_config(async_engine: AsyncEngine) -> SQLAlchemyAsyncConfig:
     """Create async config with test engine."""
+    from advanced_alchemy.config.common import ConnectionConfig
+
     return SQLAlchemyAsyncConfig(
-        engine_instance=async_engine,
-        session_dependency_key="db_session",
+        connection_config=ConnectionConfig(engine_instance=async_engine),
+        session_key_config=SessionKeyConfig(session_dependency_key="db_session"),
     )
 
 
@@ -339,9 +343,11 @@ async def test_async_session_backend_expiration(
         pytest.skip("Mock engine cannot test real database operations")
 
     # Create config with very short expiration
+    from advanced_alchemy.config.common import ConnectionConfig
+
     config = SQLAlchemyAsyncConfig(
-        engine_instance=async_engine,
-        session_dependency_key="db_session",
+        connection_config=ConnectionConfig(engine_instance=async_engine),
+        session_key_config=SessionKeyConfig(session_dependency_key="db_session"),
     )
 
     backend = SQLAlchemyAsyncSessionBackend(
@@ -458,9 +464,11 @@ async def test_async_session_middleware_integration(
     if getattr(async_engine.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
 
+    from advanced_alchemy.config.common import ConnectionConfig
+
     config = SQLAlchemyAsyncConfig(
-        engine_instance=async_engine,
-        session_dependency_key="db_session",
+        connection_config=ConnectionConfig(engine_instance=async_engine),
+        session_key_config=SessionKeyConfig(session_dependency_key="db_session"),
     )
 
     backend = SQLAlchemyAsyncSessionBackend(
@@ -526,7 +534,7 @@ async def test_sync_session_middleware_integration(
 
     config = SQLAlchemySyncConfig(
         engine_instance=engine,
-        session_dependency_key="db_session",
+        session_key_config=SessionKeyConfig(session_dependency_key="db_session"),
     )
 
     backend = SQLAlchemySyncSessionBackend(

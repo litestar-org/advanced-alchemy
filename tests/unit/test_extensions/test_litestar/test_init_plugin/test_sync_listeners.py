@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from sqlalchemy.orm import sessionmaker
 
-from advanced_alchemy.config.common import GenericSQLAlchemyConfig
+from advanced_alchemy.config.common import ConnectionConfig, GenericSQLAlchemyConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import (
     SQLAlchemySyncConfig,
 )
@@ -17,7 +17,7 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.sync import (
 def test_create_session_maker_registers_all_listeners() -> None:
     """Default config registers 6 listeners directly on the session_maker."""
     mock_session_maker = MagicMock(spec=sessionmaker)
-    config = SQLAlchemySyncConfig(connection_string="sqlite:///")
+    config = SQLAlchemySyncConfig(connection_config=ConnectionConfig(connection_string="sqlite:///"))
 
     with (
         patch.object(
@@ -40,9 +40,11 @@ def test_create_session_maker_registers_all_listeners() -> None:
 def test_create_session_maker_file_object_listener_disabled() -> None:
     """With file-object listener disabled, only timestamp + cache listeners register (3)."""
     mock_session_maker = MagicMock(spec=sessionmaker)
+    from advanced_alchemy.config.common import ListenerConfig
+
     config = SQLAlchemySyncConfig(
-        connection_string="sqlite:///",
-        enable_file_object_listener=False,
+        connection_config=ConnectionConfig(connection_string="sqlite:///"),
+        listener_config=ListenerConfig(enable_file_object_listener=False),
     )
 
     with (
@@ -61,9 +63,11 @@ def test_create_session_maker_file_object_listener_disabled() -> None:
 def test_create_session_maker_timestamp_listener_disabled() -> None:
     """With timestamp listener disabled, only file-object + cache listeners register (5)."""
     mock_session_maker = MagicMock(spec=sessionmaker)
+    from advanced_alchemy.config.common import ListenerConfig
+
     config = SQLAlchemySyncConfig(
-        connection_string="sqlite:///",
-        enable_touch_updated_timestamp_listener=False,
+        connection_config=ConnectionConfig(connection_string="sqlite:///"),
+        listener_config=ListenerConfig(enable_touch_updated_timestamp_listener=False),
     )
 
     with (

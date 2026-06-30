@@ -6,15 +6,15 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from advanced_alchemy.config.asyncio import AsyncSessionConfig, SQLAlchemyAsyncConfig
-from advanced_alchemy.config.common import GenericSQLAlchemyConfig
+from advanced_alchemy.config.common import CacheOptions, ConnectionConfig, GenericSQLAlchemyConfig, ListenerConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 
 def test_create_session_maker_returns_existing() -> None:
     """When session_maker is already set, return it without creating a new one."""
     existing_maker = MagicMock()
-    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///")
-    config.session_maker = existing_maker
+    config = SQLAlchemyAsyncConfig(connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///"))
+    config.session_factory_config.session_maker = existing_maker
 
     result = config.create_session_maker()
     assert result is existing_maker
@@ -24,7 +24,7 @@ def test_create_session_maker_standard_path() -> None:
     """Standard path creates a sessionmaker and registers all listeners."""
     mock_session_maker = MagicMock(spec=async_sessionmaker)
 
-    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///")
+    config = SQLAlchemyAsyncConfig(connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///"))
 
     with (
         patch.object(
@@ -65,8 +65,8 @@ def test_create_session_maker_file_object_listener_disabled() -> None:
     mock_session_maker = MagicMock(spec=async_sessionmaker)
 
     config = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///",
-        enable_file_object_listener=False,
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///"),
+        listener_config=ListenerConfig(enable_file_object_listener=False),
     )
 
     with (
@@ -88,8 +88,8 @@ def test_create_session_maker_timestamp_listener_disabled() -> None:
     mock_session_maker = MagicMock(spec=async_sessionmaker)
 
     config = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///",
-        enable_touch_updated_timestamp_listener=False,
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///"),
+        listener_config=ListenerConfig(enable_touch_updated_timestamp_listener=False),
     )
 
     with (
@@ -113,7 +113,7 @@ def test_post_init_routing_and_connection_string_conflict() -> None:
 
     with pytest.raises(ImproperConfigurationError, match="Provide either"):
         SQLAlchemyAsyncConfig(
-            connection_string="sqlite+aiosqlite:///",
+            connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///"),
             routing_config=mock_routing,
         )
 
@@ -125,7 +125,7 @@ def test_post_init_routing_config_sets_connection_string() -> None:
     mock_routing.get_engine_configs.return_value = []
 
     config = SQLAlchemyAsyncConfig(routing_config=mock_routing)
-    assert config.connection_string == "sqlite+aiosqlite:///routed"
+    assert config.connection_config.connection_string == "sqlite+aiosqlite:///routed"
 
 
 def test_post_init_routing_config_fallback_to_engine_configs() -> None:
@@ -139,7 +139,7 @@ def test_post_init_routing_config_fallback_to_engine_configs() -> None:
     mock_routing.get_engine_configs.return_value = [mock_engine_config]
 
     config = SQLAlchemyAsyncConfig(routing_config=mock_routing)
-    assert config.connection_string == "sqlite+aiosqlite:///fallback"
+    assert config.connection_config.connection_string == "sqlite+aiosqlite:///fallback"
 
 
 def test_post_init_cache_config_builds_manager() -> None:
@@ -147,13 +147,13 @@ def test_post_init_cache_config_builds_manager() -> None:
     from advanced_alchemy.cache import CacheConfig, CacheManager
 
     config = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:",
-        cache_config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300),
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        cache_options=CacheOptions(config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300)),
     )
-    assert isinstance(config.cache_manager, CacheManager)
+    assert isinstance(config.cache_options.manager, CacheManager)
     info = config.session_config.info
     assert isinstance(info, dict)
-    assert info["cache_manager"] is config.cache_manager
+    assert info["cache_manager"] is config.cache_options.manager
 
 
 def test_post_init_cache_config_with_session_info_none_builds_manager() -> None:
@@ -161,15 +161,15 @@ def test_post_init_cache_config_with_session_info_none_builds_manager() -> None:
     from advanced_alchemy.cache import CacheConfig, CacheManager
 
     config = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:",
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
         session_config=AsyncSessionConfig(info=None),
-        cache_config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300),
+        cache_options=CacheOptions(config=CacheConfig(backend="dogpile.cache.memory", expiration_time=300)),
     )
-    assert isinstance(config.cache_manager, CacheManager)
+    assert isinstance(config.cache_options.manager, CacheManager)
     info = config.session_config.info
     assert isinstance(info, dict)
     assert info["file_object_raise_on_error"] is True
-    assert info["cache_manager"] is config.cache_manager
+    assert info["cache_manager"] is config.cache_options.manager
 
 
 def test_post_init_explicit_cache_manager_overrides() -> None:
@@ -178,10 +178,10 @@ def test_post_init_explicit_cache_manager_overrides() -> None:
 
     manager = CacheManager(CacheConfig(backend="dogpile.cache.memory"))
     config = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:",
-        cache_manager=manager,
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        cache_options=CacheOptions(manager=manager),
     )
-    assert config.cache_manager is manager
+    assert config.cache_options.manager is manager
     info = config.session_config.info
     assert isinstance(info, dict)
     assert info["cache_manager"] is manager
@@ -189,8 +189,8 @@ def test_post_init_explicit_cache_manager_overrides() -> None:
 
 def test_post_init_without_cache_config_leaves_info_clean() -> None:
     """No cache_config means no cache_manager key on session.info."""
-    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
-    assert config.cache_manager is None
+    config = SQLAlchemyAsyncConfig(connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"))
+    assert config.cache_options.manager is None
     info = config.session_config.info
     assert isinstance(info, dict)
     assert "cache_manager" not in info
@@ -206,14 +206,14 @@ def test_post_init_does_not_alias_shared_session_config_info() -> None:
     mgr_b = CacheManager(CacheConfig(backend="dogpile.cache.memory", key_prefix="b:"))
 
     cfg_a = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:",
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
         session_config=shared,
-        cache_manager=mgr_a,
+        cache_options=CacheOptions(manager=mgr_a),
     )
     cfg_b = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:",
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
         session_config=shared,
-        cache_manager=mgr_b,
+        cache_options=CacheOptions(manager=mgr_b),
     )
 
     info_a = cfg_a.session_config.info
@@ -234,9 +234,17 @@ def test_hash_distinguishes_configs_by_cache_manager() -> None:
     mgr_a = CacheManager(CacheConfig(backend="dogpile.cache.memory", key_prefix="a:"))
     mgr_b = CacheManager(CacheConfig(backend="dogpile.cache.memory", key_prefix="b:"))
 
-    cfg_a = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:", cache_manager=mgr_a)
-    cfg_b = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:", cache_manager=mgr_b)
-    cfg_none = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+    cfg_a = SQLAlchemyAsyncConfig(
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        cache_options=CacheOptions(manager=mgr_a),
+    )
+    cfg_b = SQLAlchemyAsyncConfig(
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        cache_options=CacheOptions(manager=mgr_b),
+    )
+    cfg_none = SQLAlchemyAsyncConfig(
+        connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///:memory:")
+    )
 
     assert hash(cfg_a) != hash(cfg_b)
     assert hash(cfg_a) != hash(cfg_none)

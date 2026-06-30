@@ -8,6 +8,7 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from advanced_alchemy.config.common import ConnectionConfig, SessionTransactionConfig
 from advanced_alchemy.extensions.sanic import (
     AdvancedAlchemy,
     AsyncSessionConfig,
@@ -91,9 +92,9 @@ def provide_limit_offset_pagination(
 # Application
 # #######################
 
-session_config = AsyncSessionConfig(expire_on_commit=False)
+session_config = AsyncSessionConfig(transaction_config=SessionTransactionConfig(expire_on_commit=False))
 alchemy_config = SQLAlchemyAsyncConfig(
-    connection_string="sqlite+aiosqlite:///test.sqlite",
+    connection_config=ConnectionConfig(connection_string="sqlite+aiosqlite:///test.sqlite"),
     session_config=session_config,
 )  # Create 'db_session' dependency.
 app = Sanic("AlchemySanicApp")

@@ -16,6 +16,83 @@ if TYPE_CHECKING:
     from advanced_alchemy.types.file_object.base import PathLike
 
 
+class _FileMetadata:
+    """Container for file metadata attributes to reduce FileObject's attribute count."""
+
+    __slots__ = (
+        "_checksum",
+        "_etag",
+        "_last_modified",
+        "_metadata",
+        "_size",
+        "_version_id",
+    )
+
+    def __init__(
+        self,
+        size: "Optional[int]" = None,
+        last_modified: "Optional[float]" = None,
+        checksum: "Optional[str]" = None,
+        etag: "Optional[str]" = None,
+        version_id: "Optional[str]" = None,
+        metadata: "Optional[dict[str, Any]]" = None,
+    ) -> None:
+        self._size = size
+        self._last_modified = last_modified
+        self._checksum = checksum
+        self._etag = etag
+        self._version_id = version_id
+        self._metadata = metadata or {}
+
+    @property
+    def size(self) -> "Optional[int]":
+        return self._size
+
+    @size.setter
+    def size(self, value: int) -> None:
+        self._size = value
+
+    @property
+    def last_modified(self) -> "Optional[float]":
+        return self._last_modified
+
+    @last_modified.setter
+    def last_modified(self, value: float) -> None:
+        self._last_modified = value
+
+    @property
+    def checksum(self) -> "Optional[str]":
+        return self._checksum
+
+    @checksum.setter
+    def checksum(self, value: str) -> None:
+        self._checksum = value
+
+    @property
+    def etag(self) -> "Optional[str]":
+        return self._etag
+
+    @etag.setter
+    def etag(self, value: str) -> None:
+        self._etag = value
+
+    @property
+    def version_id(self) -> "Optional[str]":
+        return self._version_id
+
+    @version_id.setter
+    def version_id(self, value: str) -> None:
+        self._version_id = value
+
+    @property
+    def metadata(self) -> "dict[str, Any]":
+        return self._metadata
+
+    @metadata.setter
+    def metadata(self, value: "dict[str, Any]") -> None:
+        self._metadata = value
+
+
 class FileObject:
     """Represents file metadata during processing using a dataclass structure.
 
@@ -26,19 +103,13 @@ class FileObject:
     """
 
     __slots__ = (
-        "_checksum",
         "_content_type",
-        "_etag",
         "_filename",
-        "_last_modified",
-        "_metadata",
-        "_pending_source_content",
-        "_pending_source_path",
+        "_metadata_obj",
+        "_pending_source",
         "_raw_backend",
         "_resolved_backend",
-        "_size",
         "_to_filename",
-        "_version_id",
     )
 
     def __init__(
@@ -65,22 +136,25 @@ class FileObject:
             ValueError: If filename is not provided, size is negative, backend/protocol mismatch,
                         or both 'content' and 'source_path' are provided.
         """
-        self._size = size
-        self._last_modified = last_modified
-        self._checksum = checksum
-        self._etag = etag
-        self._version_id = version_id
-        self._metadata = metadata or {}
+        self._metadata_obj = _FileMetadata(
+            size=size,
+            last_modified=last_modified,
+            checksum=checksum,
+            etag=etag,
+            version_id=version_id,
+            metadata=metadata,
+        )
         self._filename = filename
         self._content_type = content_type
         self._to_filename = to_filename
         self._resolved_backend: Optional[StorageBackend] = backend if isinstance(backend, StorageBackend) else None
         self._raw_backend = backend
-        self._pending_source_path = Path(source_path) if source_path is not None else None
-        self._pending_source_content = content
-        if self._pending_source_content is not None and self._pending_source_path is not None:
+        if content is not None and source_path is not None:
             msg = "Cannot provide both 'source_content' and 'source_path' during initialization."
             raise ValueError(msg)
+        self._pending_source: Optional[Union[DataLike, AsyncDataLike, Path]] = (
+            content if content is not None else (Path(source_path) if source_path is not None else None)
+        )
 
     def __repr__(self) -> str:
         """Return a string representation of the FileObject."""
@@ -134,55 +208,55 @@ class FileObject:
 
     @property
     def has_pending_data(self) -> bool:
-        return bool(self._pending_source_content or self._pending_source_path)
+        return self._pending_source is not None
 
     @property
     def metadata(self) -> dict[str, Any]:
-        return self._metadata
+        return self._metadata_obj.metadata
 
     @metadata.setter
     def metadata(self, value: dict[str, Any]) -> None:
-        self._metadata = value
+        self._metadata_obj.metadata = value
 
     @property
     def size(self) -> "Optional[int]":
-        return self._size
+        return self._metadata_obj.size
 
     @size.setter
     def size(self, value: int) -> None:
-        self._size = value
+        self._metadata_obj.size = value
 
     @property
     def last_modified(self) -> "Optional[float]":
-        return self._last_modified
+        return self._metadata_obj.last_modified
 
     @last_modified.setter
     def last_modified(self, value: float) -> None:
-        self._last_modified = value
+        self._metadata_obj.last_modified = value
 
     @property
     def checksum(self) -> "Optional[str]":
-        return self._checksum
+        return self._metadata_obj.checksum
 
     @checksum.setter
     def checksum(self, value: str) -> None:
-        self._checksum = value
+        self._metadata_obj.checksum = value
 
     @property
     def etag(self) -> "Optional[str]":
-        return self._etag
+        return self._metadata_obj.etag
 
     @etag.setter
     def etag(self, value: str) -> None:
-        self._etag = value
+        self._metadata_obj.etag = value
 
     @property
     def version_id(self) -> "Optional[str]":
-        return self._version_id
+        return self._metadata_obj.version_id
 
     @version_id.setter
     def version_id(self, value: str) -> None:
-        self._version_id = value
+        self._metadata_obj.version_id = value
 
     def update_metadata(self, metadata: "dict[str, Any]") -> None:
         """Update the file metadata.
@@ -332,10 +406,8 @@ class FileObject:
             TypeError: If trying to save async data synchronously.
         """
 
-        if data is None and self._pending_source_content is not None:
-            data = self._pending_source_content  # type: ignore[assignment]
-        elif data is None and self._pending_source_path is not None:
-            data = self._pending_source_path
+        if data is None and self._pending_source is not None:
+            data = self._pending_source  # type: ignore[assignment]
 
         if data is None:
             msg = "No data provided and no pending content/path found to save."
@@ -352,8 +424,7 @@ class FileObject:
         )
 
         # Clear pending attributes after successful save
-        self._pending_source_content = None
-        self._pending_source_path = None
+        self._pending_source = None
 
         return updated_self
 
@@ -386,10 +457,8 @@ class FileObject:
             TypeError: If trying to save sync data asynchronously.
         """
 
-        if data is None and self._pending_source_content is not None:
-            data = self._pending_source_content
-        elif data is None and self._pending_source_path is not None:
-            data = self._pending_source_path
+        if data is None and self._pending_source is not None:
+            data = self._pending_source
 
         if data is None:
             msg = "No data provided and no pending content/path found to save."
@@ -405,8 +474,7 @@ class FileObject:
         )
 
         # Clear pending attributes after successful save
-        self._pending_source_content = None
-        self._pending_source_path = None
+        self._pending_source = None
 
         return updated_self
 
