@@ -193,10 +193,7 @@ def compile_merge_oracle(element: MergeStatement, compiler: "SQLCompiler", **kwa
     return merge_sql
 
 
-@compiles(MergeStatement, "postgresql")
-def compile_merge_postgresql(element: MergeStatement, compiler: "SQLCompiler", **kwargs: Any) -> str:
-    """Compile MERGE statement for PostgreSQL 15+."""
-    dialect = compiler.dialect
+def _check_postgres_merge_version(dialect: Any) -> None:
     if (
         hasattr(dialect, "server_version_info")
         and dialect.server_version_info
@@ -205,24 +202,27 @@ def compile_merge_postgresql(element: MergeStatement, compiler: "SQLCompiler", *
         msg = "MERGE statement requires PostgreSQL 15 or higher"
         raise NotImplementedError(msg)
 
-    table_name = element.table.name
 
+def _compile_merge_source_clause(element: MergeStatement, compiler: "SQLCompiler", **kwargs: Any) -> str:
     if isinstance(element.source, str):
-        # Wrap raw string source and alias as src
-        source_clause = f"({element.source}) AS src"
-    else:
-        # Ensure the compiled source is parenthesized and has a stable alias 'src'
-        compiled_source = compiler.process(element.source, **kwargs)
-        compiled_trim = compiled_source.strip()
-        if compiled_trim.startswith("("):
-            # Already parenthesized; check for alias after closing paren
-            has_outer_alias = (
-                re.search(r"\)\s+(AS\s+)?[a-zA-Z_][a-zA-Z0-9_]*\s*$", compiled_trim, re.IGNORECASE) is not None
-            )
-            source_clause = compiled_trim if has_outer_alias else f"{compiled_trim} AS src"
-        else:
-            # Not parenthesized: wrap and alias
-            source_clause = f"({compiled_trim}) AS src"
+        return f"({element.source}) AS src"
+
+    compiled_source = compiler.process(element.source, **kwargs)
+    compiled_trim = compiled_source.strip()
+    if compiled_trim.startswith("("):
+        has_outer_alias = (
+            re.search(r"\)\s+(AS\s+)?[a-zA-Z_][a-zA-Z0-9_]*\s*$", compiled_trim, re.IGNORECASE) is not None
+        )
+        return compiled_trim if has_outer_alias else f"{compiled_trim} AS src"
+    return f"({compiled_trim}) AS src"
+
+
+@compiles(MergeStatement, "postgresql")
+def compile_merge_postgresql(element: MergeStatement, compiler: "SQLCompiler", **kwargs: Any) -> str:
+    _check_postgres_merge_version(compiler.dialect)
+
+    table_name = element.table.name
+    source_clause = _compile_merge_source_clause(element, compiler, **kwargs)
 
     merge_sql = f"MERGE INTO {table_name} AS tgt USING {source_clause} ON ("
     merge_sql += compiler.process(element.on_condition, **kwargs)
@@ -230,31 +230,16 @@ def compile_merge_postgresql(element: MergeStatement, compiler: "SQLCompiler", *
 
     if element.when_matched_update:
         merge_sql += " WHEN MATCHED THEN UPDATE SET "
-        updates = []
-        for column, value in element.when_matched_update.items():
-            if hasattr(value, "_compiler_dispatch"):
-                compiled_value = compiler.process(value, **kwargs)
-            else:
-                compiled_value = compiler.process(value, **kwargs)
-            updates.append(f"{column} = {compiled_value}")  # pyright: ignore
-        merge_sql += ", ".join(updates)  # pyright: ignore
+        updates = [f"{col} = {compiler.process(val, **kwargs)}" for col, val in element.when_matched_update.items()]
+        merge_sql += ", ".join(updates)
 
     if element.when_not_matched_insert:
         columns = list(element.when_not_matched_insert.keys())
-        values = list(element.when_not_matched_insert.values())
-
+        values = [compiler.process(v, **kwargs) for v in element.when_not_matched_insert.values()]
         merge_sql += " WHEN NOT MATCHED THEN INSERT ("
         merge_sql += ", ".join(columns)
         merge_sql += ") VALUES ("
-
-        compiled_values = []
-        for value in values:
-            if hasattr(value, "_compiler_dispatch"):
-                compiled_value = compiler.process(value, **kwargs)
-            else:
-                compiled_value = compiler.process(value, **kwargs)
-            compiled_values.append(compiled_value)  # pyright: ignore
-        merge_sql += ", ".join(compiled_values)  # pyright: ignore
+        merge_sql += ", ".join(values)
         merge_sql += ")"
 
     return merge_sql
@@ -359,6 +344,16 @@ class OnConflictUpsert:
             validate_identifier(col, "column")
 
     @staticmethod
+    def _resolve_default_update_columns(
+        values: dict[str, Any],
+        conflict_columns: list[str],
+        update_columns: Optional[list[str]] = None,
+    ) -> list[str]:
+        if update_columns is None:
+            return [col for col in values if col not in conflict_columns]
+        return update_columns
+
+    @staticmethod
     def _build_oracle_merge_source(
         table: Table,
         values: dict[str, Any],
@@ -427,6 +422,22 @@ class OnConflictUpsert:
         return source, insert_columns, when_not_matched_insert
 
     @staticmethod
+    def _build_dialect_source(
+        table: Table,
+        values: dict[str, Any],
+        dialect_name: Optional[str] = None,
+    ) -> tuple[ClauseElement, list[str], dict[str, Any], dict[str, Any]]:
+        if dialect_name == "oracle":
+            return OnConflictUpsert._build_oracle_merge_source(table, values)
+        if dialect_name in {"postgresql", "cockroachdb"}:
+            source, insert_columns, when_not_matched_insert = OnConflictUpsert._build_postgresql_merge_source(
+                table, values
+            )
+            return source, insert_columns, when_not_matched_insert, {}
+        source, insert_columns, when_not_matched_insert = OnConflictUpsert._build_generic_merge_source(values)
+        return source, insert_columns, when_not_matched_insert, {}
+
+    @staticmethod
     def _build_when_matched_update(
         dialect_name: Optional[str],
         update_columns: list[str],
@@ -446,6 +457,13 @@ class OnConflictUpsert:
             if col_name in when_not_matched_insert:
                 final_insert_mapping[col_name] = when_not_matched_insert[col_name]
         return final_insert_mapping
+
+    @staticmethod
+    def _build_match_condition(
+        conflict_columns: list[str],
+    ) -> ClauseElement:
+        on_conditions = [f"tgt.{col} = src.{col}" for col in conflict_columns]
+        return text(" AND ".join(on_conditions))
 
     @staticmethod
     def create_merge_upsert(
@@ -481,27 +499,13 @@ class OnConflictUpsert:
         if validate_identifiers:
             OnConflictUpsert._validate_upsert_identifiers(conflict_columns, update_columns, values)
 
-        if update_columns is None:
-            update_columns = [col for col in values if col not in conflict_columns]
+        update_columns = OnConflictUpsert._resolve_default_update_columns(values, conflict_columns, update_columns)
 
-        additional_params: dict[str, Any] = {}
-        source: Union[ClauseElement, str]
-        insert_columns: list[str]
-        when_not_matched_insert: dict[str, Any]
+        source, insert_columns, when_not_matched_insert, additional_params = OnConflictUpsert._build_dialect_source(
+            table, values, dialect_name
+        )
 
-        if dialect_name == "oracle":
-            source, insert_columns, when_not_matched_insert, additional_params = (
-                OnConflictUpsert._build_oracle_merge_source(table, values)
-            )
-        elif dialect_name in {"postgresql", "cockroachdb"}:
-            source, insert_columns, when_not_matched_insert = OnConflictUpsert._build_postgresql_merge_source(
-                table, values
-            )
-        else:
-            source, insert_columns, when_not_matched_insert = OnConflictUpsert._build_generic_merge_source(values)
-
-        on_conditions = [f"tgt.{col} = src.{col}" for col in conflict_columns]
-        on_condition = text(" AND ".join(on_conditions))
+        on_condition = OnConflictUpsert._build_match_condition(conflict_columns)
 
         when_matched_update = OnConflictUpsert._build_when_matched_update(dialect_name, update_columns, values)
 

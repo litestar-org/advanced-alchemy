@@ -561,6 +561,109 @@ def _create_choices_filter_providers(
     return filters
 
 
+def _create_id_filter_provider(config: FilterConfig, dep_defaults: DependencyDefaults) -> dict[str, Provide]:
+    if not config.get("id_filter", False):
+        return {}
+
+    def provide_id_filter(  # pyright: ignore[reportUnknownParameterType]
+        ids: FromQuery[Optional[list[str]]] = None,
+    ) -> CollectionFilter:  # pyright: ignore[reportMissingTypeArgument]
+        return CollectionFilter(field_name=config.get("id_field", "id"), values=ids)
+
+    return {dep_defaults.ID_FILTER_DEPENDENCY_KEY: Provide(provide_id_filter, sync_to_thread=False)}  # pyright: ignore[reportUnknownArgumentType]
+
+
+def _create_created_filter_provider(config: FilterConfig, dep_defaults: DependencyDefaults) -> dict[str, Provide]:
+    if not config.get("created_at", False):
+        return {}
+
+    def provide_created_filter(
+        before: Annotated[DTorNone, QueryParameter(name="createdBefore")] = None,
+        after: Annotated[DTorNone, QueryParameter(name="createdAfter")] = None,
+    ) -> BeforeAfter:
+        return BeforeAfter("created_at", before, after)
+
+    return {dep_defaults.CREATED_FILTER_DEPENDENCY_KEY: Provide(provide_created_filter, sync_to_thread=False)}
+
+
+def _create_updated_filter_provider(config: FilterConfig, dep_defaults: DependencyDefaults) -> dict[str, Provide]:
+    if not config.get("updated_at", False):
+        return {}
+
+    def provide_updated_filter(
+        before: Annotated[DTorNone, QueryParameter(name="updatedBefore")] = None,
+        after: Annotated[DTorNone, QueryParameter(name="updatedAfter")] = None,
+    ) -> BeforeAfter:
+        return BeforeAfter("updated_at", before, after)
+
+    return {dep_defaults.UPDATED_FILTER_DEPENDENCY_KEY: Provide(provide_updated_filter, sync_to_thread=False)}
+
+
+def _create_limit_offset_filter_provider(config: FilterConfig, dep_defaults: DependencyDefaults) -> dict[str, Provide]:
+    if config.get("pagination_type") != "limit_offset":
+        return {}
+
+    def provide_limit_offset_pagination(
+        current_page: Annotated[int, QueryParameter(ge=1, name="currentPage")] = 1,
+        page_size: Annotated[
+            int,
+            QueryParameter(
+                name="pageSize",
+                ge=1,
+            ),
+        ] = config.get("pagination_size", dep_defaults.DEFAULT_PAGINATION_SIZE),
+    ) -> LimitOffset:
+        return LimitOffset(page_size, page_size * (current_page - 1))
+
+    return {
+        dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY: Provide(provide_limit_offset_pagination, sync_to_thread=False)
+    }
+
+
+def _create_search_filter_provider(config: FilterConfig, dep_defaults: DependencyDefaults) -> dict[str, Provide]:
+    if not (search_fields := config.get("search")):
+        return {}
+
+    def provide_search_filter(
+        search_string: Annotated[
+            StringOrNone,
+            QueryParameter(
+                name="searchString",
+                title="Field to search",
+            ),
+        ] = None,
+        ignore_case: Annotated[
+            BooleanOrNone,
+            QueryParameter(
+                name="searchIgnoreCase",
+                title="Search should be case sensitive",
+            ),
+        ] = config.get("search_ignore_case", False),
+    ) -> SearchFilter:
+        # Handle both string and set input types for search fields
+        field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else set(search_fields)
+
+        return SearchFilter(
+            field_name=field_names,
+            value=search_string,  # type: ignore[arg-type]
+            ignore_case=ignore_case or False,
+        )
+
+    return {dep_defaults.SEARCH_FILTER_DEPENDENCY_KEY: Provide(provide_search_filter, sync_to_thread=False)}
+
+
+def _create_sort_filter_provider(config: FilterConfig, dep_defaults: DependencyDefaults) -> dict[str, Provide]:
+    if not (sort_field := config.get("sort_field")):
+        return {}
+
+    return {
+        dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY: Provide(
+            _create_order_by_filter_provider(sort_field, config.get("sort_order", "desc")),
+            sync_to_thread=False,
+        )
+    }
+
+
 def _create_statement_filters(
     config: FilterConfig, dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS
 ) -> dict[str, Provide]:
@@ -575,87 +678,12 @@ def _create_statement_filters(
     """
     filters: dict[str, Provide] = {}
 
-    if config.get("id_filter", False):
-
-        def provide_id_filter(  # pyright: ignore[reportUnknownParameterType]
-            ids: FromQuery[Optional[list[str]]] = None,
-        ) -> CollectionFilter:  # pyright: ignore[reportMissingTypeArgument]
-            return CollectionFilter(field_name=config.get("id_field", "id"), values=ids)
-
-        filters[dep_defaults.ID_FILTER_DEPENDENCY_KEY] = Provide(provide_id_filter, sync_to_thread=False)  # pyright: ignore[reportUnknownArgumentType]
-
-    if config.get("created_at", False):
-
-        def provide_created_filter(
-            before: Annotated[DTorNone, QueryParameter(name="createdBefore")] = None,
-            after: Annotated[DTorNone, QueryParameter(name="createdAfter")] = None,
-        ) -> BeforeAfter:
-            return BeforeAfter("created_at", before, after)
-
-        filters[dep_defaults.CREATED_FILTER_DEPENDENCY_KEY] = Provide(provide_created_filter, sync_to_thread=False)
-
-    if config.get("updated_at", False):
-
-        def provide_updated_filter(
-            before: Annotated[DTorNone, QueryParameter(name="updatedBefore")] = None,
-            after: Annotated[DTorNone, QueryParameter(name="updatedAfter")] = None,
-        ) -> BeforeAfter:
-            return BeforeAfter("updated_at", before, after)
-
-        filters[dep_defaults.UPDATED_FILTER_DEPENDENCY_KEY] = Provide(provide_updated_filter, sync_to_thread=False)
-
-    if config.get("pagination_type") == "limit_offset":
-
-        def provide_limit_offset_pagination(
-            current_page: Annotated[int, QueryParameter(ge=1, name="currentPage")] = 1,
-            page_size: Annotated[
-                int,
-                QueryParameter(
-                    name="pageSize",
-                    ge=1,
-                ),
-            ] = config.get("pagination_size", dep_defaults.DEFAULT_PAGINATION_SIZE),
-        ) -> LimitOffset:
-            return LimitOffset(page_size, page_size * (current_page - 1))
-
-        filters[dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY] = Provide(
-            provide_limit_offset_pagination, sync_to_thread=False
-        )
-
-    if search_fields := config.get("search"):
-
-        def provide_search_filter(
-            search_string: Annotated[
-                StringOrNone,
-                QueryParameter(
-                    name="searchString",
-                    title="Field to search",
-                ),
-            ] = None,
-            ignore_case: Annotated[
-                BooleanOrNone,
-                QueryParameter(
-                    name="searchIgnoreCase",
-                    title="Search should be case sensitive",
-                ),
-            ] = config.get("search_ignore_case", False),
-        ) -> SearchFilter:
-            # Handle both string and set input types for search fields
-            field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else set(search_fields)
-
-            return SearchFilter(
-                field_name=field_names,
-                value=search_string,  # type: ignore[arg-type]
-                ignore_case=ignore_case or False,
-            )
-
-        filters[dep_defaults.SEARCH_FILTER_DEPENDENCY_KEY] = Provide(provide_search_filter, sync_to_thread=False)
-
-    if sort_field := config.get("sort_field"):
-        filters[dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY] = Provide(
-            _create_order_by_filter_provider(sort_field, config.get("sort_order", "desc")),
-            sync_to_thread=False,
-        )
+    filters.update(_create_id_filter_provider(config, dep_defaults))
+    filters.update(_create_created_filter_provider(config, dep_defaults))
+    filters.update(_create_updated_filter_provider(config, dep_defaults))
+    filters.update(_create_limit_offset_filter_provider(config, dep_defaults))
+    filters.update(_create_search_filter_provider(config, dep_defaults))
+    filters.update(_create_sort_filter_provider(config, dep_defaults))
 
     filters.update(_create_not_in_filter_providers(config))
     filters.update(_create_in_filter_providers(config))

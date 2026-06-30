@@ -286,31 +286,82 @@ def _handle_integrity_error(
     raise IntegrityError(detail=f"An integrity error occurred: {exc}") from exc
 
 
+def _handle_not_found(
+    exc: Exception,
+    error_messages: Optional[ErrorMessages],
+    dialect_name: Optional[str],
+) -> None:
+    _raise_from_error(exc, error_messages, "not_found", "No rows matched the specified data", NotFoundError)
+
+
+def _handle_multiple_results(
+    exc: Exception,
+    error_messages: Optional[ErrorMessages],
+    dialect_name: Optional[str],
+) -> None:
+    _raise_from_error(
+        exc, error_messages, "multiple_rows", "Multiple rows matched the specified data", MultipleResultsFoundError
+    )
+
+
+def _handle_invalid_request(
+    exc: Exception,
+    error_messages: Optional[ErrorMessages],
+    dialect_name: Optional[str],
+) -> None:
+    raise InvalidRequestError(detail="An invalid request was made.") from exc
+
+
+def _handle_statement_error(
+    exc: Exception,
+    error_messages: Optional[ErrorMessages],
+    dialect_name: Optional[str],
+) -> None:
+    raise IntegrityError(
+        detail=cast("str", getattr(exc.orig, "detail", "There was an issue processing the statement."))
+    ) from exc
+
+
+def _handle_sqlalchemy_error(
+    exc: Exception,
+    error_messages: Optional[ErrorMessages],
+    dialect_name: Optional[str],
+) -> None:
+    _raise_from_error(exc, error_messages, "other", f"An exception occurred: {exc}", RepositoryError)
+
+
+def _handle_attribute_error(
+    exc: Exception,
+    error_messages: Optional[ErrorMessages],
+    dialect_name: Optional[str],
+) -> None:
+    _raise_from_error(
+        exc, error_messages, "other", f"An attribute error occurred during processing: {exc}", RepositoryError
+    )
+
+
+_EXCEPTION_HANDLERS: list[
+    tuple[type[Exception], Callable[[Exception, Optional[ErrorMessages], Optional[str]], None]]
+] = [
+    (NotFoundError, _handle_not_found),
+    (MultipleResultsFound, _handle_multiple_results),
+    (SQLAlchemyIntegrityError, _handle_integrity_error),
+    (SQLAlchemyInvalidRequestError, _handle_invalid_request),
+    (StatementError, _handle_statement_error),
+    (SQLAlchemyError, _handle_sqlalchemy_error),
+    (AttributeError, _handle_attribute_error),
+]
+
+
 def _raise_wrapped_exception(
     exc: Exception,
     error_messages: Optional[ErrorMessages] = None,
     dialect_name: Optional[str] = None,
 ) -> None:
-    if isinstance(exc, NotFoundError):
-        _raise_from_error(exc, error_messages, "not_found", "No rows matched the specified data", NotFoundError)
-    if isinstance(exc, MultipleResultsFound):
-        _raise_from_error(
-            exc, error_messages, "multiple_rows", "Multiple rows matched the specified data", MultipleResultsFoundError
-        )
-    if isinstance(exc, SQLAlchemyIntegrityError):
-        _handle_integrity_error(exc, error_messages, dialect_name)
-    if isinstance(exc, SQLAlchemyInvalidRequestError):
-        raise InvalidRequestError(detail="An invalid request was made.") from exc
-    if isinstance(exc, StatementError):
-        raise IntegrityError(
-            detail=cast("str", getattr(exc.orig, "detail", "There was an issue processing the statement."))
-        ) from exc
-    if isinstance(exc, SQLAlchemyError):
-        _raise_from_error(exc, error_messages, "other", f"An exception occurred: {exc}", RepositoryError)
-    if isinstance(exc, AttributeError):
-        _raise_from_error(
-            exc, error_messages, "other", f"An attribute error occurred during processing: {exc}", RepositoryError
-        )
+    for exc_type, handler in _EXCEPTION_HANDLERS:
+        if isinstance(exc, exc_type):
+            handler(exc, error_messages, dialect_name)
+            return
 
 
 @contextmanager
