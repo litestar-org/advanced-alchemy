@@ -4,7 +4,7 @@ import contextlib
 import datetime
 import re
 from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, Any, Optional, Protocol, Union, cast, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Optional, Protocol, Union, cast, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import Date, MetaData, String
@@ -155,9 +155,9 @@ class ModelProtocol(Protocol):
     """
 
     if TYPE_CHECKING:
-        __table__: FromClause
-        __mapper__: Mapper[Any]
-        __name__: str
+        __table__: ClassVar[FromClause]
+        __mapper__: ClassVar[Mapper[Any]]
+        __name__: ClassVar[str]
 
 
 def model_to_dict(instance: "ModelProtocol", exclude: Optional[set[str]] = None) -> dict[str, Any]:
@@ -202,9 +202,9 @@ class BasicAttributes:
     """
 
     if TYPE_CHECKING:
-        __name__: str
-        __table__: FromClause
-        __mapper__: Mapper[Any]
+        __name__: ClassVar[str]
+        __table__: ClassVar[FromClause]
+        __mapper__: ClassVar[Mapper[Any]]
 
     def to_dict(self, exclude: Optional[set[str]] = None) -> dict[str, Any]:
         """Convert model to dictionary.
