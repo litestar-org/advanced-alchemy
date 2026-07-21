@@ -1463,7 +1463,15 @@ async def test_upsert_many_native_path_is_single_statement_per_chunk(
     author_model = models["author"]
     author_repo = create_repository(session, author_model)
     dialect_name = session.bind.dialect.name if session.bind is not None else session.get_bind().dialect.name
-    if dialect_name not in {"postgresql", "cockroachdb", "sqlite", "duckdb", "oracle", "mssql"}:
+    if dialect_name not in {
+        "postgresql",
+        "cockroachdb",
+        "sqlite",
+        "duckdb",
+        "oracle",
+        "mssql",
+        "spanner+spanner",
+    }:
         pytest.skip(
             f"native upsert path with match_fields=['id'] cannot hydrate on {dialect_name!r} (no RETURNING / autoincrement PK)"
         )
@@ -1541,14 +1549,22 @@ async def test_upsert_many_no_merge_forces_fallback(
 async def test_upsert_many_chunk_size_emits_multiple_chunks(
     seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
 ) -> None:
-    """Passing chunk_size below the row count must produce multiple native statements."""
+    """A small parameter cap must produce multiple native statements."""
     from sqlalchemy import event
 
     session, models = seeded_test_session_async
     author_model = models["author"]
     author_repo = create_repository(session, author_model)
     dialect_name = session.bind.dialect.name if session.bind is not None else session.get_bind().dialect.name
-    if dialect_name not in {"postgresql", "cockroachdb", "sqlite", "duckdb", "oracle", "mssql"}:
+    if dialect_name not in {
+        "postgresql",
+        "cockroachdb",
+        "sqlite",
+        "duckdb",
+        "oracle",
+        "mssql",
+        "spanner+spanner",
+    }:
         pytest.skip(
             f"native upsert path with match_fields=['id'] cannot hydrate on {dialect_name!r} (no RETURNING / autoincrement PK)"
         )

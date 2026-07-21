@@ -183,7 +183,8 @@
         ``match_fields`` maps to a primary key, unique constraint, or unique index:
         ``INSERT … ON CONFLICT DO UPDATE`` on PostgreSQL / CockroachDB / SQLite /
         DuckDB / MySQL / MariaDB, ``MERGE`` on Oracle / MSSQL, and
-        ``INSERT OR UPDATE`` on Spanner — compiled to one statement per chunk.
+        primary-key ``INSERT OR UPDATE … THEN RETURN`` on Spanner — compiled to
+        one statement per dialect-sized chunk.
 
 .. changelog:: 1.10.0
     :date: 2026-05-23

@@ -887,6 +887,13 @@ class TestResolveUpsertStrategy:
         second = resolve_upsert_strategy(sample_table, ("id",), "postgresql")
         assert first is second
 
+    def test_dialect_name_keyword_remains_supported(self, sample_table: Table) -> None:
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        strategy = resolve_upsert_strategy(sample_table, ("id",), dialect_name="postgresql")
+
+        assert strategy.kind == "on_conflict"
+
     @pytest.mark.parametrize(
         ("dialect", "expected_kind", "expected_returning"),
         [
@@ -898,7 +905,8 @@ class TestResolveUpsertStrategy:
             ("mariadb", "on_conflict", False),
             ("oracle", "merge", False),
             ("mssql", "merge", False),
-            ("spanner", "insert_or_update", False),
+            ("spanner", "insert_or_update", True),
+            ("spanner+spanner", "insert_or_update", True),
         ],
     )
     def test_dialect_to_kind_mapping(
@@ -914,6 +922,41 @@ class TestResolveUpsertStrategy:
         assert strategy.kind == expected_kind
         assert strategy.supports_returning is expected_returning
         assert strategy.dialect_name == dialect
+
+    def test_spanner_insert_or_update_only_matches_primary_key(self, composite_pk_table: Table) -> None:
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        strategy = resolve_upsert_strategy(composite_pk_table, ("email",), "spanner+spanner")
+
+        assert strategy.kind == "fallback"
+        assert strategy.conflict_columns == ("email",)
+
+    def test_runtime_dialect_returning_capability_is_respected(self, sample_table: Table) -> None:
+        from sqlalchemy.engine.default import DefaultDialect
+
+        from advanced_alchemy.operations import resolve_upsert_strategy
+
+        class _DialectWithoutInsertReturning(DefaultDialect):
+            name = "sqlite"
+            insert_returning = False
+
+        strategy = resolve_upsert_strategy(sample_table, ("id",), _DialectWithoutInsertReturning())
+
+        assert strategy.kind == "on_conflict"
+        assert strategy.supports_returning is False
+
+    def test_spanner_insert_or_update_uses_sqlalchemy_insert_with_returning(self, sample_table: Table) -> None:
+        from google.cloud.sqlalchemy_spanner.sqlalchemy_spanner import SpannerDialect
+
+        statement = OnConflictUpsert.create_insert_or_update_many(
+            table=sample_table,
+            values_list=[{"id": 1, "key": "key", "namespace": "ns", "value": "value"}],
+        ).returning(sample_table)
+
+        compiled = str(statement.compile(dialect=SpannerDialect()))
+
+        assert compiled.startswith("INSERT OR UPDATE INTO test_table")
+        assert "THEN RETURN" in compiled
 
     def test_unknown_dialect_falls_back(self, sample_table: Table) -> None:
         from advanced_alchemy.operations import resolve_upsert_strategy

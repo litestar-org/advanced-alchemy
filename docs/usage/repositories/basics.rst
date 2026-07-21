@@ -162,10 +162,10 @@ Dispatch matrix:
      - ``MERGE INTO … USING (VALUES (…)) AS src(…) …;``
      - No
      - re-SELECT on ``match_fields``
-   * - ``spanner``
+   * - ``spanner+spanner``
      - ``INSERT OR UPDATE INTO … (…) VALUES (…)``
-     - No
-     - re-SELECT on ``match_fields``
+     - Yes (``THEN RETURN``)
+     - cursor rows via ``.returning(model_type)``
    * - anything else
      - fallback: ``SELECT`` + ``add_many`` + ``update_many``
      - n/a
@@ -180,6 +180,10 @@ Important behaviors:
   keys from inserting duplicates instead of updating. Deferrable unique
   constraints and partial or expression-based unique indexes also use the
   fallback because they are not portable conflict targets.
+- **Spanner primary-key semantics.** ``INSERT OR UPDATE`` determines matches
+  only from the primary key. A Spanner unique index can protect alternate
+  values, but it is not an equivalent conflict target for this DML form, so
+  alternate ``match_fields`` use the correctness fallback.
 - **Deterministic batches.** Duplicate conflict keys in one input batch are
   rejected before execution. Backends otherwise disagree between last-write
   wins and statement failure. Rows with different explicitly supplied update
@@ -191,11 +195,14 @@ Important behaviors:
 - **``no_merge=True``** forces the fallback path regardless of dialect
   capability. Use it as a deterministic per-call override for testing or to
   preserve historical per-row ``UPDATE``/``INSERT`` semantics.
-- **``chunk_size``** mirrors ``add_many``: each chunk compiles to exactly one
-  native statement (plus a re-SELECT for hydration on dialects without
-  RETURNING). Smaller chunks reduce the number of rows touched by each
-  statement, but write locks are still retained until the surrounding
-  transaction commits.
+- **``chunk_size``** is an optional parameter cap. When it is omitted, the
+  active dialect's ``insertmanyvalues_max_parameters`` limit is used, with a
+  conservative 950-parameter fallback for dialects that do not publish one.
+  Native upserts also respect ``insertmanyvalues_page_size``. Each chunk
+  compiles to exactly one native statement (plus a re-SELECT for hydration on
+  dialects without RETURNING). Smaller chunks reduce the number of rows
+  touched by each statement, but write locks are still retained until the
+  surrounding transaction commits.
 - **SQL Server concurrency.** The MSSQL statement intentionally does not add
   ``HOLDLOCK`` / ``SERIALIZABLE``. That hint prevents a concurrent missing-key
   insert race by retaining key-range locks until transaction end, which can

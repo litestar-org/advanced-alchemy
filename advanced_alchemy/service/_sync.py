@@ -1101,7 +1101,10 @@ class SQLAlchemySyncRepositoryService(
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             bind_group: Optional routing group to use for the operation.
             schema_dump_config: Optional schema dump behavior for this operation.
-            chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
+            chunk_size: Optional parameter cap for each native statement. Defaults
+                to the active dialect's ``insertmanyvalues_max_parameters``;
+                native upserts also respect ``insertmanyvalues_page_size``. Must be
+                greater than zero.
 
         Returns:
             Updated or created representation.
@@ -1350,7 +1353,8 @@ class SQLAlchemySyncRepositoryService(
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
                 Only applicable for single primary key models.
             chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
-                Defaults to `950` if left unset.
+                Defaults to the active dialect's limit, with a conservative `950`
+                fallback. Must be greater than zero.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded

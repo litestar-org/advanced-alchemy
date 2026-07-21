@@ -73,6 +73,14 @@ class BigIntModel(base.BigIntAuditBase):
     """
 
 
+class UpsertMatchModel(base.UUIDBase):
+    """Model used to exercise native-upsert matching helpers."""
+
+    natural_key: Mapped[Any] = mapped_column(String(length=50), unique=True)
+    tenant_id: Mapped[int] = mapped_column(Integer)
+    user_id: Mapped[int] = mapped_column(Integer)
+
+
 @pytest.fixture()
 async def async_mock_repo() -> AsyncGenerator[SQLAlchemyAsyncRepository[MagicMock], None]:
     """SQLAlchemy repository with a mock model type."""
@@ -304,6 +312,78 @@ async def test_sqlalchemy_repo_upsert_many(
         assert row.id is not None
 
     mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+
+
+def test_upsert_batch_size_uses_dialect_parameter_and_page_limits(
+    mock_repo: SQLAlchemyAsyncRepository[Any], monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "insertmanyvalues_max_parameters", 32700)
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "insertmanyvalues_page_size", 1000)
+
+    assert mock_repo._get_upsert_rows_per_chunk(column_count=5, chunk_size=None) == 1000
+    assert mock_repo._get_upsert_rows_per_chunk(column_count=5, chunk_size=200) == 40
+
+
+def test_insertmanyvalues_chunk_size_must_be_positive(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    with pytest.raises(ValueError, match="chunk_size must be greater than zero"):
+        mock_repo._get_insertmanyvalues_max_parameters(0)
+
+
+def test_native_upsert_reselect_uses_single_column_in_predicate(
+    mock_repo: SQLAlchemyAsyncRepository[Any], monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.setattr(mock_repo, "model_type", UpsertMatchModel)
+    match_filter = mock_repo._get_upsert_match_filter(
+        [{"natural_key": "first"}, {"natural_key": "second"}], ["natural_key"]
+    )
+
+    assert match_filter.operator.__name__ == "in_op"  # type: ignore[union-attr]
+
+
+def test_native_upsert_reselect_uses_tuple_in_except_on_mssql(
+    mock_repo: SQLAlchemyAsyncRepository[Any], monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.setattr(mock_repo, "model_type", UpsertMatchModel)
+    rows = [{"tenant_id": 1, "user_id": 2}, {"tenant_id": 3, "user_id": 4}]
+
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "name", "postgresql")
+    tuple_filter = mock_repo._get_upsert_match_filter(rows, ["tenant_id", "user_id"])
+    assert tuple_filter.operator.__name__ == "in_op"  # type: ignore[union-attr]
+
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "name", "mssql")
+    mssql_filter = mock_repo._get_upsert_match_filter(rows, ["tenant_id", "user_id"])
+    assert mssql_filter.operator.__name__ == "or_"  # type: ignore[union-attr]
+
+
+def test_merge_on_match_fields_is_linear_for_hashable_keys(
+    mock_repo: SQLAlchemyAsyncRepository[Any], monkeypatch: MonkeyPatch
+) -> None:
+    class CountingKey:
+        comparisons = 0
+
+        def __init__(self, value: int) -> None:
+            self.value = value
+
+        def __hash__(self) -> int:
+            return hash(self.value)
+
+        def __eq__(self, other: object) -> bool:
+            type(self).comparisons += 1
+            return isinstance(other, CountingKey) and self.value == other.value
+
+    monkeypatch.setattr(mock_repo, "model_type", UpsertMatchModel)
+    monkeypatch.setattr(mock_repo, "_pk_attr_names", ("id",))
+    existing = [
+        UpsertMatchModel(id=uuid4(), natural_key=CountingKey(index), tenant_id=1, user_id=1) for index in range(50)
+    ]
+    incoming = [
+        UpsertMatchModel(natural_key=CountingKey(index), tenant_id=1, user_id=1) for index in reversed(range(50))
+    ]
+
+    merged = mock_repo._merge_on_match_fields(incoming, existing, ["natural_key"])
+
+    assert all(row.id is not None for row in merged)
+    assert CountingKey.comparisons < 200
 
 
 async def test_sqlalchemy_repo_delete(mock_repo: SQLAlchemyAsyncRepository[Any], mocker: MockerFixture) -> None:

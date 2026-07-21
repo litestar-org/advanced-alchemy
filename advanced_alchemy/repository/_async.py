@@ -52,7 +52,6 @@ from advanced_alchemy.filters import StatementFilter, StatementTypeT
 from advanced_alchemy.operations import (
     DEFAULT_INVOKE_FAILED,
     OnConflictUpsert,
-    SpannerUpsert,
     UpsertStrategy,
     invoke_python_default,
     resolve_upsert_strategy,
@@ -1117,8 +1116,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
                 Note: Only applies to single-column lookups.
             chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
-                Defaults to `950` if left unset. For composite keys, this is automatically
-                divided by the number of PK columns.
+                Defaults to the active dialect's limit, with a conservative `950`
+                fallback. For composite keys, this is automatically divided by the
+                number of PK columns. Must be greater than zero.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -1263,9 +1263,24 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 self._queue_cache_invalidation(self.get_primary_key_value(instance), bind_group)
             return instances
 
-    @staticmethod
-    def _get_insertmanyvalues_max_parameters(chunk_size: Optional[int] = None) -> int:
-        return chunk_size if chunk_size is not None else DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS
+    def _get_insertmanyvalues_max_parameters(self, chunk_size: Optional[int] = None) -> int:
+        if chunk_size is not None:
+            if chunk_size < 1:
+                msg = "chunk_size must be greater than zero"
+                raise ValueError(msg)
+            return chunk_size
+        dialect_limit = getattr(self._dialect, "insertmanyvalues_max_parameters", None)
+        if isinstance(dialect_limit, int) and not isinstance(dialect_limit, bool) and dialect_limit > 0:
+            return dialect_limit
+        return DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS
+
+    def _get_upsert_rows_per_chunk(self, column_count: int, chunk_size: Optional[int]) -> int:
+        """Calculate native-upsert rows using dialect parameter and page limits."""
+        parameter_limited_rows = max(1, self._get_insertmanyvalues_max_parameters(chunk_size) // max(1, column_count))
+        dialect_page_size = getattr(self._dialect, "insertmanyvalues_page_size", None)
+        if isinstance(dialect_page_size, int) and not isinstance(dialect_page_size, bool) and dialect_page_size > 0:
+            return min(parameter_limited_rows, dialect_page_size)
+        return parameter_limited_rows
 
     async def delete_where(
         self,
@@ -2924,9 +2939,11 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         Dispatches to the most efficient native primitive for the active dialect
         (``INSERT ... ON CONFLICT ... DO UPDATE``, ``MERGE``, or
         ``INSERT OR UPDATE``) whenever ``match_fields`` maps to a PK or unique
-        constraint/index. Falls back to the SELECT-then-partition-then-add/update
-        path when the strategy resolver cannot prove uniqueness or when
-        ``no_merge=True`` is set.
+        constraint/index that the backend can target. Spanner's
+        ``INSERT OR UPDATE`` is native only for primary-key matching, and
+        ambiguous MySQL/MariaDB unique targets use the fallback. Also falls
+        back to the SELECT-then-partition-then-add/update path when the strategy
+        resolver cannot prove uniqueness or when ``no_merge=True`` is set.
 
         !!! tip
             In most cases, you will want to set `match_fields` to the combination of attributes, excluded the primary key, that define uniqueness for a row.
@@ -2947,7 +2964,10 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             bind_group: Optional routing group to use for the operation.
-            chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
+            chunk_size: Optional parameter cap for each native statement. Defaults
+                to the active dialect's ``insertmanyvalues_max_parameters``;
+                native upserts also respect ``insertmanyvalues_page_size``. Must be
+                greater than zero.
 
         Returns:
             The updated or created instances.
@@ -2966,7 +2986,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         strategy = resolve_upsert_strategy(
             cast("Table", self.model_type.__table__),
             tuple(sorted(resolved_match_fields)),
-            self._dialect.name,
+            self._dialect,
         )
         self._validate_upsert_match_values(data, resolved_match_fields)
 
@@ -3052,19 +3072,22 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         instances: List[ModelT] = []
         data_to_update: List[ModelT] = []
         data_to_insert: List[ModelT] = []
-        match_filters: List[Union[StatementFilter, ColumnElement[bool]]] = [
-            or_(
+        match_rows = [{field_name: getattr(datum, field_name) for field_name in match_fields} for datum in data]
+        if all(value is not None for row in match_rows for value in row.values()):
+            match_filter = self._get_upsert_match_filter(match_rows, match_fields)
+        else:
+            match_filter = or_(
                 *[
                     and_(
                         *[
-                            get_instrumented_attr(self.model_type, field_name) == getattr(datum, field_name)
+                            get_instrumented_attr(self.model_type, field_name) == row[field_name]
                             for field_name in match_fields
                         ]
                     )
-                    for datum in data
+                    for row in match_rows
                 ]
             )
-        ]
+        match_filters: List[Union[StatementFilter, ColumnElement[bool]]] = [match_filter]
 
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
@@ -3077,10 +3100,26 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 bind_group=bind_group,
             )
             existing_ids = self._get_object_ids(existing_objs=existing_objs)
+            hashable_existing_ids: set[PrimaryKeyType] = set()
+            unhashable_existing_ids: List[PrimaryKeyType] = []
+            for existing_id in existing_ids:
+                try:
+                    hashable_existing_ids.add(existing_id)
+                except TypeError:
+                    unhashable_existing_ids.append(existing_id)
             merged_data = self._merge_on_match_fields(data, existing_objs, match_fields)
             for datum in merged_data:
                 datum_pk = self.get_primary_key_value(datum)
-                if datum_pk in existing_ids:
+                try:
+                    is_existing = datum_pk in hashable_existing_ids
+                except TypeError:
+                    is_existing = any(compare_values(existing_id, datum_pk) for existing_id in existing_ids)
+                else:
+                    if not is_existing and unhashable_existing_ids:
+                        is_existing = any(
+                            compare_values(existing_id, datum_pk) for existing_id in unhashable_existing_ids
+                        )
+                if is_existing:
                     data_to_update.append(datum)
                 else:
                     data_to_insert.append(datum)
@@ -3287,19 +3326,18 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
     ) -> List[ModelT]:
         """Execute the native upsert primitive for ``strategy.kind`` and hydrate.
 
-        Chunks ``input_rows`` so each statement stays under the configured
-        ``insertmanyvalues_max_parameters`` cap. For ``on_conflict`` dialects
-        that support RETURNING, hydration is via ``session.scalars`` against
-        ``.returning(model_type)``; for everything else (MERGE on oracle / mssql,
-        ``INSERT OR UPDATE`` on spanner, MySQL/MariaDB ON DUPLICATE KEY UPDATE),
-        hydration is a re-SELECT keyed on ``match_fields``.
+        Chunks ``input_rows`` so each statement stays under the dialect's
+        ``insertmanyvalues_max_parameters`` and ``insertmanyvalues_page_size``
+        limits. Dialects that support RETURNING (including Spanner's
+        ``THEN RETURN``) hydrate via ``session.scalars`` against
+        ``.returning(model_type)``; MERGE and MySQL/MariaDB hydrate with one
+        re-SELECT per chunk keyed on ``match_fields``.
         """
         if not input_rows:
             return []
         table = cast("Table", self.model_type.__table__)
         conflict_columns = list(strategy.conflict_columns)
-        max_parameters = self._get_insertmanyvalues_max_parameters(chunk_size)
-        rows_per_chunk = max(1, max_parameters // max(1, len(input_rows[0])))
+        rows_per_chunk = self._get_upsert_rows_per_chunk(len(input_rows[0]), chunk_size)
         loader_options = self._get_loader_options(load)[0]
 
         instances: List[ModelT] = []
@@ -3395,10 +3433,16 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             return None
 
         if strategy.kind == "insert_or_update":
-            await self.session.execute(
-                SpannerUpsert(table=table, values_list=row_chunk),
-                execution_options=execution_options or {},
-            )
+            statement = OnConflictUpsert.create_insert_or_update_many(table=table, values_list=row_chunk)
+            if strategy.supports_returning:
+                returning_statement = statement.returning(self.model_type)
+                if loader_options:
+                    returning_statement = returning_statement.options(*loader_options)
+                returned_rows = await self.session.scalars(
+                    returning_statement, execution_options=execution_options or {}
+                )
+                return list(returned_rows)
+            await self.session.execute(statement, execution_options=execution_options or {})
             return None
 
         msg = f"Unsupported upsert kind '{strategy.kind}' reached native execution"
@@ -3414,19 +3458,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         bind_group: Optional[str],
     ) -> List[ModelT]:
         """Re-SELECT chunk rows after a no-RETURNING native upsert."""
-        match_filters = [
-            or_(
-                *[
-                    and_(
-                        *[
-                            get_instrumented_attr(self.model_type, field_name) == row[field_name]
-                            for field_name in match_fields
-                        ]
-                    )
-                    for row in row_chunk
-                ]
-            )
-        ]
+        match_filters = [self._get_upsert_match_filter(row_chunk, match_fields)]
         selected_rows = await self.get_many(
             *match_filters,
             load=load,
@@ -3436,6 +3468,21 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             bind_group=bind_group,
         )
         return list(selected_rows)
+
+    def _get_upsert_match_filter(self, row_chunk: List[dict[str, Any]], match_fields: List[str]) -> ColumnElement[bool]:
+        """Build the smallest exact-key predicate supported by the dialect."""
+        match_columns = [get_instrumented_attr(self.model_type, field_name) for field_name in match_fields]
+        if len(match_columns) == 1:
+            return match_columns[0].in_([row[match_fields[0]] for row in row_chunk])
+        if self._dialect.name != "mssql":
+            match_values = [tuple(row[field_name] for field_name in match_fields) for row in row_chunk]
+            return tuple_(*match_columns).in_(match_values)
+        return or_(
+            *[
+                and_(*[column == row[field_name] for column, field_name in zip(match_columns, match_fields)])
+                for row in row_chunk
+            ]
+        )
 
     @staticmethod
     def _order_upsert_results(
@@ -3506,15 +3553,33 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         if match_fields is None:
             # Default to all PK columns for composite PKs, otherwise just id_attribute
             match_fields = list(self._pk_attr_names) if self.has_composite_pk else [self.id_attribute]
-        for existing_datum in existing_data:
-            for datum in data:
-                match = all(
-                    getattr(datum, field_name) == getattr(existing_datum, field_name) for field_name in match_fields
-                )
-                if match and self.has_primary_key_values(existing_datum):
-                    # Copy all PK values from existing to datum (handles composite PKs)
-                    for pk_attr in self._pk_attr_names:
-                        setattr(datum, pk_attr, getattr(existing_datum, pk_attr))
+        instances_by_match_key: dict[tuple[Any, ...], ModelT] = {}
+        for existing_instance in existing_data:
+            if not self.has_primary_key_values(existing_instance):
+                continue
+            match_key = tuple(getattr(existing_instance, field_name) for field_name in match_fields)
+            with contextlib.suppress(TypeError):
+                instances_by_match_key[match_key] = existing_instance
+        for datum in data:
+            match_key = tuple(getattr(datum, field_name) for field_name in match_fields)
+            try:
+                matched_instance: Optional[ModelT] = instances_by_match_key.get(match_key)
+            except TypeError:
+                matched_instance = None
+                for candidate_instance in existing_data:
+                    if not self.has_primary_key_values(candidate_instance):
+                        continue
+                    candidate_key = tuple(getattr(candidate_instance, field_name) for field_name in match_fields)
+                    if len(candidate_key) == len(match_key) and all(
+                        compare_values(candidate_value, match_value)
+                        for candidate_value, match_value in zip(candidate_key, match_key)
+                    ):
+                        matched_instance = candidate_instance
+                        break
+            if matched_instance is not None:
+                # Copy all PK values from existing to datum (handles composite PKs).
+                for pk_attr in self._pk_attr_names:
+                    setattr(datum, pk_attr, getattr(matched_instance, pk_attr))
         return data
 
     async def get_many(
