@@ -34,7 +34,6 @@ from advanced_alchemy.mixins import (
     UUIDv7PrimaryKey,
 )
 from advanced_alchemy.types import GUID, DateTimeUTC, FileObject, FileObjectList, JsonB, StoredObject
-from advanced_alchemy.utils.dataclass import DataclassProtocol
 
 if TYPE_CHECKING:
     from sqlalchemy.sql import FromClause
@@ -405,7 +404,6 @@ def create_registry(
         dict: JsonB,
         dict[str, Any]: JsonB,
         dict[str, str]: JsonB,
-        DataclassProtocol: JsonB,
         FileObject: StoredObject,
         FileObjectList: StoredObject,
     }

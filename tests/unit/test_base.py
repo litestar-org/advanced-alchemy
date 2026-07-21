@@ -282,3 +282,40 @@ def test_identity_works_with_sqlite() -> None:
 
     # Should not raise any errors
     assert True  # If we get here, it worked
+
+
+def test_registry_type_annotation_map_has_no_protocol_keys() -> None:
+    """Regression test for https://github.com/litestar-org/advanced-alchemy/issues/477.
+
+    ``type_annotation_map`` is resolved by SQLAlchemy through an exact/``__mro__``
+    dictionary lookup that rejects supertype matches. A ``Protocol`` (such as the
+    now-removed ``DataclassProtocol`` entry) is never present in the ``__mro__`` of
+    a class that structurally satisfies it, so a Protocol key can never match and
+    is misleading dead configuration. Guard against reintroducing one.
+    """
+    from advanced_alchemy.base import orm_registry
+
+    protocol_keys = [key for key in orm_registry.type_annotation_map if getattr(key, "_is_protocol", False)]
+    assert protocol_keys == []
+
+
+def test_dataclass_column_resolves_via_custom_annotation_map() -> None:
+    """A concrete dataclass resolves only when registered explicitly.
+
+    This is the supported replacement for the removed ``DataclassProtocol`` entry:
+    users map their own concrete dataclass type, which lands in the registry as an
+    exact key and therefore resolves.
+    """
+    from dataclasses import dataclass
+
+    from advanced_alchemy.base import create_registry
+    from advanced_alchemy.types import JsonB
+
+    @dataclass
+    class ExtraData:
+        before: int
+
+    registry = create_registry(custom_annotation_map={ExtraData: JsonB})
+
+    resolved = registry._resolve_type(ExtraData)  # pyright: ignore[reportPrivateUsage]
+    assert resolved is not None
