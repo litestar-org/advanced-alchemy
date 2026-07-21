@@ -57,7 +57,7 @@ extensions = [
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
-    "msgspec": ("https://msgspec.dev", None),
+    "msgspec": ("https://msgspec.dev/", None),
     "sqlalchemy": ("https://docs.sqlalchemy.org/en/20/", None),
     "alembic": ("https://alembic.sqlalchemy.org/en/latest/", None),
     "litestar": ("https://docs.litestar.dev/latest/", None),
