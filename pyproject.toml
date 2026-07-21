@@ -121,11 +121,18 @@ fastapi = ["fastapi[all]>=0.115.3", "starlette"]
 flask = ["flask-sqlalchemy>=3.1.1", "flask[async]"]
 fsspec = ["fsspec>=2024.10.0"]
 lint = [
+  # Mypy checks the project with Python 3.9 grammar even when it runs on a
+  # newer interpreter. Keep typed dependency sources parseable by that target.
+  "anyio>=4.13,<4.14; python_version >= '3.10'",
+  "click>=8.3,<8.4; python_version >= '3.10'",
+  "filelock==3.29.0; python_version >= '3.10'",
   "mypy>=1.13.0,<2.0.0",
+  "numpy<2.5",
   "pre-commit>=3.5.0",
   "pyright>=1.1.386",
   "ruff>=0.7.1",
   "slotscheck>=0.16.5",
+  "tracerite<2.4",
   "asyncpg-stubs",
   "types-Pillow",
   "types-PyMySQL",
@@ -496,13 +503,6 @@ module = ["sphinx.*"]
 follow_imports = "skip"
 ignore_missing_imports = true
 module = ["opentelemetry.*"]
-
-[[tool.mypy.overrides]]
-# These typed dependencies use Python 3.10 syntax in releases installed on newer
-# interpreters, while this project intentionally checks its public surface using
-# the Python 3.9 grammar.
-follow_imports = "skip"
-module = ["anyio", "anyio.*", "click", "click.*", "filelock", "filelock.*"]
 
 [[tool.mypy.overrides]]
 module = "advanced_alchemy._serialization"

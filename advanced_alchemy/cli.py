@@ -1,5 +1,3 @@
-# pyright: reportUnknownMemberType=false
-
 import sys
 from collections.abc import Sequence
 from pathlib import Path
