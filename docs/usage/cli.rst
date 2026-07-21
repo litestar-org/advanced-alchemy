@@ -90,12 +90,11 @@ If the file is named ``alchemy-config.py``, you would need to use it like this `
 .. code-block:: python
     :caption: alchemy-config.py
 
-    from sqlalchemy import create_engine
-    from advanced_alchemy.config import SQLAlchemyConfig
+    from advanced_alchemy.config import SQLAlchemySyncConfig
 
     # Create a test config using SQLite
-    config = SQLAlchemyConfig(
-        connection_url="sqlite:///test.db"
+    config = SQLAlchemySyncConfig(
+        connection_string="sqlite:///test.db"
     )
 
 
