@@ -8,6 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_engine_from_config
 from advanced_alchemy.base import metadata_registry
 from alembic import context
 
+try:
+    # Enables autogenerate support for PostgreSQL ``ENUM`` changes (e.g. added values).
+    # Alembic cannot detect these on its own; importing this package registers the
+    # required autogenerate comparators as a side effect. Install with the
+    # ``advanced-alchemy[postgresql]`` extra to enable.
+    import alembic_postgresql_enum  # type: ignore[import-not-found,unused-ignore]  # pyright: ignore[reportMissingImports]  # noqa: F401
+except ImportError:
+    pass
+
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
 
