@@ -156,11 +156,11 @@ Dispatch matrix:
      - re-SELECT on ``match_fields``
    * - ``oracle``
      - ``MERGE INTO … USING (SELECT … FROM DUAL UNION ALL …) …``
-     - Yes
+     - No
      - re-SELECT on ``match_fields``
    * - ``mssql``
-     - ``MERGE INTO … USING (VALUES (…)) AS src(…) … OUTPUT inserted.*;``
-     - Yes
+     - ``MERGE INTO … USING (VALUES (…)) AS src(…) …;``
+     - No
      - re-SELECT on ``match_fields``
    * - ``spanner``
      - ``INSERT OR UPDATE INTO … (…) VALUES (…)``
@@ -177,13 +177,37 @@ Important behaviors:
   ``match_fields`` is *provably* unique (PK / UniqueConstraint / unique
   Index). If it cannot prove uniqueness, ``kind="fallback"`` is selected
   silently — this is the correctness anchor that prevents non-unique match
-  keys from inserting duplicates instead of updating.
+  keys from inserting duplicates instead of updating. Deferrable unique
+  constraints and partial or expression-based unique indexes also use the
+  fallback because they are not portable conflict targets.
+- **Deterministic batches.** Duplicate conflict keys in one input batch are
+  rejected before execution. Backends otherwise disagree between last-write
+  wins and statement failure. Rows with different explicitly supplied update
+  columns also use the ORM fallback so an omitted field is never overwritten
+  by a generated insert default.
+- **MySQL / MariaDB ambiguity.** ``ON DUPLICATE KEY`` cannot name the intended
+  unique constraint. Tables with more than one unique key therefore use the
+  fallback, avoiding an update caused by an unrelated unique index.
 - **``no_merge=True``** forces the fallback path regardless of dialect
   capability. Use it as a deterministic per-call override for testing or to
   preserve historical per-row ``UPDATE``/``INSERT`` semantics.
 - **``chunk_size``** mirrors ``add_many``: each chunk compiles to exactly one
   native statement (plus a re-SELECT for hydration on dialects without
-  RETURNING).
+  RETURNING). Smaller chunks reduce the number of rows touched by each
+  statement, but write locks are still retained until the surrounding
+  transaction commits.
+- **SQL Server concurrency.** The MSSQL statement intentionally does not add
+  ``HOLDLOCK`` / ``SERIALIZABLE``. That hint prevents a concurrent missing-key
+  insert race by retaining key-range locks until transaction end, which can
+  create broad blocking in the repository's caller-managed transactions. The
+  required unique key still protects data integrity; applications with
+  competing inserts should keep transactions short and retry duplicate-key or
+  deadlock failures.
+- **Fallback concurrency.** The portable SELECT-then-write fallback does not
+  lock a missing key gap. A database uniqueness constraint remains required
+  when concurrent writers are possible, and callers should retry a conflicting
+  insert. Existing-row writes retain the backend's normal row locks until the
+  transaction ends.
 - **Server-managed PK safety net.** ``MERGE`` (oracle / mssql) and
   ``INSERT OR UPDATE`` (spanner) cannot transparently invoke server-side
   ``Sequence`` / ``Identity`` defaults the way ``INSERT ... ON CONFLICT``

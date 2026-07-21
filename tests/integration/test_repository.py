@@ -1469,9 +1469,9 @@ async def test_upsert_many_native_path_is_single_statement_per_chunk(
         )
     from advanced_alchemy.mixins import BigIntPrimaryKey
 
-    if issubclass(author_model, BigIntPrimaryKey) and dialect_name in {"oracle", "mssql"}:
+    if issubclass(author_model, BigIntPrimaryKey):
         pytest.skip(
-            f"bigint Sequence PK on {dialect_name!r} MERGE path falls back to ORM-managed inserts; native single-statement assertion does not apply"
+            f"server-generated bigint PK on {dialect_name!r} falls back to ORM-managed inserts; native single-statement assertion does not apply"
         )
 
     statements: list[str] = []
@@ -1554,9 +1554,9 @@ async def test_upsert_many_chunk_size_emits_multiple_chunks(
         )
     from advanced_alchemy.mixins import BigIntPrimaryKey
 
-    if issubclass(author_model, BigIntPrimaryKey) and dialect_name in {"oracle", "mssql"}:
+    if issubclass(author_model, BigIntPrimaryKey):
         pytest.skip(
-            f"bigint Sequence PK on {dialect_name!r} MERGE path falls back to ORM-managed inserts; native single-statement assertion does not apply"
+            f"server-generated bigint PK on {dialect_name!r} falls back to ORM-managed inserts; native chunking assertion does not apply"
         )
 
     statements: list[str] = []
@@ -1580,6 +1580,119 @@ async def test_upsert_many_chunk_size_emits_multiple_chunks(
     assert len(results) == 8
     upsert_statements = [s for s in statements if "INSERT" in s.upper() or "MERGE" in s.upper()]
     assert len(upsert_statements) >= 2, f"expected >=2 upsert statements with chunk_size=4, got {upsert_statements}"
+
+
+async def test_upsert_many_rejects_duplicate_match_keys(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """A batch must not have backend-dependent duplicate-key behavior."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+    UserRole = models["user_role"]
+    data = [
+        UserRole(user_id=700, role_id=700, is_active=True),
+        UserRole(user_id=700, role_id=700, is_active=False),
+    ]
+
+    with pytest.raises(ValueError, match="duplicate values for match_fields"):
+        await maybe_async(user_role_repo.upsert_many(data))
+
+
+async def test_upsert_many_non_returning_reselect_uses_exact_composite_keys(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hydration must not return the Cartesian product of composite key values."""
+    from advanced_alchemy.operations import OnConflictUpsert
+
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+    UserRole = models["user_role"]
+    await maybe_async(
+        user_role_repo.add_many(
+            [
+                UserRole(user_id=710, role_id=710, is_active=True),
+                UserRole(user_id=710, role_id=711, is_active=True),
+                UserRole(user_id=711, role_id=710, is_active=True),
+                UserRole(user_id=711, role_id=711, is_active=True),
+            ]
+        )
+    )
+
+    original_create_upsert_many = OnConflictUpsert.create_upsert_many
+
+    def _without_returning(*args: Any, **kwargs: Any) -> tuple[Any, bool]:
+        statement, _ = original_create_upsert_many(*args, **kwargs)
+        return statement, False
+
+    monkeypatch.setattr(OnConflictUpsert, "create_upsert_many", _without_returning)
+    results = await maybe_async(
+        user_role_repo.upsert_many(
+            [
+                UserRole(user_id=710, role_id=711, is_active=False),
+                UserRole(user_id=711, role_id=710, is_active=False),
+            ]
+        )
+    )
+
+    assert {(item.user_id, item.role_id) for item in results} == {(710, 711), (711, 710)}
+
+
+async def test_upsert_many_refreshes_existing_identity_map_rows(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Native RETURNING must overwrite stale state already present in the session."""
+    session, models = seeded_test_session_async
+    author_model = models["author"]
+    author_repo = create_repository(session, author_model)
+    existing_author = (await maybe_async(author_repo.get_many()))[0]
+    replacement_author = author_model(id=existing_author.id, name="Updated by native upsert", dob=existing_author.dob)
+
+    results = await maybe_async(author_repo.upsert_many([replacement_author], match_fields=["id"]))
+
+    assert results[0] is existing_author
+    assert results[0].name == "Updated by native upsert"
+
+
+async def test_upsert_many_preserves_insert_defaults_and_applies_onupdate(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Native upsert must not copy insert-only defaults into existing rows."""
+    session, models = seeded_test_session_async
+    author_model = models["author"]
+    author_repo = create_repository(session, author_model)
+    existing_author = (await maybe_async(author_repo.get_many()))[0]
+    original_created_at = existing_author.created_at
+    original_updated_at = existing_author.updated_at
+    replacement_author = author_model(id=existing_author.id, name="Native defaults update", dob=existing_author.dob)
+
+    results = await maybe_async(author_repo.upsert_many([replacement_author], match_fields=["id"]))
+
+    assert results[0].created_at == original_created_at
+    assert results[0].updated_at > original_updated_at
+
+
+async def test_upsert_many_persistent_instance_updates_only_changed_fields(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Loaded state is not equivalent to explicitly supplied update data."""
+    session, models = seeded_test_session_async
+    author_repo = create_repository(session, models["author"])
+    existing_author = (await maybe_async(author_repo.get_many()))[0]
+    original_created_at = existing_author.created_at
+    original_updated_at = existing_author.updated_at
+    existing_author.name = "Persistent native update"
+
+    results = await maybe_async(author_repo.upsert_many([existing_author], match_fields=["id"]))
+
+    assert results[0].created_at == original_created_at
+    assert results[0].updated_at > original_updated_at
 
 
 async def test_repo_update_partial_does_not_clear_relationships_github_684(

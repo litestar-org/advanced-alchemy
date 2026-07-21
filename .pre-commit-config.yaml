@@ -17,12 +17,12 @@ repos:
       - id: mixed-line-ending
       - id: trailing-whitespace
   - repo: https://github.com/provinzkraut/unasyncd
-    rev: "v0.10.0"
+    rev: "v0.10.1"
     hooks:
       - id: unasyncd
         additional_dependencies: ["ruff"]
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.15.15"
+    rev: "v0.15.22"
     hooks:
       # Run the linter.
       - id: ruff
@@ -32,7 +32,7 @@ repos:
       - id: ruff-format
         types_or: [python, pyi]
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.2
+    rev: v2.4.3
     hooks:
       - id: codespell
         additional_dependencies: [tomli]

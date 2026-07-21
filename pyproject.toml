@@ -498,6 +498,13 @@ ignore_missing_imports = true
 module = ["opentelemetry.*"]
 
 [[tool.mypy.overrides]]
+# These typed dependencies use Python 3.10 syntax in releases installed on newer
+# interpreters, while this project intentionally checks its public surface using
+# the Python 3.9 grammar.
+follow_imports = "skip"
+module = ["anyio", "anyio.*", "click", "click.*", "filelock", "filelock.*"]
+
+[[tool.mypy.overrides]]
 module = "advanced_alchemy._serialization"
 warn_unused_ignores = false
 

@@ -3,9 +3,9 @@
 from typing import Any
 
 import pytest
-from sqlalchemy import Column, Index, Integer, MetaData, String, Table, UniqueConstraint
+from sqlalchemy import Column, Index, Integer, MetaData, String, Table, UniqueConstraint, func, text
 
-from advanced_alchemy.operations import MergeStatement, OnConflictUpsert, validate_identifier
+from advanced_alchemy.operations import MergeStatement, OnConflictUpsert, resolve_upsert_strategy, validate_identifier
 
 
 @pytest.fixture
@@ -277,7 +277,7 @@ class TestSpannerUpsert:
 class TestMSSQLMergeCompile:
     """Tests for the MSSQL MergeStatement compile path added in Ch.4."""
 
-    def test_mssql_compile_emits_using_values_source_and_output_inserted(self, sample_table: Table) -> None:
+    def test_mssql_compile_emits_using_values_source_without_unused_output(self, sample_table: Table) -> None:
         from sqlalchemy.dialects import mssql
 
         values_list = [
@@ -293,11 +293,12 @@ class TestMSSQLMergeCompile:
         compiled = str(stmt.compile(dialect=mssql.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
         upper = compiled.upper()
         assert "MERGE INTO TEST_TABLE AS TGT" in upper
+        assert "HOLDLOCK" not in upper
+        assert "OUTPUT INSERTED" not in upper
         assert "USING (VALUES" in upper
         assert "AS SRC(" in upper
         assert "WHEN MATCHED THEN UPDATE SET" in upper
         assert "WHEN NOT MATCHED THEN INSERT" in upper
-        assert "OUTPUT INSERTED.*" in upper
         assert compiled.rstrip().endswith(";")
 
     def test_mssql_compile_trailing_semicolon_is_mandatory(self, sample_table: Table) -> None:
@@ -326,7 +327,100 @@ class TestMSSQLMergeCompile:
         compiled = str(stmt.compile(dialect=mssql.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
         upper = compiled.upper()
         assert "TGT.[KEY] = SRC.[KEY]" in upper
-        assert "TGT.[NAMESPACE] = SRC.[NAMESPACE]" in upper
+        assert "TGT.NAMESPACE = SRC.NAMESPACE" in upper
+
+    def test_mssql_compile_qualifies_schema_without_serializable_hint(self) -> None:
+        from sqlalchemy.dialects import mssql
+
+        table = Table(
+            "Order",
+            MetaData(),
+            Column("id", Integer, primary_key=True),
+            Column("key", String(50), unique=True),
+            schema="tenant",
+        )
+        stmt, _ = OnConflictUpsert.create_merge_many(
+            table=table,
+            values_list=[{"id": 1, "key": "k1"}],
+            conflict_columns=["key"],
+            dialect_name="mssql",
+        )
+
+        compiled = str(stmt.compile(dialect=mssql.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
+
+        assert "MERGE INTO tenant.[Order] AS tgt" in compiled
+
+
+class TestBulkUpsertSafety:
+    """Cross-dialect correctness gates for native bulk dispatch."""
+
+    def test_default_update_columns_never_mutate_primary_key(self, sample_table: Table) -> None:
+        from sqlalchemy.dialects import postgresql
+
+        stmt, _ = OnConflictUpsert.create_upsert_many(
+            table=sample_table,
+            values_list=[{"id": 1, "key": "k1", "namespace": "ns", "value": "v1"}],
+            conflict_columns=["key", "namespace"],
+            dialect_name="postgresql",
+        )
+        compiled = str(stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
+        update_clause = compiled.upper().split(" DO UPDATE SET ", maxsplit=1)[1]
+
+        assert "ID =" not in update_clause
+        assert "KEY =" not in update_clause
+        assert "NAMESPACE =" not in update_clause
+
+    def test_mysql_falls_back_when_conflict_target_is_ambiguous(self) -> None:
+        table = Table(
+            "accounts",
+            MetaData(),
+            Column("id", Integer, primary_key=True),
+            Column("email", String(255), unique=True),
+        )
+
+        strategy = resolve_upsert_strategy(table, ("email",), "mysql")
+
+        assert strategy.kind == "fallback"
+
+    def test_deferrable_unique_constraint_does_not_use_on_conflict(self) -> None:
+        table = Table(
+            "accounts",
+            MetaData(),
+            Column("id", Integer, primary_key=True),
+            Column("email", String(255)),
+            UniqueConstraint("email", deferrable=True),
+        )
+
+        strategy = resolve_upsert_strategy(table, ("email",), "postgresql")
+
+        assert strategy.kind == "fallback"
+
+    def test_partial_unique_index_does_not_use_native_upsert(self) -> None:
+        table = Table(
+            "accounts",
+            MetaData(),
+            Column("id", Integer, primary_key=True),
+            Column("email", String(255)),
+            Column("active", Integer),
+        )
+        Index("uq_active_email", table.c.email, unique=True, postgresql_where=text("active = 1"))
+
+        strategy = resolve_upsert_strategy(table, ("email",), "postgresql")
+
+        assert strategy.kind == "fallback"
+
+    def test_expression_unique_index_does_not_use_native_upsert(self) -> None:
+        table = Table(
+            "accounts",
+            MetaData(),
+            Column("id", Integer, primary_key=True),
+            Column("email", String(255)),
+        )
+        Index("uq_lower_email", func.lower(table.c.email), unique=True)
+
+        strategy = resolve_upsert_strategy(table, ("email",), "postgresql")
+
+        assert strategy.kind == "fallback"
 
 
 class TestIdentifierValidation:
@@ -732,12 +826,12 @@ class TestResolveUpsertStrategy:
         assert strategy.conflict_columns == ("id",)
         assert strategy.dialect_name == "postgresql"
 
-    def test_pk_superset_match_uses_pk_cols(self, composite_pk_table: Table) -> None:
+    def test_pk_superset_match_preserves_match_semantics_with_fallback(self, composite_pk_table: Table) -> None:
         from advanced_alchemy.operations import resolve_upsert_strategy
 
         strategy = resolve_upsert_strategy(composite_pk_table, ("tenant_id", "user_id", "email"), "postgresql")
-        assert strategy.kind == "on_conflict"
-        assert set(strategy.conflict_columns) == {"tenant_id", "user_id"}
+        assert strategy.kind == "fallback"
+        assert set(strategy.conflict_columns) == {"tenant_id", "user_id", "email"}
 
     def test_composite_pk_exact_match(self, composite_pk_table: Table) -> None:
         from advanced_alchemy.operations import resolve_upsert_strategy
@@ -802,8 +896,8 @@ class TestResolveUpsertStrategy:
             ("duckdb", "on_conflict", True),
             ("mysql", "on_conflict", False),
             ("mariadb", "on_conflict", False),
-            ("oracle", "merge", True),
-            ("mssql", "merge", True),
+            ("oracle", "merge", False),
+            ("mssql", "merge", False),
             ("spanner", "insert_or_update", False),
         ],
     )
