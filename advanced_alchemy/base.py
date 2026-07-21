@@ -421,10 +421,6 @@ def create_registry(
                 IPvAnyNetwork: String,
             }
         )
-    with contextlib.suppress(ImportError):
-        from msgspec import Struct
-
-        type_annotation_map[Struct] = JsonB
     if custom_annotation_map is not None:
         type_annotation_map.update(custom_annotation_map)
     return SQLAlchemyRegistry(metadata=meta, type_annotation_map=type_annotation_map)
