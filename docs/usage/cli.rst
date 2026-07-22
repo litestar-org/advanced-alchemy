@@ -71,7 +71,7 @@ The following options are available for all commands:
    * - Option
      - Explanation
    * - ``--config`` TEXT
-     - **Required**. Dotted path to SQLAlchemy config(s), it's an instance of ``SQLAlchemyConfig`` (sync or async). Example: ``--config path.to.alchemy-config.config``
+     - **Required**. Dotted path to SQLAlchemy config(s), it's an instance of ``SQLAlchemySyncConfig`` or ``SQLAlchemyAsyncConfig``. Example: ``--config path.to.alchemy-config.config``
    * - ``--bind-key`` TEXT
      - Optional. Specify which SQLAlchemy config to use
    * - ``--no-prompt``
@@ -90,12 +90,11 @@ If the file is named ``alchemy-config.py``, you would need to use it like this `
 .. code-block:: python
     :caption: alchemy-config.py
 
-    from sqlalchemy import create_engine
-    from advanced_alchemy.config import SQLAlchemyConfig
+    from advanced_alchemy.config import SQLAlchemySyncConfig
 
     # Create a test config using SQLite
-    config = SQLAlchemyConfig(
-        connection_url="sqlite:///test.db"
+    config = SQLAlchemySyncConfig(
+        connection_string="sqlite:///test.db"
     )
 
 
