@@ -28,7 +28,7 @@ jobs:
         shell: bash
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install Microsoft ODBC Drivers
         run: sudo apt-get update && sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y
