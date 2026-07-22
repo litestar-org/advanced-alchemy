@@ -74,6 +74,9 @@ obstore = [
 passlib = [
     { name = "passlib", extra = ["argon2"] },
 ]
+postgresql = [
+    { name = "alembic-postgresql-enum" },
+]
 pwdlib = [
     { name = "pwdlib", version = "0.2.1", source = { registry = "https://pypi.org/simple" }, extra = ["argon2"], marker = "python_full_version < '3.10'" },
     { name = "pwdlib", version = "0.3.0", source = { registry = "https://pypi.org/simple" }, extra = ["argon2"], marker = "python_full_version >= '3.10'" },
@@ -322,6 +325,7 @@ oracle = [
     { name = "oracledb" },
 ]
 postgres = [
+    { name = "alembic-postgresql-enum" },
     { name = "asyncpg" },
     { name = "psycopg", version = "3.2.13", source = { registry = "https://pypi.org/simple" }, extra = ["binary", "pool"], marker = "python_full_version < '3.10'" },
     { name = "psycopg", version = "3.3.4", source = { registry = "https://pypi.org/simple" }, extra = ["binary", "pool"], marker = "python_full_version >= '3.10'" },
@@ -383,6 +387,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.12.0" },
+    { name = "alembic-postgresql-enum", marker = "extra == 'postgresql'", specifier = ">=1.10.0" },
     { name = "argon2-cffi", marker = "extra == 'argon2'" },
     { name = "cryptography", marker = "extra == 'cryptography'" },
     { name = "dogpile-cache", marker = "extra == 'dogpile'" },
@@ -400,7 +405,7 @@ requires-dist = [
     { name = "typing-extensions", specifier = ">=4.0.0" },
     { name = "uuid-utils", marker = "extra == 'uuid'", specifier = ">=0.6.1" },
 ]
-provides-extras = ["argon2", "cli", "cryptography", "dogpile", "fsspec", "nanoid", "obstore", "passlib", "pwdlib", "pyotp", "uuid"]
+provides-extras = ["argon2", "cli", "cryptography", "dogpile", "fsspec", "nanoid", "obstore", "passlib", "postgresql", "pwdlib", "pyotp", "uuid"]
 
 [package.metadata.requires-dev]
 build = [{ name = "bump-my-version" }]
@@ -554,6 +559,7 @@ mssql = [
 mysql = [{ name = "asyncmy", specifier = ">=0.2.9" }]
 oracle = [{ name = "oracledb", specifier = ">=2.4.1" }]
 postgres = [
+    { name = "alembic-postgresql-enum", specifier = ">=1.10.0" },
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2.3" },
     { name = "psycopg2-binary", specifier = ">=2.9.10" },
@@ -938,6 +944,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/94/13/8b084e0f2efb0275a1d534838844926f798bd766566b1375174e2448cd31/alembic-1.18.4.tar.gz", hash = "sha256:cb6e1fd84b6174ab8dbb2329f86d631ba9559dd78df550b57804d607672cedbc", size = 2056725, upload-time = "2026-02-10T16:00:47.195Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d2/29/6533c317b74f707ea28f8d633734dbda2119bbadfc61b2f3640ba835d0f7/alembic-1.18.4-py3-none-any.whl", hash = "sha256:a5ed4adcf6d8a4cb575f3d759f071b03cd6e5c7618eb796cb52497be25bfe19a", size = 263893, upload-time = "2026-02-10T16:00:49.997Z" },
+]
+
+[[package]]
+name = "alembic-postgresql-enum"
+version = "1.10.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "alembic", version = "1.16.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "alembic", version = "1.18.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+    { name = "sqlalchemy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/63/cf/b5147b926441e7cdc12f306465dac488ff22364b1467a09a5d43743b8cfc/alembic_postgresql_enum-1.10.0.tar.gz", hash = "sha256:ea23481de3d6a00d68d369f92a46ff4fa27b2575e39c583145f1e23ea9c7511d", size = 18557, upload-time = "2026-02-23T16:15:04.148Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/58/8a/4db3821584824ac68df00a6ca27331d3f41f40105f22a8dc1b30b1ec83af/alembic_postgresql_enum-1.10.0-py3-none-any.whl", hash = "sha256:39297cb5dc0e71a3e08df1feeab9ffcc1b6aac0be02bf578748d74c442cd3fbf", size = 27774, upload-time = "2026-02-23T16:15:02.789Z" },
 ]
 
 [[package]]

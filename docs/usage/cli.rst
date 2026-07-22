@@ -255,6 +255,24 @@ Create a new migration revision:
    * - ``--rev-id`` TEXT
      - Specific revision ID
 
+.. note:: **PostgreSQL enum changes**
+
+   Alembic's autogenerate does not detect changes to PostgreSQL native ``ENUM``
+   types on its own (for example, adding a value to an existing ``StrEnum``).
+   Advanced Alchemy's migration templates automatically enable this detection
+   when the optional `alembic-postgresql-enum
+   <https://pypi.org/project/alembic-postgresql-enum/>`_ package is installed.
+   Install it with the ``postgresql`` extra:
+
+   .. code-block:: bash
+
+       pip install "advanced-alchemy[postgresql]"
+
+   The generated ``env.py`` imports the package inside a ``try``/``except`` block,
+   so no configuration is required — it activates only when the package is present.
+   If you initialized your migrations with an older version of Advanced Alchemy,
+   add ``import alembic_postgresql_enum`` near the top of your ``env.py`` to enable it.
+
 
 Inspection Commands
 ~~~~~~~~~~~~~~~~~~~
