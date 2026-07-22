@@ -858,7 +858,9 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
+        chunk_size: Optional[int] = None,
     ) -> List[ModelT]:
+        _ = chunk_size
         return [await self.upsert(item) for item in data]
 
     async def get_many_and_count(

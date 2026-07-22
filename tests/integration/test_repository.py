@@ -1447,6 +1447,270 @@ async def test_composite_pk_upsert_many_all_new(
         assert created is not None
 
 
+async def test_upsert_many_native_path_is_single_statement_per_chunk(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Native dispatch must compile to ONE upsert statement per chunk.
+
+    Acceptance gate from the saga PRD: on a native-capable dialect, the
+    upsert path emits one INSERT...ON CONFLICT / MERGE / INSERT OR UPDATE per
+    chunk plus (when ``supports_returning=False``) at most one re-SELECT for
+    hydration — never the historical 1 SELECT + N add/update sequence.
+    """
+    from sqlalchemy import event
+
+    session, models = seeded_test_session_async
+    author_model = models["author"]
+    author_repo = create_repository(session, author_model)
+    dialect_name = session.bind.dialect.name if session.bind is not None else session.get_bind().dialect.name
+    if dialect_name not in {
+        "postgresql",
+        "cockroachdb",
+        "sqlite",
+        "duckdb",
+        "oracle",
+        "mssql",
+        "spanner+spanner",
+    }:
+        pytest.skip(
+            f"native upsert path with match_fields=['id'] cannot hydrate on {dialect_name!r} (no RETURNING / autoincrement PK)"
+        )
+    from advanced_alchemy.mixins import BigIntPrimaryKey
+
+    if issubclass(author_model, BigIntPrimaryKey):
+        pytest.skip(
+            f"server-generated bigint PK on {dialect_name!r} falls back to ORM-managed inserts; native single-statement assertion does not apply"
+        )
+
+    statements: list[str] = []
+
+    def _record(conn: Any, clauseelement: Any, *args: Any, **kwargs: Any) -> None:
+        _ = args, kwargs
+        try:
+            statements.append(str(clauseelement.compile(dialect=conn.dialect)))
+        except Exception:
+            statements.append(type(clauseelement).__name__)
+
+    bind = session.bind if session.bind is not None else session.get_bind()
+    sync_engine = getattr(bind, "sync_engine", bind)
+    event.listen(sync_engine, "before_execute", _record)
+    try:
+        data = [author_model(name=f"native-upsert-author-{i}", dob=datetime.date(1990, 1, 1)) for i in range(5)]
+        results = await maybe_async(author_repo.upsert_many(data, match_fields=["id"]))
+    finally:
+        event.remove(sync_engine, "before_execute", _record)
+
+    assert len(results) == 5
+    upsert_statements = [s for s in statements if "INSERT" in s.upper() or "MERGE" in s.upper()]
+    assert len(upsert_statements) == 1, (
+        f"expected 1 native upsert statement, got {len(upsert_statements)}: {statements}"
+    )
+
+
+async def test_upsert_many_no_merge_forces_fallback(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """``no_merge=True`` must take the SELECT+partition+add/update fallback path.
+
+    The fallback emits at minimum a SELECT (existence probe) followed by an
+    INSERT statement — the native path emits a single upsert with no
+    initial SELECT.
+    """
+    from sqlalchemy import event
+
+    session, models = seeded_test_session_async
+    author_model = models["author"]
+    author_repo = create_repository(session, author_model)
+
+    statements: list[str] = []
+
+    def _record(conn: Any, clauseelement: Any, *args: Any, **kwargs: Any) -> None:
+        _ = args, kwargs
+        try:
+            statements.append(str(clauseelement.compile(dialect=conn.dialect)))
+        except Exception:
+            statements.append(type(clauseelement).__name__)
+
+    bind = session.bind if session.bind is not None else session.get_bind()
+    sync_engine = getattr(bind, "sync_engine", bind)
+    event.listen(sync_engine, "before_execute", _record)
+    try:
+        data = [author_model(name=f"fallback-author-{i}", dob=datetime.date(1990, 1, 1)) for i in range(3)]
+        results = await maybe_async(author_repo.upsert_many(data, match_fields=["id"], no_merge=True))
+    finally:
+        event.remove(sync_engine, "before_execute", _record)
+
+    assert len(results) == 3
+    saw_select = any("SELECT" in s.upper() for s in statements)
+    saw_insert = any(s.upper().startswith("INSERT") for s in statements)
+    assert saw_select and saw_insert, f"fallback expected SELECT+INSERT, got: {statements}"
+
+
+async def test_upsert_many_chunk_size_emits_multiple_chunks(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """A small parameter cap must produce multiple native statements."""
+    from sqlalchemy import event
+
+    session, models = seeded_test_session_async
+    author_model = models["author"]
+    author_repo = create_repository(session, author_model)
+    dialect_name = session.bind.dialect.name if session.bind is not None else session.get_bind().dialect.name
+    if dialect_name not in {
+        "postgresql",
+        "cockroachdb",
+        "sqlite",
+        "duckdb",
+        "oracle",
+        "mssql",
+        "spanner+spanner",
+    }:
+        pytest.skip(
+            f"native upsert path with match_fields=['id'] cannot hydrate on {dialect_name!r} (no RETURNING / autoincrement PK)"
+        )
+    from advanced_alchemy.mixins import BigIntPrimaryKey
+
+    if issubclass(author_model, BigIntPrimaryKey):
+        pytest.skip(
+            f"server-generated bigint PK on {dialect_name!r} falls back to ORM-managed inserts; native chunking assertion does not apply"
+        )
+
+    statements: list[str] = []
+
+    def _record(conn: Any, clauseelement: Any, *args: Any, **kwargs: Any) -> None:
+        _ = args, kwargs
+        try:
+            statements.append(str(clauseelement.compile(dialect=conn.dialect)))
+        except Exception:
+            statements.append(type(clauseelement).__name__)
+
+    bind = session.bind if session.bind is not None else session.get_bind()
+    sync_engine = getattr(bind, "sync_engine", bind)
+    event.listen(sync_engine, "before_execute", _record)
+    try:
+        data = [author_model(name=f"chunked-author-{i}", dob=datetime.date(1990, 1, 1)) for i in range(8)]
+        results = await maybe_async(author_repo.upsert_many(data, match_fields=["id"], chunk_size=4))
+    finally:
+        event.remove(sync_engine, "before_execute", _record)
+
+    assert len(results) == 8
+    upsert_statements = [s for s in statements if "INSERT" in s.upper() or "MERGE" in s.upper()]
+    assert len(upsert_statements) >= 2, f"expected >=2 upsert statements with chunk_size=4, got {upsert_statements}"
+
+
+async def test_upsert_many_rejects_duplicate_match_keys(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """A batch must not have backend-dependent duplicate-key behavior."""
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+    UserRole = models["user_role"]
+    data = [
+        UserRole(user_id=700, role_id=700, is_active=True),
+        UserRole(user_id=700, role_id=700, is_active=False),
+    ]
+
+    with pytest.raises(ValueError, match="duplicate values for match_fields"):
+        await maybe_async(user_role_repo.upsert_many(data))
+
+
+async def test_upsert_many_non_returning_reselect_uses_exact_composite_keys(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hydration must not return the Cartesian product of composite key values."""
+    from advanced_alchemy.operations import OnConflictUpsert
+
+    session, models = seeded_test_session_async
+    if "user_role" not in models:
+        pytest.skip("user_role model not available")
+
+    user_role_repo = create_repository(session, models["user_role"])
+    UserRole = models["user_role"]
+    await maybe_async(
+        user_role_repo.add_many(
+            [
+                UserRole(user_id=710, role_id=710, is_active=True),
+                UserRole(user_id=710, role_id=711, is_active=True),
+                UserRole(user_id=711, role_id=710, is_active=True),
+                UserRole(user_id=711, role_id=711, is_active=True),
+            ]
+        )
+    )
+
+    original_create_upsert_many = OnConflictUpsert.create_upsert_many
+
+    def _without_returning(*args: Any, **kwargs: Any) -> tuple[Any, bool]:
+        statement, _ = original_create_upsert_many(*args, **kwargs)
+        return statement, False
+
+    monkeypatch.setattr(OnConflictUpsert, "create_upsert_many", _without_returning)
+    results = await maybe_async(
+        user_role_repo.upsert_many(
+            [
+                UserRole(user_id=710, role_id=711, is_active=False),
+                UserRole(user_id=711, role_id=710, is_active=False),
+            ]
+        )
+    )
+
+    assert {(item.user_id, item.role_id) for item in results} == {(710, 711), (711, 710)}
+
+
+async def test_upsert_many_refreshes_existing_identity_map_rows(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Native RETURNING must overwrite stale state already present in the session."""
+    session, models = seeded_test_session_async
+    author_model = models["author"]
+    author_repo = create_repository(session, author_model)
+    existing_author = (await maybe_async(author_repo.get_many()))[0]
+    replacement_author = author_model(id=existing_author.id, name="Updated by native upsert", dob=existing_author.dob)
+
+    results = await maybe_async(author_repo.upsert_many([replacement_author], match_fields=["id"]))
+
+    assert results[0] is existing_author
+    assert results[0].name == "Updated by native upsert"
+
+
+async def test_upsert_many_preserves_insert_defaults_and_applies_onupdate(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Native upsert must not copy insert-only defaults into existing rows."""
+    session, models = seeded_test_session_async
+    author_model = models["author"]
+    author_repo = create_repository(session, author_model)
+    existing_author = (await maybe_async(author_repo.get_many()))[0]
+    original_created_at = existing_author.created_at
+    original_updated_at = existing_author.updated_at
+    replacement_author = author_model(id=existing_author.id, name="Native defaults update", dob=existing_author.dob)
+
+    results = await maybe_async(author_repo.upsert_many([replacement_author], match_fields=["id"]))
+
+    assert results[0].created_at == original_created_at
+    assert results[0].updated_at > original_updated_at
+
+
+async def test_upsert_many_persistent_instance_updates_only_changed_fields(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Loaded state is not equivalent to explicitly supplied update data."""
+    session, models = seeded_test_session_async
+    author_repo = create_repository(session, models["author"])
+    existing_author = (await maybe_async(author_repo.get_many()))[0]
+    original_created_at = existing_author.created_at
+    original_updated_at = existing_author.updated_at
+    existing_author.name = "Persistent native update"
+
+    results = await maybe_async(author_repo.upsert_many([existing_author], match_fields=["id"]))
+
+    assert results[0].created_at == original_created_at
+    assert results[0].updated_at > original_updated_at
+
+
 async def test_repo_update_partial_does_not_clear_relationships_github_684(
     seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
 ) -> None:

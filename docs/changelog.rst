@@ -175,6 +175,16 @@
         Alchemy mixins so users can understand the physical column order
         produced for newly-created tables.
 
+    .. change:: per-dialect optimal upsert_many (MERGE / ON CONFLICT / INSERT OR UPDATE)
+        :type: feature
+
+        ``Repository.upsert_many`` and ``Service.upsert_many`` now dispatch to the
+        most efficient native upsert primitive supported by the active dialect when
+        ``match_fields`` maps to a primary key, unique constraint, or unique index:
+        ``INSERT … ON CONFLICT DO UPDATE`` on PostgreSQL / CockroachDB / SQLite /
+        DuckDB / MySQL / MariaDB, ``MERGE`` on Oracle / MSSQL, and
+        primary-key ``INSERT OR UPDATE … THEN RETURN`` on Spanner — compiled to
+        one statement per dialect-sized chunk.
 
 .. changelog:: 1.10.0
     :date: 2026-05-23

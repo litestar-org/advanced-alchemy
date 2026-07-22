@@ -36,20 +36,35 @@ See Also:
 - :mod:`advanced_alchemy.extensions` : Additional database extensions
 """
 
+import functools
 import re
-from typing import TYPE_CHECKING, Any, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Optional, Union, cast
 from uuid import UUID
 
-from sqlalchemy import Insert, Table, bindparam, literal_column, select, text
+from sqlalchemy import Boolean, Insert, Table, UniqueConstraint, bindparam, insert, select, text
+from sqlalchemy.engine import Dialect
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import ClauseElement
+from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.expression import Executable
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from sqlalchemy.sql.compiler import SQLCompiler
-    from sqlalchemy.sql.elements import ColumnElement
+    from collections.abc import Iterable, Sequence
 
-__all__ = ("MergeStatement", "OnConflictUpsert", "validate_identifier")
+    from sqlalchemy.sql.compiler import SQLCompiler
+
+UpsertKind = Literal["on_conflict", "merge", "insert_or_update", "fallback"]
+
+__all__ = (
+    "MergeStatement",
+    "OnConflictUpsert",
+    "SpannerUpsert",
+    "UpsertKind",
+    "UpsertStrategy",
+    "compile_spanner_upsert_default",
+    "resolve_upsert_strategy",
+    "validate_identifier",
+)
 
 # Pattern for valid SQL identifiers (conservative - alphanumeric and underscore only)
 _IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -131,6 +146,47 @@ class MergeStatement(Executable, ClauseElement):
         self.when_not_matched_insert = when_not_matched_insert or {}
 
 
+class _MergeSourceColumn(ColumnElement[Any]):
+    """Dialect-quoted reference to a column on the MERGE ``src`` alias."""
+
+    inherit_cache = True
+
+    def __init__(self, column_name: str, column_type: Any) -> None:
+        self.column_name = column_name
+        self.type = column_type
+
+
+@compiles(_MergeSourceColumn)
+def _compile_merge_source_column(  # pyright: ignore[reportUnusedFunction]
+    element: _MergeSourceColumn, compiler: "SQLCompiler", **kwargs: Any
+) -> str:
+    _ = kwargs
+    return f"src.{compiler.preparer.quote(element.column_name)}"
+
+
+class _MergeMatchCondition(ColumnElement[bool]):
+    """Dialect-quoted equality predicates for MERGE target/source keys."""
+
+    inherit_cache = True
+    type = Boolean()
+
+    def __init__(self, match_columns: "Sequence[str]") -> None:
+        self.match_columns = tuple(match_columns)
+
+
+@compiles(_MergeMatchCondition)
+def _compile_merge_match_condition(  # pyright: ignore[reportUnusedFunction]
+    element: _MergeMatchCondition, compiler: "SQLCompiler", **kwargs: Any
+) -> str:
+    _ = kwargs
+    quote = compiler.preparer.quote
+    return " AND ".join(f"tgt.{quote(column)} = src.{quote(column)}" for column in element.match_columns)
+
+
+def _merge_source_column(table: Table, column_name: str) -> _MergeSourceColumn:
+    return _MergeSourceColumn(column_name, table.c[column_name].type)
+
+
 # PostgreSQL version constant
 POSTGRES_MERGE_VERSION = 15
 
@@ -147,7 +203,8 @@ def compile_merge_default(element: MergeStatement, compiler: "SQLCompiler", **kw
 @compiles(MergeStatement, "oracle")
 def compile_merge_oracle(element: MergeStatement, compiler: "SQLCompiler", **kwargs: Any) -> str:
     """Compile MERGE statement for Oracle."""
-    table_name = element.table.name
+    quote = compiler.preparer.quote
+    table_name = compiler.preparer.format_table(element.table)
 
     if isinstance(element.source, str):
         source_str = element.source
@@ -170,7 +227,7 @@ def compile_merge_oracle(element: MergeStatement, compiler: "SQLCompiler", **kwa
                 compiled_value = compiler.process(value, **kwargs)
             else:
                 compiled_value = compiler.process(value, **kwargs)
-            updates.append(f"{column} = {compiled_value}")  # pyright: ignore
+            updates.append(f"tgt.{quote(column)} = {compiled_value}")  # pyright: ignore
         merge_sql += ", ".join(updates)  # pyright: ignore
 
     if element.when_not_matched_insert:
@@ -178,7 +235,7 @@ def compile_merge_oracle(element: MergeStatement, compiler: "SQLCompiler", **kwa
         values = list(element.when_not_matched_insert.values())
 
         merge_sql += " WHEN NOT MATCHED THEN INSERT ("
-        merge_sql += ", ".join(columns)
+        merge_sql += ", ".join(quote(column) for column in columns)
         merge_sql += ") VALUES ("
 
         compiled_values = []
@@ -206,7 +263,8 @@ def compile_merge_postgresql(element: MergeStatement, compiler: "SQLCompiler", *
         msg = "MERGE statement requires PostgreSQL 15 or higher"
         raise NotImplementedError(msg)
 
-    table_name = element.table.name
+    quote = compiler.preparer.quote
+    table_name = compiler.preparer.format_table(element.table)
 
     if isinstance(element.source, str):
         # Wrap raw string source and alias as src
@@ -237,7 +295,7 @@ def compile_merge_postgresql(element: MergeStatement, compiler: "SQLCompiler", *
                 compiled_value = compiler.process(value, **kwargs)
             else:
                 compiled_value = compiler.process(value, **kwargs)
-            updates.append(f"{column} = {compiled_value}")  # pyright: ignore
+            updates.append(f"{quote(column)} = {compiled_value}")  # pyright: ignore
         merge_sql += ", ".join(updates)  # pyright: ignore
 
     if element.when_not_matched_insert:
@@ -245,7 +303,7 @@ def compile_merge_postgresql(element: MergeStatement, compiler: "SQLCompiler", *
         values = list(element.when_not_matched_insert.values())
 
         merge_sql += " WHEN NOT MATCHED THEN INSERT ("
-        merge_sql += ", ".join(columns)
+        merge_sql += ", ".join(quote(column) for column in columns)
         merge_sql += ") VALUES ("
 
         compiled_values = []
@@ -261,6 +319,133 @@ def compile_merge_postgresql(element: MergeStatement, compiler: "SQLCompiler", *
     return merge_sql
 
 
+@compiles(MergeStatement, "mssql")
+def compile_merge_mssql(element: MergeStatement, compiler: "SQLCompiler", **kwargs: Any) -> str:
+    """Compile MERGE for SQL Server.
+
+    Emits T-SQL form:
+
+        MERGE INTO {table} AS tgt
+        USING (VALUES (...), (...)) AS src(col1, col2)
+        ON tgt.col = src.col [AND ...]
+        WHEN MATCHED THEN UPDATE SET tgt.col = src.col [, ...]
+        WHEN NOT MATCHED THEN INSERT (col1, ...) VALUES (src.col1, ...)
+        ;
+
+    The trailing semicolon is REQUIRED for T-SQL MERGE — without it SQL Server
+    raises a syntax error. The repository hydrates with one exact-key re-SELECT;
+    emitting ``OUTPUT inserted.*`` here would transfer the same rows twice. All
+    identifiers are quoted via ``compiler.preparer`` so reserved words like
+    ``key`` survive.
+    """
+    quote = compiler.preparer.quote
+    table_name = compiler.preparer.format_table(element.table)
+
+    if isinstance(element.source, str):
+        source_clause = f"({element.source})"
+    else:
+        compiled_source = compiler.process(element.source, **kwargs)
+        compiled_trim = compiled_source.strip()
+        source_clause = compiled_trim if compiled_trim.startswith("(") else f"({compiled_trim})"
+
+    merge_sql = f"MERGE INTO {table_name} AS tgt USING {source_clause} ON ("
+    merge_sql += compiler.process(element.on_condition, **kwargs)
+    merge_sql += ")"
+
+    if element.when_matched_update:
+        merge_sql += " WHEN MATCHED THEN UPDATE SET "
+        updates: list[str] = []
+        for column, value in element.when_matched_update.items():
+            compiled_value = compiler.process(value, **kwargs)
+            updates.append(f"tgt.{quote(column)} = {compiled_value}")
+        merge_sql += ", ".join(updates)
+
+    if element.when_not_matched_insert:
+        columns = list(element.when_not_matched_insert.keys())
+        values = list(element.when_not_matched_insert.values())
+
+        merge_sql += " WHEN NOT MATCHED THEN INSERT ("
+        merge_sql += ", ".join(quote(col) for col in columns)
+        merge_sql += ") VALUES ("
+
+        compiled_values: list[str] = [compiler.process(value, **kwargs) for value in values]
+        merge_sql += ", ".join(compiled_values)
+        merge_sql += ")"
+
+    merge_sql += ";"
+    return merge_sql
+
+
+class SpannerUpsert(Executable, ClauseElement):
+    """Spanner-specific bulk upsert primitive (``INSERT OR UPDATE INTO``).
+
+    Cloud Spanner does not implement SQL ``MERGE``; the closest DML form is
+    ``INSERT OR UPDATE INTO {table} ({cols}) VALUES (...), (...)``. We model
+    this with its own ClauseElement (instead of overloading ``MergeStatement``)
+    because the syntax has no ``USING`` / ``WHEN MATCHED`` shape.
+
+    The PK must be present in every row — Spanner does not auto-generate PKs
+    via DML. This low-level construct does not expose SQLAlchemy result-column
+    metadata; repository code that needs hydration uses a regular
+    :class:`~sqlalchemy.sql.dml.Insert` with ``OR UPDATE`` and ``returning()``
+    so the Spanner dialect emits ``THEN RETURN``.
+    """
+
+    inherit_cache = True
+
+    def __init__(self, table: Table, values_list: list[dict[str, Any]]) -> None:
+        """Initialize a Spanner INSERT_OR_UPDATE.
+
+        Args:
+            table: Target table for the upsert.
+            values_list: Rows to insert/update. All rows MUST share the same
+                keys; PK columns MUST be present in every row.
+
+        Raises:
+            ValueError: ``values_list`` is empty or rows have heterogeneous
+                keys.
+        """
+        if not values_list:
+            msg = "values_list must not be empty"
+            raise ValueError(msg)
+        first_keys = tuple(values_list[0].keys())
+        first_keyset = set(first_keys)
+        for idx, row in enumerate(values_list[1:], start=1):
+            if set(row.keys()) != first_keyset:
+                msg = f"All entries in values_list must share the same keys (row {idx} differs from row 0)"
+                raise ValueError(msg)
+        augmented = _augment_with_pk_defaults(table, values_list)
+        self.table = table
+        self.values_list = augmented
+        self.columns: tuple[str, ...] = tuple(augmented[0].keys())
+
+
+@compiles(SpannerUpsert)
+def compile_spanner_upsert_default(element: SpannerUpsert, compiler: "SQLCompiler", **kwargs: Any) -> str:
+    """Default compilation - raises error for non-spanner dialects."""
+    _ = element, kwargs
+    dialect_name = compiler.dialect.name
+    msg = f"SpannerUpsert is only compilable for a Spanner dialect, not '{dialect_name}'"
+    raise NotImplementedError(msg)
+
+
+@compiles(SpannerUpsert, "spanner")
+@compiles(SpannerUpsert, "spanner+spanner")
+def compile_spanner_upsert(element: SpannerUpsert, compiler: "SQLCompiler", **kwargs: Any) -> str:
+    """Compile Spanner INSERT_OR_UPDATE INTO ... VALUES (...), (...)."""
+    table_name = compiler.preparer.format_table(element.table)
+    cols = ", ".join(compiler.preparer.quote(column) for column in element.columns)
+    row_strs: list[str] = []
+    for idx, row in enumerate(element.values_list):
+        placeholders: list[str] = []
+        for col in element.columns:
+            column = element.table.c[col]
+            bp = bindparam(f"row{idx}_{col}", value=row[col], type_=column.type)
+            placeholders.append(compiler.process(bp, **kwargs))
+        row_strs.append(f"({', '.join(placeholders)})")
+    return f"INSERT OR UPDATE INTO {table_name} ({cols}) VALUES {', '.join(row_strs)}"  # noqa: S608
+
+
 class OnConflictUpsert:
     """Cross-database upsert operation using dialect-specific constructs.
 
@@ -271,13 +456,22 @@ class OnConflictUpsert:
 
     @staticmethod
     def supports_native_upsert(dialect_name: str) -> bool:
-        """Check if the dialect supports native upsert operations.
+        """Check if the dialect supports the single-row ``create_upsert`` API.
+
+        This flag is scoped to the per-row ``INSERT ... ON CONFLICT`` /
+        ``ON DUPLICATE KEY UPDATE`` dialects that
+        :meth:`OnConflictUpsert.create_upsert` can compile directly. The
+        bulk ``MERGE`` (mssql, oracle) and ``INSERT OR UPDATE`` (spanner)
+        primitives are dispatched separately by
+        :meth:`Repository.upsert_many` via :func:`resolve_upsert_strategy`
+        and are intentionally **not** reported here.
 
         Args:
             dialect_name: Name of the database dialect
 
         Returns:
-            True if native upsert is supported, False otherwise
+            ``True`` for postgresql / cockroachdb / sqlite / mysql /
+            mariadb / duckdb; ``False`` otherwise.
         """
         return dialect_name in {"postgresql", "cockroachdb", "sqlite", "mysql", "mariadb", "duckdb"}
 
@@ -301,7 +495,13 @@ class OnConflictUpsert:
             validate_identifiers: If True, validate column names for safety (default: False)
 
         Returns:
-            A SQLAlchemy Insert statement with upsert logic
+            A SQLAlchemy ``Insert`` for the ON-CONFLICT dialects (postgresql /
+            cockroachdb / sqlite / duckdb / mysql / mariadb). MSSQL, Oracle,
+            and Spanner are handled by the bulk ``MERGE`` / ``INSERT OR UPDATE``
+            path in :func:`OnConflictUpsert.create_merge_many` and
+            :func:`OnConflictUpsert.create_insert_or_update_many`, accessed through
+            :func:`resolve_upsert_strategy` from the repository layer — they
+            are not exposed via this single-row API.
 
         Raises:
             NotImplementedError: If the dialect doesn't support native upsert
@@ -316,34 +516,49 @@ class OnConflictUpsert:
             for col in values:
                 validate_identifier(col, "column")
 
-        if update_columns is None:
-            update_columns = [col for col in values if col not in conflict_columns]
+        update_columns = _resolve_update_columns(table, values, conflict_columns, update_columns)
 
-        if dialect_name in {"postgresql", "sqlite", "duckdb"}:
+        if dialect_name in {"postgresql", "sqlite", "duckdb", "cockroachdb"}:
             from sqlalchemy.dialects.postgresql import insert as pg_insert
 
             pg_insert_stmt = pg_insert(table).values(values)
+            if not update_columns:
+                return pg_insert_stmt.on_conflict_do_nothing(index_elements=conflict_columns)
             return pg_insert_stmt.on_conflict_do_update(
-                index_elements=conflict_columns, set_={col: pg_insert_stmt.excluded[col] for col in update_columns}
-            )
-        if dialect_name == "cockroachdb":
-            from sqlalchemy.dialects.postgresql import insert as pg_insert
-
-            pg_insert_stmt = pg_insert(table).values(values)
-            return pg_insert_stmt.on_conflict_do_update(
-                index_elements=conflict_columns, set_={col: pg_insert_stmt.excluded[col] for col in update_columns}
+                index_elements=conflict_columns,
+                set_={col: pg_insert_stmt.excluded[col] for col in update_columns},
             )
 
         if dialect_name in {"mysql", "mariadb"}:
             from sqlalchemy.dialects.mysql import insert as mysql_insert
 
             mysql_insert_stmt = mysql_insert(table).values(values)
-            return mysql_insert_stmt.on_duplicate_key_update(
-                **{col: mysql_insert_stmt.inserted[col] for col in update_columns}
+            mysql_updates = (
+                {col: mysql_insert_stmt.inserted[col] for col in update_columns}
+                if update_columns
+                else {conflict_columns[0]: mysql_insert_stmt.inserted[conflict_columns[0]]}
             )
+            return mysql_insert_stmt.on_duplicate_key_update(**mysql_updates)
 
         msg = f"Native upsert not supported for dialect '{dialect_name}'"
         raise NotImplementedError(msg)
+
+    @staticmethod
+    def create_insert_or_update_many(table: Table, values_list: list[dict[str, Any]]) -> Insert:
+        """Create a Spanner ``INSERT OR UPDATE`` using SQLAlchemy's Insert.
+
+        A regular :class:`~sqlalchemy.sql.dml.Insert` retains result-column
+        metadata, allowing callers to add ``returning(model_type)``. The
+        Spanner dialect compiles that combination to ``THEN RETURN``.
+
+        Args:
+            table: Target table for the upsert.
+            values_list: Homogeneous rows to insert or update.
+
+        Returns:
+            A multi-values insert prefixed with Spanner's ``OR UPDATE`` token.
+        """
+        return insert(table).prefix_with("OR UPDATE").values(values_list)
 
     @staticmethod
     def create_merge_upsert(  # noqa: C901, PLR0915
@@ -385,8 +600,7 @@ class OnConflictUpsert:
             for col in values:
                 validate_identifier(col, "column")
 
-        if update_columns is None:
-            update_columns = [col for col in values if col not in conflict_columns]
+        update_columns = _resolve_update_columns(table, values, conflict_columns, update_columns)
 
         additional_params: dict[str, Any] = {}
         source: Union[ClauseElement, str]
@@ -403,17 +617,17 @@ class OnConflictUpsert:
             for pk_column in table.primary_key.columns:
                 if pk_column.name in values or pk_column.default is None:
                     continue
-                if callable(getattr(pk_column.default, "arg", None)):
-                    try:
-                        default_value = pk_column.default.arg(None)  # type: ignore[attr-defined]
-                        if isinstance(default_value, UUID):
-                            default_value = default_value.hex
-                        additional_params[pk_column.name] = default_value
-                        labeled_columns.append(
-                            bindparam(pk_column.name, value=default_value, type_=pk_column.type).label(pk_column.name)
-                        )
-                    except (TypeError, AttributeError, ValueError):
+                arg = getattr(pk_column.default, "arg", None)
+                if callable(arg):
+                    default_value = invoke_python_default(arg)
+                    if default_value is DEFAULT_INVOKE_FAILED:
                         continue
+                    if isinstance(default_value, UUID):
+                        default_value = default_value.hex
+                    additional_params[pk_column.name] = default_value
+                    labeled_columns.append(
+                        bindparam(pk_column.name, value=default_value, type_=pk_column.type).label(pk_column.name)
+                    )
                 elif hasattr(pk_column.default, "next_value"):
                     pk_col_with_seq = pk_column
 
@@ -423,7 +637,7 @@ class OnConflictUpsert:
             source_query = source_query.select_from(text("DUAL"))
             source = source_query.subquery("src")
             insert_columns = [label_col.name for label_col in labeled_columns]
-            when_not_matched_insert = {col_name: literal_column(f"src.{col_name}") for col_name in insert_columns}
+            when_not_matched_insert = {col_name: _merge_source_column(table, col_name) for col_name in insert_columns}
             if pk_col_with_seq is not None:
                 insert_columns.append(pk_col_with_seq.name)
                 when_not_matched_insert[pk_col_with_seq.name] = cast("Any", pk_col_with_seq.default).next_value()
@@ -436,7 +650,7 @@ class OnConflictUpsert:
                 labeled_columns.append(bp.label(key))
             source = select(*labeled_columns).subquery("src")
             insert_columns = list(values.keys())
-            when_not_matched_insert = {col: literal_column(f"src.{col}") for col in insert_columns}
+            when_not_matched_insert = {col: _merge_source_column(table, col) for col in insert_columns}
         else:
             placeholders = ", ".join([f"%({key})s" for key in values])
             col_names = ", ".join(values.keys())
@@ -444,12 +658,11 @@ class OnConflictUpsert:
             insert_columns = list(values.keys())
             when_not_matched_insert = {col: bindparam(col) for col in insert_columns}
 
-        on_conditions = [f"tgt.{col} = src.{col}" for col in conflict_columns]
-        on_condition = text(" AND ".join(on_conditions))
+        on_condition = _MergeMatchCondition(conflict_columns)
 
         if dialect_name in {"postgresql", "cockroachdb", "oracle"}:
             when_matched_update: dict[str, Any] = {
-                col: literal_column(f"src.{col}") for col in update_columns if col in values
+                col: _merge_source_column(table, col) for col in update_columns if col in values
             }
         else:
             when_matched_update = {col: bindparam(col) for col in update_columns if col in values}
@@ -472,5 +685,591 @@ class OnConflictUpsert:
 
         return merge_stmt, additional_params  # pyright: ignore[reportUnknownVariableType]
 
+    @staticmethod
+    def create_upsert_many(
+        table: Table,
+        values_list: list[dict[str, Any]],
+        conflict_columns: list[str],
+        update_columns: Optional[list[str]] = None,
+        dialect_name: Optional[str] = None,
+        validate_identifiers: bool = False,
+        model_type: Optional[type[Any]] = None,
+    ) -> tuple[Insert, bool]:
+        """Build a dialect-specific bulk Insert with ON CONFLICT / ON DUPLICATE KEY UPDATE.
 
-# Note: Oracle-specific helper removed; inline logic now handles defaults
+        Compiles to a single ``INSERT ... VALUES (...), (...), ...`` per chunk so the
+        round-trip cost is fixed regardless of batch size.
+
+        Args:
+            table: Target table for the upsert.
+            values_list: Rows to insert/update. All rows MUST share the same keys.
+            conflict_columns: Columns that define the conflict / match condition.
+            update_columns: Columns to update on conflict (defaults to all
+                non-conflict keys from the first row).
+            dialect_name: Database dialect name; determines compile path.
+            validate_identifiers: If True, validate column identifiers for safety.
+            model_type: Optional ORM model target used for ORM-aware RETURNING.
+
+        Returns:
+            A tuple ``(statement, supports_returning)`` where ``supports_returning``
+            is True for postgresql / cockroachdb / sqlite / duckdb and False for
+            mysql / mariadb.
+
+        Raises:
+            ValueError: ``values_list`` is empty, rows have heterogeneous keys,
+                or identifier validation fails.
+            NotImplementedError: The dialect does not support an ON CONFLICT
+                style native bulk upsert.
+        """
+        _validate_bulk_inputs(values_list, conflict_columns, update_columns, validate_identifiers)
+
+        resolved_update_columns = _resolve_update_columns(
+            table,
+            values_list[0],
+            conflict_columns,
+            update_columns,
+        )
+        insert_target: Union[Table, type[Any]] = model_type if model_type is not None else table
+
+        if dialect_name in {"postgresql", "sqlite", "duckdb", "cockroachdb"}:
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            pg_stmt = pg_insert(insert_target).values(values_list)
+            if not resolved_update_columns:
+                return (pg_stmt.on_conflict_do_nothing(index_elements=conflict_columns), True)
+            return (
+                pg_stmt.on_conflict_do_update(
+                    index_elements=conflict_columns,
+                    set_={col: pg_stmt.excluded[col] for col in resolved_update_columns},
+                ),
+                True,
+            )
+
+        if dialect_name in {"mysql", "mariadb"}:
+            from sqlalchemy.dialects.mysql import insert as mysql_insert
+
+            mysql_stmt = mysql_insert(insert_target).values(values_list)
+            mysql_updates = (
+                {col: mysql_stmt.inserted[col] for col in resolved_update_columns}
+                if resolved_update_columns
+                else {conflict_columns[0]: mysql_stmt.inserted[conflict_columns[0]]}
+            )
+            return (
+                mysql_stmt.on_duplicate_key_update(**mysql_updates),
+                False,
+            )
+
+        msg = f"Native bulk upsert not supported for dialect '{dialect_name}'"
+        raise NotImplementedError(msg)
+
+    @staticmethod
+    def create_merge_many(
+        table: Table,
+        values_list: list[dict[str, Any]],
+        conflict_columns: list[str],
+        update_columns: Optional[list[str]] = None,
+        dialect_name: Optional[str] = None,
+        validate_identifiers: bool = False,
+    ) -> tuple[Union[MergeStatement, list[MergeStatement]], dict[str, Any]]:
+        """Build a bulk MERGE / executemany-fallback per dialect.
+
+        Returns a single ``MergeStatement`` for dialects whose MERGE syntax supports
+        a multi-row source (oracle, mssql, postgresql/cockroachdb), and a list of
+        single-row ``MergeStatement`` (one per input row) for everything else.
+
+        Args:
+            table: Target table for the upsert.
+            values_list: Rows to insert/update. All rows MUST share the same keys.
+            conflict_columns: Columns that define the matching condition.
+            update_columns: Columns to update on match (defaults to all non-conflict
+                keys from the first row).
+            dialect_name: Database dialect name; selects the source construction.
+            validate_identifiers: If True, validate column identifiers for safety.
+
+        Returns:
+            A tuple ``(statement_or_list, additional_params)``. ``additional_params``
+            carries generated values (Oracle UUID PKs, MSSQL bound row values) that
+            must be passed when executing.
+
+        Raises:
+            ValueError: ``values_list`` is empty, rows have heterogeneous keys,
+                or identifier validation fails.
+        """
+        _validate_bulk_inputs(values_list, conflict_columns, update_columns, validate_identifiers)
+        values_list = _augment_with_pk_defaults(table, values_list)
+
+        resolved_update_columns = _resolve_update_columns(
+            table,
+            values_list[0],
+            conflict_columns,
+            update_columns,
+        )
+
+        if dialect_name == "oracle":
+            return _build_oracle_bulk_merge(table, values_list, conflict_columns, resolved_update_columns)
+
+        if dialect_name in {"postgresql", "cockroachdb"}:
+            return _build_pg_bulk_merge(table, values_list, conflict_columns, resolved_update_columns)
+
+        if dialect_name == "mssql":
+            return _build_mssql_bulk_merge(table, values_list, conflict_columns, resolved_update_columns)
+
+        stmts: list[MergeStatement] = []
+        combined_params: dict[str, Any] = {}
+        for row in values_list:
+            stmt, row_params = OnConflictUpsert.create_merge_upsert(
+                table=table,
+                values=row,
+                conflict_columns=conflict_columns,
+                update_columns=update_columns,
+                dialect_name=dialect_name,
+                validate_identifiers=False,
+            )
+            stmts.append(stmt)
+            combined_params.update(row_params)
+        return stmts, combined_params
+
+
+DEFAULT_INVOKE_FAILED: Any = object()
+
+
+def _resolve_update_columns(
+    table: Table,
+    available_columns: "Iterable[str]",
+    conflict_columns: "Sequence[str]",
+    update_columns: Optional["Sequence[str]"],
+) -> list[str]:
+    """Return update columns without keys that identify the target row.
+
+    Updating a primary key during an upsert is unsafe when a different unique
+    key is used as the conflict target, and Oracle rejects updates to columns
+    referenced by the MERGE ``ON`` clause. Apply the same rule to every
+    dialect so the operation has portable semantics.
+    """
+    protected_columns = set(conflict_columns)
+    for column in table.primary_key.columns:
+        protected_columns.add(column.key)
+        protected_columns.add(column.name)
+    candidate_columns = list(update_columns) if update_columns is not None else list(available_columns)
+    return [column for column in candidate_columns if column not in protected_columns]
+
+
+def invoke_python_default(arg: Any) -> Any:
+    """Invoke a SQLAlchemy ``ColumnDefault.arg`` callable, tolerating both signatures.
+
+    SQLAlchemy accepts both context-taking defaults (``lambda ctx: …``) and
+    zero-arg defaults (``lambda: …``, ``uuid7``, ``datetime.utcnow``).
+    Returns ``DEFAULT_INVOKE_FAILED`` if neither call shape produced a value.
+    """
+    try:
+        return arg(None)
+    except TypeError:
+        pass
+    except (AttributeError, ValueError):
+        return DEFAULT_INVOKE_FAILED
+    try:
+        return arg()
+    except (TypeError, AttributeError, ValueError):
+        return DEFAULT_INVOKE_FAILED
+
+
+def _augment_with_pk_defaults(
+    table: Table,
+    values_list: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Invoke Python-callable PK defaults for any rows missing those columns.
+
+    Callers like the Litestar session/store backends invoke
+    ``OnConflictUpsert.create_upsert`` (and thus ``create_merge_many``) with a
+    values dict that omits the PK — they expect SQLAlchemy's ORM flush to
+    populate the Python ``default=uuid7`` factory. The native dispatch path
+    bypasses that flush, so we invoke the default here, once per row, before
+    building the dialect-specific ``MERGE`` / ``INSERT OR UPDATE``. Columns
+    without a Python default (autoincrement / IDENTITY / Sequence) are left
+    untouched so the database supplies them.
+    """
+    if not values_list:
+        return values_list
+    first_keys = set(values_list[0].keys())
+    pk_defaults: list[tuple[str, Any]] = []
+    for pk_col in table.primary_key.columns:
+        if pk_col.name in first_keys:
+            continue
+        default = pk_col.default
+        arg = getattr(default, "arg", None) if default is not None else None
+        if callable(arg):
+            pk_defaults.append((pk_col.name, arg))
+    if not pk_defaults:
+        return values_list
+    augmented: list[dict[str, Any]] = []
+    for row in values_list:
+        new_row = dict(row)
+        for col_name, arg in pk_defaults:
+            value = invoke_python_default(arg)
+            if value is not DEFAULT_INVOKE_FAILED:
+                new_row[col_name] = value
+        augmented.append(new_row)
+    return augmented
+
+
+def _validate_bulk_inputs(
+    values_list: list[dict[str, Any]],
+    conflict_columns: list[str],
+    update_columns: Optional[list[str]],
+    validate_identifiers_flag: bool,
+) -> None:
+    """Shared input guard for create_upsert_many / create_merge_many.
+
+    Raises ValueError on empty list, heterogeneous keys, or invalid identifiers
+    when validation is requested.
+    """
+    if not values_list:
+        msg = "values_list must not be empty"
+        raise ValueError(msg)
+    first_keys = set(values_list[0].keys())
+    for idx, row in enumerate(values_list[1:], start=1):
+        if set(row.keys()) != first_keys:
+            msg = f"All entries in values_list must share the same keys (row {idx} differs from row 0)"
+            raise ValueError(msg)
+    if validate_identifiers_flag:
+        for col in conflict_columns:
+            validate_identifier(col, "conflict column")
+        if update_columns:
+            for col in update_columns:
+                validate_identifier(col, "update column")
+        for col in first_keys:
+            validate_identifier(col, "column")
+
+
+def _collect_oracle_pk_defaults(
+    table: Table,
+    row: dict[str, Any],
+    idx: int,
+    additional_params: dict[str, Any],
+) -> list["ColumnElement[Any]"]:
+    """Generate PK default bindparams for one Oracle MERGE row.
+
+    Mirrors the per-row PK-default block in create_merge_upsert but namespaces the
+    bindparam names with ``row{idx}_pk_`` so each row in the bulk source has its
+    own unique param name (Oracle MERGE has no implicit row identity).
+    """
+    pk_columns: list[ColumnElement[Any]] = []
+    for pk_column in table.primary_key.columns:
+        if pk_column.name in row or pk_column.default is None:
+            continue
+        arg = getattr(pk_column.default, "arg", None)
+        if not callable(arg):
+            continue
+        default_value = invoke_python_default(arg)
+        if default_value is DEFAULT_INVOKE_FAILED:
+            continue
+        if isinstance(default_value, UUID):
+            default_value = default_value.hex
+        param_name = f"row{idx}_pk_{pk_column.name}"
+        additional_params[param_name] = default_value
+        pk_columns.append(bindparam(param_name, value=default_value, type_=pk_column.type).label(pk_column.name))
+    return pk_columns
+
+
+def _build_oracle_bulk_merge(
+    table: Table,
+    values_list: list[dict[str, Any]],
+    conflict_columns: list[str],
+    update_columns: list[str],
+) -> tuple[MergeStatement, dict[str, Any]]:
+    """Construct an Oracle MERGE whose source is ``SELECT ... FROM DUAL UNION ALL ...``."""
+    first_keys = list(values_list[0].keys())
+    additional_params: dict[str, Any] = {}
+    per_row_selects: list[Any] = []
+    pk_default_names: list[str] = []
+
+    for idx, row in enumerate(values_list):
+        row_columns: list[ColumnElement[Any]] = []
+        for key in first_keys:
+            column = table.c[key]
+            bp = bindparam(f"row{idx}_{key}", value=row[key], type_=column.type)
+            row_columns.append(bp.label(key))
+        pk_extras = _collect_oracle_pk_defaults(table, row, idx, additional_params)
+        if idx == 0:
+            pk_default_names = [col.name for col in pk_extras]
+        row_columns.extend(pk_extras)
+        per_row_selects.append(select(*row_columns).select_from(text("DUAL")))
+
+    unified = per_row_selects[0] if len(per_row_selects) == 1 else per_row_selects[0].union_all(*per_row_selects[1:])
+    source = unified.subquery("src")
+    insert_columns = list(first_keys) + pk_default_names
+    when_not_matched_insert: dict[str, Any] = {col: _merge_source_column(table, col) for col in insert_columns}
+    when_matched_update: dict[str, Any] = {
+        col: _merge_source_column(table, col) for col in update_columns if col in first_keys
+    }
+    on_condition = _MergeMatchCondition(conflict_columns)
+    return (
+        MergeStatement(
+            table=table,
+            source=source,
+            on_condition=on_condition,
+            when_matched_update=when_matched_update,
+            when_not_matched_insert=when_not_matched_insert,
+        ),
+        additional_params,
+    )
+
+
+def _build_pg_bulk_merge(
+    table: Table,
+    values_list: list[dict[str, Any]],
+    conflict_columns: list[str],
+    update_columns: list[str],
+) -> tuple[MergeStatement, dict[str, Any]]:
+    """Construct a PostgreSQL/CockroachDB MERGE whose source is ``SELECT ... UNION ALL ...``."""
+    first_keys = list(values_list[0].keys())
+    per_row_selects: list[Any] = []
+    for idx, row in enumerate(values_list):
+        row_columns: list[ColumnElement[Any]] = []
+        for key in first_keys:
+            column = table.c[key]
+            bp = bindparam(f"src_row{idx}_{key}", value=row[key], type_=column.type)
+            row_columns.append(bp.label(key))
+        per_row_selects.append(select(*row_columns))
+
+    unified = per_row_selects[0] if len(per_row_selects) == 1 else per_row_selects[0].union_all(*per_row_selects[1:])
+    source = unified.subquery("src")
+    when_not_matched_insert: dict[str, Any] = {col: _merge_source_column(table, col) for col in first_keys}
+    when_matched_update: dict[str, Any] = {
+        col: _merge_source_column(table, col) for col in update_columns if col in first_keys
+    }
+    on_condition = _MergeMatchCondition(conflict_columns)
+    return (
+        MergeStatement(
+            table=table,
+            source=source,
+            on_condition=on_condition,
+            when_matched_update=when_matched_update,
+            when_not_matched_insert=when_not_matched_insert,
+        ),
+        {},
+    )
+
+
+def _build_mssql_bulk_merge(
+    table: Table,
+    values_list: list[dict[str, Any]],
+    conflict_columns: list[str],
+    update_columns: list[str],
+) -> tuple[MergeStatement, dict[str, Any]]:
+    """Construct an MSSQL ``MergeStatement`` whose source is a ``text(...).bindparams(...)`` VALUES clause.
+
+    Using ``text()`` with explicit :class:`~sqlalchemy.sql.expression.BindParameter`
+    children lets the MSSQL compiler translate the ``:row0_*`` markers to
+    ``?`` placeholders that pyodbc understands — a literal-string source
+    would survive intact through compilation and fail at the driver with a
+    ``[SQL Server]Incorrect syntax near ':'`` ProgrammingError.
+
+    Column identifiers are bracket-quoted (``[name]``) so reserved T-SQL
+    keywords like ``key`` survive in the alias column list, the ON clause,
+    and the WHEN MATCHED / WHEN NOT MATCHED source references.
+    """
+    first_keys = list(values_list[0].keys())
+    quoted_cols = [f"[{key}]" for key in first_keys]
+    col_names = ", ".join(quoted_cols)
+    bp_objects: list[Any] = []
+    row_fragments: list[str] = []
+    for idx, row in enumerate(values_list):
+        placeholders: list[str] = []
+        for col_name in first_keys:
+            bp_name = f"row{idx}_{col_name}"
+            bp_objects.append(bindparam(bp_name, value=row[col_name], type_=table.c[col_name].type))
+            placeholders.append(f":{bp_name}")
+        row_fragments.append(f"({', '.join(placeholders)})")
+    source = text(f"(VALUES {', '.join(row_fragments)}) AS src({col_names})").bindparams(*bp_objects)
+    when_not_matched_insert: dict[str, Any] = {col: _merge_source_column(table, col) for col in first_keys}
+    when_matched_update: dict[str, Any] = {
+        col: _merge_source_column(table, col) for col in update_columns if col in first_keys
+    }
+    on_condition = _MergeMatchCondition(conflict_columns)
+    return (
+        MergeStatement(
+            table=table,
+            source=source,
+            on_condition=on_condition,
+            when_matched_update=when_matched_update,
+            when_not_matched_insert=when_not_matched_insert,
+        ),
+        {},
+    )
+
+
+class UpsertStrategy(NamedTuple):
+    """Dispatch decision returned by :func:`resolve_upsert_strategy`.
+
+    Tells the repository which native primitive to compile (``on_conflict`` /
+    ``merge`` / ``insert_or_update``) or whether to take the existing
+    SELECT-then-partition fallback. The ``conflict_columns`` field is the
+    *validated* unique key (PK / UniqueConstraint / unique Index) and has
+    exactly the same columns as the caller's ``match_fields``.
+    """
+
+    kind: UpsertKind
+    supports_returning: bool
+    conflict_columns: tuple[str, ...]
+    dialect_name: str
+
+
+_DIALECTS_ON_CONFLICT_RETURNING: frozenset[str] = frozenset({"postgresql", "cockroachdb", "sqlite", "duckdb"})
+_DIALECTS_ON_CONFLICT_NO_RETURNING: frozenset[str] = frozenset({"mysql", "mariadb"})
+_DIALECTS_MERGE: frozenset[str] = frozenset({"oracle", "mssql"})
+_DIALECTS_INSERT_OR_UPDATE: frozenset[str] = frozenset({"spanner", "spanner+spanner"})
+
+
+def _native_primitive_for_dialect(
+    dialect_name: str, insert_returning: Optional[bool] = None
+) -> tuple[Optional[UpsertKind], bool]:
+    """Return ``(kind, supports_returning)`` for the dialect's native upsert primitive.
+
+    Returns ``(None, False)`` for dialects without a native primitive (fallback).
+    """
+    if dialect_name in _DIALECTS_ON_CONFLICT_RETURNING:
+        return ("on_conflict", True if insert_returning is None else insert_returning)
+    if dialect_name in _DIALECTS_ON_CONFLICT_NO_RETURNING:
+        return ("on_conflict", False)
+    if dialect_name in _DIALECTS_MERGE:
+        return ("merge", False)
+    if dialect_name in _DIALECTS_INSERT_OR_UPDATE:
+        return ("insert_or_update", True if insert_returning is None else insert_returning)
+    return (None, False)
+
+
+def _get_native_unique_index_columns(index: Any) -> tuple[str, ...]:
+    """Return simple unique-index columns, excluding filtered/expressional forms."""
+    if not index.unique:
+        return ()
+    if any(index.dialect_options[dialect].get("where") is not None for dialect in ("postgresql", "sqlite", "mssql")):
+        return ()
+    index_columns = tuple(index.columns)
+    if len(index_columns) != len(index.expressions) or any(
+        expression is not column for expression, column in zip(index.expressions, index_columns)
+    ):
+        return ()
+    return tuple(col.key for col in index_columns)
+
+
+def _mysql_unique_target_is_ambiguous(table: Table, primary_key_columns: tuple[str, ...]) -> bool:
+    """Return whether MySQL could update through an unintended unique key."""
+    unique_keys: set[frozenset[str]] = set()
+    if primary_key_columns:
+        unique_keys.add(frozenset(primary_key_columns))
+    unique_keys.update(
+        frozenset(col.key for col in constraint.columns)
+        for constraint in table.constraints
+        if isinstance(constraint, UniqueConstraint)
+    )
+    unique_keys.update(
+        frozenset(index_columns)
+        for index in table.indexes
+        if (index_columns := _get_native_unique_index_columns(index))
+    )
+    return len(unique_keys) > 1
+
+
+def resolve_upsert_strategy(
+    table: Table,
+    match_fields: "Sequence[str]",
+    dialect_name: Union[str, Dialect],
+) -> UpsertStrategy:
+    """Resolve the optimal upsert strategy for ``(table, match_fields, dialect)``.
+
+    The result is cached for the process lifetime; ``Table`` objects are
+    singletons per declarative class, so this is one decision per
+    ``(model, match_fields, dialect)`` tuple.
+
+    Resolution priority:
+
+    1. ``match_fields`` equals the table's primary key →
+       native primitive for the dialect, ``conflict_columns`` is the PK.
+    2. A :class:`~sqlalchemy.UniqueConstraint` whose columns match exactly →
+       native primitive where the backend can target it, ``conflict_columns``
+       is that constraint's columns.
+    3. A unique :class:`~sqlalchemy.Index` whose columns match exactly →
+       native primitive where the backend can target it, ``conflict_columns``
+       is that index's columns. Spanner ``INSERT OR UPDATE`` only matches the
+       primary key, and ambiguous MySQL/MariaDB unique targets fall back.
+    4. Otherwise → ``kind="fallback"``, ``supports_returning=False``.
+
+    Args:
+        table: Target table. Used by identity for caching.
+        match_fields: Columns the caller wants to match on. Order-insensitive.
+        dialect_name: Database dialect or dialect name. Passing the runtime dialect
+            allows the resolver to honor its actual RETURNING capability.
+
+    Returns:
+        An :class:`UpsertStrategy` describing the decision.
+
+    Raises:
+        ValueError: ``match_fields`` is empty or contains a column not present
+            on the table.
+    """
+    if not match_fields:
+        msg = "match_fields must not be empty"
+        raise ValueError(msg)
+    normalized = tuple(sorted(set(match_fields)))
+    table_columns = set(table.c.keys())
+    missing = [column_name for column_name in normalized if column_name not in table_columns]
+    if missing:
+        msg = f"match_fields {missing!r} not present in table {table.name!r}"
+        raise ValueError(msg)
+    if isinstance(dialect_name, str):
+        resolved_dialect_name = dialect_name
+        insert_returning: Optional[bool] = None
+    else:
+        resolved_dialect_name = dialect_name.name
+        insert_returning = bool(dialect_name.insert_returning)
+    return _resolve_upsert_strategy_cached(table, normalized, resolved_dialect_name, insert_returning)
+
+
+@functools.cache
+def _resolve_upsert_strategy_cached(
+    table: Table,
+    match_fields: tuple[str, ...],
+    dialect_name: str,
+    insert_returning: Optional[bool],
+) -> UpsertStrategy:
+    """Cached arm of :func:`resolve_upsert_strategy`. Keyed by identity of ``table``."""
+    kind, supports_returning = _native_primitive_for_dialect(dialect_name, insert_returning)
+    match_set = set(match_fields)
+    primary_key_columns = tuple(column.key for column in table.primary_key.columns)
+    native_conflict_columns: Optional[tuple[str, ...]] = None
+    if kind is not None and primary_key_columns and set(primary_key_columns) == match_set:
+        native_conflict_columns = primary_key_columns
+    elif kind is not None and kind != "insert_or_update":
+        for constraint in table.constraints:
+            if isinstance(constraint, UniqueConstraint):
+                if constraint.deferrable:
+                    continue
+                unique_constraint_columns = tuple(column.key for column in constraint.columns)
+                if unique_constraint_columns and set(unique_constraint_columns) == match_set:
+                    native_conflict_columns = unique_constraint_columns
+                    break
+
+        if native_conflict_columns is None:
+            for index in table.indexes:
+                unique_index_columns = _get_native_unique_index_columns(index)
+                if unique_index_columns and set(unique_index_columns) == match_set:
+                    native_conflict_columns = unique_index_columns
+                    break
+
+    mysql_target_is_ambiguous = dialect_name in {"mysql", "mariadb"} and _mysql_unique_target_is_ambiguous(
+        table, primary_key_columns
+    )
+    if kind is not None and native_conflict_columns is not None and not mysql_target_is_ambiguous:
+        return UpsertStrategy(
+            kind=kind,
+            supports_returning=supports_returning,
+            conflict_columns=native_conflict_columns,
+            dialect_name=dialect_name,
+        )
+    return UpsertStrategy(
+        kind="fallback",
+        supports_returning=False,
+        conflict_columns=match_fields,
+        dialect_name=dialect_name,
+    )
