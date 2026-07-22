@@ -387,7 +387,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.12.0" },
-    { name = "alembic-postgresql-enum", marker = "extra == 'postgresql'" },
+    { name = "alembic-postgresql-enum", marker = "extra == 'postgresql'", specifier = ">=1.10.0" },
     { name = "argon2-cffi", marker = "extra == 'argon2'" },
     { name = "cryptography", marker = "extra == 'cryptography'" },
     { name = "dogpile-cache", marker = "extra == 'dogpile'" },
@@ -559,7 +559,7 @@ mssql = [
 mysql = [{ name = "asyncmy", specifier = ">=0.2.9" }]
 oracle = [{ name = "oracledb", specifier = ">=2.4.1" }]
 postgres = [
-    { name = "alembic-postgresql-enum" },
+    { name = "alembic-postgresql-enum", specifier = ">=1.10.0" },
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2.3" },
     { name = "psycopg2-binary", specifier = ">=2.9.10" },
