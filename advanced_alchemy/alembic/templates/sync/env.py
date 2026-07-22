@@ -12,7 +12,7 @@ try:
     # required autogenerate comparators as a side effect. Install with the
     # ``advanced-alchemy[postgresql]`` extra to enable.
     import alembic_postgresql_enum  # type: ignore[import-not-found,unused-ignore]  # pyright: ignore[reportMissingImports]  # noqa: F401
-except ImportError:
+except ModuleNotFoundError:
     pass
 
 if TYPE_CHECKING:
