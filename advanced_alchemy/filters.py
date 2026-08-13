@@ -49,6 +49,8 @@ from sqlalchemy import (
     exists,
     false,
     not_,
+    nulls_first,
+    nulls_last,
     or_,
     select,
     text,
@@ -583,16 +585,27 @@ class OrderBy(StatementFilter):
         This filter only modifies SELECT statements. For other statement types,
         the statement is returned unchanged.
 
+    Note:
+        ``nulls`` controls where NULLs land. Left as ``None`` the database decides, and the
+        databases disagree: PostgreSQL and Oracle sort NULLs last ascending and first descending,
+        while MySQL and SQLite do the opposite. Set it explicitly for a stable order across
+        backends — ``nulls="last"`` is usually what a user reading a descending list expects, since
+        rows with no value otherwise fill the first page.
+
     See Also:
         - :meth:`sqlalchemy.sql.expression.Select.order_by`: SQLAlchemy ORDER BY clause
         - :meth:`sqlalchemy.sql.expression.ColumnElement.asc`: Ascending order
         - :meth:`sqlalchemy.sql.expression.ColumnElement.desc`: Descending order
+        - :func:`sqlalchemy.sql.expression.nulls_first`: NULLS FIRST
+        - :func:`sqlalchemy.sql.expression.nulls_last`: NULLS LAST
     """
 
     field_name: FilterFieldName
     """Field name, model attribute, or func expression (e.g., ``func.random()``)."""
     sort_order: Literal["asc", "desc"] = "asc"
     """Sort direction ("asc" or "desc")."""
+    nulls: Optional[Literal["first", "last"]] = None
+    """Where NULLs sort. ``None`` leaves the placement to the database."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         """Append an ORDER BY clause to the statement.
@@ -612,10 +625,12 @@ class OrderBy(StatementFilter):
         """
         if isinstance(statement, Select):
             field = self._get_instrumented_attr(model, self.field_name)
-            if self.sort_order == "desc":
-                statement = cast("StatementTypeT", statement.order_by(field.desc()))
-            else:
-                statement = cast("StatementTypeT", statement.order_by(field.asc()))
+            ordering = field.desc() if self.sort_order == "desc" else field.asc()
+            if self.nulls == "first":
+                ordering = nulls_first(ordering)
+            elif self.nulls == "last":
+                ordering = nulls_last(ordering)
+            statement = cast("StatementTypeT", statement.order_by(ordering))
         return statement
 
 

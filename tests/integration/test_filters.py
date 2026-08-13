@@ -594,6 +594,34 @@ def test_order_by_with_instrumented_attribute(session: Session, movie_model_sync
     assert results[0].title == "Shawshank Redemption"
 
 
+def test_order_by_nulls_placement(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """ "The Hangover" has a NULL director, and the databases disagree about where NULLs sort.
+
+    `nulls` pins it: without it, a descending sort puts the NULL row first on PostgreSQL and last on
+    SQLite, so the same query pages differently per backend.
+    """
+    Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
+    for sort_order in ("asc", "desc"):
+        nulls_last_filter = OrderBy(field_name="director", sort_order=sort_order, nulls="last")
+        results = session.execute(nulls_last_filter.append_to_statement(select(Movie), Movie)).scalars().all()
+        assert results[-1].director is None, f"{sort_order} with nulls='last' must end with the NULL row"
+
+        nulls_first_filter = OrderBy(field_name="director", sort_order=sort_order, nulls="first")
+        results = session.execute(nulls_first_filter.append_to_statement(select(Movie), Movie)).scalars().all()
+        assert results[0].director is None, f"{sort_order} with nulls='first' must start with the NULL row"
+
+
 def test_search_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
 
