@@ -22,6 +22,7 @@ from advanced_alchemy.filters import (
     MultiFilter,
     NotExistsFilter,
     NotInCollectionFilter,
+    NotInSearchFilter,
     NotNullFilter,
     NullFilter,
     OnBeforeAfter,
@@ -806,6 +807,56 @@ def test_search_filter(session: Session, movie_model_sync: type[DeclarativeBase]
     statement = search_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert len(results) == 1
+
+
+def test_search_filter_escapes_wildcards(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """`_` and `%` in the search value are matched literally by default.
+
+    "The_" is not a substring of any title, but `_` is a single-character wildcard in LIKE, so
+    without escaping it would match both "The Matrix" and "The Hangover".
+    """
+    Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
+    escaped = SearchFilter(field_name="title", value="The_")
+    results = session.execute(escaped.append_to_statement(select(Movie), Movie)).scalars().all()
+    assert len(results) == 0
+
+    unescaped = SearchFilter(field_name="title", value="The_", escape_wildcards=False)
+    results = session.execute(unescaped.append_to_statement(select(Movie), Movie)).scalars().all()
+    assert {movie.title for movie in results} == {"The Matrix", "The Hangover"}
+
+
+def test_not_in_search_filter_escapes_wildcards(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """`NotInSearchFilter` inherits the escaping, so a literal "The_" excludes nothing."""
+    Movie = movie_model_sync
+
+    # Skip mock engines
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    # Clean any existing data first, then setup fresh data
+    if getattr(session.bind.dialect, "name", "") != "mock":
+        session.execute(Movie.__table__.delete())
+        session.commit()
+    setup_movie_data(session, Movie)
+
+    escaped = NotInSearchFilter(field_name="title", value="The_")
+    results = session.execute(escaped.append_to_statement(select(Movie), Movie)).scalars().all()
+    assert len(results) == 3
+
+    unescaped = NotInSearchFilter(field_name="title", value="The_", escape_wildcards=False)
+    results = session.execute(unescaped.append_to_statement(select(Movie), Movie)).scalars().all()
+    assert {movie.title for movie in results} == {"Shawshank Redemption"}
 
 
 def test_filter_group_logical_operators(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:

@@ -644,6 +644,31 @@ class OrderBy(StatementFilter):
         return statement
 
 
+LIKE_ESCAPE_CHAR = "/"
+"""Escape character used when :class:`SearchFilter` escapes LIKE wildcards.
+
+Not a backslash: SQLAlchemy renders one into the ``ESCAPE`` clause as ``'\\\\'``, which DuckDB reads
+as two characters and rejects with "Escape string must be empty or one character". ``/`` needs no
+such doubling, so it compiles identically on every dialect.
+"""
+
+
+def escape_like_value(value: str, escape_char: str = LIKE_ESCAPE_CHAR) -> str:
+    """Escape the LIKE wildcards ``%`` and ``_`` so they match literally.
+
+    The escape character itself is escaped first, otherwise it would consume the
+    backslashes added for the wildcards.
+
+    Args:
+        value: The raw search term.
+        escape_char: The character to escape with.
+
+    Returns:
+        str: ``value`` with ``escape_char``, ``%`` and ``_`` escaped.
+    """
+    return value.replace(escape_char, escape_char * 2).replace("%", f"{escape_char}%").replace("_", f"{escape_char}_")
+
+
 @dataclass
 class SearchFilter(StatementFilter):
     """Case-sensitive or case-insensitive substring matching filter.
@@ -654,6 +679,10 @@ class SearchFilter(StatementFilter):
     Note:
         The search pattern automatically adds wildcards before and after the search
         value, equivalent to SQL pattern '%value%'.
+
+    Note:
+        ``%`` and ``_`` in ``value`` are escaped by default so the search matches them
+        literally. Set ``escape_wildcards`` to ``False`` to treat them as wildcards.
 
     See Also:
         - :class:`.NotInSearchFilter`: Opposite filter using NOT LIKE/ILIKE
@@ -667,6 +696,8 @@ class SearchFilter(StatementFilter):
     """Text to match within the field(s)."""
     ignore_case: Optional[bool] = False
     """Whether to use case-insensitive matching."""
+    escape_wildcards: bool = True
+    """Whether to treat ``%`` and ``_`` in :attr:`value` as literal characters."""
 
     @property
     def _operator(self) -> Callable[..., ColumnElement[bool]]:
@@ -681,7 +712,7 @@ class SearchFilter(StatementFilter):
         return or_
 
     @property
-    def _func(self) -> "attrgetter[Callable[[str], BinaryExpression[bool]]]":
+    def _func(self) -> "attrgetter[Callable[..., BinaryExpression[bool]]]":
         """Return the appropriate LIKE or ILIKE operator as a function.
 
         Returns:
@@ -715,11 +746,13 @@ class SearchFilter(StatementFilter):
             :class:`sqlalchemy.sql.expression.BinaryExpression`: SQLAlchemy expression
         """
         search_clause: list[BinaryExpression[bool]] = []
+        escape_char = LIKE_ESCAPE_CHAR if self.escape_wildcards else None
+        value = escape_like_value(self.value) if self.escape_wildcards else self.value
         for field_name in self.normalized_field_names:
             try:
                 field = self._get_instrumented_attr(model, field_name)
-                search_text = f"%{self.value}%"
-                search_clause.append(self._func(field)(search_text))
+                search_text = f"%{value}%"
+                search_clause.append(self._func(field)(search_text, escape=escape_char))
             except AttributeError:
                 msg = f"Skipping search for field {field_name}.  It is not found in model {model.__name__}"
                 logger.debug(msg)
@@ -851,7 +884,7 @@ class NotInSearchFilter(SearchFilter):
         return and_
 
     @property
-    def _func(self) -> "attrgetter[Callable[[str], BinaryExpression[bool]]]":
+    def _func(self) -> "attrgetter[Callable[..., BinaryExpression[bool]]]":
         """Return the appropriate NOT LIKE or NOT ILIKE operator as a function.
 
         Returns:
