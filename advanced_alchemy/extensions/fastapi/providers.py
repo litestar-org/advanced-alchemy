@@ -118,6 +118,24 @@ DEPENDENCY_DEFAULTS = DependencyDefaults()
 dep_cache = DependencyCache()
 
 
+def _alias_for(config: "FilterConfig", canonical: str) -> str:
+    """Resolve the query parameter name for a generated filter.
+
+    `canonical` is the snake_case name of the parameter (``created_before``, ``page_size``, or a
+    model field for the per-field filters). The default generator is :func:`camelize`, which
+    reproduces the previously hardcoded names exactly.
+
+    Args:
+        config: The filter configuration, optionally carrying an ``alias_generator``.
+        canonical: The snake_case name of the parameter.
+
+    Returns:
+        str: The query parameter name to expose.
+    """
+    generator = config.get("alias_generator") or camelize
+    return generator(canonical)
+
+
 def _should_commit_for_status(status_code: int, commit_mode: str) -> bool:
     """Determine if we should commit based on status code and commit mode.
 
@@ -365,7 +383,11 @@ def provide_filters(
         return list
 
     # Calculate cache key using hashable version of config
-    cache_key = hash((_CACHE_NAMESPACE, make_hashable(config)))
+    # The key is the tuple itself rather than `hash(...)` of it. A config may now carry an
+    # `alias_generator`, and a function hashes by identity — which is its address. Reducing the key
+    # to an int drops the last reference to that function, so CPython can hand the same address to
+    # the next generator and the cache would return the wrong providers for it.
+    cache_key = (_CACHE_NAMESPACE, make_hashable(config))
 
     # Check cache first
     cached_dep = cast("Optional[Callable[..., list[FilterTypes]]]", dep_cache.get_dependencies(cache_key))
@@ -396,7 +418,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             ids: Annotated[  # type: ignore
                 Optional[list[id_filter]],  # pyright: ignore
                 Query(
-                    alias="ids",
+                    alias=_alias_for(config, "ids"),
                     required=False,
                     description="IDs to filter by.",
                 ),
@@ -422,7 +444,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             before: Annotated[
                 Optional[str],
                 Query(
-                    alias="createdBefore",
+                    alias=_alias_for(config, "created_before"),
                     description="Filter by created date before this timestamp.",
                     json_schema_extra={"format": "date-time"},
                 ),
@@ -430,7 +452,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             after: Annotated[
                 Optional[str],
                 Query(
-                    alias="createdAfter",
+                    alias=_alias_for(config, "created_after"),
                     description="Filter by created date after this timestamp.",
                     json_schema_extra={"format": "date-time"},
                 ),
@@ -479,7 +501,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             before: Annotated[
                 Optional[str],
                 Query(
-                    alias="updatedBefore",
+                    alias=_alias_for(config, "updated_before"),
                     description="Filter by updated date before this timestamp.",
                     json_schema_extra={"format": "date-time"},
                 ),
@@ -487,7 +509,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             after: Annotated[
                 Optional[str],
                 Query(
-                    alias="updatedAfter",
+                    alias=_alias_for(config, "updated_after"),
                     description="Filter by updated date after this timestamp.",
                     json_schema_extra={"format": "date-time"},
                 ),
@@ -537,7 +559,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 int,
                 Query(
                     ge=1,
-                    alias="currentPage",
+                    alias=_alias_for(config, "current_page"),
                     description="Page number for pagination.",
                 ),
             ] = 1,
@@ -545,7 +567,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 int,
                 Query(
                     ge=1,
-                    alias="pageSize",
+                    alias=_alias_for(config, "page_size"),
                     description="Number of items per page.",
                 ),
             ] = config.get("pagination_size", dep_defaults.DEFAULT_PAGINATION_SIZE),
@@ -570,7 +592,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 Optional[str],
                 Query(
                     required=False,
-                    alias="searchString",
+                    alias=_alias_for(config, "search_string"),
                     description="Search term.",
                 ),
             ] = None,
@@ -578,7 +600,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 Optional[bool],
                 Query(
                     required=False,
-                    alias="searchIgnoreCase",
+                    alias=_alias_for(config, "search_ignore_case"),
                     description="Whether search should be case-insensitive.",
                 ),
             ] = config.get("search_ignore_case", False),
@@ -610,7 +632,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             field_name: Annotated[
                 str,
                 Query(
-                    alias="orderBy",
+                    alias=_alias_for(config, "order_by"),
                     description="Field to order by.",
                     required=False,
                 ),
@@ -618,7 +640,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             sort_order: Annotated[
                 Optional[SortOrder],
                 Query(
-                    alias="sortOrder",
+                    alias=_alias_for(config, "sort_order"),
                     description="Sort order ('asc' or 'desc').",
                     required=False,
                 ),
@@ -648,7 +670,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     values: Annotated[  # type: ignore
                         Optional[set[field_name.type_hint]],  # pyright: ignore
                         Query(
-                            alias=camelize(f"{field_name.name}_not_in"),
+                            alias=_alias_for(config, f"{field_name.name}_not_in"),
                             description=f"Filter {field_name.name} not in values",
                         ),
                     ] = None,
@@ -680,7 +702,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     values: Annotated[  # type: ignore
                         Optional[set[field_name.type_hint]],  # pyright: ignore
                         Query(
-                            alias=camelize(f"{field_name.name}_in"),
+                            alias=_alias_for(config, f"{field_name.name}_in"),
                             description=f"Filter {field_name.name} in values",
                         ),
                     ] = None,
@@ -710,7 +732,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     value: Annotated[
                         Optional[bool],
                         Query(
-                            alias=camelize(field_name.name),
+                            alias=_alias_for(config, field_name.name),
                             description=f"Filter {field_name.name} by boolean value",
                         ),
                     ] = None,
@@ -740,7 +762,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     values: Annotated[  # type: ignore
                         Optional[list[field_name.type_hint]],  # pyright: ignore
                         Query(
-                            alias=camelize(field_name.name),
+                            alias=_alias_for(config, field_name.name),
                             description=f"Filter {field_name.name} by allowed choices",
                         ),
                     ] = None,

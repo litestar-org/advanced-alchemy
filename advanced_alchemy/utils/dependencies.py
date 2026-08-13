@@ -4,7 +4,7 @@ These primitives are framework-agnostic and reused by framework
 ``advanced_alchemy.extensions`` provider modules.
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal, NamedTuple, Optional, Union, cast
 from uuid import UUID
@@ -99,6 +99,14 @@ class FilterConfig(TypedDict):
     """Fields that support boolean filters."""
     choice_fields: NotRequired[ChoiceFieldConfig]
     """Fields that support choices filters."""
+    alias_generator: NotRequired[Callable[[str], str]]
+    """Maps a parameter's snake_case name to the query parameter exposed for it.
+
+    Receives ``created_before``, ``page_size``, ``sort_order``, or a model field name for the
+    per-field filters. Defaults to :func:`~advanced_alchemy.utils.text.camelize`, which produces the
+    names this has always generated (``createdBefore``, ``pageSize``, ``sortOrder``). Pass
+    ``lambda name: name`` to keep snake_case instead.
+    """
 
 
 class DependencyCache(metaclass=SingletonMeta):
@@ -172,8 +180,31 @@ def make_hashable(value: Any) -> HashableType:
     if isinstance(value, tuple):
         values = cast("tuple[Any, ...]", value)  # type: ignore[redundant-cast]
         return tuple(make_hashable(item) for item in values)
+    return _make_leaf_hashable(value)
+
+
+def _make_leaf_hashable(value: Any) -> HashableType:
+    """Convert a non-container value into a hashable representation.
+
+    Args:
+        value: Value that needs to be made hashable.
+
+    Returns:
+        A hashable representation of ``value``.
+    """
     if isinstance(value, (str, int, float, bool, type(None))):
         return value
+    if callable(value):
+        # `str(function)` embeds the object's address, which CPython reuses once the object is
+        # collected — two different callables would then produce the same key and `DependencyCache`
+        # would hand back the wrong providers. Keeping the callable itself gives identity semantics
+        # and holds a reference, so the address cannot be recycled underneath us.
+        try:
+            hash(value)
+        except TypeError:
+            pass  # not hashable after all; fall back to the string form below
+        else:
+            return cast("HashableType", value)
     return str(value)
 
 

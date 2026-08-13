@@ -116,7 +116,7 @@ def test_create_filter_dependencies_cache_hit() -> None:
 def test_create_filter_dependencies_cache_miss() -> None:
     """Test create_filter_dependencies with cache miss."""
     config = cast(FilterConfig, {"created_at": True})
-    cache_key = hash((_CACHE_NAMESPACE, make_hashable(config)))
+    cache_key = (_CACHE_NAMESPACE, make_hashable(config))
     mock_agg_func = lambda: [  # noqa: E731
         BeforeAfter(field_name="created_at", before=None, after=None)
     ]  # Dummy aggregate function
