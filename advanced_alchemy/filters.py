@@ -21,6 +21,7 @@ See Also:
 
 import datetime
 import logging
+import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Collection
 from dataclasses import dataclass
@@ -56,6 +57,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.sql import operators as op
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
+from sqlalchemy.sql.visitors import iterate
 from typing_extensions import TypeAlias, TypedDict, TypeVar
 
 from advanced_alchemy.base import ModelProtocol
@@ -95,6 +97,7 @@ __all__ = (
     "StatementFilter",
     "StatementFilterT",
     "StatementTypeT",
+    "UncorrelatedSubqueryWarning",
 )
 
 T = TypeVar("T")
@@ -839,22 +842,50 @@ class NotInSearchFilter(SearchFilter):
         return attrgetter("not_ilike" if self.ignore_case else "not_like")
 
 
+class UncorrelatedSubqueryWarning(UserWarning):
+    """Warned when an EXISTS subquery has nothing to correlate against the outer query."""
+
+
+def _warn_if_uncorrelated(filter_: "StatementFilter", conditions: "ColumnElement[bool]", model: "type[ModelT]") -> None:
+    """Warn when ``conditions`` never mention the outer table.
+
+    ``Select.correlate()`` only *permits* correlation, it cannot invent a join. If none of the
+    supplied conditions reference the outer table, the subquery stands alone: it is true whenever any
+    child row matches, so the filter silently matches every row of the outer query instead of raising.
+    """
+    table = model.__table__
+    if any(getattr(element, "table", None) is table for element in iterate(conditions)):
+        return
+    table_name = getattr(table, "name", str(table))
+    warnings.warn(
+        f"{type(filter_).__name__} conditions do not reference {table_name!r}, so the subquery is not "
+        f"correlated and will match every row. Include the join in `values`, for example "
+        f"`values=[Child.{table_name}_id == {model.__name__}.id, ...]`.",
+        UncorrelatedSubqueryWarning,
+        stacklevel=4,
+    )
+
+
 @dataclass
 class ExistsFilter(StatementFilter):
     """Filter for EXISTS subqueries.
 
     This filter creates an EXISTS condition using a list of column expressions.
-    The expressions can be combined using either AND or OR logic. The filter applies
-    a correlated subquery that returns only the rows from the main query that match
-    the specified conditions.
+    The expressions can be combined using either AND or OR logic.
 
-    For example, if searching movies with `Movie.genre == "Action"`, only rows where
-    the genre is "Action" will be returned.
+    .. important::
+
+        ``values`` must include the condition that joins the subquery to the outer query.
+        :meth:`~sqlalchemy.sql.expression.Select.correlate` only *permits* correlation; it cannot
+        infer a join. Conditions that never mention the outer table produce a standalone subquery,
+        which is true whenever any row matches it — so the filter matches **every** row of the outer
+        query rather than raising. A :class:`UncorrelatedSubqueryWarning` is emitted in that case.
 
     Parameters
     ----------
     values : list[ColumnElement[bool]]
-        values: List of SQLAlchemy column expressions to use in the EXISTS clause
+        values: List of SQLAlchemy column expressions to use in the EXISTS clause, including the
+        correlation between the outer table and the subquery table
     operator : Literal["and", "or"], optional
         operator: If "and", combines conditions with AND, otherwise uses OR. Defaults to "and".
 
@@ -866,13 +897,17 @@ class ExistsFilter(StatementFilter):
             from advanced_alchemy.filters import ExistsFilter
 
             filter = ExistsFilter(
-                values=[User.email.like("%@example.com%")],
+                values=[
+                    User.organization_id
+                    == Organization.id,  # correlation
+                    User.email.like("%@example.com%"),
+                ],
             )
             statement = filter.append_to_statement(
                 select(Organization), Organization
             )
 
-        This will return only organizations where the user's email contains "@example.com".
+        This will return only organizations that have a user whose email contains "@example.com".
 
         Using OR conditions::
 
@@ -881,7 +916,8 @@ class ExistsFilter(StatementFilter):
                 operator="or",
             )
 
-        This will return organizations where the user's role is either "admin" OR "owner".
+        Note that this example is *not* correlated on its own — combine it with the correlation, or
+        nest it in a :class:`FilterGroup`, to restrict the outer query.
 
     See Also:
     --------
@@ -948,6 +984,7 @@ class ExistsFilter(StatementFilter):
         # Combine all values with AND or OR (using the operator specified in the filter)
         # This creates a single boolean expression from multiple conditions
         combined_conditions = self._get_combined_conditions()
+        _warn_if_uncorrelated(self, combined_conditions, model)
 
         # Create a correlated subquery with the combined conditions
         try:
@@ -1079,6 +1116,7 @@ class NotExistsFilter(StatementFilter):
 
         # Combine conditions and create correlated subquery
         combined_conditions = self._get_combined_conditions()
+        _warn_if_uncorrelated(self, combined_conditions, model)
         subquery = select(1).where(combined_conditions)
         correlated_subquery = subquery.correlate(model.__table__)
         return not_(exists(correlated_subquery))
