@@ -760,12 +760,19 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             )
             annotations[param_name] = Annotated[Optional[ChoicesFilter[Any]], Depends(choices_provider)]
 
-    _aggregate_filter_function.__signature__ = inspect.Signature(  # type: ignore
+    # A fresh function per config. Assigning `__signature__` to the shared module-level
+    # `_aggregate_filter_function` would make every call to `provide_filters` overwrite the
+    # parameters of every dependency built before it, so two routers with different configs would
+    # both end up serving whichever config was built last.
+    def aggregate_filters(**kwargs: Any) -> list[FilterTypes]:
+        return _aggregate_filter_function(**kwargs)
+
+    aggregate_filters.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
         parameters=params,
-        return_annotation=Annotated[list[FilterTypes], Depends(_aggregate_filter_function)],
+        return_annotation=Annotated[list[FilterTypes], Depends(aggregate_filters)],
     )
 
-    return _aggregate_filter_function
+    return aggregate_filters
 
 
 def _aggregate_filter_function(**kwargs: Any) -> list[FilterTypes]:
