@@ -21,7 +21,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.fastapi.providers import (
-    _CACHE_NAMESPACE,  # pyright: ignore[reportPrivateUsage]
     DEPENDENCY_DEFAULTS,
     ChoiceField,
     DependencyCache,
@@ -29,6 +28,7 @@ from advanced_alchemy.extensions.fastapi.providers import (
     FieldNameType,
     FilterConfig,
     _create_filter_aggregate_function_fastapi,  # pyright: ignore[reportPrivateUsage]
+    _filter_cache_key,  # pyright: ignore[reportPrivateUsage]
     dep_cache,  # Import the global cache instance
     provide_filters,
 )
@@ -44,7 +44,6 @@ from advanced_alchemy.filters import (
 )
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
-from advanced_alchemy.utils.dependencies import make_hashable
 from advanced_alchemy.utils.singleton import SingletonMeta
 
 if sys.version_info >= (3, 11):
@@ -116,7 +115,7 @@ def test_create_filter_dependencies_cache_hit() -> None:
 def test_create_filter_dependencies_cache_miss() -> None:
     """Test create_filter_dependencies with cache miss."""
     config = cast(FilterConfig, {"created_at": True})
-    cache_key = (_CACHE_NAMESPACE, make_hashable(config))
+    cache_key = _filter_cache_key(config, DEPENDENCY_DEFAULTS)
     mock_agg_func = lambda: [  # noqa: E731
         BeforeAfter(field_name="created_at", before=None, after=None)
     ]  # Dummy aggregate function
