@@ -46,8 +46,10 @@ from sqlalchemy import (
     Update,
     and_,
     any_,
+    case,
     exists,
     false,
+    literal_column,
     not_,
     nulls_first,
     nulls_last,
@@ -56,6 +58,7 @@ from sqlalchemy import (
     text,
     true,
 )
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import operators as op
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from typing_extensions import TypeAlias, TypedDict, TypeVar
@@ -574,6 +577,41 @@ class LimitOffset(PaginationFilter):
         return statement
 
 
+class _NullsPlacement(ColumnElement[Any]):
+    """An ORDER BY term that pins where NULLs sort.
+
+    MySQL, MariaDB and SQL Server have no ``NULLS FIRST``/``NULLS LAST`` syntax and reject it
+    outright, so there the placement is emulated with a leading nullity key. Every other backend
+    gets the native clause, which an index on the column can still satisfy.
+    """
+
+    inherit_cache = True
+
+    def __init__(self, ordering: Any, column: Any, nulls: 'Literal["first", "last"]') -> None:
+        self.ordering = ordering
+        self.column = column
+        self.nulls = nulls
+
+
+@compiles(_NullsPlacement)
+def _compile_nulls_placement(element: _NullsPlacement, compiler: Any, **kw: Any) -> str:
+    native = nulls_first if element.nulls == "first" else nulls_last
+    return str(compiler.process(native(element.ordering), **kw))
+
+
+@compiles(_NullsPlacement, "mysql")
+@compiles(_NullsPlacement, "mariadb")
+@compiles(_NullsPlacement, "mssql")
+def _compile_nulls_placement_emulated(element: _NullsPlacement, compiler: Any, **kw: Any) -> str:
+    nulls_go_last = element.nulls == "last"
+    # Literals, not bound parameters: a placeholder inside ORDER BY is ambiguous on these backends.
+    key = case(
+        (element.column.is_(None), literal_column("1" if nulls_go_last else "0")),
+        else_=literal_column("0" if nulls_go_last else "1"),
+    )
+    return f"{compiler.process(key, **kw)}, {compiler.process(element.ordering, **kw)}"
+
+
 @dataclass
 class OrderBy(StatementFilter):
     """Order by a specific field.
@@ -591,6 +629,9 @@ class OrderBy(StatementFilter):
         while MySQL and SQLite do the opposite. Set it explicitly for a stable order across
         backends — ``nulls="last"`` is usually what a user reading a descending list expects, since
         rows with no value otherwise fill the first page.
+
+        MySQL, MariaDB and SQL Server have no ``NULLS FIRST``/``NULLS LAST`` syntax, so there the
+        placement is emulated with a leading nullity key rather than raising.
 
     See Also:
         - :meth:`sqlalchemy.sql.expression.Select.order_by`: SQLAlchemy ORDER BY clause
@@ -625,11 +666,9 @@ class OrderBy(StatementFilter):
         """
         if isinstance(statement, Select):
             field = self._get_instrumented_attr(model, self.field_name)
-            ordering = field.desc() if self.sort_order == "desc" else field.asc()
-            if self.nulls == "first":
-                ordering = nulls_first(ordering)
-            elif self.nulls == "last":
-                ordering = nulls_last(ordering)
+            ordering: ColumnElement[Any] = field.desc() if self.sort_order == "desc" else field.asc()
+            if self.nulls is not None:
+                ordering = _NullsPlacement(ordering, field, self.nulls)
             statement = cast("StatementTypeT", statement.order_by(ordering))
         return statement
 
