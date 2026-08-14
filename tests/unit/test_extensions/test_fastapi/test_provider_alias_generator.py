@@ -1,11 +1,12 @@
 """`FilterConfig["alias_generator"]` controls the generated query parameter names."""
 
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 import pytest
 from fastapi import Depends, FastAPI
 
 from advanced_alchemy.extensions.fastapi import providers
+from advanced_alchemy.extensions.fastapi.providers import FilterConfig
 
 pytestmark = pytest.mark.unit
 
@@ -21,7 +22,7 @@ CONFIG: dict[str, Any] = {
 
 def _parameter_names(config: dict[str, Any]) -> list[str]:
     app = FastAPI()
-    dependency = providers.provide_filters(config)
+    dependency = providers.provide_filters(cast(FilterConfig, config))
 
     @app.get("/things")
     async def list_things(filters: Annotated[list[Any], Depends(dependency)]) -> list[Any]:
