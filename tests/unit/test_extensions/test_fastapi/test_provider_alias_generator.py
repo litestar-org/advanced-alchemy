@@ -5,6 +5,7 @@ from typing import Annotated, Any, cast
 import pytest
 from fastapi import Depends, FastAPI
 
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.fastapi import providers
 from advanced_alchemy.extensions.fastapi.providers import FilterConfig
 
@@ -75,3 +76,19 @@ def test_distinct_generators_get_distinct_dependencies() -> None:
     assert snake[0] == "created_before"
     assert upper[0] == "CREATED_BEFORE"
     assert _parameter_names(dict(CONFIG))[0] == "createdBefore", "the default config must be unaffected"
+
+
+def test_a_generator_that_collides_is_rejected() -> None:
+    """Sharing a query parameter is silent and destructive, so it has to fail at build time.
+
+    FastAPI binds the one value to both parameters, so a `created_before`/`created_after` pair
+    collapsed onto a single name asks for `< x AND > x` and quietly matches nothing.
+    """
+    with pytest.raises(ImproperConfigurationError, match="both map to the query parameter 'created'"):
+        _parameter_names({"created_at": True, "alias_generator": lambda name: name.split("_")[0]})
+
+
+def test_fields_colliding_under_the_default_generator_are_rejected() -> None:
+    """`camelize` collides too: a boolean field named `status_in` lands on `in_fields=["status"]`."""
+    with pytest.raises(ImproperConfigurationError, match="both map to the query parameter 'statusIn'"):
+        _parameter_names({"boolean_fields": ["status_in"], "in_fields": ["status"]})

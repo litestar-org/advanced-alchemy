@@ -106,6 +106,9 @@ class FilterConfig(TypedDict):
     per-field filters. Defaults to :func:`~advanced_alchemy.utils.text.camelize`, which produces the
     names this has always generated (``createdBefore``, ``pageSize``, ``sortOrder``). Pass
     ``lambda name: name`` to keep snake_case instead.
+
+    Must give every parameter a distinct name; one shared between two filters is rejected when the
+    dependency is built, because FastAPI would bind the single value to both.
     """
 
 
