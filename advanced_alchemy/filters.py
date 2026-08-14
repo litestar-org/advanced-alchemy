@@ -42,6 +42,7 @@ from sqlalchemy import (
     ColumnElement,
     Date,
     Delete,
+    Integer,
     Select,
     Update,
     and_,
@@ -594,7 +595,9 @@ class _NullsPlacement(ColumnElement[Any]):
 
 
 @compiles(_NullsPlacement)
-def _compile_nulls_placement(element: _NullsPlacement, compiler: Any, **kw: Any) -> str:
+def _compile_nulls_placement(  # pyright: ignore[reportUnusedFunction]
+    element: _NullsPlacement, compiler: Any, **kw: Any
+) -> str:
     native = nulls_first if element.nulls == "first" else nulls_last
     return str(compiler.process(native(element.ordering), **kw))
 
@@ -602,12 +605,14 @@ def _compile_nulls_placement(element: _NullsPlacement, compiler: Any, **kw: Any)
 @compiles(_NullsPlacement, "mysql")
 @compiles(_NullsPlacement, "mariadb")
 @compiles(_NullsPlacement, "mssql")
-def _compile_nulls_placement_emulated(element: _NullsPlacement, compiler: Any, **kw: Any) -> str:
+def _compile_nulls_placement_emulated(  # pyright: ignore[reportUnusedFunction]
+    element: _NullsPlacement, compiler: Any, **kw: Any
+) -> str:
     nulls_go_last = element.nulls == "last"
     # Literals, not bound parameters: a placeholder inside ORDER BY is ambiguous on these backends.
     key = case(
-        (element.column.is_(None), literal_column("1" if nulls_go_last else "0")),
-        else_=literal_column("0" if nulls_go_last else "1"),
+        (element.column.is_(None), literal_column("1" if nulls_go_last else "0", Integer)),
+        else_=literal_column("0" if nulls_go_last else "1", Integer),
     )
     return f"{compiler.process(key, **kw)}, {compiler.process(element.ordering, **kw)}"
 
