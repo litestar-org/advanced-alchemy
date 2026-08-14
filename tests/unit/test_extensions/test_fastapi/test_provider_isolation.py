@@ -6,7 +6,7 @@ import pytest
 from fastapi import Depends, FastAPI
 
 from advanced_alchemy.extensions.fastapi import providers
-from advanced_alchemy.extensions.fastapi.providers import FilterConfig
+from advanced_alchemy.extensions.fastapi.providers import DEPENDENCY_DEFAULTS, DependencyDefaults, FilterConfig
 
 pytestmark = pytest.mark.unit
 
@@ -47,3 +47,41 @@ def _cached_config() -> FilterConfig:
 def test_the_same_config_is_still_cached() -> None:
     """The per-config cache is what keeps repeated identical configs cheap; it should still hit."""
     assert providers.provide_filters(_cached_config()) is providers.provide_filters(_cached_config())
+
+
+class _BigPages(DependencyDefaults):
+    DEFAULT_PAGINATION_SIZE = 100
+
+
+def _page_size(dependency: Any, path: str) -> Any:
+    app = FastAPI()
+
+    @app.get(path)
+    async def endpoint(filters: Annotated[list[Any], Depends(dependency)]) -> list[Any]:
+        return filters
+
+    parameters = app.openapi()["paths"][path]["get"]["parameters"]
+    return next(p["schema"]["default"] for p in parameters if p["name"] == "pageSize")
+
+
+def test_one_config_with_two_dependency_defaults_does_not_share_a_dependency() -> None:
+    """`dep_defaults` shapes the signature too, so it has to take part in the cache key.
+
+    Keyed on the config alone, whichever defaults were built first won for the whole process, and
+    the other caller silently served a page size it never asked for.
+    """
+    config: FilterConfig = {"pagination_type": "limit_offset"}
+
+    default = providers.provide_filters(dict(config))  # type: ignore[arg-type]
+    big = providers.provide_filters(dict(config), _BigPages())  # type: ignore[arg-type]
+
+    assert default is not big
+    assert _page_size(default, "/default") == DEPENDENCY_DEFAULTS.DEFAULT_PAGINATION_SIZE
+    assert _page_size(big, "/big") == _BigPages.DEFAULT_PAGINATION_SIZE
+
+
+def test_equal_dependency_defaults_still_share_a_dependency() -> None:
+    """Keying on the values rather than the instance is what keeps the cache useful here."""
+    assert providers.provide_filters(_cached_config(), DependencyDefaults()) is providers.provide_filters(
+        _cached_config(), DependencyDefaults()
+    )

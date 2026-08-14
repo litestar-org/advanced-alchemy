@@ -331,6 +331,18 @@ def provide_service(  # noqa: C901, PLR0915
     return provide_sync_service
 
 
+def _filter_cache_key(config: FilterConfig, dep_defaults: DependencyDefaults) -> int:
+    """Cache key for a generated filter dependency.
+
+    ``dep_defaults`` belongs in the key alongside the config: the generated signature bakes in its
+    parameter names and page size, so keying on the config alone lets whichever defaults were built
+    first be served to every later caller asking for the same config. It is keyed by value rather
+    than by instance, so two equal ``DependencyDefaults`` still share one dependency.
+    """
+    defaults = tuple((name, getattr(dep_defaults, name)) for name in sorted(DependencyDefaults.__annotations__))
+    return hash((_CACHE_NAMESPACE, make_hashable(config), defaults))
+
+
 def provide_filters(
     config: FilterConfig,
     dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
@@ -364,8 +376,7 @@ def provide_filters(
     if not has_filters:
         return list
 
-    # Calculate cache key using hashable version of config
-    cache_key = hash((_CACHE_NAMESPACE, make_hashable(config)))
+    cache_key = _filter_cache_key(config, dep_defaults)
 
     # Check cache first
     cached_dep = cast("Optional[Callable[..., list[FilterTypes]]]", dep_cache.get_dependencies(cache_key))
