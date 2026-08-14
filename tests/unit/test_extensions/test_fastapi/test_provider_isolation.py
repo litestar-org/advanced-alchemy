@@ -6,6 +6,7 @@ import pytest
 from fastapi import Depends, FastAPI
 
 from advanced_alchemy.extensions.fastapi import providers
+from advanced_alchemy.extensions.fastapi.providers import FilterConfig
 
 pytestmark = pytest.mark.unit
 
@@ -38,7 +39,11 @@ def test_two_configs_do_not_share_one_signature() -> None:
     assert _query_parameter_names(app, "/books") == ["createdBefore", "createdAfter"]
 
 
+def _cached_config() -> FilterConfig:
+    """A fresh, equal config each call, so the cache is exercised by value rather than by identity."""
+    return {"search": "name", "pagination_type": "limit_offset"}
+
+
 def test_the_same_config_is_still_cached() -> None:
     """The per-config cache is what keeps repeated identical configs cheap; it should still hit."""
-    config: dict[str, Any] = {"search": "name", "pagination_type": "limit_offset"}
-    assert providers.provide_filters(dict(config)) is providers.provide_filters(dict(config))
+    assert providers.provide_filters(_cached_config()) is providers.provide_filters(_cached_config())
