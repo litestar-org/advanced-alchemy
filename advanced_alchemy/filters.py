@@ -57,6 +57,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.sql import operators as op
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
+from sqlalchemy.sql.elements import ColumnClause, TextClause
 from sqlalchemy.sql.visitors import iterate
 from typing_extensions import TypeAlias, TypedDict, TypeVar
 
@@ -854,8 +855,13 @@ def _warn_if_uncorrelated(filter_: "StatementFilter", conditions: "ColumnElement
     child row matches, so the filter silently matches every row of the outer query instead of raising.
     """
     table = model.__table__
-    if any(getattr(element, "table", None) is table for element in iterate(conditions)):
-        return
+    for element in iterate(conditions):
+        if getattr(element, "table", None) is table:
+            return
+        # Raw SQL is opaque to the traversal, so a correlation spelled out as text looks exactly like
+        # no correlation at all. Stay quiet rather than accuse a query that may well be correct.
+        if isinstance(element, TextClause) or (isinstance(element, ColumnClause) and element.is_literal):
+            return
     table_name = getattr(table, "name", str(table))
     warnings.warn(
         f"{type(filter_).__name__} conditions do not reference {table_name!r}, so the subquery is not "
@@ -879,7 +885,8 @@ class ExistsFilter(StatementFilter):
         :meth:`~sqlalchemy.sql.expression.Select.correlate` only *permits* correlation; it cannot
         infer a join. Conditions that never mention the outer table produce a standalone subquery,
         which is true whenever any row matches it — so the filter matches **every** row of the outer
-        query rather than raising. A :class:`UncorrelatedSubqueryWarning` is emitted in that case.
+        query rather than raising. A :class:`UncorrelatedSubqueryWarning` is emitted in that case,
+        except when ``values`` contain raw SQL, whose tables cannot be inspected.
 
     Parameters
     ----------

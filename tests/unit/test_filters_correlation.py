@@ -1,7 +1,7 @@
 """Correlation behaviour of :class:`ExistsFilter` and :class:`NotExistsFilter`."""
 
 import pytest
-from sqlalchemy import ForeignKey, String, select
+from sqlalchemy import ForeignKey, String, literal_column, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from advanced_alchemy.filters import ExistsFilter, NotExistsFilter, UncorrelatedSubqueryWarning
@@ -52,5 +52,21 @@ def test_correlated_conditions_do_not_warn(filter_type: type, recwarn: pytest.Wa
 def test_self_referential_conditions_do_not_warn(filter_type: type, recwarn: pytest.WarningsRecorder) -> None:
     """A condition on the outer table itself is already correlated — the common single-table usage."""
     filter_ = filter_type(values=[Organization.id > 1])
+    _compiled(filter_)
+    assert not [w for w in recwarn if issubclass(w.category, UncorrelatedSubqueryWarning)]
+
+
+@pytest.mark.parametrize("filter_type", [ExistsFilter, NotExistsFilter])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        text("correlation_user.organization_id = correlation_organization.id"),
+        literal_column("correlation_organization.id") == User.organization_id,
+    ],
+    ids=["text", "literal_column"],
+)
+def test_raw_sql_conditions_do_not_warn(filter_type: type, raw: object, recwarn: pytest.WarningsRecorder) -> None:
+    """Raw SQL hides its tables, so a correlation written that way must not be reported as missing."""
+    filter_ = filter_type(values=[raw])
     _compiled(filter_)
     assert not [w for w in recwarn if issubclass(w.category, UncorrelatedSubqueryWarning)]
