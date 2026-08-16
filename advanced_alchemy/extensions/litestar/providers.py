@@ -307,6 +307,18 @@ def create_service_dependencies(
     return deps
 
 
+def _filter_cache_key(config: FilterConfig, dep_defaults: DependencyDefaults) -> int:
+    """Cache key for a set of generated filter dependencies.
+
+    ``dep_defaults`` belongs in the key alongside the config: it names every dependency the set is
+    keyed by and supplies the default page size, so keying on the config alone lets whichever
+    defaults were built first be served to every later caller asking for the same config. It is
+    keyed by value rather than by instance, so two equal ``DependencyDefaults`` still share one set.
+    """
+    defaults = tuple((name, getattr(dep_defaults, name)) for name in sorted(DependencyDefaults.__annotations__))
+    return hash((_CACHE_NAMESPACE, make_hashable(config), defaults))
+
+
 def create_filter_dependencies(
     config: FilterConfig, dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS
 ) -> dict[str, Provide]:
@@ -319,7 +331,7 @@ def create_filter_dependencies(
     Returns:
         A dependency provider function for the combined filter function.
     """
-    cache_key = hash((_CACHE_NAMESPACE, make_hashable(config)))
+    cache_key = _filter_cache_key(config, dep_defaults)
     deps = cast("Optional[dict[str, Provide]]", dep_cache.get_dependencies(cache_key))
     if deps is not None:
         return deps
