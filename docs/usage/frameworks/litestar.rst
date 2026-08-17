@@ -624,8 +624,10 @@ The registered store name must match ``ServerSideSessionConfig.store``, which is
                 )
                 await db_session.commit()
 
-    Run it from an ``on_startup`` hook, a scheduler such as SAQ, or an external cron
-    job. Do not use ``delete_all()`` for this — it removes live sessions too.
+    Run it on a **recurring** schedule — a periodic task scheduler such as SAQ, or an
+    external cron job. An ``on_startup`` hook runs only once per process start, so it
+    works for an optional initial sweep but will not keep a long-running deployment
+    clean on its own. Do not use ``delete_all()`` for this — it removes live sessions too.
 
 Backend-Based Integration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
