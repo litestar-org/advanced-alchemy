@@ -72,6 +72,7 @@ class RoutingSyncSession(Session):
         """
         kwargs.pop("bind", None)
         kwargs.pop("binds", None)
+        self.bind = None
         super().__init__(**kwargs)
         self._default_engine = default_engine
         self._selectors = selectors
@@ -213,6 +214,7 @@ class RoutingAsyncSession(AsyncSession):
 
         # Convert async selectors to sync selectors for the wrapped session
         sync_selectors = {name: _SyncEngineSelectorWrapper(selector) for name, selector in selectors.items()}
+        self.bind = None  # type: ignore
 
         super().__init__(
             sync_session_class=RoutingSyncSession,
