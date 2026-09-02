@@ -20,7 +20,7 @@ from advanced_alchemy.routing.context import (
 
 if TYPE_CHECKING:
     from sqlalchemy import Engine
-    from sqlalchemy.ext.asyncio import AsyncEngine
+    from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
     from sqlalchemy.orm import Mapper
 
     from advanced_alchemy.config.routing import RoutingConfig
@@ -214,7 +214,9 @@ class RoutingAsyncSession(AsyncSession):
 
         # Convert async selectors to sync selectors for the wrapped session
         sync_selectors = {name: _SyncEngineSelectorWrapper(selector) for name, selector in selectors.items()}
-        self.bind = None  # type: ignore
+        # In SQLAlchemy this type is either Unbound or AsyncEngine | AsyncConnection.
+        # This type ignore guarantees that bind is going to be defined in any case.
+        self.bind: Optional[Union[AsyncEngine, AsyncConnection]] = None  # type: ignore[assignment]
 
         super().__init__(
             sync_session_class=RoutingSyncSession,

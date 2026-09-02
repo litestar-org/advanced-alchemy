@@ -1,8 +1,11 @@
 """
 Regression tests: repositories constructed on top of routing sessions.
 
-Issue #793: ``RoutingSession`` / ``RoutingAsyncSession`` did not expose a
-``bind`` attribute, so the repository ``__init__`` line::
+Issue: https://github.com/litestar-org/advanced-alchemy/issues/793
+
+Description:
+
+``RoutingAsyncSession`` did not expose a ``bind`` attribute, so the repository ``__init__`` line::
 
     self._dialect = (
         self.session.bind.dialect
