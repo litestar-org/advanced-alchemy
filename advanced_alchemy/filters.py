@@ -19,6 +19,7 @@ See Also:
 
 """
 
+import base64
 import datetime
 import logging
 from abc import ABC, abstractmethod
@@ -60,7 +61,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import operators as op
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
-from sqlalchemy.sql.elements import UnaryExpression
+from sqlalchemy.sql.elements import NamedColumn, UnaryExpression
 from typing_extensions import TypeAlias, TypedDict, TypeVar
 
 from advanced_alchemy.base import ModelProtocol
@@ -81,6 +82,7 @@ __all__ = (
     "ChoicesFilter",
     "CollectionFilter",
     "ComparisonFilter",
+    "Cursor",
     "ExistsFilter",
     "FilterGroup",
     "FilterMap",
@@ -126,6 +128,7 @@ class FilterMap(TypedDict):
     collection: "type[CollectionFilter[Any]]"
     not_in_collection: "type[NotInCollectionFilter[Any]]"
     limit_offset: "type[LimitOffset]"
+    cursor: "type[Cursor]"
     null: "type[NullFilter]"
     not_null: "type[NotNullFilter]"
     order_by: "type[OrderBy]"
@@ -577,6 +580,178 @@ class LimitOffset(PaginationFilter):
         if isinstance(statement, Select):
             statement = cast("StatementTypeT", statement.limit(self.limit).offset(self.offset))
         return statement
+
+
+CURSOR_VALUE_DELIMITER = "|||"
+
+
+@dataclass
+class Cursor(PaginationFilter):
+    """Keyset (cursor) pagination filter.
+
+    Paginates using a WHERE condition on ``field_name`` instead of OFFSET, which
+    keeps performance stable on large tables.
+
+    To make pagination stable when multiple rows share the same ``field_name``
+    value, the primary key is used as a tiebreaker: both the WHERE condition and
+    the ORDER BY clause include the primary key column(s) as secondary key(s).
+
+    ``cursor`` is ``None`` for the first page, otherwise a single string
+    produced by :func:`encode_cursor_value` holding the ``field_name`` value of
+    the last row of the previous page followed by its primary key value(s).
+    """
+
+    limit: int
+    cursor: Optional[str]
+    field_name: FilterFieldName
+    sort_order: Literal["asc", "desc"] = "asc"
+
+    def append_to_statement(
+        self,
+        statement: StatementTypeT,
+        model: type[ModelT],
+    ) -> StatementTypeT:
+        if isinstance(statement, Select):
+            field = self._get_instrumented_attr(model, self.field_name)
+            pk_columns = list(model.__table__.primary_key)
+
+            if self.sort_order == "asc":
+                new_statement = statement.order_by(field.asc(), *[column.asc() for column in pk_columns]).limit(
+                    self.limit
+                )
+            else:
+                new_statement = statement.order_by(field.desc(), *[column.desc() for column in pk_columns]).limit(
+                    self.limit
+                )
+
+            if self.cursor is not None:
+                values = self.decode_cursor_value(self.cursor)
+                new_statement = new_statement.where(self._keyset_condition(field, pk_columns, values))
+
+            statement = cast("StatementTypeT", new_statement)
+        return statement
+
+    def _keyset_condition(
+        self,
+        field: InstrumentedField,
+        pk_columns: list[NamedColumn[Any]],
+        values: tuple[str, ...],
+    ) -> ColumnElement[bool]:
+        """Helper to build proper where clause for cursor.
+
+        Generally cursor pagination should only iterate
+        over UNIQUE and Comparable values.
+
+        However, since we want to make this implementation
+        as generic as possible and let people decide,
+        therefore we should also support non-unique columns.
+
+        So, instead of simple `col < cursor`,
+        we should also look at cases where `col = cursor`,
+        to not loose some items.
+
+        For example, in case of a table with a composite
+        primary key (pk1, pk2), we should have:
+
+        field < cursor_val
+        OR (field == cursor_val AND pk1 < cursor_pk1)
+        OR (field == cursor_val AND pk1 = cursor_pk1 AND pk2 < cursor_pk2)
+
+        In this case, even if the cursor value would point
+        at an object with non-unique field, we will
+        still be able to get next objects without losing any.
+        """
+        expected = 1 + len(pk_columns)
+        if len(values) != expected:
+            msg = (
+                f"Cursor must contain {expected} value(s): the '{self.field_name}' value "
+                f"followed by the primary key value(s), got {len(values)}: {values!r}"
+            )
+            raise ValueError(msg)
+        field_value = self._coerce_cursor_value(values[0], field)
+        pk_values = tuple(
+            self._coerce_cursor_value(pk_value, pk_column) for pk_value, pk_column in zip(values[1:], pk_columns)
+        )
+        leading = field < field_value if self.sort_order == "desc" else field > field_value
+        clauses: list[ColumnElement[bool]] = []
+        boundary = field == field_value
+        for pk_column, pk_value in zip(pk_columns, pk_values):
+            if self.sort_order == "desc":
+                clauses.append(boundary & (pk_column < pk_value))
+            else:
+                clauses.append(boundary & (pk_column > pk_value))
+            # here we modify boundary to have previous primary keys.
+            boundary = boundary & (pk_column == pk_value)
+        return or_(leading, *clauses)
+
+    @staticmethod
+    def encode_cursor_value(*values: Any) -> str:
+        """Encode cursor values into a single base64 string.
+
+        Values are joined with a delimiter and base64-encoded so the cursor can be
+        carried as a single query parameter or response field.
+
+        Args:
+            *values: The cursor field value followed by the primary key value(s).
+
+        Returns:
+            A single string safe to use as an opaque cursor.
+        """
+        payload = CURSOR_VALUE_DELIMITER.join(str(value) for value in values)
+        return base64.urlsafe_b64encode(payload.encode()).decode()
+
+    @staticmethod
+    def decode_cursor_value(cursor: str) -> tuple[str, ...]:
+        """Decode a cursor produced by :func:`encode_cursor_value`.
+
+        Args:
+            cursor: The encoded cursor string.
+
+        Returns:
+            The individual cursor values as strings.
+
+        Raises:
+            ValueError: If the cursor is not a valid encoded cursor string.
+        """
+        try:
+            payload = base64.urlsafe_b64decode(cursor.encode()).decode()
+        except (ValueError, UnicodeDecodeError) as e:
+            msg = f"Invalid cursor value: {cursor!r}"
+            raise ValueError(msg) from e
+        return tuple(payload.split(CURSOR_VALUE_DELIMITER))
+
+    @staticmethod
+    def _coerce_cursor_value(value: str, column: Any) -> Any:
+        """Convert a decoded cursor value back to the column's Python type.
+
+        Cursor values are string-encoded on the wire. Strict databases (e.g. PostgreSQL
+        with asyncpg) infer the bind parameter type from the Python value, so comparing
+        a typed column against a raw string raises (e.g. ``integer < text``). Coercing
+        the value back to the column's ``python_type`` keeps the comparison typed.
+
+        Args:
+            value: The decoded cursor value.
+            column: The column (or column-like expression) the value is compared against.
+
+        Returns:
+            The value converted to the column's Python type when possible, otherwise
+            the original string.
+        """
+        column_type = getattr(column, "type", None)
+        python_type = getattr(column_type, "python_type", None) if column_type is not None else None
+        if python_type is None:
+            return value
+        converters: dict[type, Callable[[str], Any]] = {
+            bool: lambda v: v.lower() == "true",
+            datetime.datetime: datetime.datetime.fromisoformat,
+            datetime.date: datetime.date.fromisoformat,
+            datetime.time: datetime.time.fromisoformat,
+        }
+        convert = cast("Callable[[str], Any]", converters.get(python_type, python_type))
+        try:
+            return convert(value)
+        except (TypeError, ValueError):
+            return value
 
 
 @dataclass
@@ -1234,6 +1409,7 @@ class MultiFilter(StatementFilter):
         "collection": CollectionFilter,
         "not_in_collection": NotInCollectionFilter,
         "limit_offset": LimitOffset,
+        "cursor": Cursor,
         "null": NullFilter,
         "not_null": NotNullFilter,
         "order_by": OrderBy,
@@ -1342,6 +1518,7 @@ FilterTypes: TypeAlias = Union[
     ComparisonFilter,
     MultiFilter,
     FilterGroup,
+    Cursor,
 ]
 """Aggregate type alias of the types supported for collection filtering."""
 
