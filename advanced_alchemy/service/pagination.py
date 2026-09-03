@@ -1,10 +1,12 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Generic, Optional, TypeVar
+from typing import Generic, Optional, TypeVar, Union
+
+from typing_extensions import TypeAlias
 
 T = TypeVar("T")
 
-__all__ = ("CursorPagination", "OffsetPagination")
+__all__ = ("CursorPagination", "OffsetPagination", "Pagination")
 
 
 @dataclass
@@ -32,3 +34,6 @@ class CursorPagination(Generic[T]):
 
     items: Sequence[T]
     next_cursor: Optional[str]
+
+
+Pagination: TypeAlias = Union[CursorPagination[T], OffsetPagination[T]]

@@ -19,7 +19,7 @@ from advanced_alchemy.base import ModelProtocol
 from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.filters import Cursor, LimitOffset, StatementFilter
 from advanced_alchemy.repository.typing import ModelOrRowMappingT, PrimaryKeyType
-from advanced_alchemy.service.pagination import CursorPagination, OffsetPagination
+from advanced_alchemy.service.pagination import CursorPagination, OffsetPagination, Pagination
 from advanced_alchemy.typing import (
     ATTRS_INSTALLED,
     CATTRS_INSTALLED,
@@ -98,7 +98,7 @@ def resolve_item_ids(
 class ResultConverter:
     """Simple mixin to help convert to a paginated response model.
 
-    Single objects are transformed to the supplied schema type, and lists of objects are automatically transformed into an `OffsetPagination` response of the supplied schema type.
+    Single objects are transformed to the supplied schema type, and lists of objects are automatically transformed into an `OffsetPagination` or `CursorPagination` response of the supplied schema type.
 
     Args:
         data: A database model instance or row mapping.
@@ -193,7 +193,7 @@ class ResultConverter:
         filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
         *,
         schema_type: None = None,
-    ) -> "OffsetPagination[ModelOrRowMappingT] | CursorPagination[ModelOrRowMappingT]": ...
+    ) -> "Union[OffsetPagination[ModelOrRowMappingT], CursorPagination[ModelOrRowMappingT]]": ...
 
     @overload
     def to_schema(
@@ -203,7 +203,7 @@ class ResultConverter:
         filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
         *,
         schema_type: "type[ModelDTOT]",
-    ) -> "OffsetPagination[ModelDTOT] | CursorPagination[ModelDTOT]": ...
+    ) -> "Union[OffsetPagination[ModelDTOT], CursorPagination[ModelDTOT]]": ...
 
     @overload
     def to_schema(
@@ -212,7 +212,7 @@ class ResultConverter:
         total: "int",
         *,
         pagination_type: None = None,
-    ) -> "OffsetPagination[Row[Any]] | CursorPagination[Row[Any]]": ...
+    ) -> "Union[OffsetPagination[Row[Any]], CursorPagination[Row[Any]]]": ...
 
     @overload
     def to_schema(
@@ -221,7 +221,7 @@ class ResultConverter:
         *,
         schema_type: None = None,
         pagination_type: None = None,
-    ) -> "OffsetPagination[ModelOrRowMappingT] | CursorPagination[ModelOrRowMappingT]": ...
+    ) -> "Union[OffsetPagination[ModelOrRowMappingT], CursorPagination[ModelOrRowMappingT]]": ...
 
     @overload
     def to_schema(
@@ -230,7 +230,7 @@ class ResultConverter:
         *,
         schema_type: "type[ModelDTOT]",
         pagination_type: None = None,
-    ) -> "OffsetPagination[ModelDTOT] | CursorPagination[ModelDTOT]": ...
+    ) -> "Union[OffsetPagination[ModelDTOT], CursorPagination[ModelDTOT]]": ...
 
     @overload
     def to_schema(
@@ -244,6 +244,15 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
+        data: "Sequence[Row[Any]]",
+        total: "int",
+        *,
+        pagination_type: Literal["offset"],
+    ) -> "OffsetPagination[Row[Any]]": ...
+
+    @overload
+    def to_schema(
+        self,
         data: "Sequence[ModelOrRowMappingT]",
         *,
         schema_type: None = None,
@@ -253,11 +262,29 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
+        data: "Sequence[ModelOrRowMappingT]",
+        *,
+        schema_type: None = None,
+        pagination_type: Literal["offset"],
+    ) -> "OffsetPagination[ModelOrRowMappingT]": ...
+
+    @overload
+    def to_schema(
+        self,
         data: "Union[Sequence[ModelProtocol], Sequence[RowMapping], Sequence[Row[Any]], Sequence[dict[str, Any]]]",
         *,
         schema_type: "type[ModelDTOT]",
         pagination_type: Literal["cursor"],
     ) -> "CursorPagination[ModelDTOT]": ...
+
+    @overload
+    def to_schema(
+        self,
+        data: "Union[Sequence[ModelProtocol], Sequence[RowMapping], Sequence[Row[Any]], Sequence[dict[str, Any]]]",
+        *,
+        schema_type: "type[ModelDTOT]",
+        pagination_type: Literal["offset"],
+    ) -> "OffsetPagination[ModelDTOT]": ...
 
     @overload
     def to_schema(
@@ -273,6 +300,17 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
+        data: "Sequence[ModelOrRowMappingT]",
+        total: "Optional[int]" = None,
+        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
+        *,
+        schema_type: None = None,
+        pagination_type: Literal["offset"],
+    ) -> "OffsetPagination[ModelOrRowMappingT]": ...
+
+    @overload
+    def to_schema(
+        self,
         data: "Union[Sequence[ModelProtocol], Sequence[RowMapping], Sequence[Row[Any]], Sequence[dict[str, Any]]]",
         total: "Optional[int]" = None,
         filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
@@ -280,6 +318,17 @@ class ResultConverter:
         schema_type: "type[ModelDTOT]",
         pagination_type: Literal["cursor"],
     ) -> "CursorPagination[ModelDTOT]": ...
+
+    @overload
+    def to_schema(
+        self,
+        data: "Union[Sequence[ModelProtocol], Sequence[RowMapping], Sequence[Row[Any]], Sequence[dict[str, Any]]]",
+        total: "Optional[int]" = None,
+        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
+        *,
+        schema_type: "type[ModelDTOT]",
+        pagination_type: Literal["offset"],
+    ) -> "OffsetPagination[ModelDTOT]": ...
 
     def to_schema(
         self,

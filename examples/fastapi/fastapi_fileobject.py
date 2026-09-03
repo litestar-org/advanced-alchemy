@@ -102,7 +102,7 @@ async def list_documents(
             )
         ),
     ],
-) -> service.OffsetPagination[Document]:
+) -> service.Pagination[Document]:
     results, total = await documents_service.get_many_and_count(*filters)
     return documents_service.to_schema(results, total, filters=filters, schema_type=Document)
 

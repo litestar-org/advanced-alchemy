@@ -90,7 +90,7 @@ async def list_authors(
             )
         ),
     ],
-) -> service.OffsetPagination[AuthorModel]:
+) -> service.Pagination[AuthorModel]:
     results, total = await authors_service.get_many_and_count(*filters)
     return authors_service.to_schema(results, total, filters=filters)
 

@@ -100,7 +100,7 @@ class DocumentController(Controller):
         self,
         documents_service: DocumentService,
         filters: Annotated[list[filters.FilterTypes], Dependency(skip_validation=True)],
-    ) -> service.OffsetPagination[Document]:
+    ) -> service.Pagination[Document]:
         results, total = await documents_service.get_many_and_count(*filters)
         return documents_service.to_schema(results, total, filters=filters, schema_type=Document)
 
