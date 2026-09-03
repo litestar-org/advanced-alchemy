@@ -32,6 +32,7 @@ from advanced_alchemy.filters import (
     BooleanFilter,
     ChoicesFilter,
     CollectionFilter,
+    Cursor,
     FilterTypes,
     LimitOffset,
     NotInCollectionFilter,
@@ -109,6 +110,8 @@ class DependencyDefaults:
     """Key for the updated filter dependency."""
     ORDER_BY_FILTER_DEPENDENCY_KEY: str = "order_by_filter"
     """Key for the order by dependency."""
+    CURSOR_FILTER_DEPENDENCY_KEY: str = "cursor_filter"
+    """Key for the cursor filter dependency."""
     SEARCH_FILTER_DEPENDENCY_KEY: str = "search_filter"
     """Key for the search filter dependency."""
     DEFAULT_PAGINATION_SIZE: int = 20
@@ -429,6 +432,48 @@ def _create_statement_filters(  # noqa: C901, PLR0915
             provide_limit_offset_pagination, sync_to_thread=False
         )
 
+    if config.get("pagination_type") == "cursor":
+        sort_field = config.get("sort_field")
+        if sort_field is None:
+            msg = "Cursor pagination requires a 'sort_field' in the configuration."
+            raise ValueError(msg)
+
+        sort_field_default = normalize_sort_field(sort_field)
+        sort_order_default: SortOrder = config.get("sort_order", "desc")
+
+        def provide_cursor_pagination(
+            cursor: Annotated[Optional[str], QueryParameter(name="cursor")] = None,
+            limit: Annotated[
+                int,
+                QueryParameter(
+                    name="limit",
+                    ge=1,
+                ),
+            ] = config.get("pagination_size", dep_defaults.DEFAULT_PAGINATION_SIZE),
+            field_name: Annotated[
+                StringOrNone,
+                QueryParameter(
+                    title="Order by field",
+                    name="orderBy",
+                ),
+            ] = sort_field_default,
+            sort_order: Annotated[
+                SortOrderOrNone,
+                QueryParameter(
+                    title="Field to search",
+                    name="sortOrder",
+                ),
+            ] = sort_order_default,
+        ) -> Cursor:
+            return Cursor(
+                limit=limit,
+                cursor=cursor,
+                field_name=field_name or sort_field_default,
+                sort_order=sort_order or sort_order_default,
+            )
+
+        filters[dep_defaults.CURSOR_FILTER_DEPENDENCY_KEY] = Provide(provide_cursor_pagination, sync_to_thread=False)
+
     if search_fields := config.get("search"):
 
         def provide_search_filter(
@@ -459,7 +504,8 @@ def _create_statement_filters(  # noqa: C901, PLR0915
 
         filters[dep_defaults.SEARCH_FILTER_DEPENDENCY_KEY] = Provide(provide_search_filter, sync_to_thread=False)
 
-    if sort_field := config.get("sort_field"):
+    sort_field = config.get("sort_field")
+    if sort_field and config.get("pagination_type") != "cursor":
         filters[dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY] = Provide(
             _create_order_by_filter_provider(
                 sort_field, config.get("sort_order", "desc"), alias_for, config.get("sort_nulls")
