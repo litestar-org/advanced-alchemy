@@ -28,8 +28,10 @@ from advanced_alchemy.filters import (
     CollectionFilter,
     LimitOffset,
     NotInCollectionFilter,
+    NotInSearchFilter,
     OnBeforeAfter,
     OrderBy,
+    SearchFilter,
 )
 from advanced_alchemy.repository import (
     SQLAlchemyAsyncRepository,
@@ -2513,3 +2515,28 @@ def test_mock_repository_order_by_honors_nulls_placement(sort_order: str, nulls:
     expected = [3, 2] if sort_order == "asc" else [2, 3]
     expected = [1, *expected] if nulls == "first" else [*expected, 1]
     assert [item.id for item in results] == expected
+
+
+class SearchableTitleModel(base.BigIntBase):
+    __tablename__ = "searchable_title_model"
+
+    title: Mapped[str] = mapped_column(String(50))
+
+
+@pytest.mark.parametrize("filter_type", [SearchFilter, NotInSearchFilter])
+def test_mock_repository_search_honors_escape_wildcards(filter_type: type[SearchFilter]) -> None:
+    """The in-memory repository matches `%` and `_` literally when `escape_wildcards` is set."""
+    from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
+
+    class Repo(SQLAlchemySyncMockRepository[SearchableTitleModel]):
+        model_type = SearchableTitleModel
+
+    repo = Repo(session=MagicMock(spec=Session, bind=MagicMock()))
+    repo.add_many([SearchableTitleModel(id=1, title="a 50% b"), SearchableTitleModel(id=2, title="a 50X b")])
+
+    literal = repo.list(filter_type("title", "50%", escape_wildcards=True))
+    pattern = repo.list(filter_type("title", "50."))
+
+    expected_literal = [1] if filter_type is SearchFilter else [2]
+    assert [item.id for item in literal] == expected_literal
+    assert sorted(item.id for item in pattern) == ([1, 2] if filter_type is SearchFilter else [])

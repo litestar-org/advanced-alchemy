@@ -693,6 +693,21 @@ def test_provide_filters_applies_configured_nulls_placement() -> None:
     assert client.get("/items?orderBy=id&sortOrder=asc").json() == ["first"]
 
 
+def test_provide_filters_applies_configured_wildcard_escaping() -> None:
+    """The `search_escape_wildcards` config key makes every generated SearchFilter match literally."""
+    deps = provide_filters({"search": "name", "search_escape_wildcards": True})
+
+    app = FastAPI()
+
+    @app.get("/items")
+    async def get_items(filters: Annotated[list[FilterTypes], Depends(deps)]) -> list[bool]:
+        return [filter_.escape_wildcards for filter_ in filters if isinstance(filter_, SearchFilter)]
+
+    client = TestClient(app)
+
+    assert client.get("/items?searchString=50%25").json() == [True]
+
+
 def test_openapi_schema_edge_cases() -> None:
     """Test OpenAPI schema generation for edge cases and special configurations."""
     # Test with minimal configuration

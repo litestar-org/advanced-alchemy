@@ -847,7 +847,7 @@ def test_search_filter_preserves_default_sql(
 
 
 def test_search_filter_escapes_wildcards(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
-    """Wildcard escaping is opt-in; existing wildcard searches keep their results.
+    """Wildcard escaping is opt-in; without it `%` and `_` in the value stay SQL wildcards.
 
     "The_" is not a substring of any title, but `_` is a single-character wildcard in LIKE, so
     without escaping it would match both "The Matrix" and "The Hangover".

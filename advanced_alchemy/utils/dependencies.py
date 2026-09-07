@@ -89,6 +89,8 @@ class FilterConfig(TypedDict):
     """Fields to enable search on."""
     search_ignore_case: NotRequired[bool]
     """Whether search should be case-insensitive."""
+    search_escape_wildcards: NotRequired[bool]
+    """Whether ``%`` and ``_`` in the search string match literally. Requires SQL ``ESCAPE`` support."""
     created_at: NotRequired[bool]
     """Enable created-at range filtering."""
     updated_at: NotRequired[bool]

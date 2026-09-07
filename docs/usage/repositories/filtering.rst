@@ -82,8 +82,9 @@ To match those characters literally in accounting codes or titles, opt in with
 This option escapes ``%``, ``_``, and the escape character ``/`` while retaining
 the surrounding substring wildcards. Dialect-specific pattern syntax, such as
 SQL Server's bracket expressions (``[abc]``), is unchanged. It requires SQL
-``ESCAPE`` support and is not supported by Spanner. Leave ``escape_wildcards`` at its default ``False`` on
-Spanner; existing searches retain their SQL and behavior.
+``ESCAPE`` support. Spanner has no ``ESCAPE`` clause, so ``escape_wildcards``
+must stay ``False`` there. The Litestar and FastAPI filter providers enable it
+through the ``search_escape_wildcards`` key of ``FilterConfig``.
 
 Null and Not Null Filters
 ~~~~~~~~~~~~~~~~~~~~~~~~~

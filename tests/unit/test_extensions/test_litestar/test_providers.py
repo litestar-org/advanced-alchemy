@@ -427,6 +427,17 @@ def test_search_filter() -> None:
     assert f.field_name == "name" or f.field_name == {"name"}
     assert f.value == "test"
     assert f.ignore_case is True
+    assert f.escape_wildcards is False
+
+
+def test_search_filter_applies_configured_wildcard_escaping() -> None:
+    """The `search_escape_wildcards` config key makes every generated SearchFilter match literally."""
+    deps = _create_statement_filters({"search": "name", "search_escape_wildcards": True})
+
+    f = deps["search_filter"].dependency(search_string="50%")
+
+    assert isinstance(f, SearchFilter)
+    assert f.escape_wildcards is True
 
 
 def test_limit_offset_filter() -> None:

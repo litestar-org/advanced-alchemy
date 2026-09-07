@@ -597,6 +597,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 field_name=field_names,
                 value=search_string,  # type: ignore[arg-type]
                 ignore_case=ignore_case or False,
+                escape_wildcards=config.get("search_escape_wildcards", False),
             )
 
         param_name = dep_defaults.SEARCH_FILTER_DEPENDENCY_KEY

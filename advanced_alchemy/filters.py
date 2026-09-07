@@ -75,6 +75,7 @@ else:
     InstrumentedField: TypeAlias = Any
 
 __all__ = (
+    "LIKE_ESCAPE_CHAR",
     "BeforeAfter",
     "BooleanFilter",
     "ChoicesFilter",
@@ -100,6 +101,7 @@ __all__ = (
     "StatementFilter",
     "StatementFilterT",
     "StatementTypeT",
+    "escape_like_value",
 )
 
 T = TypeVar("T")
@@ -683,8 +685,8 @@ class SearchFilter(StatementFilter):
     Note:
         ``%`` and ``_`` in ``value`` remain SQL wildcards by default. Set
         ``escape_wildcards=True`` to match them literally on databases supporting
-        the SQL ``ESCAPE`` clause. This opt-in mode is not supported by Spanner;
-        leave it disabled there to retain the existing search behavior.
+        the SQL ``ESCAPE`` clause. Spanner has no ``ESCAPE`` clause, so
+        ``escape_wildcards`` must stay ``False`` there.
 
     See Also:
         - :class:`.NotInSearchFilter`: Opposite filter using NOT LIKE/ILIKE

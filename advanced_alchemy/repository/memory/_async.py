@@ -382,7 +382,10 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         field_name: Union[str, set[str]],
         value: str,
         ignore_case: bool,
+        escape_wildcards: bool = False,
     ) -> List[ModelT]:
+        if escape_wildcards:
+            value = re.escape(value)
         pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
         fields = {field_name} if isinstance(field_name, str) else field_name
         items: List[ModelT] = []
@@ -402,7 +405,10 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         field_name: Union[str, set[str]],
         value: str,
         ignore_case: bool,
+        escape_wildcards: bool = False,
     ) -> List[ModelT]:
+        if escape_wildcards:
+            value = re.escape(value)
         pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
         fields = {field_name} if isinstance(field_name, str) else field_name
         items: List[ModelT] = []
@@ -491,6 +497,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
                     filter_.field_name,
                     value=filter_.value,
                     ignore_case=bool(filter_.ignore_case),
+                    escape_wildcards=filter_.escape_wildcards,
                 )
             elif isinstance(filter_, SearchFilter):
                 result = self._filter_by_like(
@@ -498,6 +505,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
                     filter_.field_name,
                     value=filter_.value,
                     ignore_case=bool(filter_.ignore_case),
+                    escape_wildcards=filter_.escape_wildcards,
                 )
             elif not isinstance(filter_, ColumnElement):
                 msg = f"Unexpected filter: {filter_}"
