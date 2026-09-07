@@ -72,16 +72,17 @@ Provides basic string search capabilities.
 
 ``SearchFilter`` and ``NotInSearchFilter`` preserve SQL wildcard matching by
 default: ``%`` matches any sequence of characters and ``_`` matches one character.
-For literal substrings such as accounting codes or titles containing those
-characters, opt in with ``escape_wildcards=True``:
+To match those characters literally in accounting codes or titles, opt in with
+``escape_wildcards=True``:
 
 .. code-block:: python
 
     literal_search = SearchFilter(field_name="title", value="50% off", escape_wildcards=True)
 
-Literal mode escapes ``%``, ``_``, and the escape character ``/`` while retaining
-the surrounding substring wildcards. It requires SQL ``ESCAPE`` support and is
-not supported by Spanner. Leave ``escape_wildcards`` at its default ``False`` on
+This option escapes ``%``, ``_``, and the escape character ``/`` while retaining
+the surrounding substring wildcards. Dialect-specific pattern syntax, such as
+SQL Server's bracket expressions (``[abc]``), is unchanged. It requires SQL
+``ESCAPE`` support and is not supported by Spanner. Leave ``escape_wildcards`` at its default ``False`` on
 Spanner; existing searches retain their SQL and behavior.
 
 Null and Not Null Filters
