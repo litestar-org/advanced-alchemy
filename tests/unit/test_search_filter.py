@@ -26,7 +26,14 @@ class Movie(Base):
 
 @pytest.mark.parametrize(
     "dialect",
-    [sqlite.dialect(), postgresql.dialect(), mysql.dialect(), oracle.dialect(), mssql.dialect(), SpannerDialect()],
+    [
+        sqlite.dialect(),  # type: ignore[no-untyped-call]
+        postgresql.dialect(),  # type: ignore[no-untyped-call]
+        mysql.dialect(),  # type: ignore[no-untyped-call]
+        oracle.dialect(),  # type: ignore[no-untyped-call]
+        mssql.dialect(),  # type: ignore[no-untyped-call]
+        SpannerDialect(),
+    ],
 )
 @pytest.mark.parametrize(
     ("filter_type", "ignore_case", "operator"),
