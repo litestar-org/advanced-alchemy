@@ -733,6 +733,19 @@ def test_nulls_placement_with_paginated_eager_loading(
 
 @NULLS_EMULATED
 @pytest.mark.unit
+def test_emulated_null_ordering_expands_labels_inside_case(dialect: Any) -> None:
+    director = func.lower(OrderByMovie.director).label("normalized_director")
+    statement = OrderBy(director, nulls="last").append_to_statement(select(director), OrderByMovie)
+
+    compiled = str(statement.compile(dialect=dialect))
+
+    assert compiled.endswith(
+        "ORDER BY CASE WHEN (lower(order_by_nulls_movie.director) IS NULL) THEN 1 ELSE 0 END, normalized_director ASC"
+    )
+
+
+@NULLS_EMULATED
+@pytest.mark.unit
 def test_emulated_eager_loading_adapts_the_ordering_column(dialect: Any) -> None:
     statement = OrderBy("director", nulls="last").append_to_statement(
         select(OrderByMovie).options(joinedload(OrderByMovie.credits)).limit(2), OrderByMovie

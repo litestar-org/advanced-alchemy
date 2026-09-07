@@ -604,7 +604,9 @@ def _compile_nulls_placement_emulated(  # pyright: ignore[reportUnusedFunction]
         (ordering.element.is_(None), literal_column("1" if nulls_go_last else "0", Integer)),
         else_=literal_column("0" if nulls_go_last else "1", Integer),
     )
-    return f"{compiler.process(key, **kw)}, {compiler.process(ordering, **kw)}"
+    # SQL Server permits a SELECT alias as an ordering term, but not inside CASE.
+    key_kw = {**kw, "render_label_as_label": None}
+    return f"{compiler.process(key, **key_kw)}, {compiler.process(ordering, **kw)}"
 
 
 @dataclass
