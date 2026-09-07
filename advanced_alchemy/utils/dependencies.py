@@ -24,8 +24,24 @@ __all__ = (
     "normalize_sort_field",
 )
 
+
+@dataclass(frozen=True, eq=False)
+class _CallableIdentity:
+    """Retain callable cache keys without relying on user-defined equality or hashing."""
+
+    value: Callable[..., Any]
+
+    def __hash__(self) -> int:
+        return id(self.value)
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _CallableIdentity) and self.value is other.value
+
+
 HashableValue = Union[str, int, float, bool, None]
-HashableType = Union[HashableValue, tuple[Any, ...], tuple[tuple[str, Any], ...], tuple[HashableValue, ...]]
+HashableType = Union[
+    _CallableIdentity, HashableValue, tuple[Any, ...], tuple[tuple[str, Any], ...], tuple[HashableValue, ...]
+]
 SortOrder = Literal["asc", "desc"]
 SortField = Union[str, set[str], list[str]]
 FIELD_TUPLE_LENGTH = 2
@@ -107,7 +123,7 @@ class FilterConfig(TypedDict):
     names this has always generated (``createdBefore``, ``pageSize``, ``sortOrder``). Pass
     ``lambda name: name`` to keep snake_case instead.
 
-    Must give every parameter a distinct name; one shared between two filters is rejected when the
+    An explicit generator must give every parameter a distinct name; one shared between two filters is rejected when the
     dependency is built, because FastAPI would bind the single value to both.
     """
 
@@ -198,16 +214,7 @@ def _make_leaf_hashable(value: Any) -> HashableType:
     if isinstance(value, (str, int, float, bool, type(None))):
         return value
     if callable(value):
-        # `str(function)` embeds the object's address, which CPython reuses once the object is
-        # collected — two different callables would then produce the same key and `DependencyCache`
-        # would hand back the wrong providers. Keeping the callable itself gives identity semantics
-        # and holds a reference, so the address cannot be recycled underneath us.
-        try:
-            hash(value)
-        except TypeError:
-            pass  # not hashable after all; fall back to the string form below
-        else:
-            return cast("HashableType", value)
+        return _CallableIdentity(value)
     return str(value)
 
 

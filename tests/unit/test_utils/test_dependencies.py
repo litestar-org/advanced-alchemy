@@ -139,3 +139,24 @@ def test_dependency_cache_get_set_by_config() -> None:
         cache.set(config, dependencies)
 
         assert cache.get(config) == dependencies
+
+
+def test_callable_cache_keys_use_identity_and_retain_unhashable_objects() -> None:
+    from dataclasses import dataclass
+
+    @dataclass
+    class Generator:
+        prefix: str
+
+        def __call__(self, name: str) -> str:
+            return self.prefix + name
+
+        def __str__(self) -> str:
+            return "same"
+
+    first = Generator("first_")
+    equal = Generator("first_")
+    second = Generator("second_")
+    keys = {make_hashable(first): "first", make_hashable(equal): "equal", make_hashable(second): "second"}
+    assert len(keys) == 3
+    assert keys[make_hashable(first)] == "first"

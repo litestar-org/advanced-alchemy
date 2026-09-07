@@ -6,7 +6,7 @@ import typing
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from enum import Enum, IntEnum
-from typing import Annotated, Union, cast
+from typing import Annotated, Any, Union, cast
 from unittest.mock import patch
 from uuid import UUID
 
@@ -17,8 +17,10 @@ from sqlalchemy import String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
-# Assuming necessary classes are importable from the new provider module
 from advanced_alchemy.base import UUIDBase
+
+# Assuming necessary classes are importable from the new provider module
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.fastapi.providers import (
     DEPENDENCY_DEFAULTS,
@@ -888,3 +890,131 @@ async def test_provide_filters_with_dishka_integration(monkeypatch: pytest.Monke
     assert len(filter_types) == 1  # type: ignore
 
     await container.close()
+
+
+CONFIG: dict[str, Any] = {
+    "pagination_type": "limit_offset",
+    "search": "name",
+    "sort_field": "created_at",
+    "created_at": True,
+    "boolean_fields": ["is_active"],
+    "in_fields": ["status"],
+}
+
+
+def _parameter_names(config: dict[str, Any]) -> list[str]:
+    app = FastAPI()
+    dependency = provide_filters(cast(FilterConfig, config))
+
+    @app.get("/things")
+    async def list_things(filters: Annotated[list[Any], Depends(dependency)]) -> list[Any]:
+        return filters
+
+    return [parameter["name"] for parameter in app.openapi()["paths"]["/things"]["get"]["parameters"]]
+
+
+def test_default_names_are_unchanged() -> None:
+    """The default generator is `camelize`, which reproduces the previously hardcoded names."""
+    assert _parameter_names(dict(CONFIG)) == [
+        "createdBefore",
+        "createdAfter",
+        "currentPage",
+        "pageSize",
+        "searchString",
+        "searchIgnoreCase",
+        "orderBy",
+        "sortOrder",
+        "statusIn",
+        "isActive",
+    ]
+
+
+def test_alias_generator_renames_every_parameter() -> None:
+    """Including the per-field filters, which were camelized from the model's own field names."""
+    assert _parameter_names({**CONFIG, "alias_generator": lambda name: name}) == [
+        "created_before",
+        "created_after",
+        "current_page",
+        "page_size",
+        "search_string",
+        "search_ignore_case",
+        "order_by",
+        "sort_order",
+        "status_in",
+        "is_active",
+    ]
+
+
+def test_distinct_generators_get_distinct_dependencies() -> None:
+    """Two generators must not collide in the dependency cache.
+
+    A function hashes by identity, and CPython reuses the address of a collected object — so a key
+    that does not keep the generator alive can hand the second config the first one's providers.
+    """
+    snake = _parameter_names({**CONFIG, "alias_generator": lambda name: name})
+    upper = _parameter_names({**CONFIG, "alias_generator": lambda name: name.upper()})
+
+    assert snake[0] == "created_before"
+    assert upper[0] == "CREATED_BEFORE"
+    assert _parameter_names(dict(CONFIG))[0] == "createdBefore", "the default config must be unaffected"
+
+
+def test_a_generator_that_collides_is_rejected() -> None:
+    """Sharing a query parameter is silent and destructive, so it has to fail at build time.
+
+    FastAPI binds the one value to both parameters, so a `created_before`/`created_after` pair
+    collapsed onto a single name asks for `< x AND > x` and quietly matches nothing.
+    """
+    with pytest.raises(ImproperConfigurationError, match="both map to the query parameter 'created'"):
+        _parameter_names({"created_at": True, "alias_generator": lambda name: name.split("_")[0]})
+
+
+def test_default_alias_collisions_preserve_existing_configuration() -> None:
+    assert _parameter_names({"boolean_fields": ["status_in"], "in_fields": ["status"]}) == ["statusIn"]
+
+
+@pytest.mark.parametrize("field", ["created", "updated"])
+@pytest.mark.parametrize("bound", ["before", "after"])
+def test_custom_date_alias_validation_location(field: str, bound: str) -> None:
+    app = FastAPI()
+    dependency = provide_filters(cast(FilterConfig, {f"{field}_at": True, "alias_generator": str.upper}))
+
+    @app.get("/things")
+    async def list_things(filters: Annotated[list[Any], Depends(dependency)]) -> list[Any]:
+        return filters
+
+    alias = f"{field}_{bound}".upper()
+    with TestClient(app) as client:
+        response = client.get("/things", params={alias: "invalid"})
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["query", alias]
+
+
+def test_unhashable_falsy_generators_keep_distinct_cached_aliases() -> None:
+    from dataclasses import dataclass
+
+    @dataclass
+    class Generator:
+        prefix: str
+
+        def __bool__(self) -> bool:
+            return False
+
+        def __str__(self) -> str:
+            return "same"
+
+        def __call__(self, name: str) -> str:
+            return self.prefix + name
+
+    first = Generator("first_")
+    second = Generator("second_")
+    assert _parameter_names({"pagination_type": "limit_offset", "alias_generator": first}) == [
+        "first_current_page",
+        "first_page_size",
+    ]
+    assert _parameter_names({"pagination_type": "limit_offset", "alias_generator": second}) == [
+        "second_current_page",
+        "second_page_size",
+    ]
+    config: FilterConfig = {"pagination_type": "limit_offset", "alias_generator": first}
+    assert provide_filters(config) is provide_filters(dict(config))

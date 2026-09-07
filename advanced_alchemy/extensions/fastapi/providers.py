@@ -126,10 +126,8 @@ def _alias_factory(config: "FilterConfig") -> "Callable[[str], str]":
     a model field for the per-field filters) to the query parameter to expose. The default generator
     is :func:`camelize`, which reproduces the previously hardcoded names exactly.
 
-    Two filters landing on one query parameter is silent and destructive: FastAPI binds the single
-    value to both, so a ``created_before``/``created_after`` pair collapsed onto one name asks for
-    ``< x AND > x`` and matches nothing. The default generator can collide too — a boolean field
-    named ``status_in`` reaches ``statusIn`` alongside ``in_fields=["status"]``.
+    Custom generators must produce distinct names. Existing configurations using the default
+    generator retain their historical behavior, including shared query parameters.
 
     Args:
         config: The filter configuration, optionally carrying an ``alias_generator``.
@@ -137,7 +135,9 @@ def _alias_factory(config: "FilterConfig") -> "Callable[[str], str]":
     Returns:
         Callable[[str], str]: Maps a snake_case parameter name to its query parameter.
     """
-    generator = config.get("alias_generator") or camelize
+    generator = config.get("alias_generator")
+    if generator is None:
+        return camelize
     claimed: dict[str, str] = {}
 
     def alias_for(canonical: str) -> str:
@@ -476,12 +476,14 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 
     # Add created_at filter providers
     if config.get("created_at", False):
+        created_before_alias = alias_for("created_before")
+        created_after_alias = alias_for("created_after")
 
         def provide_created_at_filter(
             before: Annotated[
                 Optional[str],
                 Query(
-                    alias=alias_for("created_before"),
+                    alias=created_before_alias,
                     description="Filter by created date before this timestamp.",
                     json_schema_extra={"format": "date-time"},
                 ),
@@ -489,7 +491,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             after: Annotated[
                 Optional[str],
                 Query(
-                    alias=alias_for("created_after"),
+                    alias=created_after_alias,
                     description="Filter by created date after this timestamp.",
                     json_schema_extra={"format": "date-time"},
                 ),
@@ -504,7 +506,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     before_dt = datetime.datetime.fromisoformat(before.replace("Z", "+00:00"))
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
-                        errors=[{"loc": ["query", "createdBefore"], "msg": "Invalid date format"}]
+                        errors=[{"loc": ["query", created_before_alias], "msg": "Invalid date format"}]
                     ) from e
 
             if after is not None:
@@ -512,7 +514,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     after_dt = datetime.datetime.fromisoformat(after.replace("Z", "+00:00"))
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
-                        errors=[{"loc": ["query", "createdAfter"], "msg": "Invalid date format"}]
+                        errors=[{"loc": ["query", created_after_alias], "msg": "Invalid date format"}]
                     ) from e
 
             return (
@@ -533,12 +535,14 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 
     # Add updated_at filter providers
     if config.get("updated_at", False):
+        updated_before_alias = alias_for("updated_before")
+        updated_after_alias = alias_for("updated_after")
 
         def provide_updated_at_filter(
             before: Annotated[
                 Optional[str],
                 Query(
-                    alias=alias_for("updated_before"),
+                    alias=updated_before_alias,
                     description="Filter by updated date before this timestamp.",
                     json_schema_extra={"format": "date-time"},
                 ),
@@ -546,7 +550,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             after: Annotated[
                 Optional[str],
                 Query(
-                    alias=alias_for("updated_after"),
+                    alias=updated_after_alias,
                     description="Filter by updated date after this timestamp.",
                     json_schema_extra={"format": "date-time"},
                 ),
@@ -561,7 +565,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     before_dt = datetime.datetime.fromisoformat(before.replace("Z", "+00:00"))
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
-                        errors=[{"loc": ["query", "updatedBefore"], "msg": "Invalid date format"}]
+                        errors=[{"loc": ["query", updated_before_alias], "msg": "Invalid date format"}]
                     ) from e
 
             if after is not None:
@@ -569,7 +573,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     after_dt = datetime.datetime.fromisoformat(after.replace("Z", "+00:00"))
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
-                        errors=[{"loc": ["query", "updatedAfter"], "msg": "Invalid date format"}]
+                        errors=[{"loc": ["query", updated_after_alias], "msg": "Invalid date format"}]
                     ) from e
 
             return (
