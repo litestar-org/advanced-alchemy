@@ -6,7 +6,7 @@ import typing
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from enum import Enum, IntEnum
-from typing import Annotated, Union, cast
+from typing import Annotated, Any, Union, cast
 from unittest.mock import patch
 from uuid import UUID
 
@@ -17,11 +17,12 @@ from sqlalchemy import String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
-# Assuming necessary classes are importable from the new provider module
 from advanced_alchemy.base import UUIDBase
+
+# Assuming necessary classes are importable from the new provider module
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.fastapi.providers import (
-    _CACHE_NAMESPACE,  # pyright: ignore[reportPrivateUsage]
     DEPENDENCY_DEFAULTS,
     ChoiceField,
     DependencyCache,
@@ -44,7 +45,6 @@ from advanced_alchemy.filters import (
 )
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
-from advanced_alchemy.utils.dependencies import make_hashable
 from advanced_alchemy.utils.singleton import SingletonMeta
 
 if sys.version_info >= (3, 11):
@@ -116,7 +116,11 @@ def test_create_filter_dependencies_cache_hit() -> None:
 def test_create_filter_dependencies_cache_miss() -> None:
     """Test create_filter_dependencies with cache miss."""
     config = cast(FilterConfig, {"created_at": True})
-    cache_key = hash((_CACHE_NAMESPACE, make_hashable(config)))
+    from advanced_alchemy.utils.dependencies import filter_cache_key, resolve_filter_aliases
+
+    cache_key = filter_cache_key(
+        "advanced_alchemy.extensions.fastapi.providers", config, DEPENDENCY_DEFAULTS, resolve_filter_aliases(config)
+    )
     mock_agg_func = lambda: [  # noqa: E731
         BeforeAfter(field_name="created_at", before=None, after=None)
     ]  # Dummy aggregate function
@@ -134,7 +138,7 @@ def test_create_filter_dependencies_cache_miss() -> None:
                 mock_get.assert_called_once_with(cache_key)
 
                 # Verify _create_filter_aggregate_function_fastapi was called
-                mock_create.assert_called_once_with(config, DEPENDENCY_DEFAULTS)
+                mock_create.assert_called_once()
 
                 # Verify cache was updated with the created dependencies
                 # We need to compare the structure, not object identity of Depends(mock_agg_func)
@@ -170,9 +174,7 @@ def test_create_filter_aggregate_function_fastapi() -> None:
     assert DEPENDENCY_DEFAULTS.ORDER_BY_FILTER_DEPENDENCY_KEY in sig.parameters
 
     # Check return annotation origin type (list) and its argument (FilterTypes)
-    assert hasattr(sig.return_annotation, "__origin__")
-    assert typing.get_origin(sig.return_annotation) is Annotated
-    assert sig.return_annotation.__args__[0] == list[FilterTypes]
+    assert sig.return_annotation == list[FilterTypes]
 
     for param_name, param in sig.parameters.items():
         # Check annotation (Optional[...] for filters that can return None)
@@ -889,3 +891,224 @@ async def test_provide_filters_with_dishka_integration(monkeypatch: pytest.Monke
     assert len(filter_types) == 1  # type: ignore
 
     await container.close()
+
+
+CONFIG: dict[str, Any] = {
+    "pagination_type": "limit_offset",
+    "search": "name",
+    "sort_field": "created_at",
+    "created_at": True,
+    "boolean_fields": ["is_active"],
+    "in_fields": ["status"],
+}
+
+
+def _parameter_names(config: dict[str, Any]) -> list[str]:
+    app = FastAPI()
+    dependency = provide_filters(cast(FilterConfig, config))
+
+    @app.get("/things")
+    async def list_things(filters: Annotated[list[Any], Depends(dependency)]) -> list[Any]:
+        return filters
+
+    return [parameter["name"] for parameter in app.openapi()["paths"]["/things"]["get"]["parameters"]]
+
+
+def test_default_names_are_unchanged() -> None:
+    """The default generator is `camelize`, which reproduces the previously hardcoded names."""
+    assert _parameter_names(dict(CONFIG)) == [
+        "createdBefore",
+        "createdAfter",
+        "currentPage",
+        "pageSize",
+        "searchString",
+        "searchIgnoreCase",
+        "orderBy",
+        "sortOrder",
+        "statusIn",
+        "isActive",
+    ]
+
+
+def test_alias_generator_renames_every_parameter() -> None:
+    """Including the per-field filters, which were camelized from the model's own field names."""
+    assert _parameter_names({**CONFIG, "alias_generator": lambda name: name}) == [
+        "created_before",
+        "created_after",
+        "current_page",
+        "page_size",
+        "search_string",
+        "search_ignore_case",
+        "order_by",
+        "sort_order",
+        "status_in",
+        "is_active",
+    ]
+
+
+def test_distinct_generators_get_distinct_dependencies() -> None:
+    """Two generators must not collide in the dependency cache.
+
+    A function hashes by identity, and CPython reuses the address of a collected object — so a key
+    that does not keep the generator alive can hand the second config the first one's providers.
+    """
+    snake = _parameter_names({**CONFIG, "alias_generator": lambda name: name})
+    upper = _parameter_names({**CONFIG, "alias_generator": lambda name: name.upper()})
+
+    assert snake[0] == "created_before"
+    assert upper[0] == "CREATED_BEFORE"
+    assert _parameter_names(dict(CONFIG))[0] == "createdBefore", "the default config must be unaffected"
+
+
+def test_a_generator_that_collides_is_rejected() -> None:
+    """Sharing a query parameter is silent and destructive, so it has to fail at build time.
+
+    FastAPI binds the one value to both parameters, so a `created_before`/`created_after` pair
+    collapsed onto a single name asks for `< x AND > x` and quietly matches nothing.
+    """
+    with pytest.raises(ImproperConfigurationError, match="duplicate query parameter 'created'"):
+        _parameter_names({"created_at": True, "alias_generator": lambda name: name.split("_")[0]})
+
+
+def test_default_alias_collisions_preserve_existing_configuration() -> None:
+    assert _parameter_names({"boolean_fields": ["status_in"], "in_fields": ["status"]}) == ["statusIn"]
+
+
+@pytest.mark.parametrize("field", ["created", "updated"])
+@pytest.mark.parametrize("bound", ["before", "after"])
+def test_custom_date_alias_validation_location(field: str, bound: str) -> None:
+    app = FastAPI()
+    dependency = provide_filters(cast(FilterConfig, {f"{field}_at": True, "alias_generator": str.upper}))
+
+    @app.get("/things")
+    async def list_things(filters: Annotated[list[Any], Depends(dependency)]) -> list[Any]:
+        return filters
+
+    alias = f"{field}_{bound}".upper()
+    with TestClient(app) as client:
+        response = client.get("/things", params={alias: "invalid"})
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["query", alias]
+
+
+def test_unhashable_falsy_generators_keep_distinct_cached_aliases() -> None:
+    from dataclasses import dataclass
+
+    @dataclass
+    class Generator:
+        prefix: str
+
+        def __bool__(self) -> bool:
+            return False
+
+        def __str__(self) -> str:
+            return "same"
+
+        def __call__(self, name: str) -> str:
+            return self.prefix + name
+
+    first = Generator("first_")
+    second = Generator("second_")
+    assert _parameter_names({"pagination_type": "limit_offset", "alias_generator": first}) == [
+        "first_current_page",
+        "first_page_size",
+    ]
+    assert _parameter_names({"pagination_type": "limit_offset", "alias_generator": second}) == [
+        "second_current_page",
+        "second_page_size",
+    ]
+    config: FilterConfig = {"pagination_type": "limit_offset", "alias_generator": first}
+    assert provide_filters(config) is provide_filters(config.copy())
+
+
+def _query_parameter_names(app: FastAPI, path: str) -> list[str]:
+    return [parameter["name"] for parameter in app.openapi()["paths"][path]["get"].get("parameters", [])]
+
+
+def test_two_configs_do_not_share_one_signature() -> None:
+    """Building a second dependency must not rewrite the first one's parameters.
+
+    The aggregate function used to be a single module-level object whose `__signature__` was
+    reassigned per config, so the last config built won and every earlier router silently served
+    the wrong query parameters.
+    """
+    app = FastAPI()
+    authors = provide_filters({"search": "name"})
+    books = provide_filters({"created_at": True})
+
+    @app.get("/authors")
+    async def list_authors(filters: Annotated[list[Any], Depends(authors)]) -> list[Any]:
+        return filters
+
+    @app.get("/books")
+    async def list_books(filters: Annotated[list[Any], Depends(books)]) -> list[Any]:
+        return filters
+
+    with TestClient(app) as client:
+        response = client.get("/authors", params={"searchString": "needle"})
+        assert response.status_code == 200
+        assert response.json()[0]["value"] == "needle"
+        response = client.get("/books", params={"createdAfter": "2025-01-01T00:00:00Z"})
+        assert response.status_code == 200
+        assert response.json()[0]["field_name"] == "created_at"
+        assert response.json()[0]["after"].startswith("2025-01-01")
+
+    assert authors is not books
+    assert _query_parameter_names(app, "/authors") == ["searchString", "searchIgnoreCase"]
+    assert _query_parameter_names(app, "/books") == ["createdBefore", "createdAfter"]
+
+
+def _cached_config() -> FilterConfig:
+    """A fresh, equal config each call, so the cache is exercised by value rather than by identity."""
+    return {"search": "name", "pagination_type": "limit_offset"}
+
+
+def test_the_same_config_is_still_cached() -> None:
+    """The per-config cache is what keeps repeated identical configs cheap; it should still hit."""
+    assert provide_filters(_cached_config()) is provide_filters(_cached_config())
+
+
+class _BigPages(DependencyDefaults):
+    DEFAULT_PAGINATION_SIZE = 100
+
+
+def _page_size(dependency: Any, path: str) -> Any:
+    app = FastAPI()
+
+    @app.get(path)
+    async def endpoint(filters: Annotated[list[Any], Depends(dependency)]) -> list[Any]:
+        return filters
+
+    with TestClient(app) as client:
+        response = client.get(path, params={"currentPage": 2})
+        assert response.status_code == 200
+        result = response.json()[0]
+        assert result["offset"] == result["limit"]
+
+    parameters = app.openapi()["paths"][path]["get"]["parameters"]
+    page_size = next(p["schema"]["default"] for p in parameters if p["name"] == "pageSize")
+    assert result["limit"] == page_size
+    return page_size
+
+
+def test_one_config_with_two_dependency_defaults_does_not_share_a_dependency() -> None:
+    """`dep_defaults` shapes the signature too, so it has to take part in the cache key.
+
+    Keyed on the config alone, whichever defaults were built first won for the whole process, and
+    the other caller silently served a page size it never asked for.
+    """
+    config: FilterConfig = {"pagination_type": "limit_offset"}
+
+    default = provide_filters(dict(config))  # type: ignore[arg-type]
+    big = provide_filters(dict(config), _BigPages())  # type: ignore[arg-type]
+
+    assert default is not big
+    assert _page_size(default, "/default") == DEPENDENCY_DEFAULTS.DEFAULT_PAGINATION_SIZE
+    assert _page_size(big, "/big") == _BigPages.DEFAULT_PAGINATION_SIZE
+
+
+def test_equal_dependency_defaults_still_share_a_dependency() -> None:
+    """Keying on the values rather than the instance is what keeps the cache useful here."""
+    assert provide_filters(_cached_config(), DependencyDefaults()) is provide_filters(
+        _cached_config(), DependencyDefaults()
+    )

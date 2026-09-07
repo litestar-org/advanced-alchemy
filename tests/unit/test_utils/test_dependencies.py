@@ -139,3 +139,39 @@ def test_dependency_cache_get_set_by_config() -> None:
         cache.set(config, dependencies)
 
         assert cache.get(config) == dependencies
+
+
+def test_filter_cache_uses_resolved_names_across_frameworks() -> None:
+    from advanced_alchemy.extensions.fastapi.providers import provide_filters
+    from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
+
+    class Generator:
+        def __init__(self, prefix: str) -> None:
+            self.prefix = prefix
+
+        def __call__(self, name: str) -> str:
+            return self.prefix + name
+
+        def __bool__(self) -> bool:
+            return False
+
+    for factory in (provide_filters, create_filter_dependencies):
+        generator = Generator("first_")
+        config: FilterConfig = {"search": "name", "alias_generator": generator}
+        first = factory(config)
+        assert first is factory({"search": "name", "alias_generator": Generator("first_")})
+        generator.prefix = "second_"
+        assert first is not factory(config)
+
+
+def test_custom_alias_validation_is_opt_in_for_both_frameworks() -> None:
+    import pytest
+
+    from advanced_alchemy.exceptions import ImproperConfigurationError
+    from advanced_alchemy.extensions.fastapi.providers import provide_filters
+    from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
+
+    for factory in (provide_filters, create_filter_dependencies):
+        factory({"boolean_fields": ["status_in"], "in_fields": ["status"]})
+        with pytest.raises(ImproperConfigurationError, match="duplicate query parameter"):
+            factory({"created_at": True, "alias_generator": lambda name: "same"})
