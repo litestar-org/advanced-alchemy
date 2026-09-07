@@ -603,6 +603,32 @@ Register a :class:`SQLAlchemyStore` under the session store name and let Litesta
 
 The registered store name must match ``ServerSideSessionConfig.store``, which is ``"sessions"`` unless you override it.
 
+.. note::
+
+    **Cleaning up expired sessions.** Unlike the backend-based integration,
+    :class:`SQLAlchemyStore <advanced_alchemy.extensions.litestar.store.SQLAlchemyStore>`
+    does not expose a ``delete_expired()`` method. Expiry is applied lazily: expired
+    entries stop being returned by ``get()``, but their rows are **not** removed from
+    the table, so it grows over time. Until a dedicated method is available (see
+    `issue #787 <https://github.com/litestar-org/advanced-alchemy/issues/787>`_),
+    schedule a periodic cleanup against the store's model table, for example:
+
+    .. code-block:: python
+
+        from sqlalchemy import delete, func
+
+        async def cleanup_expired_sessions() -> None:
+            async with alchemy_config.get_session() as db_session:
+                await db_session.execute(
+                    delete(SessionStore).where(SessionStore.expires_at <= func.now())
+                )
+                await db_session.commit()
+
+    Run it on a **recurring** schedule — a periodic task scheduler such as SAQ, or an
+    external cron job. An ``on_startup`` hook runs only once per process start, so it
+    works for an optional initial sweep but will not keep a long-running deployment
+    clean on its own. Do not use ``delete_all()`` for this — it removes live sessions too.
+
 Backend-Based Integration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
