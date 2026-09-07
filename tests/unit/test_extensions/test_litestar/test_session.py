@@ -50,7 +50,7 @@ def mock_async_session() -> MagicMock:
 
     # Add mock bind and dialect to avoid AttributeError in session backend
     mock_dialect = MagicMock()
-    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.name = "unknown_dialect"  # Use dialect that forces fallback path in tests
     mock_dialect.server_version_info = None  # Ensure no merge support
     mock_bind = MagicMock()
     mock_bind.dialect = mock_dialect
@@ -74,7 +74,7 @@ def mock_sync_session() -> MagicMock:
 
     # Add mock bind and dialect to avoid AttributeError in session backend
     mock_dialect = MagicMock()
-    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.name = "unknown_dialect"  # Use dialect that forces fallback path in tests
     mock_dialect.server_version_info = None  # Ensure no merge support
     mock_bind = MagicMock()
     mock_bind.dialect = mock_dialect
@@ -640,7 +640,7 @@ def test_sync_backend_internal_set_sync_new(
 
     # Add mock bind and dialect to avoid AttributeError in session backend
     mock_dialect = MagicMock()
-    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.name = "unknown_dialect"  # Use dialect that forces fallback path in tests
     mock_dialect.server_version_info = None  # Ensure no merge support
     mock_bind = MagicMock()
     mock_bind.dialect = mock_dialect
@@ -687,7 +687,7 @@ def test_sync_backend_internal_set_sync_update(
 
     # Add mock bind and dialect to avoid AttributeError in session backend
     mock_dialect = MagicMock()
-    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.name = "unknown_dialect"  # Use dialect that forces fallback path in tests
     mock_dialect.server_version_info = None  # Ensure no merge support
     mock_bind = MagicMock()
     mock_bind.dialect = mock_dialect
@@ -862,7 +862,7 @@ def mock_async_config_errors() -> MagicMock:
 
     # Add mock bind and dialect to avoid AttributeError in session backend
     mock_dialect = MagicMock()
-    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.name = "unknown_dialect"  # Use dialect that forces fallback path in tests
     mock_dialect.server_version_info = None  # Ensure no merge support
     mock_bind = MagicMock()
     mock_bind.dialect = mock_dialect
@@ -978,7 +978,7 @@ def mock_sync_config_errors() -> MagicMock:
 
     # Add mock bind and dialect to avoid AttributeError in session backend
     mock_dialect = MagicMock()
-    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.name = "unknown_dialect"  # Use dialect that forces fallback path in tests
     mock_dialect.server_version_info = None  # Ensure no merge support
     mock_bind = MagicMock()
     mock_bind.dialect = mock_dialect
@@ -1049,7 +1049,7 @@ def test_backend_with_minimal_max_age() -> None:
 
     # Add mock bind and dialect to avoid AttributeError in session backend
     mock_dialect = MagicMock()
-    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.name = "unknown_dialect"  # Use dialect that forces fallback path in tests
     mock_dialect.server_version_info = None  # Ensure no merge support
     mock_bind = MagicMock()
     mock_bind.dialect = mock_dialect
@@ -1145,7 +1145,7 @@ async def test_async_backend_large_data(large_data: bytes) -> None:
 
     # Add mock bind and dialect to avoid AttributeError in session backend
     mock_dialect = MagicMock()
-    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.name = "unknown_dialect"  # Use dialect that forces fallback path in tests
     mock_dialect.server_version_info = None  # Ensure no merge support
     mock_bind = MagicMock()
     mock_bind.dialect = mock_dialect
@@ -1184,7 +1184,7 @@ def test_sync_backend_large_data(large_data: bytes) -> None:
 
     # Add mock bind and dialect to avoid AttributeError in session backend
     mock_dialect = MagicMock()
-    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.name = "unknown_dialect"  # Use dialect that forces fallback path in tests
     mock_dialect.server_version_info = None  # Ensure no merge support
     mock_bind = MagicMock()
     mock_bind.dialect = mock_dialect
@@ -1234,7 +1234,7 @@ async def test_various_session_ids(session_id: str) -> None:
 
     # Add mock bind and dialect to avoid AttributeError in session backend
     mock_dialect = MagicMock()
-    mock_dialect.name = "mssql"  # Use dialect that forces fallback path in tests
+    mock_dialect.name = "unknown_dialect"  # Use dialect that forces fallback path in tests
     mock_dialect.server_version_info = None  # Ensure no merge support
     mock_bind = MagicMock()
     mock_bind.dialect = mock_dialect

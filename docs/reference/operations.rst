@@ -7,3 +7,4 @@ operations
     :imported-members:
     :undoc-members:
     :show-inheritance:
+    :exclude-members: __new__
