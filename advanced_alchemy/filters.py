@@ -52,8 +52,6 @@ from sqlalchemy import (
     false,
     literal_column,
     not_,
-    nulls_first,
-    nulls_last,
     or_,
     select,
     text,
@@ -62,6 +60,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import operators as op
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
+from sqlalchemy.sql.elements import UnaryExpression
 from typing_extensions import TypeAlias, TypedDict, TypeVar
 
 from advanced_alchemy.base import ModelProtocol
@@ -578,28 +577,18 @@ class LimitOffset(PaginationFilter):
         return statement
 
 
-class _NullsPlacement(ColumnElement[Any]):
+class _NullsPlacement(UnaryExpression[Any]):
     """An ORDER BY term that pins where NULLs sort.
 
     MySQL, MariaDB and SQL Server have no ``NULLS FIRST``/``NULLS LAST`` syntax and reject it
     outright, so there the placement is emulated with a leading nullity key. Every other backend
     gets the native clause, which an index on the column can still satisfy.
+
+    UnaryExpression preserves ordering traversal for ORM eager loading and includes
+    the column, direction and NULL placement in SQL compilation cache keys.
     """
 
     inherit_cache = True
-
-    def __init__(self, ordering: Any, column: Any, nulls: 'Literal["first", "last"]') -> None:
-        self.ordering = ordering
-        self.column = column
-        self.nulls = nulls
-
-
-@compiles(_NullsPlacement)
-def _compile_nulls_placement(  # pyright: ignore[reportUnusedFunction]
-    element: _NullsPlacement, compiler: Any, **kw: Any
-) -> str:
-    native = nulls_first if element.nulls == "first" else nulls_last
-    return str(compiler.process(native(element.ordering), **kw))
 
 
 @compiles(_NullsPlacement, "mysql")
@@ -608,13 +597,14 @@ def _compile_nulls_placement(  # pyright: ignore[reportUnusedFunction]
 def _compile_nulls_placement_emulated(  # pyright: ignore[reportUnusedFunction]
     element: _NullsPlacement, compiler: Any, **kw: Any
 ) -> str:
-    nulls_go_last = element.nulls == "last"
+    ordering = cast("UnaryExpression[Any]", element.element)
+    nulls_go_last = element.modifier is op.nulls_last_op
     # Literals, not bound parameters: a placeholder inside ORDER BY is ambiguous on these backends.
     key = case(
-        (element.column.is_(None), literal_column("1" if nulls_go_last else "0", Integer)),
+        (ordering.element.is_(None), literal_column("1" if nulls_go_last else "0", Integer)),
         else_=literal_column("0" if nulls_go_last else "1", Integer),
     )
-    return f"{compiler.process(key, **kw)}, {compiler.process(element.ordering, **kw)}"
+    return f"{compiler.process(key, **kw)}, {compiler.process(ordering, **kw)}"
 
 
 @dataclass
@@ -673,7 +663,9 @@ class OrderBy(StatementFilter):
             field = self._get_instrumented_attr(model, self.field_name)
             ordering: ColumnElement[Any] = field.desc() if self.sort_order == "desc" else field.asc()
             if self.nulls is not None:
-                ordering = _NullsPlacement(ordering, field, self.nulls)
+                ordering = _NullsPlacement(
+                    ordering, modifier=op.nulls_first_op if self.nulls == "first" else op.nulls_last_op
+                )
             statement = cast("StatementTypeT", statement.order_by(ordering))
         return statement
 
