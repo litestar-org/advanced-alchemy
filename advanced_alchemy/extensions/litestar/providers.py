@@ -645,17 +645,20 @@ def _create_statement_filters(  # noqa: C901, PLR0915
 
     if filters:
         filters[dep_defaults.FILTERS_DEPENDENCY_KEY] = Provide(
-            _create_filter_aggregate_function(config), sync_to_thread=False
+            _create_filter_aggregate_function(config, dep_defaults), sync_to_thread=False
         )
 
     return filters
 
 
-def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., list[FilterTypes]]:  # noqa: C901, PLR0915
+def _create_filter_aggregate_function(  # noqa: C901, PLR0915
+    config: FilterConfig, dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS
+) -> Callable[..., list[FilterTypes]]:
     """Create a filter function based on the provided configuration.
 
     Args:
         config: The filter configuration.
+        dep_defaults: Dependency names used by the individual filter providers.
 
     Returns:
         A function that returns a list of filters based on the configuration.
@@ -664,54 +667,62 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
     parameters: dict[str, inspect.Parameter] = {}
     annotations: dict[str, Any] = {}
 
+    # Capture names once so the generated signature and runtime lookups stay aligned.
+    id_filter_key = dep_defaults.ID_FILTER_DEPENDENCY_KEY
+    created_filter_key = dep_defaults.CREATED_FILTER_DEPENDENCY_KEY
+    updated_filter_key = dep_defaults.UPDATED_FILTER_DEPENDENCY_KEY
+    search_filter_key = dep_defaults.SEARCH_FILTER_DEPENDENCY_KEY
+    limit_offset_filter_key = dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY
+    order_by_filter_key = dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY
+
     # Build parameters based on config
     if cls := config.get("id_filter"):
-        parameters["id_filter"] = inspect.Parameter(
-            name="id_filter",
+        parameters[id_filter_key] = inspect.Parameter(
+            name=id_filter_key,
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
             annotation=NamedDependency[SkipValidation[CollectionFilter[cls]]],  # type: ignore[valid-type]
         )
-        annotations["id_filter"] = CollectionFilter[cls]  # type: ignore[valid-type]
+        annotations[id_filter_key] = CollectionFilter[cls]  # type: ignore[valid-type]
 
     if config.get("created_at"):
-        parameters["created_filter"] = inspect.Parameter(
-            name="created_filter",
+        parameters[created_filter_key] = inspect.Parameter(
+            name=created_filter_key,
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
             annotation=NamedDependency[SkipValidation[BeforeAfter]],
         )
-        annotations["created_filter"] = BeforeAfter
+        annotations[created_filter_key] = BeforeAfter
 
     if config.get("updated_at"):
-        parameters["updated_filter"] = inspect.Parameter(
-            name="updated_filter",
+        parameters[updated_filter_key] = inspect.Parameter(
+            name=updated_filter_key,
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
             annotation=NamedDependency[SkipValidation[BeforeAfter]],
         )
-        annotations["updated_filter"] = BeforeAfter
+        annotations[updated_filter_key] = BeforeAfter
 
     if config.get("search"):
-        parameters["search_filter"] = inspect.Parameter(
-            name="search_filter",
+        parameters[search_filter_key] = inspect.Parameter(
+            name=search_filter_key,
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
             annotation=NamedDependency[SkipValidation[SearchFilter]],
         )
-        annotations["search_filter"] = SearchFilter
+        annotations[search_filter_key] = SearchFilter
 
     if config.get("pagination_type") == "limit_offset":
-        parameters["limit_offset_filter"] = inspect.Parameter(
-            name="limit_offset_filter",
+        parameters[limit_offset_filter_key] = inspect.Parameter(
+            name=limit_offset_filter_key,
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
             annotation=NamedDependency[SkipValidation[LimitOffset]],
         )
-        annotations["limit_offset_filter"] = LimitOffset
+        annotations[limit_offset_filter_key] = LimitOffset
 
     if config.get("sort_field"):
-        parameters["order_by_filter"] = inspect.Parameter(
-            name="order_by_filter",
+        parameters[order_by_filter_key] = inspect.Parameter(
+            name=order_by_filter_key,
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
             annotation=NamedDependency[SkipValidation[OrderBy,]],
         )
-        annotations["order_by_filter"] = OrderBy
+        annotations[order_by_filter_key] = OrderBy
 
     # Add parameters for not_in filters
     if not_in_fields := config.get("not_in_fields"):
@@ -764,23 +775,23 @@ def _create_filter_aggregate_function(config: FilterConfig) -> Callable[..., lis
             list[FilterTypes]: List of configured filters.
         """
         filters: list[FilterTypes] = []
-        if id_filter := kwargs.get("id_filter"):
+        if id_filter := kwargs.get(id_filter_key):
             filters.append(id_filter)
-        if created_filter := kwargs.get("created_filter"):
+        if created_filter := kwargs.get(created_filter_key):
             filters.append(created_filter)
-        if limit_offset := kwargs.get("limit_offset_filter"):
+        if limit_offset := kwargs.get(limit_offset_filter_key):
             filters.append(limit_offset)
-        if updated_filter := kwargs.get("updated_filter"):
+        if updated_filter := kwargs.get(updated_filter_key):
             filters.append(updated_filter)
         if (
-            (search_filter := cast("Optional[SearchFilter]", kwargs.get("search_filter")))
+            (search_filter := cast("Optional[SearchFilter]", kwargs.get(search_filter_key)))
             and search_filter is not None  # pyright: ignore[reportUnnecessaryComparison]
             and search_filter.field_name is not None  # pyright: ignore[reportUnnecessaryComparison]
             and search_filter.value is not None  # pyright: ignore[reportUnnecessaryComparison]
         ):
             filters.append(search_filter)
         if (
-            (order_by := cast("Optional[OrderBy]", kwargs.get("order_by_filter")))
+            (order_by := cast("Optional[OrderBy]", kwargs.get(order_by_filter_key)))
             and order_by is not None  # pyright: ignore[reportUnnecessaryComparison]
             and order_by.field_name is not None  # pyright: ignore[reportUnnecessaryComparison]
         ):

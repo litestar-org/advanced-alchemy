@@ -710,6 +710,82 @@ def test_litestar_not_in_filter_values_are_isolated() -> None:
     assert payload["last_name"] == ["Tasan"]
 
 
+def test_filter_cache_separates_page_size_defaults() -> None:
+    class BigPages(DependencyDefaults):
+        DEFAULT_PAGINATION_SIZE = 100
+
+    config: FilterConfig = {"pagination_type": "limit_offset"}
+    default = create_filter_dependencies(config)
+    big = create_filter_dependencies(config, BigPages())
+    assert default is not big
+    key = DEPENDENCY_DEFAULTS.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY
+    assert default[key].dependency().limit == 20
+    assert big[key].dependency().limit == 100
+
+
+def test_filter_cache_shares_equal_defaults() -> None:
+    config: FilterConfig = {"pagination_type": "limit_offset"}
+    assert create_filter_dependencies(config, DependencyDefaults()) is create_filter_dependencies(
+        config, DependencyDefaults()
+    )
+
+
+def test_custom_dependency_defaults_are_resolved_in_requests() -> None:
+    class CustomDefaults(DependencyDefaults):
+        FILTERS_DEPENDENCY_KEY = "custom_filters"
+        ID_FILTER_DEPENDENCY_KEY = "custom_ids"
+        CREATED_FILTER_DEPENDENCY_KEY = "custom_created"
+        UPDATED_FILTER_DEPENDENCY_KEY = "custom_updated"
+        LIMIT_OFFSET_FILTER_DEPENDENCY_KEY = "custom_page"
+        SEARCH_FILTER_DEPENDENCY_KEY = "custom_search"
+        ORDER_BY_FILTER_DEPENDENCY_KEY = "custom_order"
+        DEFAULT_PAGINATION_SIZE = 100
+
+    config: FilterConfig = {
+        "id_filter": str,
+        "created_at": True,
+        "updated_at": True,
+        "pagination_type": "limit_offset",
+        "search": "name",
+        "sort_field": "name",
+    }
+    default_dependencies = create_filter_dependencies(config)
+    custom_dependencies = create_filter_dependencies(config, CustomDefaults())
+    assert default_dependencies is not custom_dependencies
+
+    @get("/default", dependencies=default_dependencies, sync_to_thread=False)
+    def default_handler(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> list[int]:
+        return [filter_.limit for filter_ in filters if isinstance(filter_, LimitOffset)]
+
+    @get("/custom", dependencies=custom_dependencies, sync_to_thread=False)
+    def custom_handler(custom_filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> dict[str, Any]:
+        return {
+            "types": [type(filter_).__name__ for filter_ in custom_filters],
+            "fields": [str(filter_.field_name) for filter_ in custom_filters if isinstance(filter_, BeforeAfter)],
+            "pages": [
+                [filter_.limit, filter_.offset] for filter_ in custom_filters if isinstance(filter_, LimitOffset)
+            ],
+            "ids": [list(filter_.values or []) for filter_ in custom_filters if isinstance(filter_, CollectionFilter)],
+            "search": [filter_.value for filter_ in custom_filters if isinstance(filter_, SearchFilter)],
+            "sort": [filter_.field_name for filter_ in custom_filters if isinstance(filter_, OrderBy)],
+        }
+
+    with TestClient(Litestar([default_handler, custom_handler])) as client:
+        response = client.get("/default")
+        assert response.status_code == 200
+        assert response.json() == [20]
+        response = client.get("/custom", params={"ids": "42", "searchString": "needle", "currentPage": 2})
+        assert response.status_code == 200
+        assert response.json() == {
+            "types": ["CollectionFilter", "BeforeAfter", "LimitOffset", "BeforeAfter", "SearchFilter", "OrderBy"],
+            "fields": ["created_at", "updated_at"],
+            "pages": [[100, 100]],
+            "ids": [["42"]],
+            "search": ["needle"],
+            "sort": ["name"],
+        }
+
+
 def test_custom_dependency_defaults() -> None:
     """Test using custom dependency defaults."""
 
