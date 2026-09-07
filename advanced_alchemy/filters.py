@@ -649,7 +649,7 @@ LIKE_ESCAPE_CHAR = "/"
 
 Not a backslash: SQLAlchemy renders one into the ``ESCAPE`` clause as ``'\\\\'``, which DuckDB reads
 as two characters and rejects with "Escape string must be empty or one character". ``/`` needs no
-such doubling, so it compiles identically on every dialect.
+such doubling on dialects that support an explicit ``ESCAPE`` clause.
 """
 
 
@@ -657,7 +657,7 @@ def escape_like_value(value: str, escape_char: str = LIKE_ESCAPE_CHAR) -> str:
     """Escape the LIKE wildcards ``%`` and ``_`` so they match literally.
 
     The escape character itself is escaped first, otherwise it would consume the
-    backslashes added for the wildcards.
+    escape characters added for the wildcards.
 
     Args:
         value: The raw search term.
@@ -681,8 +681,10 @@ class SearchFilter(StatementFilter):
         value, equivalent to SQL pattern '%value%'.
 
     Note:
-        ``%`` and ``_`` in ``value`` are escaped by default so the search matches them
-        literally. Set ``escape_wildcards`` to ``False`` to treat them as wildcards.
+        ``%`` and ``_`` in ``value`` remain SQL wildcards by default. Set
+        ``escape_wildcards=True`` to match them literally on databases supporting
+        the SQL ``ESCAPE`` clause. This opt-in mode is not supported by Spanner;
+        leave it disabled there to retain the existing search behavior.
 
     See Also:
         - :class:`.NotInSearchFilter`: Opposite filter using NOT LIKE/ILIKE
@@ -696,7 +698,7 @@ class SearchFilter(StatementFilter):
     """Text to match within the field(s)."""
     ignore_case: Optional[bool] = False
     """Whether to use case-insensitive matching."""
-    escape_wildcards: bool = True
+    escape_wildcards: bool = False
     """Whether to treat ``%`` and ``_`` in :attr:`value` as literal characters."""
 
     @property
@@ -861,6 +863,8 @@ class NotInSearchFilter(SearchFilter):
         field_name: Name or set of names of model attributes to search on
         value: Text to exclude from the field(s)
         ignore_case: If True, uses NOT ILIKE for case-insensitive matching
+        escape_wildcards: If True, matches wildcard characters literally using
+            SQL ESCAPE. Defaults to False; not supported by Spanner when enabled.
 
     Note:
         Uses AND for multiple fields, meaning records matching any field will be excluded.

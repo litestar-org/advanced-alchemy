@@ -70,6 +70,20 @@ Provides basic string search capabilities.
         repository = FilteringPostRepository(session=db_session)
         return await repository.get_many(SearchFilter(field_name="title", value=query, ignore_case=True))
 
+``SearchFilter`` and ``NotInSearchFilter`` preserve SQL wildcard matching by
+default: ``%`` matches any sequence of characters and ``_`` matches one character.
+For literal substrings such as accounting codes or titles containing those
+characters, opt in with ``escape_wildcards=True``:
+
+.. code-block:: python
+
+    literal_search = SearchFilter(field_name="title", value="50% off", escape_wildcards=True)
+
+Literal mode escapes ``%``, ``_``, and the escape character ``/`` while retaining
+the surrounding substring wildcards. It requires SQL ``ESCAPE`` support and is
+not supported by Spanner. Leave ``escape_wildcards`` at its default ``False`` on
+Spanner; existing searches retain their SQL and behavior.
+
 Null and Not Null Filters
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
