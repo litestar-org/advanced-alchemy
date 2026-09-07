@@ -1208,7 +1208,7 @@ def test_custom_query_aliases_match_requests_and_openapi() -> None:
         "sort_field": "created_at",
         "in_fields": ["account_id"],
         "boolean_fields": ["is_active"],
-        "alias_generator": lambda name: name,
+        "alias_generator": "snake_case",
     }
 
     @get("/aliased")

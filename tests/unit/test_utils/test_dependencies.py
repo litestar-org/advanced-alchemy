@@ -175,3 +175,19 @@ def test_custom_alias_validation_is_opt_in_for_both_frameworks() -> None:
         factory({"boolean_fields": ["status_in"], "in_fields": ["status"]})
         with pytest.raises(ImproperConfigurationError, match="duplicate query parameter"):
             factory({"created_at": True, "alias_generator": lambda name: "same"})
+
+
+def test_alias_presets_share_effective_names_across_frameworks() -> None:
+    import pytest
+
+    from advanced_alchemy.exceptions import ImproperConfigurationError
+    from advanced_alchemy.extensions.fastapi.providers import provide_filters
+    from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
+
+    for factory in (provide_filters, create_filter_dependencies):
+        assert factory({"search": "name", "alias_generator": "snake_case"}) is factory(
+            {"search": "name", "alias_generator": lambda name: name}
+        )
+        assert factory({"search": "name", "alias_generator": "camel_case"}) is factory({"search": "name"})
+        with pytest.raises(ImproperConfigurationError, match="Unknown filter alias preset"):
+            factory(cast(FilterConfig, {"search": "name", "alias_generator": "typo"}))

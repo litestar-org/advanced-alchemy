@@ -99,7 +99,7 @@ class FilterConfig(TypedDict):
     """Fields that support boolean filters."""
     choice_fields: NotRequired[ChoiceFieldConfig]
     """Fields that support choices filters."""
-    alias_generator: NotRequired[Callable[[str], str]]
+    alias_generator: NotRequired[Union[Literal["snake_case", "camel_case"], Callable[[str], str]]]
     """Maps a parameter's snake_case name to its public query parameter.
 
     Supported by both Litestar and FastAPI.
@@ -107,7 +107,8 @@ class FilterConfig(TypedDict):
     Receives ``created_before``, ``page_size``, ``sort_order``, or a model field name for the
     per-field filters. Defaults to :func:`~advanced_alchemy.utils.text.camelize`, which produces the
     names this has always generated (``createdBefore``, ``pageSize``, ``sortOrder``). Pass
-    ``lambda name: name`` to keep snake_case instead.
+    ``"snake_case"`` to keep snake_case instead, or ``"camel_case"`` for explicit camelCase.
+    A callable supports application-specific naming conventions.
 
     An explicit generator must give every parameter a distinct name; one shared between two filters is rejected when the
     dependency is built, because the framework would bind the single value to both.
@@ -303,10 +304,17 @@ def resolve_filter_aliases(config: FilterConfig) -> dict[str, str]:
     if choices := config.get("choice_fields"):
         names.extend(field.name for field in normalize_choice_field_types(choices))
     generator = config.get("alias_generator")
+    if isinstance(generator, str) and generator not in {"snake_case", "camel_case"}:
+        msg = f"Unknown filter alias preset {generator!r}; expected snake_case or camel_case"
+        raise ImproperConfigurationError(msg)
     resolved: dict[str, str] = {}
     claimed: set[str] = set()
     for name in names:
-        alias: Any = camelize(name) if generator is None else generator(name)
+        alias: Any
+        if isinstance(generator, str):
+            alias = name if generator == "snake_case" else camelize(name)
+        else:
+            alias = camelize(name) if generator is None else generator(name)
         if generator is not None and (not isinstance(alias, str) or not alias or alias in claimed):
             msg = f"Filter parameter {name!r} has an invalid or duplicate query parameter {alias!r}"
             raise ImproperConfigurationError(msg)

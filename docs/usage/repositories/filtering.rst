@@ -134,10 +134,12 @@ query parameters in either integration:
         "pagination_type": "limit_offset",
         "search": "name",
         "sort_field": "created_at",
-        "alias_generator": lambda name: name,
+        "alias_generator": "snake_case",
     }
 
 This configuration accepts ``?page_size=10&search_string=alice&order_by=created_at``.
+Use ``"camel_case"`` to explicitly select camelCase, or supply a callable for custom
+conventions. An explicit preset follows the same collision validation as a callable.
 The generator receives canonical snake_case parameter names, including field-specific
 names such as ``account_id_in``. Custom generators must return nonempty, distinct
 strings. Names are resolved when dependencies are constructed and used consistently
