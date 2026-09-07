@@ -116,7 +116,9 @@ class FilterConfig(TypedDict):
     choice_fields: NotRequired[ChoiceFieldConfig]
     """Fields that support choices filters."""
     alias_generator: NotRequired[Callable[[str], str]]
-    """Maps a parameter's snake_case name to the query parameter exposed for it.
+    """Maps a parameter's snake_case name to its FastAPI query parameter.
+
+    Supported by the FastAPI extension only; Litestar does not use this option.
 
     Receives ``created_before``, ``page_size``, ``sort_order``, or a model field name for the
     per-field filters. Defaults to :func:`~advanced_alchemy.utils.text.camelize`, which produces the

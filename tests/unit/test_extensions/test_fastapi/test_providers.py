@@ -1017,7 +1017,7 @@ def test_unhashable_falsy_generators_keep_distinct_cached_aliases() -> None:
         "second_page_size",
     ]
     config: FilterConfig = {"pagination_type": "limit_offset", "alias_generator": first}
-    assert provide_filters(config) is provide_filters(dict(config))
+    assert provide_filters(config) is provide_filters(config.copy())
 
 
 def _query_parameter_names(app: FastAPI, path: str) -> list[str]:
