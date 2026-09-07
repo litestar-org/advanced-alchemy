@@ -6,7 +6,7 @@ import typing
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from enum import Enum, IntEnum
-from typing import Annotated, Any, Union, cast
+from typing import Annotated, Any, Optional, Union, cast
 from unittest.mock import patch
 from uuid import UUID
 
@@ -675,6 +675,22 @@ def test_provide_filters_uses_scalar_default_from_list_sort_field() -> None:
     assert response.json() == [{"field_name": "name", "sort_order": "desc"}]
     assert overridden_response.status_code == 200
     assert overridden_response.json() == [{"field_name": "id", "sort_order": "asc"}]
+
+
+def test_provide_filters_applies_configured_nulls_placement() -> None:
+    """The `sort_nulls` config key pins NULL placement on every generated OrderBy."""
+    deps = provide_filters({"sort_field": "name", "sort_nulls": "first"})
+
+    app = FastAPI()
+
+    @app.get("/items")
+    async def get_items(filters: Annotated[list[FilterTypes], Depends(deps)]) -> list[Optional[str]]:
+        return [filter_.nulls for filter_ in filters if isinstance(filter_, OrderBy)]
+
+    client = TestClient(app)
+
+    assert client.get("/items").json() == ["first"]
+    assert client.get("/items?orderBy=id&sortOrder=asc").json() == ["first"]
 
 
 def test_openapi_schema_edge_cases() -> None:

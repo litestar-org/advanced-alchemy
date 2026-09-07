@@ -29,6 +29,7 @@ from advanced_alchemy.filters import (
     LimitOffset,
     NotInCollectionFilter,
     OnBeforeAfter,
+    OrderBy,
 )
 from advanced_alchemy.repository import (
     SQLAlchemyAsyncRepository,
@@ -2481,3 +2482,34 @@ def test_repository_and_service_annotations_are_accessible() -> None:
     for cls in targets:
         annotations = typing.get_type_hints(cls.list)
         assert isinstance(annotations, dict), f"{cls.__name__}.list annotations should be a dict"
+
+
+class NullableOrderModel(base.BigIntBase):
+    __tablename__ = "nullable_order_model"
+
+    director: Mapped[Union[str, None]] = mapped_column(String(50), nullable=True)
+
+
+@pytest.mark.parametrize("sort_order", ["asc", "desc"])
+@pytest.mark.parametrize("nulls", ["first", "last"])
+def test_mock_repository_order_by_honors_nulls_placement(sort_order: str, nulls: str) -> None:
+    """The in-memory repository applies `OrderBy.nulls` the same way the SQL backends do."""
+    from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
+
+    class Repo(SQLAlchemySyncMockRepository[NullableOrderModel]):
+        model_type = NullableOrderModel
+
+    repo = Repo(session=MagicMock(spec=Session, bind=MagicMock()))
+    repo.add_many(
+        [
+            NullableOrderModel(id=1, director=None),
+            NullableOrderModel(id=2, director="z"),
+            NullableOrderModel(id=3, director="a"),
+        ]
+    )
+
+    results = repo.list(OrderBy("director", sort_order, nulls))  # type: ignore[arg-type]
+
+    expected = [3, 2] if sort_order == "asc" else [2, 3]
+    expected = [1, *expected] if nulls == "first" else [*expected, 1]
+    assert [item.id for item in results] == expected

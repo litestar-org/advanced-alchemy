@@ -685,29 +685,43 @@ def test_dialects_with_the_syntax_get_the_native_clause(dialect: Any, nulls: str
 
 
 @NULLS_EMULATED
-@pytest.mark.parametrize("nulls", ["first", "last"])
+@pytest.mark.parametrize(("sort_order", "nulls"), [("asc", "last"), ("desc", "first")])
 @pytest.mark.unit
-def test_dialects_without_the_syntax_get_a_nullity_key(dialect: Any, nulls: str) -> None:
+def test_dialects_without_the_syntax_get_a_nullity_key(dialect: Any, sort_order: str, nulls: str) -> None:
     """MySQL and SQL Server reject `NULLS FIRST`/`NULLS LAST` outright, so it must not be emitted."""
-    compiled = _compile_order_by_nulls(dialect, sort_order="desc", nulls=nulls)
+    compiled = _compile_order_by_nulls(dialect, sort_order=sort_order, nulls=nulls)
 
     assert "NULLS" not in compiled
     assert "CASE WHEN" in compiled
-    assert compiled.rstrip().endswith("DESC")
+    assert compiled.rstrip().endswith(sort_order.upper())
 
 
 @NULLS_EMULATED
-@pytest.mark.parametrize(("nulls", "when_null"), [("last", "THEN 1 ELSE 0"), ("first", "THEN 0 ELSE 1")])
+@pytest.mark.parametrize(("sort_order", "nulls"), [("asc", "first"), ("desc", "last")])
 @pytest.mark.unit
-def test_the_nullity_key_sorts_the_right_way(dialect: Any, nulls: str, when_null: str) -> None:
+def test_placements_native_to_null_lowest_backends_stay_plain(dialect: Any, sort_order: str, nulls: str) -> None:
+    """These backends sort NULL lowest, so the plain term already places it and an index can satisfy the sort."""
+    compiled = _compile_order_by_nulls(dialect, sort_order=sort_order, nulls=nulls)
+
+    assert "NULLS" not in compiled
+    assert "CASE" not in compiled
+    assert compiled.rstrip().endswith(f"director {sort_order.upper()}")
+
+
+@NULLS_EMULATED
+@pytest.mark.parametrize(
+    ("sort_order", "nulls", "when_null"), [("asc", "last", "THEN 1 ELSE 0"), ("desc", "first", "THEN 0 ELSE 1")]
+)
+@pytest.mark.unit
+def test_the_nullity_key_sorts_the_right_way(dialect: Any, sort_order: str, nulls: str, when_null: str) -> None:
     """The key ascends, so NULLs need the higher value to land last and the lower one to land first."""
-    assert when_null in _compile_order_by_nulls(dialect, sort_order="desc", nulls=nulls)
+    assert when_null in _compile_order_by_nulls(dialect, sort_order=sort_order, nulls=nulls)
 
 
 @pytest.mark.parametrize("dialect", NULLS_NATIVE_DIALECTS + NULLS_EMULATED_DIALECTS)
 @pytest.mark.unit
 def test_the_default_is_untouched(dialect: Any) -> None:
-    """Without `nulls` the emitted SQL must be exactly what it was before the option existed."""
+    """Without `nulls` no NULLS clause and no CASE key are emitted."""
     compiled = _compile_order_by_nulls(dialect, sort_order="desc")
 
     assert "NULLS" not in compiled

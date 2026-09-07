@@ -461,6 +461,18 @@ def test_order_by_filter() -> None:
     assert f.sort_order == "desc"
 
 
+def test_order_by_filter_applies_configured_nulls_placement() -> None:
+    """The `sort_nulls` config key pins NULL placement on every generated OrderBy."""
+    deps = _create_statement_filters({"sort_field": "name", "sort_nulls": "last"})
+
+    provider_func = deps["order_by_filter"].dependency
+    f = provider_func(field_name="name", sort_order="asc")
+
+    assert isinstance(f, OrderBy)
+    assert f.nulls == "last"
+    assert _create_statement_filters({"sort_field": "name"})["order_by_filter"].dependency().nulls is None
+
+
 def test_order_by_filter_uses_scalar_default_from_list_sort_field() -> None:
     """Test list-based sort fields produce a scalar default order field."""
     deps = _create_statement_filters({"sort_field": ["name", "id"]})

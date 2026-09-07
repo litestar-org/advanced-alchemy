@@ -336,6 +336,7 @@ def _create_order_by_filter_provider(
     sort_field: Union[str, set[str], list[str]],
     sort_order_default: SortOrder = "desc",
     alias_for: Callable[[str], str] = camelize,
+    nulls_default: Optional[Literal["first", "last"]] = None,
 ) -> Callable[..., OrderBy]:
     sort_field_default = normalize_sort_field(sort_field)
 
@@ -355,7 +356,7 @@ def _create_order_by_filter_provider(
             ),
         ] = sort_order_default,
     ) -> OrderBy:
-        return OrderBy(field_name=field_name, sort_order=sort_order or sort_order_default)  # type: ignore[arg-type]
+        return OrderBy(field_name=field_name, sort_order=sort_order or sort_order_default, nulls=nulls_default)  # type: ignore[arg-type]
 
     return provide_order_by
 
@@ -459,7 +460,9 @@ def _create_statement_filters(  # noqa: C901, PLR0915
 
     if sort_field := config.get("sort_field"):
         filters[dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY] = Provide(
-            _create_order_by_filter_provider(sort_field, config.get("sort_order", "desc"), alias_for),
+            _create_order_by_filter_provider(
+                sort_field, config.get("sort_order", "desc"), alias_for, config.get("sort_nulls")
+            ),
             sync_to_thread=False,
         )
 

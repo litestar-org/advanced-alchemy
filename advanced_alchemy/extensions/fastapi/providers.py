@@ -613,6 +613,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
     if sort_field := config.get("sort_field"):
         sort_field_default = normalize_sort_field(sort_field)
         sort_order_default = config.get("sort_order", "desc")
+        sort_nulls_default = config.get("sort_nulls")
 
         def provide_order_by(
             field_name: Annotated[
@@ -632,7 +633,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 ),
             ] = sort_order_default,
         ) -> OrderBy:
-            return OrderBy(field_name=field_name, sort_order=sort_order or sort_order_default)
+            return OrderBy(field_name=field_name, sort_order=sort_order or sort_order_default, nulls=sort_nulls_default)
 
         param_name = dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY
         params.append(
