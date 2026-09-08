@@ -934,13 +934,16 @@ def snapshot_and_detach_relationships(instance: Any, mapper: Any) -> dict[str, A
     for relationship in mapper.mapper.relationships:
         if not was_attribute_set(instance, mapper, relationship.key):
             continue
-        raw_value = instance.__dict__.get(relationship.key)
+        raw_value: Any = instance.__dict__.get(relationship.key)
+        related_items: list[Any]
         if isinstance(raw_value, Mapping):
-            values[relationship.key] = dict(raw_value)
-            related_items = list(raw_value.values())
+            mapping = cast("Mapping[Any, Any]", raw_value)
+            values[relationship.key] = dict(mapping)
+            related_items = list(mapping.values())
         elif isinstance(raw_value, (list, set)):
-            values[relationship.key] = list(raw_value)
-            related_items = list(raw_value)
+            items = cast("Iterable[Any]", raw_value)
+            values[relationship.key] = list(items)
+            related_items = list(items)
         else:
             values[relationship.key] = raw_value
             related_items = [raw_value]
@@ -955,17 +958,18 @@ def snapshot_and_detach_relationships(instance: Any, mapper: Any) -> dict[str, A
             # (or raising, for relationships configured with ``lazy="raise"``):
             # the backref sync that caused the pollution can only have populated
             # an attribute that was already loaded in memory.
-            back_value = related.__dict__.get(back_attr)
+            back_value: Any = related.__dict__.get(back_attr)
             if isinstance(back_value, (list, set)) and instance in back_value:
-                back_value.remove(instance)
+                cast("Any", back_value).remove(instance)
             elif back_value is instance:
                 setattr(related, back_attr, None)
             else:
                 # The back-populated collection was never loaded (e.g. lazy="raise"),
                 # so the backref sync recorded the append as a pending mutation
                 # rather than materializing the collection. Cancel it there instead.
-                pending = getattr(inspect(related), "_pending_mutations", None)
-                added_items = getattr(pending.get(back_attr), "added_items", None) if pending else None
+                related_state: Any = inspect(related)
+                pending: Any = getattr(related_state, "_pending_mutations", None)
+                added_items: Any = getattr(pending.get(back_attr), "added_items", None) if pending else None
                 if added_items is not None and instance in added_items:
                     added_items.discard(instance)
     return values

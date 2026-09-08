@@ -42,9 +42,9 @@ from typing import Any
 from uuid import UUID
 
 import pytest
-from sqlalchemy import Column, ForeignKey, Table
+from sqlalchemy import Column, ForeignKey, String, Table
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import Mapped, attribute_keyed_dict, relationship, selectinload
+from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column, relationship, selectinload
 
 from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.filters import CollectionFilter
@@ -66,14 +66,14 @@ user_role_790 = Table(
 class User790(UUIDBase):
     __tablename__ = "user_790"
 
-    alias: Mapped[str]
+    alias: Mapped[str] = mapped_column(String(50))
     roles: Mapped[list[Role790]] = relationship(secondary=user_role_790, back_populates="users", lazy="raise")
 
 
 class Role790(UUIDBase):
     __tablename__ = "role_790"
 
-    name: Mapped[str]
+    name: Mapped[str] = mapped_column(String(50))
     users: Mapped[list[User790]] = relationship(secondary=user_role_790, back_populates="roles", lazy="raise")
 
 
@@ -199,7 +199,7 @@ team_member_790 = Table(
 class Team790(UUIDBase):
     __tablename__ = "team_790"
 
-    label: Mapped[str]
+    label: Mapped[str] = mapped_column(String(50))
     members: Mapped[dict[str, Member790]] = relationship(
         secondary=team_member_790,
         collection_class=attribute_keyed_dict("name"),
@@ -211,7 +211,7 @@ class Team790(UUIDBase):
 class Member790(UUIDBase):
     __tablename__ = "member_790"
 
-    name: Mapped[str]
+    name: Mapped[str] = mapped_column(String(50))
     teams: Mapped[list[Team790]] = relationship(secondary=team_member_790, back_populates="members", lazy="raise")
 
 
