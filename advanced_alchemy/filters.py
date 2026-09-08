@@ -21,7 +21,6 @@ See Also:
 
 import datetime
 import logging
-import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Collection
 from dataclasses import dataclass
@@ -57,8 +56,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.sql import operators as op
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
-from sqlalchemy.sql.elements import ColumnClause, TextClause
-from sqlalchemy.sql.visitors import iterate
 from typing_extensions import TypeAlias, TypedDict, TypeVar
 
 from advanced_alchemy.base import ModelProtocol
@@ -98,7 +95,6 @@ __all__ = (
     "StatementFilter",
     "StatementFilterT",
     "StatementTypeT",
-    "UncorrelatedSubqueryWarning",
 )
 
 T = TypeVar("T")
@@ -843,35 +839,6 @@ class NotInSearchFilter(SearchFilter):
         return attrgetter("not_ilike" if self.ignore_case else "not_like")
 
 
-class UncorrelatedSubqueryWarning(UserWarning):
-    """Warned when an EXISTS subquery has nothing to correlate against the outer query."""
-
-
-def _warn_if_uncorrelated(filter_: "StatementFilter", conditions: "ColumnElement[bool]", model: "type[ModelT]") -> None:
-    """Warn when ``conditions`` never mention the outer table.
-
-    ``Select.correlate()`` only *permits* correlation, it cannot invent a join. If none of the
-    supplied conditions reference the outer table, the subquery stands alone: it is true whenever any
-    child row matches, so the filter silently matches every row of the outer query instead of raising.
-    """
-    table = model.__table__
-    for element in iterate(conditions):
-        if getattr(element, "table", None) is table:
-            return
-        # Raw SQL is opaque to the traversal, so a correlation spelled out as text looks exactly like
-        # no correlation at all. Stay quiet rather than accuse a query that may well be correct.
-        if isinstance(element, TextClause) or (isinstance(element, ColumnClause) and element.is_literal):
-            return
-    table_name = getattr(table, "name", str(table))
-    warnings.warn(
-        f"{type(filter_).__name__} conditions do not reference {table_name!r}, so the subquery is not "
-        f"correlated and will match every row. Include the join in `values`, for example "
-        f"`values=[Child.{table_name}_id == {model.__name__}.id, ...]`.",
-        UncorrelatedSubqueryWarning,
-        stacklevel=4,
-    )
-
-
 @dataclass
 class ExistsFilter(StatementFilter):
     """Filter for EXISTS subqueries.
@@ -885,8 +852,7 @@ class ExistsFilter(StatementFilter):
         :meth:`~sqlalchemy.sql.expression.Select.correlate` only *permits* correlation; it cannot
         infer a join. Conditions that never mention the outer table produce a standalone subquery,
         which is true whenever any row matches it — so the filter matches **every** row of the outer
-        query rather than raising. A :class:`UncorrelatedSubqueryWarning` is emitted in that case,
-        except when ``values`` contain raw SQL, whose tables cannot be inspected.
+        query rather than raising.
 
     Parameters
     ----------
@@ -991,7 +957,6 @@ class ExistsFilter(StatementFilter):
         # Combine all values with AND or OR (using the operator specified in the filter)
         # This creates a single boolean expression from multiple conditions
         combined_conditions = self._get_combined_conditions()
-        _warn_if_uncorrelated(self, combined_conditions, model)
 
         # Create a correlated subquery with the combined conditions
         try:
@@ -1123,7 +1088,6 @@ class NotExistsFilter(StatementFilter):
 
         # Combine conditions and create correlated subquery
         combined_conditions = self._get_combined_conditions()
-        _warn_if_uncorrelated(self, combined_conditions, model)
         subquery = select(1).where(combined_conditions)
         correlated_subquery = subquery.correlate(model.__table__)
         return not_(exists(correlated_subquery))
