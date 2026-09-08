@@ -937,7 +937,7 @@ def snapshot_and_detach_relationships(instance: Any, mapper: Any) -> dict[str, A
         raw_value: Any = instance.__dict__.get(relationship.key)
         related_items: list[Any]
         if isinstance(raw_value, Mapping):
-            mapping = cast("Mapping[Any, Any]", raw_value)
+            mapping = cast("dict[Any, Any]", raw_value)
             values[relationship.key] = dict(mapping)
             related_items = list(mapping.values())
         elif isinstance(raw_value, (list, set)):
