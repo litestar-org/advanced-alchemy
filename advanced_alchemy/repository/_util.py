@@ -23,6 +23,7 @@ from sqlalchemy.orm import (
     class_mapper,
     joinedload,
     lazyload,
+    object_session,
     selectinload,
 )
 from sqlalchemy.orm.strategy_options import (
@@ -897,3 +898,78 @@ def compare_values(existing_value: Any, new_value: Any) -> bool:
         # If comparison fails for any reason, consider them different
         # This is a safe fallback that will trigger updates when unsure
         return False
+
+
+def snapshot_and_detach_relationships(instance: Any, mapper: Any) -> dict[str, Any]:
+    """Capture explicitly-set relationship values on ``instance`` and undo any
+    backref pollution those assignments caused on already-persistent related objects.
+
+    A common ``to_model_on_update`` pattern builds a transient instance and assigns
+    already-persistent related objects (or a collection of them) to one of its
+    relationships, purely so the caller can copy that value onto the real,
+    session-attached instance afterwards. Because ``back_populates``/``backref``
+    synchronization is a Python-side event that fires regardless of session state,
+    the transient instance still gets appended into the related object's own
+    collection - even though it is never added to the session. The next autoflush
+    then tries to write that pairing, fails because the transient side has no
+    identity, and emits ``SAWarning: ... not in session ...`` for it.
+
+    This snapshots each explicitly-set relationship value before removing
+    ``instance`` from the corresponding back-populated collection/attribute on
+    every already-persistent related object, so the stale pairing never reaches a
+    flush. Only relationships declared with ``back_populates`` on a transient
+    ``instance`` are touched; persistent instances and one-directional
+    relationships are left untouched.
+
+    Args:
+        instance: The (possibly transient) instance to inspect.
+        mapper: The SQLAlchemy instance-state/mapper for ``instance``.
+
+    Returns:
+        A mapping of relationship name to the value that was explicitly set on
+        ``instance``, captured before any backref cleanup.
+    """
+    values: dict[str, Any] = {}
+    is_transient = object_session(instance) is None
+    for relationship in mapper.mapper.relationships:
+        if not was_attribute_set(instance, mapper, relationship.key):
+            continue
+        raw_value: Any = instance.__dict__.get(relationship.key)
+        related_items: list[Any]
+        if isinstance(raw_value, Mapping):
+            mapping = cast("dict[Any, Any]", raw_value)
+            values[relationship.key] = dict(mapping)
+            related_items = list(mapping.values())
+        elif isinstance(raw_value, (list, set)):
+            items = cast("Iterable[Any]", raw_value)
+            values[relationship.key] = list(items)
+            related_items = list(items)
+        else:
+            values[relationship.key] = raw_value
+            related_items = [raw_value]
+
+        back_attr = relationship.back_populates
+        if not is_transient or not back_attr or raw_value is None:
+            continue
+        for related in related_items:
+            if related is None or inspect(related, raiseerr=False) is None or object_session(related) is None:
+                continue
+            # Read the raw, already-loaded value to avoid triggering a lazy load
+            # (or raising, for relationships configured with ``lazy="raise"``):
+            # the backref sync that caused the pollution can only have populated
+            # an attribute that was already loaded in memory.
+            back_value: Any = related.__dict__.get(back_attr)
+            if isinstance(back_value, (list, set)) and instance in back_value:
+                cast("Any", back_value).remove(instance)
+            elif back_value is instance:
+                setattr(related, back_attr, None)
+            else:
+                # The back-populated collection was never loaded (e.g. lazy="raise"),
+                # so the backref sync recorded the append as a pending mutation
+                # rather than materializing the collection. Cancel it there instead.
+                related_state: Any = inspect(related)
+                pending: Any = getattr(related_state, "_pending_mutations", None)
+                added_items: Any = getattr(pending.get(back_attr), "added_items", None) if pending else None
+                if added_items is not None and instance in added_items:
+                    added_items.discard(instance)
+    return values
