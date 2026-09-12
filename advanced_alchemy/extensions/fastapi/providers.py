@@ -36,6 +36,7 @@ from advanced_alchemy.filters import (
     BooleanFilter,
     ChoicesFilter,
     CollectionFilter,
+    Cursor,
     FilterTypes,
     LimitOffset,
     NotInCollectionFilter,
@@ -107,6 +108,8 @@ class DependencyDefaults:
     """Key for the updated filter dependency."""
     ORDER_BY_FILTER_DEPENDENCY_KEY: str = "order_by_filter"
     """Key for the order by dependency."""
+    CURSOR_FILTER_DEPENDENCY_KEY: str = "cursor_filter"
+    """Key for cursor dependency."""
     SEARCH_FILTER_DEPENDENCY_KEY: str = "search_filter"
     """Key for the search filter dependency."""
     DEFAULT_PAGINATION_SIZE: int = 20
@@ -570,6 +573,65 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
         )
         annotations[param_name] = Annotated[LimitOffset, Depends(provide_limit_offset_pagination)]
 
+    if config.get("pagination_type") == "cursor":
+        sort_field = config.get("sort_field")
+        if sort_field is None:
+            msg = "Cursor pagination requires a 'sort_field' in the configuration."
+            raise ValueError(msg)
+
+        sort_field_default = normalize_sort_field(sort_field)
+        sort_order_default: SortOrder = config.get("sort_order", "desc")
+
+        def provide_cursor_pagination(
+            cursor: Annotated[
+                Optional[str],
+                Query(
+                    alias="cursor",
+                    description="Cursor for pagination.",
+                ),
+            ] = None,
+            page_size: Annotated[
+                int,
+                Query(
+                    ge=1,
+                    alias="pageSize",
+                    description="Number of items per page.",
+                ),
+            ] = config.get("pagination_size", dep_defaults.DEFAULT_PAGINATION_SIZE),
+            field_name: Annotated[
+                str,
+                Query(
+                    alias="orderBy",
+                    description="Field to order by.",
+                    required=False,
+                ),
+            ] = sort_field_default,
+            sort_order: Annotated[
+                Optional[SortOrder],
+                Query(
+                    alias="sortOrder",
+                    description="Sort order ('asc' or 'desc').",
+                    required=False,
+                ),
+            ] = sort_order_default,
+        ) -> Cursor:
+            return Cursor(
+                cursor=cursor,
+                limit=page_size,
+                field_name=field_name,
+                sort_order=sort_order or sort_order_default,
+            )
+
+        param_name = dep_defaults.CURSOR_FILTER_DEPENDENCY_KEY
+        params.append(
+            inspect.Parameter(
+                name=param_name,
+                kind=inspect.Parameter.KEYWORD_ONLY,
+                annotation=Annotated[Optional[Cursor], Depends(provide_cursor_pagination)],
+            )
+        )
+        annotations[param_name] = Annotated[Optional[Cursor], Depends(provide_cursor_pagination)]
+
     # Add search filter providers
     if search_fields := config.get("search"):
 
@@ -611,7 +673,8 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
         annotations[param_name] = Annotated[Optional[SearchFilter], Depends(provide_search_filter)]
 
     # Add sort filter providers
-    if sort_field := config.get("sort_field"):
+    sort_field = config.get("sort_field")
+    if sort_field and config.get("pagination_type") != "cursor":
         sort_field_default = normalize_sort_field(sort_field)
         sort_order_default = config.get("sort_order", "desc")
         sort_nulls_default = config.get("sort_nulls")

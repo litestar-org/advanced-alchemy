@@ -81,7 +81,7 @@ class FilterConfig(TypedDict):
     """Default sort order."""
     sort_nulls: NotRequired[Optional[Literal["first", "last"]]]
     """Where NULLs sort in the order-by filter. ``None`` leaves the placement to the database."""
-    pagination_type: NotRequired[Literal["limit_offset"]]
+    pagination_type: NotRequired[Literal["limit_offset", "cursor"]]
     """Pagination mode to enable."""
     pagination_size: NotRequired[int]
     """Default pagination size."""
