@@ -74,7 +74,7 @@ async def list_authors(
     ],
 ) -> service.OffsetPagination[AuthorModel]:
     results, total = await authors_service.get_many_and_count(*filters)
-    return authors_service.to_schema(results, total, filters=filters)
+    return authors_service.to_schema(results, total, filters=filters, pagination_type="offset")
 
 
 app.include_router(author_router)

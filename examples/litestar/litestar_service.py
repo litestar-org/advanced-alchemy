@@ -88,7 +88,7 @@ class AuthorController(Controller):
     ) -> service.OffsetPagination[Author]:
         """List authors."""
         results, total = await authors_service.get_many_and_count(*filters)
-        return authors_service.to_schema(results, total, filters=filters, schema_type=Author)
+        return authors_service.to_schema(results, total, filters=filters, schema_type=Author, pagination_type="offset")
 
     @post(path="/authors")
     async def create_author(self, authors_service: AuthorService, data: AuthorCreate) -> Author:
