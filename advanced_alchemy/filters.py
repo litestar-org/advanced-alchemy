@@ -98,6 +98,7 @@ __all__ = (
     "OrderBy",
     "PaginationFilter",
     "SearchFilter",
+    "PolymorphicIdentityFilter",
     "StatementFilter",
     "StatementFilterT",
     "StatementTypeT",
@@ -1323,6 +1324,116 @@ class MultiFilter(StatementFilter):
         return None
 
 
+@dataclass
+class PolymorphicIdentityFilter(StatementFilter):
+    """Filter records by their SQLAlchemy polymorphic identity value.
+
+    This filter targets the discriminator column that SQLAlchemy uses to distinguish
+    between subclasses in a polymorphic hierarchy (i.e., the column mapped by
+    ``polymorphic_on`` in the mapper configuration).  It is designed to work with
+    repositories whose ``model_type`` is an ``AliasedClass`` produced by
+    ``with_polymorphic()`` as well as with ordinary mapped classes.
+
+    Parameters
+    ----------
+    identities : Collection[Any] | None
+        One or more polymorphic-identity values to match.  When ``None`` or
+        empty the filter is a no-op.  A collection of a single value is
+        treated as equality; multiple values produce an ``IN`` clause.
+    polymorphic_on : str | None
+        The **attribute name** (not the column name) of the discriminator
+        column on the model.  When ``None`` (the default) the filter
+        introspects the mapper via ``sqlalchemy.inspect`` to discover the
+        discriminator automatically.
+
+    Examples
+    --------
+    Filter for a single identity value::
+
+        from advanced_alchemy.filters import PolymorphicIdentityFilter
+        from sqlalchemy.orm import with_polymorphic
+
+        AllAlerts = with_polymorphic(Alert, (UnexpectedAlert, ExpectedAlert))
+
+        class AlertRepository(SQLAlchemyAsyncRepository[Alert]):
+            model_type = AllAlerts
+
+        repo = AlertRepository(session=session)
+        results = await repo.list(
+            PolymorphicIdentityFilter(identities=["unexpected"])
+        )
+
+    Filter for multiple identity values::
+
+        results = await repo.list(
+            PolymorphicIdentityFilter(identities=["unexpected", "expected"])
+        )
+    """
+
+    identities: "Union[Collection[Any], None]"
+    """Polymorphic-identity values to match.  ``None`` or empty → no filter."""
+    polymorphic_on: "Optional[str]" = None
+    """Discriminator attribute name.  Discovered automatically when ``None``."""
+
+    def _resolve_discriminator_attr(self, model: Any) -> "Optional[str]":
+        """Return the discriminator attribute name for *model*.
+
+        Uses :attr:`polymorphic_on` when provided.  Otherwise introspects the
+        mapper to find ``polymorphic_on``.
+
+        Args:
+            model: The mapped class or ``AliasedClass`` passed to
+                :meth:`append_to_statement`.
+
+        Returns:
+            str | None: Attribute name, or ``None`` when not found.
+        """
+        if self.polymorphic_on is not None:
+            return self.polymorphic_on
+
+        try:
+            from sqlalchemy import inspect as sa_inspect  # noqa: PLC0415
+            from sqlalchemy.exc import NoInspectionAvailable  # noqa: PLC0415
+            from sqlalchemy.orm.util import AliasedInsp  # noqa: PLC0415
+
+            insp = sa_inspect(model, raiseerr=False)
+            mapper = insp.mapper if isinstance(insp, AliasedInsp) else insp
+            disc_col = getattr(mapper, "polymorphic_on", None)
+            if disc_col is None:
+                return None
+            attr = getattr(disc_col, "key", None) or getattr(disc_col, "name", None)
+            return attr
+        except (NoInspectionAvailable, Exception):  # noqa: BLE001
+            return None
+
+    def append_to_statement(self, statement: StatementTypeT, model: Any) -> StatementTypeT:  # type: ignore[override]
+        """Append a polymorphic-identity equality or IN filter to *statement*.
+
+        When :attr:`identities` is ``None`` or empty the statement is returned
+        unchanged.  A single value produces ``WHERE discriminator = ?``; multiple
+        values produce ``WHERE discriminator IN (?)``.
+
+        Args:
+            statement: The SQLAlchemy statement to modify.
+            model: The SQLAlchemy mapped class or ``AliasedClass``.
+
+        Returns:
+            StatementTypeT: Modified statement with the identity filter applied.
+        """
+        if not self.identities:
+            return statement
+
+        disc_attr = self._resolve_discriminator_attr(model)
+        if disc_attr is None:
+            return statement
+
+        field = self._get_instrumented_attr(model, disc_attr)
+        values = list(self.identities)
+        if len(values) == 1:
+            return cast("StatementTypeT", statement.where(field == values[0]))
+        return cast("StatementTypeT", statement.where(field.in_(values)))
+
+
 # Define FilterTypes using direct class references
 FilterTypes: TypeAlias = Union[
     BeforeAfter,
@@ -1342,6 +1453,7 @@ FilterTypes: TypeAlias = Union[
     ComparisonFilter,
     MultiFilter,
     FilterGroup,
+    PolymorphicIdentityFilter,
 ]
 """Aggregate type alias of the types supported for collection filtering."""
 

@@ -24,6 +24,7 @@ from advanced_alchemy.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.exceptions import AdvancedAlchemyError, ErrorMessages, ImproperConfigurationError, RepositoryError
 from advanced_alchemy.filters import StatementFilter
 from advanced_alchemy.repository import SQLAlchemySyncQueryRepository
+from advanced_alchemy.repository._polymorphic import get_base_model_class, is_aliased_class
 from advanced_alchemy.repository._util import LoadSpec, model_from_dict
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, SQLAlchemySyncRepositoryT
 from advanced_alchemy.service._util import ResultConverter, resolve_item_ids
@@ -184,9 +185,14 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         return self._repository_instance
 
     @cached_property
-    def model_type(self) -> type[ModelT]:
-        """Return the model type."""
-        return cast("type[ModelT]", self.repository.model_type)
+    def model_type(self) -> Any:
+        """Return the model type (may be a plain class or an AliasedClass from with_polymorphic)."""
+        return self.repository.model_type
+
+    @cached_property
+    def _base_model_class(self) -> type[ModelT]:
+        """Return the concrete base class for the model type."""
+        return cast("type[ModelT]", get_base_model_class(self.model_type))
 
     def count(
         self,
@@ -484,7 +490,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         }
         if operation and (op := operation_map.get(operation)):
             data = op(data)
-        if isinstance(data, self.model_type):
+        _base_cls = self._base_model_class
+        if isinstance(data, _base_cls):
             return data
         if is_dict(data):
             return model_from_dict(self.model_type, **data)
@@ -500,7 +507,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             return cast("ModelT", data.create_instance())
 
         # Fallback for objects with __dict__ (e.g., regular classes)
-        if hasattr(data, "__dict__") and not isinstance(data, self.model_type):
+        if hasattr(data, "__dict__") and not isinstance(data, _base_cls):
             return model_from_dict(
                 self.model_type,
                 **data.__dict__,

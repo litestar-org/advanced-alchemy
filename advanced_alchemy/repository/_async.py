@@ -1,4 +1,4 @@
-import contextlib
+﻿import contextlib
 import datetime
 import random
 import string
@@ -48,6 +48,12 @@ from sqlalchemy.sql.selectable import ForUpdateArg, ForUpdateParameter
 from advanced_alchemy.base import model_to_dict
 from advanced_alchemy.exceptions import ErrorMessages, NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.filters import StatementFilter, StatementTypeT
+from advanced_alchemy.repository._polymorphic import (
+    get_base_model_class,
+    get_model_display_name,
+    get_table_name,
+    is_aliased_class,
+)
 from advanced_alchemy.repository._util import (
     DEFAULT_ERROR_MESSAGE_TEMPLATES,
     DEFAULT_SAFE_TYPES,
@@ -638,8 +644,8 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         if self._cache_manager is not None:
             from advanced_alchemy._listeners import get_cache_tracker
 
-            # Check if model_type has __tablename__ (may not exist in mock scenarios)
-            model_name = getattr(self.model_type, "__tablename__", None)
+            # Check if model_type has __tablename__ (may not exist in mock scenarios or aliased entities)
+            model_name = get_table_name(self.model_type)
             if model_name is None:
                 return
             tracker = get_cache_tracker(self.session, self._cache_manager)
@@ -831,20 +837,20 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         if len(pk_columns) == 1:
             if isinstance(pk_value, tuple):
                 msg = (
-                    f"Model {self.model_type.__name__} has a single primary key column '{pk_attr_names[0]}'. "
+                    f"Model {get_model_display_name(self.model_type)} has a single primary key column '{pk_attr_names[0]}'. "
                     f"Expected a scalar value, got tuple: {pk_value!r}"
                 )
                 raise ValueError(msg)
             if isinstance(pk_value, dict):
                 msg = (
-                    f"Model {self.model_type.__name__} has a single primary key column '{pk_attr_names[0]}'. "
+                    f"Model {get_model_display_name(self.model_type)} has a single primary key column '{pk_attr_names[0]}'. "
                     f"Expected a scalar value, got dict: {pk_value!r}"
                 )
                 raise ValueError(msg)
             single_pk_result: ColumnElement[bool] = pk_columns[0] == pk_value
             return single_pk_result
 
-        pk_tuple = validate_composite_pk_value(pk_value, pk_attr_names, self.model_type.__name__)
+        pk_tuple = validate_composite_pk_value(pk_value, pk_attr_names, get_model_display_name(self.model_type))
         return and_(*[col == val for col, val in zip(pk_columns, pk_tuple)])
 
     def get_primary_key_value(self, instance: ModelT) -> PrimaryKeyType:
@@ -895,7 +901,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             ValueError: If tuple length doesn't match PK columns, dict is missing keys, or values are None.
         """
         pk_attr_names = self._pk_attr_names
-        model_name = self.model_type.__name__
+        model_name = get_model_display_name(self.model_type)
         return [validate_composite_pk_value(pk_value, pk_attr_names, model_name) for pk_value in item_ids]
 
     @staticmethod
@@ -1179,8 +1185,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                         else tuple_(*self._pk_columns).in_(chunk)
                     )
 
+                    _base_type = get_base_model_class(self.model_type)
                     if self._dialect.delete_executemany_returning:
-                        returning_delete_stmt = delete(self.model_type).where(pk_filter).returning(self.model_type)
+                        returning_delete_stmt = delete(_base_type).where(pk_filter).returning(_base_type)
                         if execution_options:
                             returning_delete_stmt = returning_delete_stmt.execution_options(**execution_options)
                         instances.extend(await self.session.scalars(returning_delete_stmt))
@@ -1193,7 +1200,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                             select_stmt = select_stmt.execution_options(**execution_options)
                         instances.extend(await self.session.scalars(select_stmt))
 
-                        plain_delete_stmt = delete(self.model_type).where(pk_filter)
+                        plain_delete_stmt = delete(_base_type).where(pk_filter)
                         if execution_options:
                             plain_delete_stmt = plain_delete_stmt.execution_options(**execution_options)
                         await self.session.execute(plain_delete_stmt)
@@ -1309,8 +1316,9 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             execution_options = self._get_execution_options(execution_options)
             loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
             model_type = self.model_type
+            _base_model_type = get_base_model_class(model_type)
             statement = self._get_base_stmt(
-                statement=delete(model_type),
+                statement=delete(_base_model_type),
                 loader_options=loader_options,
                 execution_options=execution_options,
             )
@@ -1318,7 +1326,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             statement = self._apply_filters(*filters, statement=statement, apply_pagination=False)
             instances: List[ModelT] = []
             if self._dialect.delete_executemany_returning:
-                instances.extend(await self.session.scalars(statement.returning(model_type)))
+                instances.extend(await self.session.scalars(statement.returning(_base_model_type)))
             else:
                 instances.extend(
                     await self.get_many(
@@ -1446,15 +1454,16 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Select[tuple[ModelT]], Delete, ReturningDelete[tuple[ModelT]]]:
         # Base statement is static
+        _base_for_dml = get_base_model_class(model_type)
         statement = self._get_base_stmt(
-            statement=delete(model_type) if statement_type == "delete" else select(model_type),
+            statement=delete(_base_for_dml) if statement_type == "delete" else select(model_type),
             loader_options=loader_options,
             execution_options=execution_options,
         )
         if execution_options:
             statement = statement.execution_options(**execution_options)
         if supports_returning and statement_type != "select":
-            statement = cast("ReturningDelete[tuple[ModelT]]", statement.returning(model_type))  # type: ignore[union-attr,assignment]  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownVariableType]
+            statement = cast("ReturningDelete[tuple[ModelT]]", statement.returning(_base_for_dml))  # type: ignore[union-attr,assignment]  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownVariableType]
         # Use field.in_() if types are incompatible with ANY() or if dialect doesn't prefer ANY()
         use_in = not self._prefer_any or self._type_must_use_in_instead_of_any(id_chunk, id_attribute.type)
         if use_in:
@@ -1823,7 +1832,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             and not self._default_execution_options
             and execution_options is None
         ):
-            model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
+            model_name = cast("str", get_table_name(self.model_type))  # type: ignore[arg-type]
             cached = await cache_manager.get_entity_async(
                 model_name, item_id, self.model_type, bind_group=resolved_bind_group
             )
@@ -2465,11 +2474,12 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
         execution_options: Union[dict[str, Any], None],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]:
         # Base update statement is static
+        _base_for_update = get_base_model_class(model_type)
         statement = self._get_base_stmt(
-            statement=update(table=model_type), loader_options=loader_options, execution_options=execution_options
+            statement=update(table=_base_for_update), loader_options=loader_options, execution_options=execution_options
         )
         if supports_returning:
-            return statement.returning(model_type)
+            return statement.returning(_base_for_update)
 
         return statement
 
@@ -2544,7 +2554,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 bind_group=bind_group,
             )
 
-        model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
+        model_name = cast("str", get_table_name(self.model_type))  # type: ignore[arg-type]
         version_token = await cache_manager.get_model_version_async(model_name)
         cache_key = _build_cache_key(
             model_name=model_name,
@@ -3111,7 +3121,7 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
                 bind_group=bind_group,
             )
 
-        model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
+        model_name = cast("str", get_table_name(self.model_type))  # type: ignore[arg-type]
         version_token = await cache_manager.get_model_version_async(model_name)
         cache_key = _build_cache_key(
             model_name=model_name,

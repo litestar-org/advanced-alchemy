@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 __all__ = (
     "MISSING",
+    "ModelOrAliasedT",
     "ModelOrRowMappingT",
     "ModelT",
     "OrderingPair",
@@ -71,6 +72,14 @@ SQLAlchemyAsyncRepositoryT = TypeVar(
 
 :class:`~advanced_alchemy.repository.SQLAlchemyAsyncRepository`
 """
+ModelOrAliasedT: TypeAlias = Any
+"""Type alias for a SQLAlchemy mapped class or an ``AliasedClass`` from ``with_polymorphic()``.
+
+Use this in place of ``type[ModelT]`` wherever a repository or service attribute
+may hold either a concrete mapped class or the result of
+:func:`sqlalchemy.orm.with_polymorphic`.
+"""
+
 OrderingPair: TypeAlias = Union[tuple[Union[str, InstrumentedAttribute[Any]], bool], UnaryExpression[Any]]
 """Type alias for ordering pairs.
 

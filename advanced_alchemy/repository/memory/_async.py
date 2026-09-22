@@ -1,4 +1,4 @@
-import datetime
+﻿import datetime
 import random
 import re
 import string
@@ -17,6 +17,8 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio.scoping import async_scoped_session
 from sqlalchemy.orm import InstrumentedAttribute, class_mapper
+
+from advanced_alchemy.repository._polymorphic import get_base_class_mapper, get_model_display_name
 from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
 from sqlalchemy.sql.dml import ReturningUpdate
 from sqlalchemy.sql.selectable import ForUpdateParameter
@@ -133,7 +135,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         Returns:
             Tuple of Column objects representing the primary key.
         """
-        mapper = class_mapper(self.model_type)
+        mapper = get_base_class_mapper(self.model_type)
         return tuple(mapper.primary_key)
 
     @property
@@ -146,7 +148,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         Returns:
             Tuple of ORM attribute names for primary key columns.
         """
-        mapper = class_mapper(self.model_type)
+        mapper = get_base_class_mapper(self.model_type)
         return tuple(mapper.get_property_by_column(col).key for col in self._pk_columns)
 
     @property
@@ -190,7 +192,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         Returns:
             Tuple representation of the primary key.
         """
-        return normalize_pk_to_tuple(pk_value, self.pk_attr_names, self.model_type.__name__)
+        return normalize_pk_to_tuple(pk_value, self.pk_attr_names, get_model_display_name(self.model_type))
 
     def _get_store_key(self, pk_value: PrimaryKeyType) -> str:
         """Generate a store key from a primary key value.

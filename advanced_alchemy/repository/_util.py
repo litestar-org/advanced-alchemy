@@ -37,6 +37,14 @@ from typing_extensions import TypeAlias
 from advanced_alchemy.base import ModelProtocol
 from advanced_alchemy.exceptions import ErrorMessages
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception as _wrap_sqlalchemy_exception
+from advanced_alchemy.repository._polymorphic import (
+    get_base_class_mapper,
+    get_base_model_class,
+    get_model_display_name,
+    get_table_name,
+    is_aliased_class,
+    resolve_polymorphic_subclass,
+)
 from advanced_alchemy.filters import (
     InAnyFilter,
     PaginationFilter,
@@ -213,13 +221,13 @@ DEFAULT_ERROR_MESSAGE_TEMPLATES: ErrorMessages = {
 
 
 def get_instrumented_attr(
-    model: type[ModelProtocol],
+    model: Any,
     key: Union[str, InstrumentedAttribute[Any]],
 ) -> InstrumentedAttribute[Any]:
     """Get an instrumented attribute from a model.
 
     Args:
-        model: SQLAlchemy model class.
+        model: SQLAlchemy model class or ``AliasedClass`` entity.
         key: Either a string attribute name or an :class:`sqlalchemy.orm.InstrumentedAttribute`.
 
     Returns:
@@ -231,16 +239,16 @@ def get_instrumented_attr(
 
 
 def get_primary_key_info(
-    model: type[ModelProtocol],
+    model: Any,
 ) -> tuple[tuple["Column[Any]", ...], tuple[str, ...]]:
     """Extract primary key columns and attribute names from a SQLAlchemy model.
 
     This function safely inspects a model to retrieve its primary key information,
     handling cases where the model may not be properly mapped (e.g., mock objects
-    in tests).
+    in tests) and ``AliasedClass`` entities produced by ``with_polymorphic()``.
 
     Args:
-        model: SQLAlchemy model class to inspect.
+        model: SQLAlchemy model class or ``AliasedClass`` to inspect.
 
     Returns:
         A tuple of (pk_columns, pk_attr_names) where:
@@ -256,7 +264,10 @@ def get_primary_key_info(
         >>> # pk_attr_names = ('user_id', 'role_id')
     """
     try:
-        mapper = inspect(model)
+        if is_aliased_class(model):
+            mapper = get_base_class_mapper(model)
+        else:
+            mapper = inspect(model)
     except NoInspectionAvailable:
         return (), ()
     else:
@@ -501,7 +512,7 @@ def _convert_relationship_value(
     return value
 
 
-def model_from_dict(model: type[ModelT], /, **kwargs: Any) -> ModelT:
+def model_from_dict(model: Any, /, **kwargs: Any) -> Any:
     """Create an ORM model instance from a dictionary of attributes.
 
     This function recursively converts nested dictionaries into their
@@ -534,7 +545,11 @@ def model_from_dict(model: type[ModelT], /, **kwargs: Any) -> ModelT:
             # user.profile is a Profile instance
             # user.addresses is a list of Address instances
     """
-    mapper = class_mapper(model)
+    if is_aliased_class(model):
+        concrete = resolve_polymorphic_subclass(model, kwargs)
+    else:
+        concrete = model
+    mapper = class_mapper(concrete)
     mapper_attrs = mapper.attrs
     converted_data: dict[str, Any] = {}
 
@@ -559,7 +574,7 @@ def model_from_dict(model: type[ModelT], /, **kwargs: Any) -> ModelT:
             # Regular column attribute - pass through
             converted_data[key] = value
 
-    return model(**converted_data)
+    return concrete(**converted_data)
 
 
 def get_abstract_loader_options(
@@ -647,8 +662,8 @@ class FilterableRepositoryProtocol(Protocol[ModelT]):
     filterable repository implementation must provide.
     """
 
-    model_type: type[ModelT]
-    """The SQLAlchemy model class this repository manages."""
+    model_type: Any
+    """The SQLAlchemy model class or ``AliasedClass`` this repository manages."""
 
 
 class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
@@ -658,8 +673,8 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     SQLAlchemy models.
     """
 
-    model_type: type[ModelT]
-    """The SQLAlchemy model class this repository manages."""
+    model_type: Any
+    """The SQLAlchemy model class or ``AliasedClass`` this repository manages."""
     prefer_any_dialects: Optional[tuple[str]] = ("postgresql",)
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
     order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None
