@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import importlib
+import subprocess
 import sys
+import textwrap
 import types
 import uuid as uuid_module
 import warnings
@@ -12,7 +14,7 @@ from typing import cast
 import pytest
 from sqlalchemy import Table, create_engine
 from sqlalchemy.dialects import mssql, oracle, postgresql
-from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, declarative_mixin, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, mapped_column
 from sqlalchemy.schema import CreateTable
 
 from advanced_alchemy._typing import MSGSPEC_INSTALLED
@@ -104,6 +106,31 @@ def test_deprecated_classes_functionality() -> None:
     assert hasattr(audit, "updated_at")
 
 
+def test_mixin_modules_import_without_sqlalchemy_deprecation_warnings() -> None:
+    """Importing the mixin-bearing modules emits no SQLAlchemy deprecation warnings (e.g. ``declarative_mixin`` on 2.1)."""
+    script = textwrap.dedent(
+        """
+        import warnings
+
+        from sqlalchemy.exc import SADeprecationWarning
+
+        warnings.simplefilter("error", SADeprecationWarning)
+
+        import advanced_alchemy.base
+        import advanced_alchemy.mixins
+        import advanced_alchemy.extensions.litestar.session
+        import advanced_alchemy.extensions.litestar.store
+        """,
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
 def test_uuid_utils_generators_are_preferred_when_installed_on_python_314(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -183,7 +210,6 @@ def test_identity_primary_key_generates_identity_ddl() -> None:
     from advanced_alchemy.base import BigIntBase
     from advanced_alchemy.mixins.bigint import IdentityPrimaryKey
 
-    @declarative_mixin
     class TestMixin(IdentityPrimaryKey):
         pass
 
@@ -226,7 +252,6 @@ def test_bigint_primary_key_still_uses_sequence() -> None:
     from advanced_alchemy.base import BigIntBase
     from advanced_alchemy.mixins.bigint import BigIntPrimaryKey
 
-    @declarative_mixin
     class TestMixin(BigIntPrimaryKey):
         pass
 
