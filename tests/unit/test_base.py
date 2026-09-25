@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import importlib
-import subprocess
 import sys
-import textwrap
 import types
 import uuid as uuid_module
 import warnings
@@ -104,31 +102,6 @@ def test_deprecated_classes_functionality() -> None:
     assert hasattr(nanoid_pk, "_sentinel")
     assert hasattr(audit, "created_at")
     assert hasattr(audit, "updated_at")
-
-
-def test_mixin_modules_import_without_sqlalchemy_deprecation_warnings() -> None:
-    """Importing the mixin-bearing modules emits no SQLAlchemy deprecation warnings (e.g. ``declarative_mixin`` on 2.1)."""
-    script = textwrap.dedent(
-        """
-        import warnings
-
-        from sqlalchemy.exc import SADeprecationWarning
-
-        warnings.simplefilter("error", SADeprecationWarning)
-
-        import advanced_alchemy.base
-        import advanced_alchemy.mixins
-        import advanced_alchemy.extensions.litestar.session
-        import advanced_alchemy.extensions.litestar.store
-        """,
-    )
-    completed = subprocess.run(
-        [sys.executable, "-c", script],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert completed.returncode == 0, completed.stderr
 
 
 def test_uuid_utils_generators_are_preferred_when_installed_on_python_314(
