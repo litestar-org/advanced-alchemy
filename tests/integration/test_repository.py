@@ -1452,10 +1452,10 @@ async def test_upsert_many_native_path_is_single_statement_per_chunk(
 ) -> None:
     """Native dispatch must compile to ONE upsert statement per chunk.
 
-    Acceptance gate from the saga PRD: on a native-capable dialect, the
-    upsert path emits one INSERT...ON CONFLICT / MERGE / INSERT OR UPDATE per
-    chunk plus (when ``supports_returning=False``) at most one re-SELECT for
-    hydration — never the historical 1 SELECT + N add/update sequence.
+    On a native-capable dialect, the upsert path emits one
+    INSERT...ON CONFLICT / MERGE / INSERT OR UPDATE per chunk plus (when
+    ``supports_returning=False``) at most one re-SELECT for hydration — never
+    the historical 1 SELECT + N add/update sequence.
     """
     from sqlalchemy import event
 
@@ -1629,7 +1629,9 @@ async def test_upsert_many_non_returning_reselect_uses_exact_composite_keys(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Hydration must not return the Cartesian product of composite key values."""
-    from advanced_alchemy.operations import OnConflictUpsert
+    import advanced_alchemy.repository._async as async_repo_mod
+    import advanced_alchemy.repository._sync as sync_repo_mod
+    from advanced_alchemy.operations import UpsertStrategy, resolve_upsert_strategy
 
     session, models = seeded_test_session_async
     if "user_role" not in models:
@@ -1648,13 +1650,17 @@ async def test_upsert_many_non_returning_reselect_uses_exact_composite_keys(
         )
     )
 
-    original_create_upsert_many = OnConflictUpsert.create_upsert_many
+    def _without_returning(*args: Any, **kwargs: Any) -> UpsertStrategy:
+        strategy = resolve_upsert_strategy(*args, **kwargs)
+        return UpsertStrategy(
+            kind=strategy.kind,
+            supports_returning=False,
+            conflict_columns=strategy.conflict_columns,
+            dialect_name=strategy.dialect_name,
+        )
 
-    def _without_returning(*args: Any, **kwargs: Any) -> tuple[Any, bool]:
-        statement, _ = original_create_upsert_many(*args, **kwargs)
-        return statement, False
-
-    monkeypatch.setattr(OnConflictUpsert, "create_upsert_many", _without_returning)
+    monkeypatch.setattr(async_repo_mod, "resolve_upsert_strategy", _without_returning)
+    monkeypatch.setattr(sync_repo_mod, "resolve_upsert_strategy", _without_returning)
     results = await maybe_async(
         user_role_repo.upsert_many(
             [
