@@ -1,11 +1,10 @@
 import datetime
 
-from sqlalchemy.orm import Mapped, declarative_mixin, mapped_column, validates
+from sqlalchemy.orm import Mapped, mapped_column, validates
 
 from advanced_alchemy.types import DateTimeUTC
 
 
-@declarative_mixin
 class AuditColumns:
     """Created/Updated At Fields Mixin."""
 

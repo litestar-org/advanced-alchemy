@@ -11,7 +11,6 @@ from typing import cast
 import pytest
 from sqlalchemy import Table, create_engine
 from sqlalchemy.dialects import mssql, oracle, postgresql
-from sqlalchemy.orm import declarative_mixin
 from sqlalchemy.schema import CreateTable
 
 from tests.helpers import purge_module
@@ -177,7 +176,6 @@ def test_identity_primary_key_generates_identity_ddl() -> None:
     from advanced_alchemy.base import BigIntBase
     from advanced_alchemy.mixins.bigint import IdentityPrimaryKey
 
-    @declarative_mixin
     class TestMixin(IdentityPrimaryKey):
         pass
 
@@ -220,7 +218,6 @@ def test_bigint_primary_key_still_uses_sequence() -> None:
     from advanced_alchemy.base import BigIntBase
     from advanced_alchemy.mixins.bigint import BigIntPrimaryKey
 
-    @declarative_mixin
     class TestMixin(BigIntPrimaryKey):
         pass
 

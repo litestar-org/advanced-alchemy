@@ -1,13 +1,12 @@
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Index, String, UniqueConstraint
-from sqlalchemy.orm import Mapped, declarative_mixin, declared_attr, mapped_column
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 if TYPE_CHECKING:
     from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
 
 
-@declarative_mixin
 class SlugKey:
     """Slug unique Field Model Mixin."""
 

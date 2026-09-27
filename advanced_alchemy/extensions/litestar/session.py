@@ -18,7 +18,7 @@ from sqlalchemy import (
     select,
 )
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, Session, declarative_mixin, declared_attr, mapped_column
+from sqlalchemy.orm import Mapped, Session, declared_attr, mapped_column
 
 from advanced_alchemy.base import UUIDv7Base
 from advanced_alchemy.extensions.litestar.plugins.init import (
@@ -49,7 +49,6 @@ _POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 _DISABLE_POSTGRES_MERGE: Final = True
 
 
-@declarative_mixin
 class SessionModelMixin(UUIDv7Base):
     """Mixin for session storage."""
 
