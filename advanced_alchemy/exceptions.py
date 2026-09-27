@@ -90,6 +90,12 @@ CHECK_CONSTRAINT_REGEXES = {
     "cockroach": [],
 }
 
+SQLSTATE_TO_ERROR_KEY = {
+    "23505": "duplicate_key",
+    "23503": "foreign_key",
+    "23514": "check_constraint",
+}
+
 
 class AdvancedAlchemyError(Exception):
     """Base exception class from which all Advanced Alchemy exceptions inherit."""
@@ -310,6 +316,11 @@ def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
                 "check_constraint": (CHECK_CONSTRAINT_REGEXES.get(dialect_name, []), IntegrityError),
                 "foreign_key": (FOREIGN_KEY_REGEXES.get(dialect_name, []), ForeignKeyError),
             }
+            sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None) or ""
+            if (key := SQLSTATE_TO_ERROR_KEY.get(sqlstate)) is not None:
+                raise keys_to_regex[key][1](
+                    detail=_get_error_message(error_messages=error_messages, key=key, exc=exc),
+                ) from exc
             detail = " - ".join(str(exc_arg) for exc_arg in exc.orig.args) if exc.orig.args else ""  # type: ignore[union-attr] # pyright: ignore[reportArgumentType,reportOptionalMemberAccess]
             for key, (regexes, exception) in keys_to_regex.items():
                 for regex in regexes:
