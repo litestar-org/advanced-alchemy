@@ -76,6 +76,14 @@ class BigIntModel(base.BigIntAuditBase):
     """
 
 
+class UpsertMatchModel(base.UUIDBase):
+    """Model used to exercise native-upsert matching helpers."""
+
+    natural_key: Mapped[Any] = mapped_column(String(length=50), unique=True)
+    tenant_id: Mapped[int] = mapped_column(Integer)
+    user_id: Mapped[int] = mapped_column(Integer)
+
+
 @pytest.fixture()
 async def async_mock_repo() -> AsyncGenerator[SQLAlchemyAsyncRepository[MagicMock], None]:
     """SQLAlchemy repository with a mock model type."""
@@ -307,6 +315,251 @@ async def test_sqlalchemy_repo_upsert_many(
         assert row.id is not None
 
     mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+
+
+def test_upsert_batch_size_uses_dialect_parameter_and_page_limits(
+    mock_repo: SQLAlchemyAsyncRepository[Any], monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "insertmanyvalues_max_parameters", 32700)
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "insertmanyvalues_page_size", 1000)
+
+    assert mock_repo._get_upsert_chunk_size(column_count=5, chunk_size=None) == 1000
+    assert mock_repo._get_upsert_chunk_size(column_count=5, chunk_size=200) == 40
+
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "insertmanyvalues_max_parameters", None)
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "insertmanyvalues_page_size", None)
+    assert mock_repo._get_upsert_chunk_size(column_count=5, chunk_size=None) == 190
+
+
+def test_insertmanyvalues_chunk_size_must_be_positive(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    with pytest.raises(ValueError, match="chunk_size must be greater than zero"):
+        mock_repo._get_insertmanyvalues_max_parameters(0)
+
+
+def test_native_upsert_reselect_uses_single_column_in_predicate(
+    mock_repo: SQLAlchemyAsyncRepository[Any], monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.setattr(mock_repo, "model_type", UpsertMatchModel)
+    match_filter = mock_repo._build_upsert_match_filter(
+        [{"natural_key": "first"}, {"natural_key": "second"}], ["natural_key"]
+    )
+
+    assert match_filter.operator.__name__ == "in_op"  # type: ignore[union-attr]
+
+
+def test_native_upsert_reselect_uses_tuple_in_except_on_mssql(
+    mock_repo: SQLAlchemyAsyncRepository[Any], monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.setattr(mock_repo, "model_type", UpsertMatchModel)
+    rows = [{"tenant_id": 1, "user_id": 2}, {"tenant_id": 3, "user_id": 4}]
+
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "name", "postgresql")
+    tuple_filter = mock_repo._build_upsert_match_filter(rows, ["tenant_id", "user_id"])
+    assert tuple_filter.operator.__name__ == "in_op"  # type: ignore[union-attr]
+
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "name", "mssql")
+    mssql_filter = mock_repo._build_upsert_match_filter(rows, ["tenant_id", "user_id"])
+    assert mssql_filter.operator.__name__ == "or_"  # type: ignore[union-attr]
+
+
+def test_upsert_helper_duplicate_match_keys(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    first = UpsertMatchModel(natural_key="same", tenant_id=1, user_id=2)
+    second = UpsertMatchModel(natural_key="same", tenant_id=1, user_id=2)
+    third = UpsertMatchModel(natural_key="other", tenant_id=1, user_id=3)
+    missing = UpsertMatchModel(natural_key=None, tenant_id=1, user_id=4)
+
+    assert mock_repo._has_duplicate_match_keys([first, third, missing], ["natural_key"]) is False
+    assert mock_repo._has_duplicate_match_keys([first, second], ["natural_key"]) is True
+
+    unhashable_a = UpsertMatchModel(natural_key=["a"], tenant_id=1, user_id=2)
+    unhashable_b = UpsertMatchModel(natural_key=["a"], tenant_id=1, user_id=2)
+    unhashable_c = UpsertMatchModel(natural_key=["b"], tenant_id=1, user_id=3)
+    assert mock_repo._has_duplicate_match_keys([unhashable_a, unhashable_c], ["natural_key"]) is False
+    assert mock_repo._has_duplicate_match_keys([unhashable_a, unhashable_b], ["natural_key"]) is True
+
+
+def test_upsert_helper_rows_require_fallback(
+    mock_repo: SQLAlchemyAsyncRepository[Any], monkeypatch: MonkeyPatch
+) -> None:
+    from advanced_alchemy.operations import UpsertStrategy
+
+    monkeypatch.setattr(mock_repo, "model_type", UpsertMatchModel)
+    on_conflict = UpsertStrategy("on_conflict", True, ("natural_key",), "postgresql")
+    merge_strategy = UpsertStrategy("merge", False, ("natural_key",), "oracle")
+
+    assert mock_repo._rows_require_fallback_upsert([], on_conflict, ["natural_key"]) is False
+    assert (
+        mock_repo._rows_require_fallback_upsert(
+            [{"natural_key": "a", "tenant_id": 1}, {"natural_key": "b"}],
+            on_conflict,
+            ["natural_key"],
+        )
+        is True
+    )
+    assert (
+        mock_repo._rows_require_fallback_upsert(
+            [{"natural_key": None, "tenant_id": 1}],
+            on_conflict,
+            ["natural_key"],
+        )
+        is True
+    )
+    assert (
+        mock_repo._rows_require_fallback_upsert(
+            [{"natural_key": "a", "tenant_id": 1}],
+            on_conflict,
+            ["natural_key"],
+        )
+        is False
+    )
+    assert (
+        mock_repo._rows_require_fallback_upsert(
+            [{"natural_key": "a", "tenant_id": 1}],
+            merge_strategy,
+            ["natural_key"],
+        )
+        is True
+    )
+    assert (
+        mock_repo._rows_require_fallback_upsert(
+            [{"id": uuid4(), "natural_key": "a", "tenant_id": 1, "user_id": 2}],
+            merge_strategy,
+            ["natural_key"],
+        )
+        is False
+    )
+
+
+def test_upsert_helper_resolve_update_columns_and_extract_row(
+    mock_repo: SQLAlchemyAsyncRepository[Any], monkeypatch: MonkeyPatch
+) -> None:
+    from advanced_alchemy.operations import UpsertStrategy
+
+    monkeypatch.setattr(mock_repo, "model_type", UpsertMatchModel)
+    strategy = UpsertStrategy("on_conflict", True, ("natural_key",), "postgresql")
+
+    assert mock_repo._resolve_upsert_update_columns([], strategy) == []
+
+    first = UpsertMatchModel(natural_key="k1", tenant_id=1, user_id=2)
+    second = UpsertMatchModel(natural_key="k2", tenant_id=3, user_id=4)
+    partial = UpsertMatchModel(natural_key="k3", tenant_id=5)
+
+    columns = mock_repo._resolve_upsert_update_columns([first, second], strategy)
+    assert columns == ["tenant_id", "user_id"]
+    assert mock_repo._resolve_upsert_update_columns([first, partial], strategy) is None
+
+    extracted = mock_repo._extract_upsert_row(first)
+    assert extracted["natural_key"] == "k1"
+    assert extracted["tenant_id"] == 1
+    assert extracted["user_id"] == 2
+    assert extracted["id"] is not None
+
+
+def test_upsert_helper_order_results(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
+    first = UpsertMatchModel(id=uuid4(), natural_key="Alpha", tenant_id=1, user_id=1)
+    second = UpsertMatchModel(id=uuid4(), natural_key="Beta", tenant_id=2, user_id=2)
+
+    ordered = mock_repo._order_upsert_results(
+        [second, first],
+        [{"natural_key": "alpha  "}, {"natural_key": "Beta"}],
+        ["natural_key"],
+    )
+    assert ordered == [first, second]
+
+    unhashable_first = UpsertMatchModel(id=uuid4(), natural_key=["x"], tenant_id=1, user_id=1)
+    ordered_unhashable = mock_repo._order_upsert_results(
+        [unhashable_first],
+        [{"natural_key": ["x"]}],
+        ["natural_key"],
+    )
+    assert ordered_unhashable == [unhashable_first]
+
+    with pytest.raises(RepositoryError, match="unambiguously pair"):
+        mock_repo._order_upsert_results(
+            [first],
+            [{"natural_key": "Alpha"}, {"natural_key": "Missing"}],
+            ["natural_key"],
+        )
+
+    ambiguous_a = UpsertMatchModel(id=uuid4(), natural_key="FOO", tenant_id=1, user_id=1)
+    ambiguous_b = UpsertMatchModel(id=uuid4(), natural_key="Foo", tenant_id=1, user_id=1)
+    with pytest.raises(RepositoryError, match="unambiguously pair"):
+        mock_repo._order_upsert_results(
+            [ambiguous_a, ambiguous_b],
+            [{"natural_key": "foo"}, {"natural_key": "bar"}],
+            ["natural_key"],
+        )
+
+
+async def test_upsert_many_native_dispatch_paths(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    monkeypatch: MonkeyPatch,
+    mocker: MockerFixture,
+) -> None:
+    monkeypatch.setattr(mock_repo, "model_type", UpsertMatchModel)
+    monkeypatch.setattr(mock_repo, "_pk_attr_names", ("id",))
+    monkeypatch.setattr(mock_repo, "_pk_columns", (UpsertMatchModel.__table__.c.id,))
+    assert mock_repo._requires_orm_upsert([]) is False
+
+    item_a = UpsertMatchModel(id=uuid4(), natural_key="k1", tenant_id=1, user_id=2)
+    item_b = UpsertMatchModel(id=uuid4(), natural_key="k2", tenant_id=3, user_id=4)
+    hydrated_a = UpsertMatchModel(id=uuid4(), natural_key="k1", tenant_id=1, user_id=2)
+    hydrated_b = UpsertMatchModel(id=uuid4(), natural_key="k2", tenant_id=3, user_id=4)
+
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "name", "postgresql")
+    monkeypatch.setattr(mock_repo, "_dialect", mock_repo.session.bind.dialect)
+    mocker.patch.object(mock_repo.session, "scalars", return_value=[hydrated_b, hydrated_a])
+    pg_results = await maybe_async(mock_repo.upsert_many([item_a, item_b], match_fields=["natural_key"]))
+    assert pg_results == [hydrated_a, hydrated_b]
+    assert item_a.id == hydrated_a.id
+
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "name", "sqlite")
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "insert_returning", False)
+    mocker.patch.object(mock_repo, "get_many", return_value=[hydrated_a, hydrated_b])
+    sqlite_results = await maybe_async(mock_repo.upsert_many([item_a, item_b], match_fields=["natural_key"]))
+    assert sqlite_results == [hydrated_a, hydrated_b]
+
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "name", "oracle")
+    oracle_results = await maybe_async(mock_repo.upsert_many([item_a, item_b], match_fields=["natural_key"]))
+    assert oracle_results == [hydrated_a, hydrated_b]
+
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "name", "spanner+spanner")
+    monkeypatch.setattr(mock_repo.session.bind.dialect, "insert_returning", True)
+    hydrated_a.id = item_a.id
+    hydrated_b.id = item_b.id
+    spanner_results = await maybe_async(mock_repo.upsert_many([item_a, item_b], match_fields=["id"]))
+    assert spanner_results == [hydrated_a, hydrated_b]
+
+
+def test_merge_on_match_fields_is_linear_for_hashable_keys(
+    mock_repo: SQLAlchemyAsyncRepository[Any], monkeypatch: MonkeyPatch
+) -> None:
+    class CountingKey:
+        comparisons = 0
+
+        def __init__(self, value: int) -> None:
+            self.value = value
+
+        def __hash__(self) -> int:
+            return hash(self.value)
+
+        def __eq__(self, other: object) -> bool:
+            type(self).comparisons += 1
+            return isinstance(other, CountingKey) and self.value == other.value
+
+    monkeypatch.setattr(mock_repo, "model_type", UpsertMatchModel)
+    monkeypatch.setattr(mock_repo, "_pk_attr_names", ("id",))
+    existing = [
+        UpsertMatchModel(id=uuid4(), natural_key=CountingKey(index), tenant_id=1, user_id=1) for index in range(50)
+    ]
+    incoming = [
+        UpsertMatchModel(natural_key=CountingKey(index), tenant_id=1, user_id=1) for index in reversed(range(50))
+    ]
+
+    merged = mock_repo._merge_on_match_fields(incoming, existing, ["natural_key"])
+
+    assert all(row.id is not None for row in merged)
+    assert CountingKey.comparisons < 200
 
 
 async def test_sqlalchemy_repo_delete(mock_repo: SQLAlchemyAsyncRepository[Any], mocker: MockerFixture) -> None:

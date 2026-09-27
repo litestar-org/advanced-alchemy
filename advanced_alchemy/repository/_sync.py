@@ -9,7 +9,6 @@ from functools import partial
 from typing import (
     TYPE_CHECKING,
     Any,
-    Final,
     List,
     Literal,
     Optional,
@@ -24,6 +23,7 @@ from sqlalchemy import (
     Result,
     Row,
     Select,
+    Table,
     TextClause,
     Update,
     and_,
@@ -49,9 +49,13 @@ from sqlalchemy.sql.selectable import ForUpdateArg, ForUpdateParameter
 from advanced_alchemy.base import model_to_dict
 from advanced_alchemy.exceptions import ErrorMessages, NotFoundError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.filters import StatementFilter, StatementTypeT
+from advanced_alchemy.operations import (
+    OnConflictUpsert,
+    UpsertStrategy,
+    resolve_upsert_strategy,
+)
 from advanced_alchemy.repository._util import (
     DEFAULT_ERROR_MESSAGE_TEMPLATES,
-    DEFAULT_SAFE_TYPES,
     FilterableRepository,
     FilterableRepositoryProtocol,
     LoadSpec,
@@ -77,9 +81,6 @@ if TYPE_CHECKING:
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams  # pyright: ignore[reportPrivateUsage]
 
     from advanced_alchemy.cache.manager import CacheManager
-
-DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
-POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 
 
 @runtime_checkable
@@ -359,7 +360,9 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
+        chunk_size: Optional[int] = None,
     ) -> List[ModelT]: ...
 
     def get_many_and_count(
@@ -646,37 +649,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             tracker = get_cache_tracker(self.session, self._cache_manager)
             if tracker is not None:
                 tracker.add_invalidation(cast("str", model_name), entity_id, bind_group)
-
-    def _type_must_use_in_instead_of_any(self, matched_values: "List[Any]", field_type: "Any" = None) -> bool:
-        """Determine if field.in_() should be used instead of any_() for compatibility.
-
-        Uses SQLAlchemy's type introspection to detect types that may have DBAPI
-        serialization issues with the ANY() operator. Checks if actual values match
-        the column's expected python_type - mismatches indicate complex types that
-        need the safer IN() operator. Falls back to Python type checking when
-        SQLAlchemy type information is unavailable.
-
-        Args:
-            matched_values: Values to be used in the filter
-            field_type: Optional SQLAlchemy TypeEngine from the column
-
-        Returns:
-            bool: True if field.in_() should be used instead of any_()
-        """
-        if not matched_values:
-            return False
-
-        if field_type is not None:
-            try:
-                expected_python_type = getattr(field_type, "python_type", None)
-                if expected_python_type is not None:
-                    for value in matched_values:
-                        if value is not None and not isinstance(value, expected_python_type):
-                            return True
-            except (AttributeError, NotImplementedError):
-                return True
-
-        return any(value is not None and type(value) not in DEFAULT_SAFE_TYPES for value in matched_values)
 
     def _get_unique_values(self, values: "List[Any]") -> "List[Any]":
         """Get unique values from a list, handling unhashable types safely.
@@ -1110,8 +1082,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 Defaults to `id`, but can reference any surrogate or candidate key for the table.
                 Note: Only applies to single-column lookups.
             chunk_size: Allows customization of the ``insertmanyvalues_max_parameters`` setting for the driver.
-                Defaults to `950` if left unset. For composite keys, this is automatically
-                divided by the number of PK columns.
+                Defaults to the active dialect's limit, with a conservative `950`
+                fallback. For composite keys, this is automatically divided by the
+                number of PK columns. Must be greater than zero.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             load: Set default relationships to be loaded
@@ -1255,10 +1228,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 # Use get_primary_key_value for composite PK support
                 self._queue_cache_invalidation(self.get_primary_key_value(instance), bind_group)
             return instances
-
-    @staticmethod
-    def _get_insertmanyvalues_max_parameters(chunk_size: Optional[int] = None) -> int:
-        return chunk_size if chunk_size is not None else DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS
 
     def delete_where(
         self,
@@ -2902,11 +2871,24 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
+        chunk_size: Optional[int] = None,
     ) -> List[ModelT]:
         """Modify or create multiple instances.
 
-        Update instances with the attribute values present on `data`, or create a new instance if
-        one doesn't exist.
+        Dispatches to the most efficient native primitive for the active dialect
+        (``INSERT ... ON CONFLICT ... DO UPDATE``, ``MERGE``, or
+        ``INSERT OR UPDATE``) whenever ``match_fields`` maps to a PK or unique
+        constraint/index that the backend can target. Spanner's
+        ``INSERT OR UPDATE`` is native only for primary-key matching, and
+        ambiguous MySQL/MariaDB unique targets use the fallback. Also falls
+        back to the SELECT-then-partition-then-add/update path when the strategy
+        resolver cannot prove uniqueness, when ``no_merge=True`` is set, when
+        the batch contains duplicate match keys, or when the model depends on
+        ORM unit-of-work behavior (mapper events, relationship cascades,
+        joined-table inheritance, ``FileObject`` columns).
+
+        The native path returns session-attached instances hydrated from the
+        database; primary key values are copied back onto the input instances.
 
         !!! tip
             In most cases, you will want to set `match_fields` to the combination of attributes, excluded the primary key, that define uniqueness for a row.
@@ -2917,7 +2899,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 :attr:`id_attribute`.
             auto_expunge: Remove object from session before returning.
             auto_commit: Commit objects before returning.
-            no_merge: Skip the usage of optimized Merge statements
+            no_merge: Force the SELECT-then-partition fallback path even when a native
+                primitive is available. Useful for testing and as an escape hatch.
             match_fields: a list of keys to use to match the existing model.  When
                 empty, automatically uses ``self.id_attribute`` (`id` by default) to match .
             error_messages: An optional dictionary of templates to use
@@ -2926,57 +2909,154 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             bind_group: Optional routing group to use for the operation.
+            chunk_size: Optional parameter cap for each native statement. Defaults
+                to the active dialect's ``insertmanyvalues_max_parameters``;
+                native upserts also respect ``insertmanyvalues_page_size``. Must be
+                greater than zero.
 
         Returns:
-            The updated or created instance.
+            The updated or created instances.
         """
+        if not data:
+            return []
         self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
-        instances: List[ModelT] = []
-        data_to_update: List[ModelT] = []
-        data_to_insert: List[ModelT] = []
-        match_fields = self._get_match_fields(match_fields=match_fields)
-        if match_fields is None:
-            # Default to all PK columns for composite PKs, otherwise just id_attribute
-            match_fields = list(self._pk_attr_names) if self.has_composite_pk else [self.id_attribute]
-        match_filter: List[Union[StatementFilter, ColumnElement[bool]]] = []
-        if match_fields:
-            for field_name in match_fields:
-                field = get_instrumented_attr(self.model_type, field_name)
-                matched_values = [
-                    field_data for datum in data if (field_data := getattr(datum, field_name)) is not None
-                ]
-                # Use field.in_() if types are incompatible with ANY() or if dialect doesn't prefer ANY()
-                use_in = not self._prefer_any or self._type_must_use_in_instead_of_any(matched_values, field.type)
-                match_filter.append(field.in_(matched_values) if use_in else any_(matched_values) == field)  # type: ignore[arg-type]
+        resolved_match_fields = self._get_match_fields(match_fields=match_fields)
+        if resolved_match_fields is None:
+            resolved_match_fields = list(self._pk_attr_names) if self.has_composite_pk else [self.id_attribute]
+
+        strategy = resolve_upsert_strategy(
+            cast("Table", self.model_type.__table__),
+            tuple(sorted(resolved_match_fields)),
+            self._dialect,
+        )
+
+        if (
+            no_merge
+            or strategy.kind == "fallback"
+            or self._has_duplicate_match_keys(data, resolved_match_fields)
+            or self._requires_orm_upsert(data)
+        ):
+            return self._upsert_many_fallback(
+                data=data,
+                match_fields=resolved_match_fields,
+                auto_expunge=auto_expunge,
+                auto_commit=auto_commit,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                bind_group=bind_group,
+            )
 
         with wrap_sqlalchemy_exception(
             error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
         ):
-            existing_objs = self.get_many(
-                *match_filter,
+            update_columns = self._resolve_upsert_update_columns(data, strategy)
+            input_rows: Optional[List[dict[str, Any]]] = None
+            if update_columns is not None:
+                try:
+                    input_rows = [self._extract_upsert_row(datum) for datum in data]
+                except (AttributeError, TypeError, ValueError):
+                    input_rows = None
+            if (
+                update_columns is None
+                or input_rows is None
+                or self._rows_require_fallback_upsert(input_rows, strategy, resolved_match_fields)
+            ):
+                return self._upsert_many_fallback(
+                    data=data,
+                    match_fields=resolved_match_fields,
+                    auto_expunge=auto_expunge,
+                    auto_commit=auto_commit,
+                    error_messages=error_messages,
+                    load=load,
+                    execution_options=execution_options,
+                    bind_group=bind_group,
+                )
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            if resolved_bind_group:
+                execution_options = dict(execution_options) if execution_options else {}
+                execution_options["bind_group"] = resolved_bind_group
+            execution_options = dict(self._get_execution_options(execution_options) or {})
+            execution_options["populate_existing"] = True
+            instances = self._upsert_many_native(
+                input_rows=input_rows,
+                strategy=strategy,
+                match_fields=resolved_match_fields,
+                update_columns=update_columns,
                 load=load,
                 execution_options=execution_options,
-                auto_expunge=False,
                 bind_group=bind_group,
+                chunk_size=chunk_size,
             )
-            for field_name in match_fields:
-                field = get_instrumented_attr(self.model_type, field_name)
-                # Safe deduplication that handles unhashable types (e.g., JSONB dicts)
-                all_values = [getattr(datum, field_name) for datum in existing_objs if datum]
-                matched_values = self._get_unique_values(all_values)
-                # Use field.in_() if types are incompatible with ANY() or if dialect doesn't prefer ANY()
-                use_in = not self._prefer_any or self._type_must_use_in_instead_of_any(matched_values, field.type)
-                match_filter.append(field.in_(matched_values) if use_in else any_(matched_values) == field)  # type: ignore[arg-type]
+            for datum, instance in zip(data, instances):
+                if datum is not instance:
+                    for pk_attr in self._pk_attr_names:
+                        setattr(datum, pk_attr, getattr(instance, pk_attr))
+            for instance in instances:
+                self._queue_cache_invalidation(self.get_primary_key_value(instance), bind_group)
+            self._flush_or_commit(auto_commit=auto_commit)
+            for instance in instances:
+                self._expunge(instance, auto_expunge=auto_expunge)
+        return instances
+
+    def _upsert_many_fallback(
+        self,
+        *,
+        data: List[ModelT],
+        match_fields: List[str],
+        auto_expunge: Optional[bool],
+        auto_commit: Optional[bool],
+        error_messages: Optional[ErrorMessages],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        bind_group: Optional[str],
+    ) -> List[ModelT]:
+        """Execute the SELECT-then-partition fallback path for ``upsert_many``."""
+        instances: List[ModelT] = []
+        data_to_update: List[ModelT] = []
+        data_to_insert: List[ModelT] = []
+        match_rows = [{field_name: getattr(datum, field_name) for field_name in match_fields} for datum in data]
+        queryable_rows = [row for row in match_rows if all(value is not None for value in row.values())]
+
+        with wrap_sqlalchemy_exception(
+            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
+        ):
+            existing_objs = (
+                self.get_many(
+                    self._build_upsert_match_filter(queryable_rows, match_fields),
+                    load=load,
+                    execution_options=execution_options,
+                    auto_expunge=False,
+                    bind_group=bind_group,
+                )
+                if queryable_rows
+                else []
+            )
             existing_ids = self._get_object_ids(existing_objs=existing_objs)
-            data = self._merge_on_match_fields(data, existing_objs, match_fields)
-            for datum in data:
-                # Use extracted PK value which handles composite PKs (returns tuple)
+            hashable_existing_ids: set[PrimaryKeyType] = set()
+            unhashable_existing_ids: List[PrimaryKeyType] = []
+            for existing_id in existing_ids:
+                try:
+                    hashable_existing_ids.add(existing_id)
+                except TypeError:
+                    unhashable_existing_ids.append(existing_id)
+            merged_data = self._merge_on_match_fields(data, existing_objs, match_fields)
+            for datum in merged_data:
                 datum_pk = self.get_primary_key_value(datum)
-                if datum_pk in existing_ids:
+                try:
+                    is_existing = datum_pk in hashable_existing_ids
+                except TypeError:
+                    is_existing = any(compare_values(existing_id, datum_pk) for existing_id in existing_ids)
+                else:
+                    if not is_existing and unhashable_existing_ids:
+                        is_existing = any(
+                            compare_values(existing_id, datum_pk) for existing_id in unhashable_existing_ids
+                        )
+                if is_existing:
                     data_to_update.append(datum)
                 else:
                     data_to_insert.append(datum)
@@ -2999,6 +3079,142 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
         return instances
+
+    def _upsert_many_native(
+        self,
+        *,
+        input_rows: List[dict[str, Any]],
+        strategy: UpsertStrategy,
+        match_fields: List[str],
+        update_columns: List[str],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        bind_group: Optional[str],
+        chunk_size: Optional[int],
+    ) -> List[ModelT]:
+        """Execute the native upsert primitive for ``strategy.kind`` and hydrate.
+
+        Chunks ``input_rows`` so each statement stays under the dialect's
+        ``insertmanyvalues_max_parameters`` and ``insertmanyvalues_page_size``
+        limits. Dialects that support RETURNING (including Spanner's
+        ``THEN RETURN``) hydrate via ``session.scalars`` against
+        ``.returning(model_type)``; MERGE and MySQL/MariaDB hydrate with one
+        re-SELECT per chunk keyed on ``match_fields``.
+        """
+        if not input_rows:
+            return []
+        table = cast("Table", self.model_type.__table__)
+        conflict_columns = list(strategy.conflict_columns)
+        rows_per_chunk = self._get_upsert_chunk_size(len(input_rows[0]), chunk_size)
+        loader_options = self._get_loader_options(load)[0]
+
+        instances: List[ModelT] = []
+        for chunk_start in range(0, len(input_rows), rows_per_chunk):
+            row_chunk = input_rows[chunk_start : chunk_start + rows_per_chunk]
+            returned_instances = self._execute_upsert_chunk(
+                row_chunk=row_chunk,
+                table=table,
+                strategy=strategy,
+                conflict_columns=conflict_columns,
+                update_columns=update_columns,
+                execution_options=execution_options,
+                loader_options=loader_options,
+            )
+            if returned_instances is not None and len(returned_instances) == len(row_chunk):
+                instances.extend(returned_instances)
+            else:
+                instances.extend(
+                    self._fetch_upserted_chunk(
+                        row_chunk=row_chunk,
+                        match_fields=match_fields,
+                        load=load,
+                        execution_options=execution_options,
+                        bind_group=bind_group,
+                    )
+                )
+        ordered_instances = self._order_upsert_results(instances, input_rows, match_fields)
+        if len(ordered_instances) != len(input_rows):
+            msg = (
+                "upsert_many could not hydrate one result per input row; "
+                "verify that the batch keys are unique under the database's comparison rules"
+            )
+            raise RepositoryError(msg)
+        return ordered_instances
+
+    def _execute_upsert_chunk(
+        self,
+        *,
+        row_chunk: List[dict[str, Any]],
+        table: "Table",
+        strategy: UpsertStrategy,
+        conflict_columns: List[str],
+        update_columns: List[str],
+        execution_options: Optional[dict[str, Any]],
+        loader_options: Optional[List[_AbstractLoad]],
+    ) -> Optional[List[ModelT]]:
+        """Execute one chunk of a native upsert.
+
+        Returns the hydrated instances when the executed statement provides
+        RETURNING; returns ``None`` to signal the caller must re-SELECT.
+        """
+        if strategy.kind == "merge":
+            merge_statement = OnConflictUpsert.create_merge_many(
+                table=table,
+                rows=row_chunk,
+                conflict_columns=conflict_columns,
+                update_columns=update_columns,
+                dialect_name=strategy.dialect_name,
+            )
+            self.session.execute(
+                merge_statement,
+                execution_options=execution_options or {},
+            )
+            return None
+
+        if strategy.kind == "on_conflict":
+            statement = OnConflictUpsert.create_upsert_many(
+                table=table,
+                rows=row_chunk,
+                conflict_columns=conflict_columns,
+                update_columns=update_columns,
+                dialect_name=strategy.dialect_name,
+                model_type=self.model_type,
+            )
+        elif strategy.kind == "insert_or_update":
+            statement = OnConflictUpsert.create_insert_or_update_many(table=table, rows=row_chunk)
+        else:
+            msg = f"Unsupported upsert kind '{strategy.kind}' reached native execution"
+            raise RepositoryError(msg)
+
+        if strategy.supports_returning:
+            returning_statement = statement.returning(self.model_type)
+            if loader_options:
+                returning_statement = returning_statement.options(*loader_options)
+            returned_rows = self.session.scalars(returning_statement, execution_options=execution_options or {})
+            return list(returned_rows)
+        self.session.execute(statement, execution_options=execution_options or {})
+        return None
+
+    def _fetch_upserted_chunk(
+        self,
+        *,
+        row_chunk: List[dict[str, Any]],
+        match_fields: List[str],
+        load: Optional[LoadSpec],
+        execution_options: Optional[dict[str, Any]],
+        bind_group: Optional[str],
+    ) -> List[ModelT]:
+        """Re-SELECT chunk rows after a no-RETURNING native upsert."""
+        match_filters = [self._build_upsert_match_filter(row_chunk, match_fields)]
+        selected_rows = self.get_many(
+            *match_filters,
+            load=load,
+            execution_options=execution_options,
+            auto_expunge=False,
+            use_cache=False,
+            bind_group=bind_group,
+        )
+        return list(selected_rows)
 
     def _get_object_ids(self, existing_objs: List[ModelT]) -> List[PrimaryKeyType]:
         """Extract primary key values from a list of model instances.
@@ -3028,15 +3244,33 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         if match_fields is None:
             # Default to all PK columns for composite PKs, otherwise just id_attribute
             match_fields = list(self._pk_attr_names) if self.has_composite_pk else [self.id_attribute]
-        for existing_datum in existing_data:
-            for datum in data:
-                match = all(
-                    getattr(datum, field_name) == getattr(existing_datum, field_name) for field_name in match_fields
-                )
-                if match and self.has_primary_key_values(existing_datum):
-                    # Copy all PK values from existing to datum (handles composite PKs)
-                    for pk_attr in self._pk_attr_names:
-                        setattr(datum, pk_attr, getattr(existing_datum, pk_attr))
+        instances_by_match_key: dict[tuple[Any, ...], ModelT] = {}
+        for existing_instance in existing_data:
+            if not self.has_primary_key_values(existing_instance):
+                continue
+            match_key = tuple(getattr(existing_instance, field_name) for field_name in match_fields)
+            with contextlib.suppress(TypeError):
+                instances_by_match_key[match_key] = existing_instance
+        for datum in data:
+            match_key = tuple(getattr(datum, field_name) for field_name in match_fields)
+            try:
+                matched_instance: Optional[ModelT] = instances_by_match_key.get(match_key)
+            except TypeError:
+                matched_instance = None
+                for candidate_instance in existing_data:
+                    if not self.has_primary_key_values(candidate_instance):
+                        continue
+                    candidate_key = tuple(getattr(candidate_instance, field_name) for field_name in match_fields)
+                    if len(candidate_key) == len(match_key) and all(
+                        compare_values(candidate_value, match_value)
+                        for candidate_value, match_value in zip(candidate_key, match_key)
+                    ):
+                        matched_instance = candidate_instance
+                        break
+            if matched_instance is not None:
+                # Copy all PK values from existing to datum (handles composite PKs).
+                for pk_attr in self._pk_attr_names:
+                    setattr(datum, pk_attr, getattr(matched_instance, pk_attr))
         return data
 
     def get_many(
