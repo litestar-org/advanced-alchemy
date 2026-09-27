@@ -24,7 +24,7 @@ from advanced_alchemy.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.exceptions import AdvancedAlchemyError, ErrorMessages, ImproperConfigurationError, RepositoryError
 from advanced_alchemy.filters import StatementFilter
 from advanced_alchemy.repository import SQLAlchemySyncQueryRepository
-from advanced_alchemy.repository._util import LoadSpec, model_from_dict
+from advanced_alchemy.repository._util import LoadSpec, model_from_dict, snapshot_and_detach_relationships
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, SQLAlchemySyncRepositoryT
 from advanced_alchemy.service._util import ResultConverter, resolve_item_ids
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
@@ -883,6 +883,18 @@ class SQLAlchemySyncRepositoryService(
         if item_id is not None:
             # When item_id is provided, update existing instance rather than replacing it
             # This preserves relationships and database-managed fields
+            instance_state = sa_inspect(data)  # pyright: ignore[reportOptionalMemberAccess]
+
+            # A `to_model_on_update` hook may have built ``data`` as a transient
+            # instance and assigned already-persistent related objects onto one
+            # of its relationships (e.g. resolving m2m ids into model instances).
+            # That assignment's back_populates sync pollutes the related objects'
+            # own collections with a reference to the (soon to be discarded)
+            # transient ``data``, which the very next query below would try to
+            # autoflush and warn about. Snapshot the explicitly-set relationship
+            # values and undo that pollution before it can reach a flush.
+            relationship_values = snapshot_and_detach_relationships(data, instance_state)
+
             existing_instance: ModelT = self.repository.get(
                 item_id,
                 id_attribute=id_attribute,
@@ -894,11 +906,14 @@ class SQLAlchemySyncRepositoryService(
 
             # Extract attributes from converted model to update existing instance
             # Only copy attributes that were explicitly set (present in instance state)
-            instance_state = sa_inspect(data)  # pyright: ignore[reportOptionalMemberAccess]
             for attr in instance_state.mapper.attrs:  # type: ignore[union-attr]  # pyright: ignore[reportOptionalMemberAccess]
                 # Check if attribute was explicitly set in the instance
                 if attr.key in instance_state.dict:  # type: ignore[union-attr]  # pyright: ignore[reportOptionalMemberAccess]
-                    value = getattr(data, attr.key, MISSING)
+                    value = (
+                        relationship_values[attr.key]
+                        if attr.key in relationship_values
+                        else getattr(data, attr.key, MISSING)
+                    )
                     if value is not MISSING and hasattr(existing_instance, attr.key):
                         setattr(existing_instance, attr.key, value)
 
