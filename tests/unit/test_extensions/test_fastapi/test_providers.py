@@ -38,6 +38,7 @@ from advanced_alchemy.filters import (
     BooleanFilter,
     ChoicesFilter,
     CollectionFilter,
+    Cursor,
     FilterTypes,
     LimitOffset,
     OrderBy,
@@ -706,6 +707,89 @@ def test_provide_filters_applies_configured_wildcard_escaping() -> None:
     client = TestClient(app)
 
     assert client.get("/items?searchString=50%25").json() == [True]
+
+
+def _cursor_summary(filters: list[FilterTypes]) -> list[dict[str, Any]]:
+    """Reduce the generated filters to the Cursor's public attributes for assertions."""
+    return [
+        {"cursor": c.cursor, "limit": c.limit, "field_name": c.field_name, "sort_order": c.sort_order}
+        for c in filters
+        if isinstance(c, Cursor)
+    ]
+
+
+def test_provide_filters_cursor_pagination_defaults() -> None:
+    """`pagination_type: 'cursor'` emits a Cursor dependency populated from the config defaults."""
+    deps = provide_filters({"pagination_type": "cursor", "sort_field": "name", "sort_order": "asc"})
+
+    app = FastAPI()
+
+    @app.get("/items")
+    async def get_items(filters: Annotated[list[FilterTypes], Depends(deps)]) -> list[dict[str, Any]]:
+        return _cursor_summary(filters)
+
+    client = TestClient(app)
+
+    assert client.get("/items").json() == [{"cursor": None, "limit": 20, "field_name": "name", "sort_order": "asc"}]
+
+
+def test_provide_filters_cursor_pagination_query_overrides() -> None:
+    """The cursor/pageSize/orderBy/sortOrder query params override the configured defaults."""
+    deps = provide_filters({"pagination_type": "cursor", "sort_field": "name", "pagination_size": 7})
+
+    app = FastAPI()
+
+    @app.get("/items")
+    async def get_items(filters: Annotated[list[FilterTypes], Depends(deps)]) -> list[dict[str, Any]]:
+        return _cursor_summary(filters)
+
+    client = TestClient(app)
+
+    assert client.get("/items?pageSize=7").json() == [
+        {"cursor": None, "limit": 7, "field_name": "name", "sort_order": "desc"}
+    ]
+    assert client.get("/items?cursor=abc123&pageSize=5&orderBy=id&sortOrder=asc").json() == [
+        {"cursor": "abc123", "limit": 5, "field_name": "id", "sort_order": "asc"}
+    ]
+
+
+def test_provide_filters_cursor_pagination_requires_sort_field() -> None:
+    """Cursor pagination needs a deterministic ordering, so a sort_field is mandatory."""
+    with pytest.raises(ValueError, match="sort_field"):
+        provide_filters({"pagination_type": "cursor"})
+
+
+def test_provide_filters_cursor_pagination_omits_order_by() -> None:
+    """When cursor pagination is enabled the standalone OrderBy filter is not emitted."""
+    deps = provide_filters({"pagination_type": "cursor", "sort_field": "name"})
+
+    app = FastAPI()
+
+    @app.get("/items")
+    async def get_items(filters: Annotated[list[FilterTypes], Depends(deps)]) -> dict[str, int]:
+        return {
+            "cursor": sum(1 for f in filters if isinstance(f, Cursor)),
+            "order_by": sum(1 for f in filters if isinstance(f, OrderBy)),
+        }
+
+    client = TestClient(app)
+
+    assert client.get("/items").json() == {"cursor": 1, "order_by": 0}
+
+
+def test_provide_filters_limit_offset_still_emitted_alongside_cursor_config() -> None:
+    """A non-cursor pagination_type keeps emitting LimitOffset (regression guard)."""
+    deps = provide_filters({"pagination_type": "limit_offset"})
+
+    app = FastAPI()
+
+    @app.get("/items")
+    async def get_items(filters: Annotated[list[FilterTypes], Depends(deps)]) -> list[LimitOffset]:
+        return [f for f in filters if isinstance(f, LimitOffset)]
+
+    client = TestClient(app)
+
+    assert client.get("/items").json() == [{"limit": 20, "offset": 0}]
 
 
 def test_openapi_schema_edge_cases() -> None:

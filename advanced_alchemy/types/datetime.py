@@ -21,7 +21,11 @@ class DateTimeUTC(TypeDecorator[datetime.datetime]):
     def python_type(self) -> type[datetime.datetime]:
         return datetime.datetime
 
-    def process_bind_param(self, value: Optional[datetime.datetime], dialect: Dialect) -> Optional[datetime.datetime]:
+    def process_bind_param(
+        self,
+        value: Optional[datetime.datetime],
+        dialect: Dialect,
+    ) -> Optional[datetime.datetime]:
         if value is None:
             return value
         if not value.tzinfo:

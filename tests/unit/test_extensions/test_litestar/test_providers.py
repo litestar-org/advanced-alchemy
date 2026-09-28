@@ -12,6 +12,7 @@ from enum import Enum, IntEnum
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
 
+import pytest
 from litestar import Litestar, get
 from litestar.di import NamedDependency, Provide
 from litestar.openapi.config import OpenAPIConfig
@@ -40,6 +41,7 @@ from advanced_alchemy.filters import (
     BooleanFilter,
     ChoicesFilter,
     CollectionFilter,
+    Cursor,
     FilterTypes,
     LimitOffset,
     NotInCollectionFilter,
@@ -454,6 +456,64 @@ def test_limit_offset_filter() -> None:
     assert isinstance(f, LimitOffset)
     assert f.limit == 5
     assert f.offset == 5
+
+
+def test_cursor_filter() -> None:
+    """Test creating the cursor filter dependency from a cursor pagination config."""
+    config = cast(FilterConfig, {"pagination_type": "cursor", "sort_field": "name", "sort_order": "asc"})
+    deps = _create_statement_filters(config)
+
+    assert "cursor_filter" in deps
+    assert "filters" in deps
+
+    provider_func = deps["cursor_filter"].dependency
+    f = provider_func()
+    assert isinstance(f, Cursor)
+    assert f.cursor is None
+    assert f.limit == 20
+    assert f.field_name == "name"
+    assert f.sort_order == "asc"
+
+
+def test_cursor_filter_overrides() -> None:
+    """Explicit cursor/limit/field_name/sort_order values override the configured defaults."""
+    config = cast(FilterConfig, {"pagination_type": "cursor", "sort_field": "name", "pagination_size": 7})
+    deps = _create_statement_filters(config)
+
+    provider_func = deps["cursor_filter"].dependency
+
+    defaults = provider_func()
+    assert defaults.limit == 7
+    assert defaults.field_name == "name"
+    assert defaults.sort_order == "desc"
+
+    overridden = provider_func(cursor="abc123", limit=5, field_name="id", sort_order="asc")
+    assert overridden.cursor == "abc123"
+    assert overridden.limit == 5
+    assert overridden.field_name == "id"
+    assert overridden.sort_order == "asc"
+
+
+def test_cursor_filter_requires_sort_field() -> None:
+    """Cursor pagination requires a deterministic ordering, so a sort_field is mandatory."""
+    with pytest.raises(ValueError, match="sort_field"):
+        _create_statement_filters(cast(FilterConfig, {"pagination_type": "cursor"}))
+
+
+def test_cursor_filter_omits_order_by() -> None:
+    """When cursor pagination is enabled the standalone order_by filter is not emitted."""
+    deps = _create_statement_filters(cast(FilterConfig, {"pagination_type": "cursor", "sort_field": "name"}))
+
+    assert "cursor_filter" in deps
+    assert "order_by_filter" not in deps
+
+
+def test_limit_offset_filter_still_emitted_for_limit_offset_type() -> None:
+    """A non-cursor pagination_type keeps emitting the limit_offset filter (regression guard)."""
+    deps = _create_statement_filters(cast(FilterConfig, {"pagination_type": "limit_offset"}))
+
+    assert "limit_offset_filter" in deps
+    assert "cursor_filter" not in deps
 
 
 def test_order_by_filter() -> None:
