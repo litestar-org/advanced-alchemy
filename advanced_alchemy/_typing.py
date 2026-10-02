@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 ARGON2_INSTALLED = find_spec("argon2") is not None
 ATTRS_INSTALLED = find_spec("attrs") is not None
+BCRYPT_INSTALLED = find_spec("bcrypt") is not None
 CATTRS_INSTALLED = find_spec("cattrs") is not None
 CRYPTOGRAPHY_INSTALLED = find_spec("cryptography") is not None
 LITESTAR_INSTALLED = find_spec("litestar") is not None
@@ -383,6 +384,7 @@ __all__ = (
     "ARGON2_INSTALLED",
     "ATTRS_INSTALLED",
     "ATTRS_NOTHING_STUB",
+    "BCRYPT_INSTALLED",
     "CATTRS_INSTALLED",
     "CRYPTOGRAPHY_INSTALLED",
     "LITESTAR_INSTALLED",

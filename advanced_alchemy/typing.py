@@ -11,6 +11,7 @@ from typing import Any
 from advanced_alchemy._typing import (
     ARGON2_INSTALLED,
     ATTRS_INSTALLED,
+    BCRYPT_INSTALLED,
     CATTRS_INSTALLED,
     CRYPTOGRAPHY_INSTALLED,
     LITESTAR_INSTALLED,
@@ -51,6 +52,7 @@ from advanced_alchemy._typing import (
 __all__ = (  # noqa: F822
     "ARGON2_INSTALLED",
     "ATTRS_INSTALLED",
+    "BCRYPT_INSTALLED",
     "CATTRS_INSTALLED",
     "CRYPTOGRAPHY_INSTALLED",
     "LITESTAR_INSTALLED",
