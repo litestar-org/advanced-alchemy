@@ -148,5 +148,7 @@ def test_set_table_check_constraint_only_created_for_oracle() -> None:
     oracle.dialect.server_version_info = (19, 0)
     postgres = MagicMock()
     postgres.dialect.name = "postgresql"
-    assert constraint._create_rule(oracle) is True
-    assert constraint._create_rule(postgres) is False
+    rule = constraint._create_rule
+    assert rule is not None
+    assert rule(oracle) is True
+    assert rule(postgres) is False
