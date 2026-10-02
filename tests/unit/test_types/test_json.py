@@ -5,10 +5,11 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import CheckConstraint, Column, MetaData, Table
 from sqlalchemy.dialects.oracle import BLOB as ORA_BLOB
 from sqlalchemy.engine import Dialect
 
-from advanced_alchemy.types.json import ORA_JSONB
+from advanced_alchemy.types.json import ORA_JSONB, JsonB
 
 
 def _make_dialect(server_version_info: Any) -> MagicMock:
@@ -118,3 +119,34 @@ def test_should_create_constraint_sa21_oracle_missing_version_returns_true(_with
     compiler.dialect.name = "oracle"
     compiler.dialect.server_version_info = None
     assert ORA_JSONB()._should_create_constraint(compiler) is True
+
+
+def test_set_table_adds_is_json_check_constraint() -> None:
+    """Attaching the type to a table must not depend on SQLAlchemy's private util helpers.
+
+    ``ORA_JSONB._set_table`` runs when a column using the type is added to a table. SQLAlchemy 2.1
+    removed ``util.portable_instancemethod``, which an earlier version of it relied on.
+    """
+    table = Table("json_doc", MetaData(), Column("data", ORA_JSONB()))
+    constraints = [c for c in table.constraints if isinstance(c, CheckConstraint)]
+    assert [c.name for c in constraints] == ["data_is_json"]
+
+
+def test_set_table_via_variant_adds_is_json_check_constraint() -> None:
+    """The ``JsonB`` variant type also attaches its Oracle check constraint to the table."""
+    table = Table("json_doc", MetaData(), Column("data", JsonB))
+    names = [c.name for c in table.constraints if isinstance(c, CheckConstraint)]
+    assert names == ["data_is_json"]
+
+
+def test_set_table_check_constraint_only_created_for_oracle() -> None:
+    """The check constraint's create rule is applied per dialect when DDL is compiled."""
+    table = Table("json_doc", MetaData(), Column("data", ORA_JSONB()))
+    constraint = next(c for c in table.constraints if isinstance(c, CheckConstraint))
+    oracle = MagicMock()
+    oracle.dialect.name = "oracle"
+    oracle.dialect.server_version_info = (19, 0)
+    postgres = MagicMock()
+    postgres.dialect.name = "postgresql"
+    assert constraint._create_rule(oracle) is True
+    assert constraint._create_rule(postgres) is False
