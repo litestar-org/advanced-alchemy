@@ -13,6 +13,7 @@ from sqlalchemy.exc import (
 
 from advanced_alchemy.exceptions import (
     DuplicateKeyError,
+    ForeignKeyError,
     IntegrityError,
     InvalidRequestError,
     MultipleResultsFoundError,
@@ -154,3 +155,89 @@ def test_wrap_sqlalchemy_exception_no_match() -> None:
         raise SQLAlchemyIntegrityError("original", {}, Exception("original"))
 
     assert str(excinfo.value) == "Integrity error"
+
+
+class _DriverError(Exception):
+    def __init__(self, *args: object, **attrs: object) -> None:
+        super().__init__(*args)
+        for name, value in attrs.items():
+            setattr(self, name, value)
+
+
+@pytest.mark.parametrize("dialect_name", ["postgresql", "cockroachdb"])
+@pytest.mark.parametrize("code_attr", ["sqlstate", "pgcode"])
+@pytest.mark.parametrize(
+    ("sqlstate", "message", "detail", "expected"),
+    [
+        (
+            "23505",
+            'duplicate key value violates unique constraint "uq_table_id"',
+            "Key (id)=(1) already exists.",
+            DuplicateKeyError,
+        ),
+        (
+            "23503",
+            'insert or update on table "child" violates foreign key constraint "fk_parent"',
+            'Key (parent_id)=(999) is not present in table "parent".',
+            ForeignKeyError,
+        ),
+        (
+            "23514",
+            'new row for relation "table" violates check constraint "ck_positive"',
+            "Failing row contains (1, -1).",
+            IntegrityError,
+        ),
+    ],
+)
+def test_wrap_sqlalchemy_exception_integrity_error_by_sqlstate(
+    dialect_name: str, code_attr: str, sqlstate: str, message: str, detail: str, expected: type[IntegrityError]
+) -> None:
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(
+            dialect_name=dialect_name,
+            error_messages={"duplicate_key": "duplicate", "foreign_key": "foreign", "check_constraint": "check"},
+        ),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError(message, detail=detail, **{code_attr: sqlstate}))
+
+    assert excinfo.type is expected
+    assert str(excinfo.value) == {"23505": "duplicate", "23503": "foreign", "23514": "check"}[sqlstate]
+
+
+def test_wrap_sqlalchemy_exception_ignores_non_string_sqlstate() -> None:
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(dialect_name="postgresql", error_messages={"integrity": "integrity"}),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError("whatever", sqlstate=["23505"]))
+
+    assert excinfo.type is IntegrityError
+    assert str(excinfo.value) == "integrity"
+
+
+@pytest.mark.parametrize(
+    ("errno", "message", "expected"),
+    [
+        (1062, "Duplicate entry '1' for key 'uq_table_id'", DuplicateKeyError),
+        (
+            1452,
+            "Cannot add or update a child row: a foreign key constraint fails "
+            "(`db`.`child`, CONSTRAINT `fk_parent` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`id`))",
+            ForeignKeyError,
+        ),
+    ],
+)
+def test_wrap_sqlalchemy_exception_mysql_generic_sqlstate_uses_regexes(
+    errno: int, message: str, expected: type[IntegrityError]
+) -> None:
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(
+            dialect_name="mysql", error_messages={"duplicate_key": "duplicate", "foreign_key": "foreign"}
+        ),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError(errno, message, sqlstate="23000"))
+
+    assert excinfo.type is expected
+    assert str(excinfo.value) == {1062: "duplicate", 1452: "foreign"}[errno]
