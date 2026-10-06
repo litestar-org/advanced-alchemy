@@ -13,6 +13,7 @@ from sqlalchemy.exc import (
 
 from advanced_alchemy.exceptions import (
     DuplicateKeyError,
+    ErrorMessages,
     ForeignKeyError,
     IntegrityError,
     InvalidRequestError,
@@ -228,7 +229,7 @@ def test_wrap_sqlalchemy_exception_ignores_non_string_sqlstate() -> None:
         ),
     ],
 )
-def test_wrap_sqlalchemy_exception_mysql_generic_sqlstate_uses_regexes(
+def test_wrap_sqlalchemy_exception_mysql_generic_sqlstate(
     errno: int, message: str, expected: type[IntegrityError]
 ) -> None:
     with (
@@ -241,3 +242,60 @@ def test_wrap_sqlalchemy_exception_mysql_generic_sqlstate_uses_regexes(
 
     assert excinfo.type is expected
     assert str(excinfo.value) == {1062: "duplicate", 1452: "foreign"}[errno]
+
+
+@pytest.mark.parametrize(
+    ("dialect_name", "orig", "expected"),
+    [
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=2067), DuplicateKeyError),
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=1555), DuplicateKeyError),
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=787), ForeignKeyError),
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=275), IntegrityError),
+        ("mysql", _DriverError(1062, "whatever"), DuplicateKeyError),
+        ("mysql", _DriverError(1216, "whatever"), ForeignKeyError),
+        ("mysql", _DriverError(1451, "whatever"), ForeignKeyError),
+        ("mariadb", _DriverError(1452, "whatever"), ForeignKeyError),
+        ("mysql", _DriverError(3819, "whatever"), IntegrityError),
+    ],
+)
+def test_wrap_sqlalchemy_exception_integrity_error_by_native_code(
+    dialect_name: str, orig: Exception, expected: type[IntegrityError]
+) -> None:
+    error_messages: ErrorMessages = {
+        "duplicate_key": "duplicate",
+        "foreign_key": "foreign",
+        "check_constraint": "check",
+        "integrity": "integrity",
+    }
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(dialect_name=dialect_name, error_messages=error_messages),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, orig)
+
+    assert excinfo.type is expected
+    assert (
+        str(excinfo.value)
+        == {DuplicateKeyError: "duplicate", ForeignKeyError: "foreign", IntegrityError: "check"}[expected]
+    )
+
+
+@pytest.mark.parametrize(
+    ("dialect_name", "orig"),
+    [
+        # not-null violation
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=1299)),
+        ("mysql", _DriverError(1048, "whatever")),
+        # MySQL error numbers are only trusted for MySQL dialects
+        ("postgresql", _DriverError(1062, "whatever")),
+    ],
+)
+def test_wrap_sqlalchemy_exception_unknown_native_code(dialect_name: str, orig: Exception) -> None:
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(dialect_name=dialect_name, error_messages={"integrity": "integrity"}),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, orig)
+
+    assert excinfo.type is IntegrityError
+    assert str(excinfo.value) == "integrity"
