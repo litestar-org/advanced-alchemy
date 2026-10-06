@@ -96,6 +96,48 @@ SQLSTATE_TO_ERROR_KEY = {
     "23514": "check_constraint",
 }
 
+SQLITE_ERRORCODE_TO_ERROR_KEY = {
+    2067: "duplicate_key",  # SQLITE_CONSTRAINT_UNIQUE
+    1555: "duplicate_key",  # SQLITE_CONSTRAINT_PRIMARYKEY
+    787: "foreign_key",  # SQLITE_CONSTRAINT_FOREIGNKEY
+    275: "check_constraint",  # SQLITE_CONSTRAINT_CHECK
+}
+
+MYSQL_ERRNO_TO_ERROR_KEY = {
+    1062: "duplicate_key",  # ER_DUP_ENTRY
+    1216: "foreign_key",  # ER_NO_REFERENCED_ROW
+    1217: "foreign_key",  # ER_ROW_IS_REFERENCED
+    1451: "foreign_key",  # ER_ROW_IS_REFERENCED_2
+    1452: "foreign_key",  # ER_NO_REFERENCED_ROW_2
+    3819: "check_constraint",  # ER_CHECK_CONSTRAINT_VIOLATED
+}
+
+
+def _get_error_key_by_code(orig: Optional[BaseException], dialect_name: str) -> Optional[str]:
+    """Classify a DBAPI integrity error by the error code the driver exposes.
+
+    Args:
+        orig: The DBAPI exception.
+        dialect_name: The name of the dialect.
+
+    Returns:
+        The error message key, or ``None`` when no known code is present.
+    """
+    if orig is None:
+        return None
+    # asyncpg and psycopg expose ``sqlstate``, psycopg2 exposes ``pgcode``
+    sqlstate = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
+    if isinstance(sqlstate, str) and sqlstate in SQLSTATE_TO_ERROR_KEY:
+        return SQLSTATE_TO_ERROR_KEY[sqlstate]
+    # sqlite3 exposes extended result codes on Python 3.11+
+    sqlite_errorcode = getattr(orig, "sqlite_errorcode", None)
+    if isinstance(sqlite_errorcode, int):
+        return SQLITE_ERRORCODE_TO_ERROR_KEY.get(sqlite_errorcode)
+    # pymysql, aiomysql, asyncmy and mysqlclient pass the server error number as ``args[0]``
+    if dialect_name in {"mysql", "mariadb"} and orig.args and isinstance(orig.args[0], int):
+        return MYSQL_ERRNO_TO_ERROR_KEY.get(orig.args[0])
+    return None
+
 
 class AdvancedAlchemyError(Exception):
     """Base exception class from which all Advanced Alchemy exceptions inherit."""
@@ -316,8 +358,7 @@ def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
                 "check_constraint": (CHECK_CONSTRAINT_REGEXES.get(dialect_name, []), IntegrityError),
                 "foreign_key": (FOREIGN_KEY_REGEXES.get(dialect_name, []), ForeignKeyError),
             }
-            sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
-            if isinstance(sqlstate, str) and (key := SQLSTATE_TO_ERROR_KEY.get(sqlstate)) is not None:
+            if (key := _get_error_key_by_code(exc.orig, dialect_name)) is not None:
                 raise keys_to_regex[key][1](
                     detail=_get_error_message(error_messages=error_messages, key=key, exc=exc),
                 ) from exc
