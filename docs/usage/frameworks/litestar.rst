@@ -603,6 +603,30 @@ Register a :class:`SQLAlchemyStore` under the session store name and let Litesta
 
 The registered store name must match ``ServerSideSessionConfig.store``, which is ``"sessions"`` unless you override it.
 
+.. note::
+
+    **Cleaning up expired sessions.** Call ``session_store.delete_expired()``
+    periodically to remove expired rows.
+    Expired entries stop being returned by ``get()``, but their rows remain in the
+    table until cleanup runs. The method works with both synchronous and asynchronous
+    SQLAlchemy configurations and is awaited in either case:
+
+    .. code-block:: python
+
+        async def cleanup_expired_sessions() -> None:
+            await session_store.delete_expired()
+
+    Cleanup only deletes entries in the store's exact namespace whose ``expires_at``
+    is at or before the current time. Live entries, entries without an expiration time,
+    and entries in other namespaces (including nested namespaces) are preserved.
+    Each namespace needs its own cleanup call. Calling ``delete_expired()`` with
+    ``namespace=None`` raises ``ImproperlyConfiguredException``.
+
+    Run it on a **recurring** schedule — a periodic task scheduler such as SAQ, or an
+    external cron job. An ``on_startup`` hook runs only once per process start, so it
+    works for an optional initial sweep but will not keep a long-running deployment
+    clean on its own. Do not use ``delete_all()`` for this — it removes live sessions too.
+
 Backend-Based Integration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

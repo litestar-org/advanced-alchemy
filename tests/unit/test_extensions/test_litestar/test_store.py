@@ -368,6 +368,52 @@ async def test_store_delete_all_no_namespace_sync(mock_sync_config: MagicMock) -
 
 
 @pytest.mark.asyncio()
+async def test_store_delete_expired_async(
+    async_store: SQLAlchemyStore[SQLAlchemyAsyncConfig], mock_async_session: AsyncMock
+) -> None:
+    """Expired-entry cleanup executes and commits with an async session."""
+    await async_store.delete_expired()
+
+    mock_async_session.execute.assert_awaited_once()
+    mock_async_session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio()
+async def test_store_delete_expired_sync(
+    sync_store_with_mock_async: SQLAlchemyStore[SQLAlchemySyncConfig], mock_sync_session: MagicMock
+) -> None:
+    """Expired-entry cleanup executes and commits with a sync session."""
+    await sync_store_with_mock_async.delete_expired()
+
+    mock_sync_session.execute.assert_called_once()
+    mock_sync_session.commit.assert_called_once()
+
+
+@pytest.mark.asyncio()
+async def test_store_delete_expired_no_namespace_async(
+    async_store: SQLAlchemyStore[SQLAlchemyAsyncConfig], mock_async_config: MagicMock
+) -> None:
+    """Cleanup without a namespace fails before opening an async session."""
+    async_store.namespace = None
+    with pytest.raises(ImproperlyConfiguredException, match="Cannot perform delete operation: No namespace configured"):
+        await async_store.delete_expired()
+
+    mock_async_config.get_session.assert_not_called()
+
+
+@pytest.mark.asyncio()
+async def test_store_delete_expired_no_namespace_sync(
+    sync_store_with_mock_async: SQLAlchemyStore[SQLAlchemySyncConfig], mock_sync_config: MagicMock
+) -> None:
+    """Cleanup without a namespace fails before opening a sync session."""
+    sync_store_with_mock_async.namespace = None
+    with pytest.raises(ImproperlyConfiguredException, match="Cannot perform delete operation: No namespace configured"):
+        await sync_store_with_mock_async.delete_expired()
+
+    mock_sync_config.get_session.assert_not_called()
+
+
+@pytest.mark.asyncio()
 async def test_store_exists_async(
     async_store: SQLAlchemyStore[SQLAlchemyAsyncConfig], mock_async_session: AsyncMock
 ) -> None:
