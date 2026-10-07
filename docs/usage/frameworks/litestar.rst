@@ -605,24 +605,22 @@ The registered store name must match ``ServerSideSessionConfig.store``, which is
 
 .. note::
 
-    **Cleaning up expired sessions.** Unlike the backend-based integration,
-    :class:`SQLAlchemyStore <advanced_alchemy.extensions.litestar.store.SQLAlchemyStore>`
-    does not expose a ``delete_expired()`` method. Expiry is applied lazily: expired
-    entries stop being returned by ``get()``, but their rows are **not** removed from
-    the table, so it grows over time. Until a dedicated method is available (see
-    `issue #787 <https://github.com/litestar-org/advanced-alchemy/issues/787>`_),
-    schedule a periodic cleanup against the store's model table, for example:
+    **Cleaning up expired sessions.** Call ``session_store.delete_expired()``
+    periodically to remove expired rows.
+    Expired entries stop being returned by ``get()``, but their rows remain in the
+    table until cleanup runs. The method works with both synchronous and asynchronous
+    SQLAlchemy configurations and is awaited in either case:
 
     .. code-block:: python
 
-        from sqlalchemy import delete, func
-
         async def cleanup_expired_sessions() -> None:
-            async with alchemy_config.get_session() as db_session:
-                await db_session.execute(
-                    delete(SessionStore).where(SessionStore.expires_at <= func.now())
-                )
-                await db_session.commit()
+            await session_store.delete_expired()
+
+    Cleanup only deletes entries in the store's exact namespace whose ``expires_at``
+    is at or before the current time. Live entries, entries without an expiration time,
+    and entries in other namespaces (including nested namespaces) are preserved.
+    Each namespace needs its own cleanup call. Calling ``delete_expired()`` with
+    ``namespace=None`` raises ``ImproperlyConfiguredException``.
 
     Run it on a **recurring** schedule — a periodic task scheduler such as SAQ, or an
     external cron job. An ``on_startup`` hook runs only once per process start, so it
