@@ -6,6 +6,17 @@
 .. changelog:: 1.11.0
     :date: 2026-05-30
 
+    .. change:: add expired-entry cleanup to the Litestar SQLAlchemy store
+        :type: feature
+        :pr: 788
+        :issue: 787
+
+        Adds ``SQLAlchemyStore.delete_expired()`` for periodic cleanup with both
+        synchronous and asynchronous SQLAlchemy configurations. Cleanup removes
+        expired rows in the store's exact namespace while preserving live entries,
+        entries without an expiration time, and entries in other namespaces.
+        The session guide documents how to call it on a recurring schedule.
+
     .. change:: harden crypto column types and add TOTP and one-time-code storage
         :type: feature
         :pr: 758
