@@ -257,6 +257,7 @@ def test_date_filter_dependencies_have_distinct_python_parameter_names() -> None
             for metadata in typing.get_args(dependency.__annotations__[key])
             if isinstance(metadata, params.Depends)
         )
+        assert depends.dependency is not None
         assert list(inspect.signature(depends.dependency).parameters) == expected
 
 
