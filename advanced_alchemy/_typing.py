@@ -75,7 +75,6 @@ class SQLModelBaseLike:
     if TYPE_CHECKING:
         __table__: "ClassVar[FromClause]"
         __mapper__: "ClassVar[Mapper[Any]]"
-        __name__: ClassVar[str]
 
     model_fields: ClassVar[dict[str, Any]] = {}
 

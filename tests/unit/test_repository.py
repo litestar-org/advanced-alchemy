@@ -33,6 +33,7 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
+from advanced_alchemy.operations import UpsertStrategy
 from advanced_alchemy.repository import (
     SQLAlchemyAsyncRepository,
     SQLAlchemySyncRepository,
@@ -43,6 +44,7 @@ from advanced_alchemy.repository._util import (
     column_has_defaults,
     model_from_dict,
 )
+from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
 from advanced_alchemy.utils.serialization import (
     is_msgspec_struct,
     is_pydantic_model,
@@ -381,8 +383,6 @@ def test_upsert_helper_duplicate_match_keys(mock_repo: SQLAlchemyAsyncRepository
 def test_upsert_helper_rows_require_fallback(
     mock_repo: SQLAlchemyAsyncRepository[Any], monkeypatch: MonkeyPatch
 ) -> None:
-    from advanced_alchemy.operations import UpsertStrategy
-
     monkeypatch.setattr(mock_repo, "model_type", UpsertMatchModel)
     on_conflict = UpsertStrategy("on_conflict", True, ("natural_key",), "postgresql")
     merge_strategy = UpsertStrategy("merge", False, ("natural_key",), "oracle")
@@ -433,8 +433,6 @@ def test_upsert_helper_rows_require_fallback(
 def test_upsert_helper_resolve_update_columns_and_extract_row(
     mock_repo: SQLAlchemyAsyncRepository[Any], monkeypatch: MonkeyPatch
 ) -> None:
-    from advanced_alchemy.operations import UpsertStrategy
-
     monkeypatch.setattr(mock_repo, "model_type", UpsertMatchModel)
     strategy = UpsertStrategy("on_conflict", True, ("natural_key",), "postgresql")
 
@@ -2749,7 +2747,6 @@ class NullableOrderModel(base.BigIntBase):
 @pytest.mark.parametrize("nulls", ["first", "last"])
 def test_mock_repository_order_by_honors_nulls_placement(sort_order: str, nulls: str) -> None:
     """The in-memory repository applies `OrderBy.nulls` the same way the SQL backends do."""
-    from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
 
     class Repo(SQLAlchemySyncMockRepository[NullableOrderModel]):
         model_type = NullableOrderModel
@@ -2779,7 +2776,6 @@ class SearchableTitleModel(base.BigIntBase):
 @pytest.mark.parametrize("filter_type", [SearchFilter, NotInSearchFilter])
 def test_mock_repository_search_honors_escape_wildcards(filter_type: type[SearchFilter]) -> None:
     """The in-memory repository matches `%` and `_` literally when `escape_wildcards` is set."""
-    from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
 
     class Repo(SQLAlchemySyncMockRepository[SearchableTitleModel]):
         model_type = SearchableTitleModel

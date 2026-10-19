@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.utils.dependencies import (
     ChoiceField,
     DependencyCache,
@@ -141,10 +142,14 @@ def test_dependency_cache_get_set_by_config() -> None:
         assert cache.get(config) == dependencies
 
 
-def test_filter_cache_uses_resolved_names_across_frameworks() -> None:
-    from advanced_alchemy.extensions.fastapi.providers import provide_filters
-    from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
+def _get_framework_filter_factories() -> tuple[Any, ...]:
+    """Import FastAPI and Litestar filter factories when those optional frameworks are installed."""
+    fastapi_providers = pytest.importorskip("advanced_alchemy.extensions.fastapi.providers")
+    litestar_providers = pytest.importorskip("advanced_alchemy.extensions.litestar.providers")
+    return (fastapi_providers.provide_filters, litestar_providers.create_filter_dependencies)
 
+
+def test_filter_cache_uses_resolved_names_across_frameworks() -> None:
     class Generator:
         def __init__(self, prefix: str) -> None:
             self.prefix = prefix
@@ -155,7 +160,7 @@ def test_filter_cache_uses_resolved_names_across_frameworks() -> None:
         def __bool__(self) -> bool:
             return False
 
-    for factory in (provide_filters, create_filter_dependencies):
+    for factory in _get_framework_filter_factories():
         generator = Generator("first_")
         config: FilterConfig = {"search": "name", "alias_generator": generator}
         first = factory(config)
@@ -165,26 +170,14 @@ def test_filter_cache_uses_resolved_names_across_frameworks() -> None:
 
 
 def test_custom_alias_validation_is_opt_in_for_both_frameworks() -> None:
-    import pytest
-
-    from advanced_alchemy.exceptions import ImproperConfigurationError
-    from advanced_alchemy.extensions.fastapi.providers import provide_filters
-    from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
-
-    for factory in (provide_filters, create_filter_dependencies):
+    for factory in _get_framework_filter_factories():
         factory({"boolean_fields": ["status_in"], "in_fields": ["status"]})
         with pytest.raises(ImproperConfigurationError, match="duplicate query parameter"):
             factory({"created_at": True, "alias_generator": lambda name: "same"})
 
 
 def test_alias_presets_share_effective_names_across_frameworks() -> None:
-    import pytest
-
-    from advanced_alchemy.exceptions import ImproperConfigurationError
-    from advanced_alchemy.extensions.fastapi.providers import provide_filters
-    from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
-
-    for factory in (provide_filters, create_filter_dependencies):
+    for factory in _get_framework_filter_factories():
         assert factory({"search": "name", "alias_generator": "snake_case"}) is factory(
             {"search": "name", "alias_generator": lambda name: name}
         )

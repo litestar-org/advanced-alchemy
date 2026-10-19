@@ -8,16 +8,21 @@ from unittest.mock import create_autospec
 from uuid import UUID
 
 import pytest
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import Session
 from time_machine import travel
 
-from advanced_alchemy.exceptions import NotFoundError
+import advanced_alchemy.repository._async as async_repo_mod
+import advanced_alchemy.repository._sync as sync_repo_mod
+from advanced_alchemy.exceptions import NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
     BeforeAfter,
     OrderBy,
     SearchFilter,
 )
+from advanced_alchemy.mixins import BigIntPrimaryKey
+from advanced_alchemy.operations import UpsertStrategy, resolve_upsert_strategy
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.repository._util import DEFAULT_ERROR_MESSAGE_TEMPLATES
 from advanced_alchemy.repository.memory import (
@@ -1457,8 +1462,6 @@ async def test_upsert_many_native_path_is_single_statement_per_chunk(
     ``supports_returning=False``) at most one re-SELECT for hydration — never
     the historical 1 SELECT + N add/update sequence.
     """
-    from sqlalchemy import event
-
     session, models = seeded_test_session_async
     author_model = models["author"]
     author_repo = create_repository(session, author_model)
@@ -1475,8 +1478,6 @@ async def test_upsert_many_native_path_is_single_statement_per_chunk(
         pytest.skip(
             f"native upsert path with match_fields=['id'] cannot hydrate on {dialect_name!r} (no RETURNING / autoincrement PK)"
         )
-    from advanced_alchemy.mixins import BigIntPrimaryKey
-
     if issubclass(author_model, BigIntPrimaryKey):
         pytest.skip(
             f"server-generated bigint PK on {dialect_name!r} falls back to ORM-managed inserts; native single-statement assertion does not apply"
@@ -1516,8 +1517,6 @@ async def test_upsert_many_no_merge_forces_fallback(
     and inserts every row through the ORM — the statements must be plain
     INSERTs with no native upsert clause.
     """
-    from sqlalchemy import event
-
     session, models = seeded_test_session_async
     author_model = models["author"]
     author_repo = create_repository(session, author_model)
@@ -1550,8 +1549,6 @@ async def test_upsert_many_chunk_size_emits_multiple_chunks(
     seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
 ) -> None:
     """A small parameter cap must produce multiple native statements."""
-    from sqlalchemy import event
-
     session, models = seeded_test_session_async
     author_model = models["author"]
     author_repo = create_repository(session, author_model)
@@ -1568,8 +1565,6 @@ async def test_upsert_many_chunk_size_emits_multiple_chunks(
         pytest.skip(
             f"native upsert path with match_fields=['id'] cannot hydrate on {dialect_name!r} (no RETURNING / autoincrement PK)"
         )
-    from advanced_alchemy.mixins import BigIntPrimaryKey
-
     if issubclass(author_model, BigIntPrimaryKey):
         pytest.skip(
             f"server-generated bigint PK on {dialect_name!r} falls back to ORM-managed inserts; native chunking assertion does not apply"
@@ -1607,8 +1602,6 @@ async def test_upsert_many_duplicate_match_keys_use_fallback(
     same target; a genuine primary-key conflict surfaces as the wrapped
     repository error rather than a raw ``ValueError``.
     """
-    from advanced_alchemy.exceptions import RepositoryError
-
     session, models = seeded_test_session_async
     if "user_role" not in models:
         pytest.skip("user_role model not available")
@@ -1629,10 +1622,6 @@ async def test_upsert_many_non_returning_reselect_uses_exact_composite_keys(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Hydration must not return the Cartesian product of composite key values."""
-    import advanced_alchemy.repository._async as async_repo_mod
-    import advanced_alchemy.repository._sync as sync_repo_mod
-    from advanced_alchemy.operations import UpsertStrategy, resolve_upsert_strategy
-
     session, models = seeded_test_session_async
     if "user_role" not in models:
         pytest.skip("user_role model not available")

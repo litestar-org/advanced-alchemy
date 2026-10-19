@@ -1368,15 +1368,19 @@ class _NullsPlacement(UnaryExpression[Any]):
 def _compile_nulls_placement_emulated(  # pyright: ignore[reportUnusedFunction]
     element: _NullsPlacement, compiler: Any, **kw: Any
 ) -> str:
+    """Compile emulated NULLS placement for MySQL, MariaDB, and SQL Server.
+
+    Uses literal integer columns instead of bound parameters because parameter placeholders inside
+    ``ORDER BY`` are ambiguous on these dialects, and disables label rendering inside ``CASE``
+    because SQL Server rejects ``SELECT`` aliases inside ``CASE`` expressions.
+    """
     ordering = cast("UnaryExpression[Any]", element.element)
     nulls_go_last = element.modifier is op.nulls_last_op
     if nulls_go_last is (ordering.modifier is op.desc_op):
         return cast("str", compiler.process(ordering, **kw))
-    # Literals, not bound parameters: a placeholder inside ORDER BY is ambiguous on these backends.
     key = case(
         (ordering.element.is_(None), literal_column("1" if nulls_go_last else "0", Integer)),
         else_=literal_column("0" if nulls_go_last else "1", Integer),
     )
-    # SQL Server permits a SELECT alias as an ordering term, but not inside CASE.
     key_kw = {**kw, "render_label_as_label": None}
     return f"{compiler.process(key, **key_kw)}, {compiler.process(ordering, **kw)}"

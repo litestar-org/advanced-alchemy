@@ -4,6 +4,7 @@ import inspect
 import sys
 import typing
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, IntEnum
 from typing import Annotated, Any, Optional, Union, cast
@@ -18,8 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from advanced_alchemy.base import UUIDBase
-
-# Assuming necessary classes are importable from the new provider module
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.fastapi.providers import (
@@ -45,6 +44,7 @@ from advanced_alchemy.filters import (
 )
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
+from advanced_alchemy.utils.dependencies import filter_cache_key, resolve_filter_aliases
 from advanced_alchemy.utils.singleton import SingletonMeta
 
 if sys.version_info >= (3, 11):
@@ -116,8 +116,6 @@ def test_create_filter_dependencies_cache_hit() -> None:
 def test_create_filter_dependencies_cache_miss() -> None:
     """Test create_filter_dependencies with cache miss."""
     config = cast(FilterConfig, {"created_at": True})
-    from advanced_alchemy.utils.dependencies import filter_cache_key, resolve_filter_aliases
-
     cache_key = filter_cache_key(
         "advanced_alchemy.extensions.fastapi.providers", config, DEPENDENCY_DEFAULTS, resolve_filter_aliases(config)
     )
@@ -1023,8 +1021,6 @@ def test_custom_date_alias_validation_location(field: str, bound: str) -> None:
 
 
 def test_unhashable_falsy_generators_keep_distinct_cached_aliases() -> None:
-    from dataclasses import dataclass
-
     @dataclass
     class Generator:
         prefix: str

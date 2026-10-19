@@ -42,6 +42,8 @@ from uuid import UUID
 from weakref import WeakKeyDictionary
 
 from sqlalchemy import Boolean, Insert, Select, Table, UniqueConstraint, bindparam, insert, select, text
+from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import Dialect
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import ClauseElement
@@ -60,6 +62,7 @@ __all__ = (
     "OnConflictUpsert",
     "UpsertKind",
     "UpsertStrategy",
+    "resolve_column_default",
     "resolve_upsert_strategy",
     "validate_identifier",
 )
@@ -427,8 +430,6 @@ class OnConflictUpsert:
         update_columns = _resolve_update_columns(table, values, conflict_columns, update_columns)
 
         if dialect_name in {"postgresql", "sqlite", "duckdb", "cockroachdb"}:
-            from sqlalchemy.dialects.postgresql import insert as pg_insert
-
             pg_insert_stmt = pg_insert(table).values(values)
             index_elements = [table.c[col] for col in conflict_columns]
             if not update_columns:
@@ -439,8 +440,6 @@ class OnConflictUpsert:
             )
 
         if dialect_name in {"mysql", "mariadb"}:
-            from sqlalchemy.dialects.mysql import insert as mysql_insert
-
             mysql_insert_stmt = mysql_insert(table).values(values)
             mysql_updates = (
                 {col: mysql_insert_stmt.inserted[col] for col in update_columns}
@@ -624,8 +623,6 @@ class OnConflictUpsert:
         insert_target: Union[Table, type[Any]] = model_type if model_type is not None else table
 
         if dialect_name in {"postgresql", "sqlite", "duckdb", "cockroachdb"}:
-            from sqlalchemy.dialects.postgresql import insert as pg_insert
-
             pg_stmt = pg_insert(insert_target).values(list(rows))
             index_elements = [table.c[col] for col in conflict_columns]
             if not resolved_update_columns:
@@ -636,8 +633,6 @@ class OnConflictUpsert:
             )
 
         if dialect_name in {"mysql", "mariadb"}:
-            from sqlalchemy.dialects.mysql import insert as mysql_insert
-
             mysql_stmt = mysql_insert(insert_target).values(list(rows))
             mysql_updates = (
                 {col: mysql_stmt.inserted[col] for col in resolved_update_columns}

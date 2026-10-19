@@ -3240,9 +3240,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         existing_data: List[ModelT],
         match_fields: Optional[Union[List[str], str]] = None,
     ) -> List[ModelT]:
+        """Copy primary key attributes from matched existing instances onto incoming instances."""
         match_fields = self._get_match_fields(match_fields=match_fields)
         if match_fields is None:
-            # Default to all PK columns for composite PKs, otherwise just id_attribute
             match_fields = list(self._pk_attr_names) if self.has_composite_pk else [self.id_attribute]
         instances_by_match_key: dict[tuple[Any, ...], ModelT] = {}
         for existing_instance in existing_data:
@@ -3268,7 +3268,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                         matched_instance = candidate_instance
                         break
             if matched_instance is not None:
-                # Copy all PK values from existing to datum (handles composite PKs).
                 for pk_attr in self._pk_attr_names:
                     setattr(datum, pk_attr, getattr(matched_instance, pk_attr))
         return data
