@@ -9,7 +9,6 @@ from flask import g
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.flask.cli import database_group
 from advanced_alchemy.extensions.flask.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
@@ -158,8 +157,6 @@ class AdvancedAlchemy:
             raise ImproperConfigurationError(msg)
 
         session = session_maker()
-
-        set_async_context(self._is_async(bind_key))
 
         if self._has_async_config:
             # Ensure portal is started

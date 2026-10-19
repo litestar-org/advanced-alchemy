@@ -1,6 +1,7 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
+import pytest
 from litestar import Litestar, get
 from litestar.testing import TestClient
 from sqlalchemy import select
@@ -165,3 +166,30 @@ def test_plugin_is_async_context(tmp_path: Path) -> None:
         response = async_client.get("/test_async_plugin")
         assert response.status_code == 200
         assert response.json() == {"is_async": True}
+
+
+@pytest.mark.filterwarnings("error:Call to deprecated function 'set_async_context':DeprecationWarning")
+@pytest.mark.parametrize("is_async", [True, False])
+def test_provide_session_does_not_call_deprecated_set_async_context(tmp_path: Path, is_async: bool) -> None:
+    """Providing a session must not emit the ``set_async_context`` deprecation warning."""
+    db_path = tmp_path / "litestar_deprecation_test.db"
+    config: Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]
+    if is_async:
+        config = SQLAlchemyAsyncConfig(connection_string=f"sqlite+aiosqlite:///{db_path}")
+
+        @get("/")
+        async def handler(db_session: AsyncSession) -> None:
+            return None
+
+    else:
+        config = SQLAlchemySyncConfig(connection_string=f"sqlite:///{db_path}")
+
+        @get("/", sync_to_thread=False)
+        def handler(db_session: Session) -> None:
+            return None
+
+    app = Litestar(route_handlers=[handler], plugins=[SQLAlchemyInitPlugin(config=config)])
+
+    with TestClient(app=app) as client:
+        response = client.get("/")
+        assert response.status_code == 200
