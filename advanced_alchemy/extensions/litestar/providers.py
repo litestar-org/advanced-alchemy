@@ -663,11 +663,13 @@ def _create_filter_aggregate_function(
     dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
     providers: Optional[dict[str, Provide]] = None,
 ) -> Callable[..., list[FilterTypes]]:
-    """Build aggregate metadata from the registered dependencies themselves."""
+    """Build aggregate metadata from the registered dependencies themselves.
+
+    Preserves historical filter output order by placing pagination before ``updated_at``.
+    """
     if providers is None:
         providers = _create_statement_filters(config, dep_defaults, include_aggregate=False)
     keys = list(providers)
-    # Preserve the historical output order, including pagination before updated-at.
     pagination = dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY
     updated = dep_defaults.UPDATED_FILTER_DEPENDENCY_KEY
     if pagination in keys and updated in keys:

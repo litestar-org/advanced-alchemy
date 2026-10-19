@@ -386,6 +386,10 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 ) -> Callable[..., list[FilterTypes]]:
     """Create a FastAPI dependency provider function that aggregates multiple filter dependencies.
 
+    Returns a fresh ``partial(_aggregate_filter_function)`` per configuration so assigning
+    ``__signature__`` and ``__annotations__`` does not mutate previously constructed
+    dependencies.
+
     Returns:
         A FastAPI dependency provider function that aggregates multiple filter dependencies.
     """
@@ -770,10 +774,6 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             )
             annotations[param_name] = Annotated[Optional[ChoicesFilter[Any]], Depends(choices_provider)]
 
-    # A fresh function per config. Assigning `__signature__` to the shared module-level
-    # `_aggregate_filter_function` would make every call to `provide_filters` overwrite the
-    # parameters of every dependency built before it, so two routers with different configs would
-    # both end up serving whichever config was built last.
     aggregate_filters = partial(_aggregate_filter_function)
 
     aggregate_filters.__signature__ = inspect.Signature(  # type: ignore[attr-defined]

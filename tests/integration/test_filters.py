@@ -3,12 +3,16 @@ from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
 import pytest
-from google.cloud.sqlalchemy_spanner.sqlalchemy_spanner import SpannerDialect
 from pytest import FixtureRequest
 from sqlalchemy import Boolean, Engine, ForeignKey, String, create_engine, func, select
 from sqlalchemy.dialects import mssql, mysql, oracle, postgresql, sqlite
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, joinedload, mapped_column, relationship
+
+try:
+    from google.cloud.sqlalchemy_spanner.sqlalchemy_spanner import SpannerDialect
+except ImportError:  # pragma: no cover
+    SpannerDialect = None  # type: ignore[assignment,misc]
 
 from advanced_alchemy.base import BigIntBase, UUIDAuditBase
 from advanced_alchemy.filters import (
@@ -604,14 +608,11 @@ def test_order_by_nulls_placement(session: Session, movie_model_sync: type[Decla
     """
     Movie = movie_model_sync
 
-    # Skip mock engines
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
 
-    # Clean any existing data first, then setup fresh data
-    if getattr(session.bind.dialect, "name", "") != "mock":
-        session.execute(Movie.__table__.delete())
-        session.commit()
+    session.execute(Movie.__table__.delete())
+    session.commit()
     setup_movie_data(session, Movie)
 
     for sort_order in ("asc", "desc"):
@@ -819,7 +820,10 @@ def test_search_filter(session: Session, movie_model_sync: type[DeclarativeBase]
         mysql.dialect(),  # type: ignore[no-untyped-call]
         oracle.dialect(),  # type: ignore[no-untyped-call]
         mssql.dialect(),  # type: ignore[no-untyped-call]
-        SpannerDialect(),
+        pytest.param(
+            SpannerDialect() if SpannerDialect is not None else None,
+            marks=pytest.mark.skipif(SpannerDialect is None, reason="sqlalchemy-spanner not installed"),
+        ),
     ],
 )
 @pytest.mark.parametrize(
@@ -854,14 +858,11 @@ def test_search_filter_escapes_wildcards(session: Session, movie_model_sync: typ
     """
     Movie = movie_model_sync
 
-    # Skip mock engines
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
 
-    # Clean any existing data first, then setup fresh data
-    if getattr(session.bind.dialect, "name", "") != "mock":
-        session.execute(Movie.__table__.delete())
-        session.commit()
+    session.execute(Movie.__table__.delete())
+    session.commit()
     setup_movie_data(session, Movie)
 
     escaped = SearchFilter(field_name="title", value="The_", escape_wildcards=True)
@@ -877,14 +878,11 @@ def test_not_in_search_filter_escapes_wildcards(session: Session, movie_model_sy
     """`NotInSearchFilter` inherits the escaping, so a literal "The_" excludes nothing."""
     Movie = movie_model_sync
 
-    # Skip mock engines
     if getattr(session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engines not supported for filter tests")
 
-    # Clean any existing data first, then setup fresh data
-    if getattr(session.bind.dialect, "name", "") != "mock":
-        session.execute(Movie.__table__.delete())
-        session.commit()
+    session.execute(Movie.__table__.delete())
+    session.commit()
     setup_movie_data(session, Movie)
 
     escaped = NotInSearchFilter(field_name="title", value="The_", escape_wildcards=True)

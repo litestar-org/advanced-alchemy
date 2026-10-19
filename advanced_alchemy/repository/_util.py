@@ -52,6 +52,7 @@ from advanced_alchemy.filters import (
 from advanced_alchemy.operations import UpsertStrategy, resolve_column_default
 from advanced_alchemy.repository._typing import arrays_equal, is_numpy_array
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType
+from advanced_alchemy.types.file_object import StoredObject
 from advanced_alchemy.utils.serialization import encode_complex_type, encode_json
 
 DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
@@ -919,8 +920,6 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         instances relying on any of those take the ORM fallback so their
         behavior matches ``add_many`` and ``update_many``.
         """
-        from advanced_alchemy.types.file_object import StoredObject
-
         mapper = self.model_type.__mapper__
         if len(mapper.tables) > 1:
             return True

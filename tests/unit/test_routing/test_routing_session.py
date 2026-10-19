@@ -3,12 +3,17 @@
 Tests the session classes that implement read/write routing via get_bind().
 """
 
+from collections.abc import Iterator
 from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy import Delete, Engine, Insert, Update, select
+from sqlalchemy import Delete, Engine, Insert, String, Update, select
+from sqlalchemy.orm import Mapped, mapped_column
 
+from advanced_alchemy.base import UUIDAuditBase
 from advanced_alchemy.config.routing import RoutingConfig
+from advanced_alchemy.repository import SQLAlchemySyncRepository
+from advanced_alchemy.routing import RoutingSyncSessionMaker
 from advanced_alchemy.routing.context import (
     force_primary_var,
     reset_routing_context,
@@ -437,3 +442,48 @@ def test_has_for_update_detects_for_update_clause() -> None:
     assert session._has_for_update(regular_select) is False
 
     assert session._has_for_update(None) is False
+
+
+class RoutingBindUser(UUIDAuditBase):
+    """Minimal model for routing bind regression tests."""
+
+    __tablename__ = "routing_bind_sync_users"
+
+    name: Mapped[str] = mapped_column(String(length=100))  # pyright: ignore[reportUninitializedInstanceVariable]
+
+
+class RoutingBindUserSyncRepository(SQLAlchemySyncRepository[RoutingBindUser]):
+    """Sync repository for ``RoutingBindUser``."""
+
+    model_type = RoutingBindUser
+
+
+@pytest.fixture()
+def sqlite_sync_routing_session() -> Iterator[RoutingSyncSession]:
+    """Create a sync routing session backed by in-memory SQLite engines."""
+    maker = RoutingSyncSessionMaker(
+        RoutingConfig(
+            primary_connection_string="sqlite://",
+            read_replicas=["sqlite://"],
+        )
+    )
+    session = maker()
+    try:
+        yield session
+    finally:
+        session.close()
+        maker.close_all()
+
+
+def test_sync_routing_session_exposes_none_bind(sqlite_sync_routing_session: RoutingSyncSession) -> None:
+    """A sync routing session must expose ``bind`` as ``None``."""
+    assert sqlite_sync_routing_session.bind is None
+
+
+def test_sync_repository_constructs_with_routing_session(sqlite_sync_routing_session: RoutingSyncSession) -> None:
+    """Constructing a sync repository on a routing session must resolve dialect via ``get_bind()``."""
+    repo = RoutingBindUserSyncRepository(session=sqlite_sync_routing_session)
+
+    assert repo.session is sqlite_sync_routing_session
+    assert repo._dialect.name == "sqlite"
+    assert repo._dialect is sqlite_sync_routing_session.get_bind().dialect

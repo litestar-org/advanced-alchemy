@@ -4,8 +4,16 @@ from typing import Any
 
 import pytest
 from sqlalchemy import Column, Index, Integer, MetaData, String, Table, UniqueConstraint, func, text
+from sqlalchemy.dialects import mssql, postgresql, sqlite
+from sqlalchemy.engine.default import DefaultDialect
 
-from advanced_alchemy.operations import MergeStatement, OnConflictUpsert, resolve_upsert_strategy, validate_identifier
+from advanced_alchemy.operations import (
+    MergeStatement,
+    OnConflictUpsert,
+    UpsertStrategy,
+    resolve_upsert_strategy,
+    validate_identifier,
+)
 
 
 @pytest.fixture
@@ -200,8 +208,6 @@ class TestMSSQLMergeCompile:
     """Tests for the MSSQL MergeStatement compile path."""
 
     def test_mssql_compile_emits_using_values_source_without_unused_output(self, sample_table: Table) -> None:
-        from sqlalchemy.dialects import mssql
-
         rows = [
             {"key": "k1", "namespace": "ns", "value": "v1"},
             {"key": "k2", "namespace": "ns", "value": "v2"},
@@ -224,8 +230,6 @@ class TestMSSQLMergeCompile:
         assert compiled.rstrip().endswith(";")
 
     def test_mssql_compile_trailing_semicolon_is_mandatory(self, sample_table: Table) -> None:
-        from sqlalchemy.dialects import mssql
-
         rows = [{"key": "k1", "namespace": "ns", "value": "v1"}]
         stmt = OnConflictUpsert.create_merge_many(
             table=sample_table,
@@ -237,8 +241,6 @@ class TestMSSQLMergeCompile:
         assert compiled.rstrip().endswith(";")
 
     def test_mssql_compile_on_clause_uses_conflict_columns(self, sample_table: Table) -> None:
-        from sqlalchemy.dialects import mssql
-
         rows = [{"key": "k1", "namespace": "ns", "value": "v1"}]
         stmt = OnConflictUpsert.create_merge_many(
             table=sample_table,
@@ -252,8 +254,6 @@ class TestMSSQLMergeCompile:
         assert "TGT.NAMESPACE = SRC.NAMESPACE" in upper
 
     def test_mssql_compile_qualifies_schema_without_serializable_hint(self) -> None:
-        from sqlalchemy.dialects import mssql
-
         table = Table(
             "Order",
             MetaData(),
@@ -277,8 +277,6 @@ class TestBulkUpsertSafety:
     """Cross-dialect correctness gates for native bulk dispatch."""
 
     def test_default_update_columns_never_mutate_primary_key(self, sample_table: Table) -> None:
-        from sqlalchemy.dialects import postgresql
-
         stmt = OnConflictUpsert.create_upsert_many(
             table=sample_table,
             rows=[{"id": 1, "key": "k1", "namespace": "ns", "value": "v1"}],
@@ -468,8 +466,6 @@ class TestCreateUpsertMany:
             )
 
     def test_postgresql_compiles_to_single_insert_with_multiple_values(self, sample_table: Table) -> None:
-        from sqlalchemy.dialects import postgresql
-
         rows = [
             {"key": "k1", "namespace": "ns", "value": "v1"},
             {"key": "k2", "namespace": "ns", "value": "v2"},
@@ -498,8 +494,6 @@ class TestCreateUpsertMany:
         assert hasattr(stmt, "on_conflict_do_update")
 
     def test_sqlite_compiles(self, sample_table: Table) -> None:
-        from sqlalchemy.dialects import sqlite
-
         rows = [
             {"key": "k1", "namespace": "ns", "value": "v1"},
             {"key": "k2", "namespace": "ns", "value": "v2"},
@@ -558,8 +552,6 @@ class TestCreateUpsertMany:
             )
 
     def test_single_row_equivalence_to_create_upsert(self, sample_table: Table) -> None:
-        from sqlalchemy.dialects import postgresql
-
         row = {"key": "k1", "namespace": "ns", "value": "v1"}
         single = OnConflictUpsert.create_upsert(
             table=sample_table,
@@ -648,8 +640,6 @@ class TestCreateMergeMany:
         assert "FROM DUAL" not in source_repr.upper()
 
     def test_mssql_returns_merge_with_values_source_clause(self, sample_table: Table) -> None:
-        from sqlalchemy.dialects import mssql
-
         rows = [
             {"key": "k1", "namespace": "ns", "value": "v1"},
             {"key": "k2", "namespace": "ns", "value": "v2"},
@@ -731,8 +721,6 @@ class TestResolveUpsertStrategy:
     """Tests for resolve_upsert_strategy."""
 
     def test_pk_exact_match_on_conflict_dialect(self, sample_table: Table) -> None:
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         strategy = resolve_upsert_strategy(sample_table, ("id",), "postgresql")
         assert strategy.kind == "on_conflict"
         assert strategy.supports_returning is True
@@ -740,70 +728,50 @@ class TestResolveUpsertStrategy:
         assert strategy.dialect_name == "postgresql"
 
     def test_pk_superset_match_preserves_match_semantics_with_fallback(self, composite_pk_table: Table) -> None:
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         strategy = resolve_upsert_strategy(composite_pk_table, ("tenant_id", "user_id", "email"), "postgresql")
         assert strategy.kind == "fallback"
         assert set(strategy.conflict_columns) == {"tenant_id", "user_id", "email"}
 
     def test_composite_pk_exact_match(self, composite_pk_table: Table) -> None:
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         strategy = resolve_upsert_strategy(composite_pk_table, ("tenant_id", "user_id"), "postgresql")
         assert strategy.kind == "on_conflict"
         assert set(strategy.conflict_columns) == {"tenant_id", "user_id"}
 
     def test_unique_constraint_match(self, composite_pk_table: Table) -> None:
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         strategy = resolve_upsert_strategy(composite_pk_table, ("email",), "postgresql")
         assert strategy.kind == "on_conflict"
         assert strategy.conflict_columns == ("email",)
 
     def test_unique_index_match(self, composite_pk_table: Table) -> None:
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         strategy = resolve_upsert_strategy(composite_pk_table, ("external_ref",), "postgresql")
         assert strategy.kind == "on_conflict"
         assert strategy.conflict_columns == ("external_ref",)
 
     def test_non_unique_field_falls_back(self, composite_pk_table: Table) -> None:
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         strategy = resolve_upsert_strategy(composite_pk_table, ("display_name",), "postgresql")
         assert strategy.kind == "fallback"
         assert strategy.supports_returning is False
 
     def test_non_existent_column_falls_back(self, sample_table: Table) -> None:
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         strategy = resolve_upsert_strategy(sample_table, ("missing_col",), "postgresql")
         assert strategy.kind == "fallback"
         assert strategy.supports_returning is False
 
     def test_empty_match_fields_raises(self, sample_table: Table) -> None:
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         with pytest.raises(ValueError, match="must not be empty"):
             resolve_upsert_strategy(sample_table, (), "postgresql")
 
     def test_match_fields_order_independent_cache(self, composite_pk_table: Table) -> None:
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         first = resolve_upsert_strategy(composite_pk_table, ("tenant_id", "user_id"), "postgresql")
         second = resolve_upsert_strategy(composite_pk_table, ("user_id", "tenant_id"), "postgresql")
         assert first == second
 
     def test_cache_returns_same_instance(self, sample_table: Table) -> None:
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         first = resolve_upsert_strategy(sample_table, ("id",), "postgresql")
         second = resolve_upsert_strategy(sample_table, ("id",), "postgresql")
         assert first is second
 
     def test_dialect_keyword_argument(self, sample_table: Table) -> None:
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         strategy = resolve_upsert_strategy(sample_table, ("id",), dialect="postgresql")
 
         assert strategy.kind == "on_conflict"
@@ -830,26 +798,18 @@ class TestResolveUpsertStrategy:
         expected_kind: str,
         expected_returning: bool,
     ) -> None:
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         strategy = resolve_upsert_strategy(sample_table, ("id",), dialect)
         assert strategy.kind == expected_kind
         assert strategy.supports_returning is expected_returning
         assert strategy.dialect_name == dialect
 
     def test_spanner_insert_or_update_only_matches_primary_key(self, composite_pk_table: Table) -> None:
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         strategy = resolve_upsert_strategy(composite_pk_table, ("email",), "spanner+spanner")
 
         assert strategy.kind == "fallback"
         assert strategy.conflict_columns == ("email",)
 
     def test_runtime_dialect_returning_capability_is_respected(self, sample_table: Table) -> None:
-        from sqlalchemy.engine.default import DefaultDialect
-
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         class _DialectWithoutInsertReturning(DefaultDialect):
             name = "sqlite"
             insert_returning = False
@@ -860,28 +820,23 @@ class TestResolveUpsertStrategy:
         assert strategy.supports_returning is False
 
     def test_spanner_insert_or_update_uses_sqlalchemy_insert_with_returning(self, sample_table: Table) -> None:
-        from google.cloud.sqlalchemy_spanner.sqlalchemy_spanner import SpannerDialect
-
+        spanner_module = pytest.importorskip("google.cloud.sqlalchemy_spanner.sqlalchemy_spanner")
         statement = OnConflictUpsert.create_insert_or_update_many(
             table=sample_table,
             rows=[{"id": 1, "key": "key", "namespace": "ns", "value": "value"}],
         ).returning(sample_table)
 
-        compiled = str(statement.compile(dialect=SpannerDialect()))
+        compiled = str(statement.compile(dialect=spanner_module.SpannerDialect()))
 
         assert compiled.startswith("INSERT OR UPDATE INTO test_table")
         assert "THEN RETURN" in compiled
 
     def test_unknown_dialect_falls_back(self, sample_table: Table) -> None:
-        from advanced_alchemy.operations import resolve_upsert_strategy
-
         strategy = resolve_upsert_strategy(sample_table, ("id",), "snowflake")
         assert strategy.kind == "fallback"
         assert strategy.supports_returning is False
 
     def test_upsert_strategy_is_named_tuple_like(self, sample_table: Table) -> None:
-        from advanced_alchemy.operations import UpsertStrategy, resolve_upsert_strategy
-
         strategy = resolve_upsert_strategy(sample_table, ("id",), "postgresql")
         assert isinstance(strategy, UpsertStrategy)
         assert hasattr(strategy, "kind")
