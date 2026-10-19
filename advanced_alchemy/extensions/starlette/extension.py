@@ -10,16 +10,14 @@ from typing import (
     overload,
 )
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 
-from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.starlette.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 
 if TYPE_CHECKING:
     from sqlalchemy import Engine
-    from sqlalchemy.ext.asyncio import AsyncEngine
+    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
     from sqlalchemy.orm import Session
     from starlette.applications import Starlette
 
@@ -255,7 +253,6 @@ class AdvancedAlchemy:
         if session is None:
             session = config.create_session_maker()()
             setattr(request.state, config.session_key, session)
-        set_async_context(isinstance(session, AsyncSession))
         return session
 
     def get_session(
@@ -313,7 +310,6 @@ class AdvancedAlchemy:
         config = self.get_config(key)
 
         def _get_session(request: Request) -> Union["Session", "AsyncSession"]:
-            set_async_context(isinstance(config, SQLAlchemyAsyncConfig))
             return self._get_session_from_request(request, config)
 
         return _get_session
@@ -332,7 +328,6 @@ class AdvancedAlchemy:
         config = self.get_async_config(key)
 
         def _get_session(request: Request) -> "AsyncSession":
-            set_async_context(True)
             return self._get_session_from_request(request, config)
 
         return _get_session
@@ -349,7 +344,6 @@ class AdvancedAlchemy:
         config = self.get_sync_config(key)
 
         def _get_session(request: Request) -> "Session":
-            set_async_context(False)
             return self._get_session_from_request(request, config)
 
         return _get_session

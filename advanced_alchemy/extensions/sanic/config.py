@@ -28,7 +28,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
 from typing_extensions import Literal
 
-from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config import EngineConfig as _EngineConfig
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemyAsyncConfig
@@ -198,7 +197,6 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             session = cast("Optional[AsyncSession]", getattr(request.ctx, self.session_key, None))
             if session is None:
                 setattr(request.ctx, self.session_key, self.get_session())
-                set_async_context(True)
 
         @self.app.middleware("response")  # type: ignore[misc,untyped-decorator]
         async def on_response(request: Request, response: HTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
@@ -411,7 +409,6 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             session = cast("Optional[Session]", getattr(request.ctx, self.session_key, None))
             if session is None:
                 setattr(request.ctx, self.session_key, self.get_session())
-                set_async_context(False)
 
         @self.app.middleware("response")  # type: ignore[misc,untyped-decorator]
         async def on_response(request: Request, response: HTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
