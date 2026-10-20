@@ -429,7 +429,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
         created_after_alias = alias_for("created_after")
 
         def provide_created_at_filter(
-            before: Annotated[
+            created_at_before: Annotated[
                 Optional[str],
                 Query(
                     alias=created_before_alias,
@@ -437,7 +437,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     json_schema_extra={"format": "date-time"},
                 ),
             ] = None,
-            after: Annotated[
+            created_at_after: Annotated[
                 Optional[str],
                 Query(
                     alias=created_after_alias,
@@ -450,17 +450,17 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             after_dt = None
 
             # Validate both parameters regardless of endpoint path
-            if before is not None:
+            if created_at_before is not None:
                 try:
-                    before_dt = datetime.datetime.fromisoformat(before.replace("Z", "+00:00"))
+                    before_dt = datetime.datetime.fromisoformat(created_at_before.replace("Z", "+00:00"))
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
                         errors=[{"loc": ["query", created_before_alias], "msg": "Invalid date format"}]
                     ) from e
 
-            if after is not None:
+            if created_at_after is not None:
                 try:
-                    after_dt = datetime.datetime.fromisoformat(after.replace("Z", "+00:00"))
+                    after_dt = datetime.datetime.fromisoformat(created_at_after.replace("Z", "+00:00"))
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
                         errors=[{"loc": ["query", created_after_alias], "msg": "Invalid date format"}]
@@ -488,7 +488,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
         updated_after_alias = alias_for("updated_after")
 
         def provide_updated_at_filter(
-            before: Annotated[
+            updated_at_before: Annotated[
                 Optional[str],
                 Query(
                     alias=updated_before_alias,
@@ -496,7 +496,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     json_schema_extra={"format": "date-time"},
                 ),
             ] = None,
-            after: Annotated[
+            updated_at_after: Annotated[
                 Optional[str],
                 Query(
                     alias=updated_after_alias,
@@ -509,17 +509,17 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             after_dt = None
 
             # Validate both parameters regardless of endpoint path
-            if before is not None:
+            if updated_at_before is not None:
                 try:
-                    before_dt = datetime.datetime.fromisoformat(before.replace("Z", "+00:00"))
+                    before_dt = datetime.datetime.fromisoformat(updated_at_before.replace("Z", "+00:00"))
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
                         errors=[{"loc": ["query", updated_before_alias], "msg": "Invalid date format"}]
                     ) from e
 
-            if after is not None:
+            if updated_at_after is not None:
                 try:
-                    after_dt = datetime.datetime.fromisoformat(after.replace("Z", "+00:00"))
+                    after_dt = datetime.datetime.fromisoformat(updated_at_after.replace("Z", "+00:00"))
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
                         errors=[{"loc": ["query", updated_after_alias], "msg": "Invalid date format"}]

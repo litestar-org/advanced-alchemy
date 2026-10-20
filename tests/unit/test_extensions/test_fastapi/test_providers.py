@@ -12,7 +12,7 @@ from unittest.mock import patch
 from uuid import UUID
 
 import pytest
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Request, params
 from fastapi.testclient import TestClient
 from sqlalchemy import String
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -237,6 +237,28 @@ def test_create_filter_aggregate_function_fastapi() -> None:
     assert mock_created_filter not in result_some_none
     assert mock_search_filter not in result_some_none
     assert mock_order_by not in result_some_none
+
+
+def test_date_filter_dependencies_have_distinct_python_parameter_names() -> None:
+    """The created/updated sub-dependencies must not share `before`/`after` parameter names.
+
+    Tools that recursively inspect a route dependency graph key on Python parameter names, so
+    each provider needs distinct names even though the public query aliases
+    (`createdBefore`/`createdAfter`/`updatedBefore`/`updatedAfter`) already differ.
+    """
+    dependency = provide_filters({"created_at": True, "updated_at": True})
+
+    for key, expected in (
+        ("created_filter", ["created_at_before", "created_at_after"]),
+        ("updated_filter", ["updated_at_before", "updated_at_after"]),
+    ):
+        depends = next(
+            metadata
+            for metadata in typing.get_args(dependency.__annotations__[key])
+            if isinstance(metadata, params.Depends)
+        )
+        assert depends.dependency is not None
+        assert list(inspect.signature(depends.dependency).parameters) == expected
 
 
 # --- Main create_filter_dependencies Tests --- #
