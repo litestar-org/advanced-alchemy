@@ -18,6 +18,11 @@ on:
         required: false
         type: number
         default: 60
+      experimental:
+        description: "Allow failures (for Python versions whose dependencies lack wheels)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -54,6 +59,7 @@ jobs:
         run: uv python install ${{ inputs.python-version }}
 
       - name: Install dependencies
+        continue-on-error: ${{ inputs.experimental }}
         run: uv sync --all-extras --dev
 
       - name: Set PYTHONPATH
@@ -61,10 +67,12 @@ jobs:
 
       - name: Test
         if: ${{ !inputs.coverage }}
+        continue-on-error: ${{ inputs.experimental }}
         run: uv run pytest --dist "loadgroup" -m "" tests -n 2
 
       - name: Test with coverage
         if: ${{ inputs.coverage }}
+        continue-on-error: ${{ inputs.experimental }}
         run: uv run pytest tests --dist "loadgroup" -m "" --cov=advanced_alchemy --cov-report=xml -n 2
 
       - uses: actions/upload-artifact@v7
