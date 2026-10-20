@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import inspect
-from collections.abc import AsyncGenerator, Callable, Generator
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, closing
 from inspect import isclass
 from typing import TYPE_CHECKING, Any, Generic, cast, overload
@@ -41,8 +41,8 @@ T5 = TypeVar("T5")
 T6 = TypeVar("T6")
 Ts = TypeVarTuple("Ts")
 
-AsyncServiceProvider: TypeAlias = Callable[..., AsyncGenerator[T, None]]
-SyncServiceProvider: TypeAlias = Callable[..., Generator[T, None, None]]
+AsyncServiceProvider: TypeAlias = "Callable[..., AsyncGenerator[T, None] | Awaitable[T]]"
+SyncServiceProvider: TypeAlias = "Callable[..., Generator[T, None, None] | T]"
 ServiceSpec: TypeAlias = "type[T] | AsyncServiceProvider[T] | SyncServiceProvider[T]"
 
 
@@ -72,6 +72,19 @@ class _ServiceGroupContext(Generic[Unpack[Ts]]):
         "_sync_stack",
         "_uniquify",
     )
+
+    _async_stack: AsyncExitStack | None
+    _config: Any | None
+    _connection: Any | None
+    _count_with_window_function: bool | None
+    _error_messages: ErrorMessages | EmptyType | None
+    _execution_options: dict[str, Any] | None
+    _load: LoadSpec | None
+    _session: AsyncSession | Session | None
+    _specs: tuple[Any, ...]
+    _statement: Any | None
+    _sync_stack: ExitStack | None
+    _uniquify: bool | None
 
     def __init__(
         self,
@@ -112,7 +125,7 @@ class _ServiceGroupContext(Generic[Unpack[Ts]]):
                 services.append(service)
             self._async_stack = stack
             return cast("tuple[Unpack[Ts]]", tuple(services))
-        except Exception:
+        except BaseException:
             await stack.aclose()
             raise
 
@@ -138,7 +151,7 @@ class _ServiceGroupContext(Generic[Unpack[Ts]]):
                 services.append(service)
             self._sync_stack = stack
             return cast("tuple[Unpack[Ts]]", tuple(services))
-        except Exception:
+        except BaseException:
             stack.close()
             raise
 
@@ -162,11 +175,17 @@ class _ServiceGroupContext(Generic[Unpack[Ts]]):
                 )
                 raise ImproperConfigurationError(msg)
             return self._session
-        if self._connection is not None and self._config is not None and hasattr(self._config, "provide_session"):
-            return cast(
-                "AsyncSession",
-                self._config.provide_session(self._connection.app.state, self._connection.scope),
-            )
+        if self._connection is not None:
+            if self._config is None or not hasattr(self._config, "provide_session"):
+                msg = "A valid config with 'provide_session' must be provided alongside connection."
+                raise ImproperConfigurationError(msg)
+            resolved_session = self._config.provide_session(self._connection.app.state, self._connection.scope)
+            if isinstance(resolved_session, Session):
+                msg = (
+                    "A synchronous Session cannot be used in an async context. Use a synchronous 'with' block instead."
+                )
+                raise ImproperConfigurationError(msg)
+            return cast("AsyncSession", resolved_session)
         if self._config is not None and hasattr(self._config, "get_session"):
             session_ctx = self._config.get_session()
             if hasattr(session_ctx, "__aenter__"):
@@ -183,11 +202,15 @@ class _ServiceGroupContext(Generic[Unpack[Ts]]):
                 msg = "An asynchronous AsyncSession cannot be used in a sync context. Use 'async with' instead."
                 raise ImproperConfigurationError(msg)
             return self._session
-        if self._connection is not None and self._config is not None and hasattr(self._config, "provide_session"):
-            return cast(
-                "Session",
-                self._config.provide_session(self._connection.app.state, self._connection.scope),
-            )
+        if self._connection is not None:
+            if self._config is None or not hasattr(self._config, "provide_session"):
+                msg = "A valid config with 'provide_session' must be provided alongside connection."
+                raise ImproperConfigurationError(msg)
+            resolved_session = self._config.provide_session(self._connection.app.state, self._connection.scope)
+            if isinstance(resolved_session, AsyncSession):
+                msg = "An asynchronous AsyncSession cannot be used in a sync context. Use 'async with' instead."
+                raise ImproperConfigurationError(msg)
+            return cast("Session", resolved_session)
         if self._config is not None and hasattr(self._config, "get_session"):
             session_ctx = self._config.get_session()
             if hasattr(session_ctx, "__enter__"):
@@ -221,7 +244,10 @@ class _ServiceGroupContext(Generic[Unpack[Ts]]):
             try:
                 return spec_factory(session=session)
             except TypeError:
-                return spec_factory(session)
+                try:
+                    return spec_factory(session)
+                except TypeError:
+                    return spec_factory()
 
         try:
             result = spec(session)
@@ -231,6 +257,8 @@ class _ServiceGroupContext(Generic[Unpack[Ts]]):
             except TypeError:
                 result = spec()
 
+        if inspect.isawaitable(result):
+            result = await result
         if hasattr(result, "__aenter__"):
             return await stack.enter_async_context(result)
         if hasattr(result, "__enter__"):
@@ -267,7 +295,10 @@ class _ServiceGroupContext(Generic[Unpack[Ts]]):
             try:
                 return spec_factory(session=session)
             except TypeError:
-                return spec_factory(session)
+                try:
+                    return spec_factory(session)
+                except TypeError:
+                    return spec_factory()
 
         try:
             result = spec(session)
@@ -277,15 +308,21 @@ class _ServiceGroupContext(Generic[Unpack[Ts]]):
             except TypeError:
                 result = spec()
 
+        if (
+            inspect.isawaitable(result)
+            or hasattr(result, "__anext__")
+            or (hasattr(result, "__aenter__") and not hasattr(result, "__enter__"))
+        ):
+            if inspect.iscoroutine(result):
+                result.close()
+            msg = "An asynchronous service provider cannot be used in a synchronous 'with' block."
+            raise ImproperConfigurationError(msg)
         if hasattr(result, "__enter__"):
             return stack.enter_context(result)
         if hasattr(result, "__next__"):
             sync_gen_ctx = closing(result)
             sync_gen = stack.enter_context(sync_gen_ctx)
             return next(sync_gen)
-        if hasattr(result, "__anext__") or hasattr(result, "__aenter__"):
-            msg = "An asynchronous service provider cannot be used in a synchronous 'with' block."
-            raise ImproperConfigurationError(msg)
         return result
 
 
@@ -301,6 +338,14 @@ class ServiceGroup(Generic[Unpack[Ts]]):
         "statement",
         "uniquify",
     )
+
+    specs: tuple[Any, ...]
+    statement: Any | None
+    error_messages: ErrorMessages | EmptyType | None
+    load: LoadSpec | None
+    execution_options: dict[str, Any] | None
+    uniquify: bool | None
+    count_with_window_function: bool | None
 
     @overload
     def __init__(
@@ -446,7 +491,6 @@ class ServiceGroup(Generic[Unpack[Ts]]):
         count_with_window_function: bool | None = None,
     ) -> _ServiceGroupContext[Unpack[Ts]]:
         """Instantiate an acquisition context for services in this group."""
-        load_spec: Any = load if load is not None else self.load
         return cast(
             "_ServiceGroupContext[Unpack[Ts]]",
             _ServiceGroupContext(
@@ -456,7 +500,7 @@ class ServiceGroup(Generic[Unpack[Ts]]):
                 connection=connection,
                 statement=statement if statement is not None else self.statement,
                 error_messages=error_messages if error_messages is not Empty else self.error_messages,
-                load=load_spec,
+                load=load if load is not None else self.load,
                 execution_options=execution_options if execution_options is not None else self.execution_options,
                 uniquify=uniquify if uniquify is not None else self.uniquify,
                 count_with_window_function=(
