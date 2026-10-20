@@ -213,6 +213,8 @@ Acquire multiple services inside an ``async with`` block:
 
 .. code-block:: python
 
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from advanced_alchemy.service import provide_services
 
 
@@ -236,6 +238,7 @@ For standalone scripts, CLI commands, or background task runners where an active
 
 .. code-block:: python
 
+    from advanced_alchemy.config import SQLAlchemyAsyncConfig
     from advanced_alchemy.service import provide_services
 
 
@@ -255,6 +258,8 @@ In Litestar guards, middleware, and request interceptors, access the request-sco
 .. code-block:: python
 
     from litestar.connection import ASGIConnection
+
+    from advanced_alchemy.config import SQLAlchemyAsyncConfig
     from advanced_alchemy.service import provide_services
 
 
@@ -288,8 +293,9 @@ Use ``.new()`` for explicit context acquisition:
 
 .. code-block:: python
 
-    async with blog_group.new(session=session) as (posts, tags):
-        ...
+    async def acquire_blog_services(session: AsyncSession) -> None:
+        async with blog_group.new(session=session) as (posts, tags):
+            ...
 
 Dependency Injection
 ^^^^^^^^^^^^^^^^^^^^
@@ -300,6 +306,7 @@ Use ``.provide()`` for dependency injection in Litestar:
 
     from litestar.di import Provide
 
+    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
     dependencies = {"blog_services": Provide(blog_group.provide(config=config))}
 
 
