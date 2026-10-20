@@ -283,6 +283,9 @@ class _ServiceGroupContext(Generic[Unpack[Ts]]):
             sync_gen_ctx = closing(result)
             sync_gen = stack.enter_context(sync_gen_ctx)
             return next(sync_gen)
+        if hasattr(result, "__anext__") or hasattr(result, "__aenter__"):
+            msg = "An asynchronous service provider cannot be used in a synchronous 'with' block."
+            raise ImproperConfigurationError(msg)
         return result
 
 
@@ -463,6 +466,32 @@ class ServiceGroup(Generic[Unpack[Ts]]):
                 ),
             ),
         )
+
+    @overload
+    def provide(
+        self,
+        *,
+        config: SQLAlchemySyncConfig,
+        statement: Select[tuple[ModelT]] | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        count_with_window_function: bool | None = None,
+    ) -> Callable[..., Generator[tuple[Unpack[Ts]], None, None]]: ...
+
+    @overload
+    def provide(
+        self,
+        *,
+        config: SQLAlchemyAsyncConfig | None = None,
+        statement: Select[tuple[ModelT]] | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        count_with_window_function: bool | None = None,
+    ) -> Callable[..., AsyncGenerator[tuple[Unpack[Ts]], None]]: ...
 
     def provide(
         self,
