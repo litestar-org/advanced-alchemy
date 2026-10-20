@@ -460,17 +460,30 @@ Reusable Composition with ``ServiceGroup``
 
     blog_group = ServiceGroup(BlogPostService, BlogTagService)
 
-    # Use .new() for explicit context acquisition:
+Explicit Context Acquisition
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Use ``.new()`` for explicit context acquisition:
+
+.. code-block:: python
+
     async with blog_group.new(session=session) as (posts, tags):
         ...
 
-    # Use .provide() for dependency injection:
-    # Litestar:
-    # dependencies = {"blog_services": Provide(blog_group.provide(config=config))}
-    #
-    # Route handler:
-    # async def handler(blog_services: tuple[BlogPostService, BlogTagService]) -> ...:
-    #     posts, tags = blog_services
+Dependency Injection
+^^^^^^^^^^^^^^^^^^^^
+
+Use ``.provide()`` for dependency injection in Litestar:
+
+.. code-block:: python
+
+    from litestar.di import Provide
+
+    dependencies = {"blog_services": Provide(blog_group.provide(config=config))}
+
+
+    async def handler(blog_services: tuple[BlogPostService, BlogTagService]) -> None:
+        posts, tags = blog_services
 
 
 Framework Integration

@@ -10,10 +10,13 @@ from sqlalchemy.orm import Session
 
 from advanced_alchemy.config import SQLAlchemySyncConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.repository import Empty
 from advanced_alchemy.service import (
     AsyncServiceProvider,
     ServiceGroup,
     ServiceSpec,
+    SQLAlchemyAsyncRepositoryService,
+    SQLAlchemySyncRepositoryService,
     SyncServiceProvider,
     provide_services,
 )
@@ -386,3 +389,105 @@ def test_async_session_from_config_in_sync_context_raises_error() -> None:
     with pytest.raises(ImproperConfigurationError, match="Config returned an asynchronous session context"):
         with provide_services(FakeSyncUserService, config=config):
             pass
+
+
+@pytest.mark.asyncio
+async def test_provide_services_with_async_function_provider() -> None:
+    session = MagicMock(spec=AsyncSession)
+
+    async def provide_user_func(sess: AsyncSession) -> FakeUserService:
+        return FakeUserService(session=sess)
+
+    async with provide_services(provide_user_func, FakeRoleService, session=session) as (users, roles):
+        assert isinstance(users, FakeUserService)
+        assert isinstance(roles, FakeRoleService)
+        assert users.session is session
+        assert roles.session is session
+
+
+def test_async_function_provider_in_sync_context_raises_error() -> None:
+    session = MagicMock(spec=Session)
+
+    async def async_fn(sess: Any) -> Any:
+        return sess
+
+    with pytest.raises(
+        ImproperConfigurationError, match="asynchronous service provider cannot be used in a synchronous 'with' block"
+    ):
+        with provide_services(async_fn, session=session):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_provide_services_with_repository_services() -> None:
+    session = MagicMock(spec=AsyncSession)
+    session.bind = MagicMock()
+    session.bind.dialect.name = "sqlite"
+
+    class SampleAsyncService(SQLAlchemyAsyncRepositoryService[Any]):
+        repository_type = MagicMock()
+
+    async with provide_services(SampleAsyncService, FakeRoleService, session=session) as (svc, roles):
+        assert isinstance(svc, SampleAsyncService)
+        assert isinstance(roles, FakeRoleService)
+
+
+def test_provide_services_sync_with_repository_services() -> None:
+    session = MagicMock(spec=Session)
+    session.bind = MagicMock()
+    session.bind.dialect.name = "sqlite"
+
+    class SampleSyncService(SQLAlchemySyncRepositoryService[Any]):
+        repository_type = MagicMock()
+
+    with provide_services(SampleSyncService, FakeSyncRoleService, session=session) as (svc, roles):
+        assert isinstance(svc, SampleSyncService)
+        assert isinstance(roles, FakeSyncRoleService)
+
+
+def test_connection_without_config_raises_error() -> None:
+    connection = MagicMock()
+    with pytest.raises(ImproperConfigurationError, match="provide_session"):
+        with provide_services(FakeSyncUserService, connection=connection):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_connection_without_config_async_raises_error() -> None:
+    connection = MagicMock()
+    with pytest.raises(ImproperConfigurationError, match="provide_session"):
+        async with provide_services(FakeUserService, connection=connection):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_service_group_options_propagation() -> None:
+    session = MagicMock(spec=AsyncSession)
+
+    class MockServiceCls:
+        new = MagicMock()
+
+    mock_service_instance = MagicMock()
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__.return_value = mock_service_instance
+    MockServiceCls.new.return_value = mock_ctx
+
+    group = ServiceGroup(
+        MockServiceCls,
+        statement=cast("Any", "statement_marker"),
+        uniquify=True,
+    )
+
+    async with group.new(session=session, count_with_window_function=True) as (svc,):
+        assert svc is mock_service_instance
+
+    MockServiceCls.new.assert_called_once_with(
+        session=session,
+        statement="statement_marker",
+        config=None,
+        error_messages=Empty,
+        load=None,
+        execution_options=None,
+        uniquify=True,
+        count_with_window_function=True,
+    )
