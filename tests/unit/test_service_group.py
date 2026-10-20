@@ -243,3 +243,64 @@ async def test_user_exception_inside_block_triggers_cleanup() -> None:
         await raise_user_error()
 
     assert cleanup_ran
+
+
+@pytest.mark.asyncio
+async def test_provide_services_with_connection_and_config() -> None:
+    session = MagicMock(spec=AsyncSession)
+    config = MagicMock()
+    config.provide_session.return_value = session
+
+    connection = MagicMock()
+    connection.app.state = MagicMock()
+    connection.scope = {}
+
+    async with provide_services(FakeUserService, connection=connection, config=config) as (users,):
+        assert isinstance(users, FakeUserService)
+        assert users.session is session
+
+    config.provide_session.assert_called_once_with(connection.app.state, connection.scope)
+
+
+def test_provide_services_sync_with_connection_and_config() -> None:
+    session = MagicMock(spec=Session)
+    config = MagicMock()
+    config.provide_session.return_value = session
+
+    connection = MagicMock()
+    connection.app.state = MagicMock()
+    connection.scope = {}
+
+    with provide_services(FakeSyncUserService, connection=connection, config=config) as (users,):
+        assert isinstance(users, FakeSyncUserService)
+        assert users.session is session
+
+    config.provide_session.assert_called_once_with(connection.app.state, connection.scope)
+
+
+def test_framework_re_exports() -> None:
+    from advanced_alchemy.extensions.fastapi.providers import (
+        ServiceGroup as FastApiServiceGroup,
+    )
+    from advanced_alchemy.extensions.fastapi.providers import (
+        provide_services as fastapi_provide_services,
+    )
+    from advanced_alchemy.extensions.litestar.providers import (
+        ServiceGroup as LitestarProvidersServiceGroup,
+    )
+    from advanced_alchemy.extensions.litestar.providers import (
+        provide_services as litestar_providers_provide_services,
+    )
+    from advanced_alchemy.extensions.litestar.service import (
+        ServiceGroup as LitestarServiceGroup,
+    )
+    from advanced_alchemy.extensions.litestar.service import (
+        provide_services as litestar_provide_services,
+    )
+
+    assert FastApiServiceGroup is ServiceGroup
+    assert fastapi_provide_services is provide_services
+    assert LitestarProvidersServiceGroup is ServiceGroup
+    assert litestar_providers_provide_services is provide_services
+    assert LitestarServiceGroup is ServiceGroup
+    assert litestar_provide_services is provide_services
