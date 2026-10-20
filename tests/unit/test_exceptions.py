@@ -13,6 +13,8 @@ from sqlalchemy.exc import (
 
 from advanced_alchemy.exceptions import (
     DuplicateKeyError,
+    ErrorMessages,
+    ForeignKeyError,
     IntegrityError,
     InvalidRequestError,
     MultipleResultsFoundError,
@@ -154,3 +156,197 @@ def test_wrap_sqlalchemy_exception_no_match() -> None:
         raise SQLAlchemyIntegrityError("original", {}, Exception("original"))
 
     assert str(excinfo.value) == "Integrity error"
+
+
+class _DriverError(Exception):
+    """Synthetic DBAPI exception exposing arbitrary attributes for unit testing."""
+
+    def __init__(self, *args: object, **attrs: object) -> None:
+        super().__init__(*args)
+        for name, value in attrs.items():
+            setattr(self, name, value)
+
+
+@pytest.mark.parametrize("dialect_name", ["postgresql", "cockroachdb"])
+@pytest.mark.parametrize("code_attr", ["sqlstate", "pgcode"])
+@pytest.mark.parametrize(
+    ("sqlstate", "message", "detail", "expected"),
+    [
+        (
+            "23505",
+            'duplicate key value violates unique constraint "uq_table_id"',
+            "Key (id)=(1) already exists.",
+            DuplicateKeyError,
+        ),
+        (
+            "23503",
+            'insert or update on table "child" violates foreign key constraint "fk_parent"',
+            'Key (parent_id)=(999) is not present in table "parent".',
+            ForeignKeyError,
+        ),
+        (
+            "23514",
+            'new row for relation "table" violates check constraint "ck_positive"',
+            "Failing row contains (1, -1).",
+            IntegrityError,
+        ),
+    ],
+)
+def test_wrap_sqlalchemy_exception_integrity_error_by_sqlstate(
+    dialect_name: str, code_attr: str, sqlstate: str, message: str, detail: str, expected: type[IntegrityError]
+) -> None:
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(
+            dialect_name=dialect_name,
+            error_messages={"duplicate_key": "duplicate", "foreign_key": "foreign", "check_constraint": "check"},
+        ),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError(message, detail=detail, **{code_attr: sqlstate}))
+
+    assert excinfo.type is expected
+    assert str(excinfo.value) == {"23505": "duplicate", "23503": "foreign", "23514": "check"}[sqlstate]
+
+
+def test_wrap_sqlalchemy_exception_ignores_non_string_sqlstate() -> None:
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(dialect_name="postgresql", error_messages={"integrity": "integrity"}),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError("whatever", sqlstate=["23505"]))
+
+    assert excinfo.type is IntegrityError
+    assert str(excinfo.value) == "integrity"
+
+
+@pytest.mark.parametrize(
+    ("dialect_name", "orig", "expected"),
+    [
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=2067), DuplicateKeyError),
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=1555), DuplicateKeyError),
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=787), ForeignKeyError),
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=275), IntegrityError),
+        ("mysql", _DriverError(1062, "whatever"), DuplicateKeyError),
+        ("mysql", _DriverError(1169, "whatever"), DuplicateKeyError),
+        ("mysql", _DriverError(1216, "whatever"), ForeignKeyError),
+        ("mysql", _DriverError(1451, "whatever"), ForeignKeyError),
+        ("mariadb", _DriverError(1452, "whatever"), ForeignKeyError),
+        ("mysql", _DriverError(3819, "whatever"), IntegrityError),
+        ("mariadb", _DriverError(4025, "whatever"), IntegrityError),
+        ("oracle", _DriverError(1, "ORA-00001: unique constraint"), DuplicateKeyError),
+        ("oracle", _DriverError(2291, "ORA-02291: integrity constraint"), ForeignKeyError),
+        ("oracle", _DriverError(2292, "ORA-02292: integrity constraint"), ForeignKeyError),
+        ("oracle", _DriverError(2290, "ORA-02290: check constraint"), IntegrityError),
+        ("mssql", _DriverError(2601, "duplicate key"), DuplicateKeyError),
+        ("mssql", _DriverError(2627, "duplicate key"), DuplicateKeyError),
+        ("mssql", _DriverError(547, "conflicted with the FOREIGN KEY constraint"), ForeignKeyError),
+        ("mssql", _DriverError(547, "conflicted with the CHECK constraint"), IntegrityError),
+    ],
+)
+def test_wrap_sqlalchemy_exception_integrity_error_by_native_code(
+    dialect_name: str, orig: Exception, expected: type[IntegrityError]
+) -> None:
+    error_messages: ErrorMessages = {
+        "duplicate_key": "duplicate",
+        "foreign_key": "foreign",
+        "check_constraint": "check",
+        "integrity": "integrity",
+    }
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(dialect_name=dialect_name, error_messages=error_messages),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, orig)
+
+    assert excinfo.type is expected
+    assert (
+        str(excinfo.value)
+        == {DuplicateKeyError: "duplicate", ForeignKeyError: "foreign", IntegrityError: "check"}[expected]
+    )
+
+
+@pytest.mark.parametrize(
+    ("dialect_name", "message", "expected"),
+    [
+        ("oracle", "ORA-00001: unique constraint (APP.USERS_EMAIL_UNQ) violated", DuplicateKeyError),
+        ("oracle", "ORA-02291: integrity constraint (APP.FK_CHILD) violated - parent key not found", ForeignKeyError),
+        ("oracle", "ORA-02292: integrity constraint (APP.FK_CHILD) violated - child record found", ForeignKeyError),
+        ("oracle", "ORA-02290: check constraint (APP.CK_AGE) violated", IntegrityError),
+        ("mssql", "Cannot insert duplicate key row in object 'dbo.users' with unique index 'UQ_email'.", DuplicateKeyError),
+        ("mssql", "The INSERT statement conflicted with the FOREIGN KEY constraint 'FK_orders_users'.", ForeignKeyError),
+        ("mssql", "The INSERT statement conflicted with the CHECK constraint 'CK_positive'.", IntegrityError),
+        ("duckdb", "Constraint Error: Duplicate key 'id: 1' violates primary key constraint", DuplicateKeyError),
+        ("duckdb", "Constraint Error: Foreign Key Constraint Violation", ForeignKeyError),
+        ("duckdb", "Constraint Error: CHECK constraint failed", IntegrityError),
+        ("spanner", "ALREADY_EXISTS: Unique constraint UsersByEmail violated", DuplicateKeyError),
+        ("spanner", "FAILED_PRECONDITION: Foreign key constraint OrdersUsers violated", ForeignKeyError),
+        ("spanner", "FAILED_PRECONDITION: Check constraint check_age violated", IntegrityError),
+        ("spanner+spanner", "ALREADY_EXISTS: Unique constraint UsersByEmail violated", DuplicateKeyError),
+        ("spanner+spanner", "FAILED_PRECONDITION: Foreign key constraint OrdersUsers violated", ForeignKeyError),
+        ("spanner+spanner", "FAILED_PRECONDITION: Check constraint check_age violated", IntegrityError),
+        ("mariadb", "Constraint 'check_status' failed for `app`.`users`", IntegrityError),
+        ("sqlite", "CHECK constraint failed: users", IntegrityError),
+    ],
+)
+def test_wrap_sqlalchemy_exception_integrity_error_by_regex(
+    dialect_name: str, message: str, expected: type[IntegrityError]
+) -> None:
+    error_messages: ErrorMessages = {
+        "duplicate_key": "duplicate",
+        "foreign_key": "foreign",
+        "check_constraint": "check",
+        "integrity": "integrity",
+    }
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(dialect_name=dialect_name, error_messages=error_messages),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, Exception(message))
+
+    assert excinfo.type is expected
+    assert (
+        str(excinfo.value)
+        == {DuplicateKeyError: "duplicate", ForeignKeyError: "foreign", IntegrityError: "check"}[expected]
+    )
+
+
+def test_wrap_sqlalchemy_exception_without_dialect_name() -> None:
+    with (
+        pytest.raises(DuplicateKeyError),
+        wrap_sqlalchemy_exception(),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError("duplicate", sqlite_errorcode=2067))
+
+    with (
+        pytest.raises(DuplicateKeyError),
+        wrap_sqlalchemy_exception(),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, Exception("ORA-00001: unique constraint violated"))
+
+
+def test_wrap_sqlalchemy_exception_without_error_messages() -> None:
+    with (
+        pytest.raises(DuplicateKeyError) as excinfo,
+        wrap_sqlalchemy_exception(dialect_name="sqlite"),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError("duplicate", sqlite_errorcode=2067))
+
+    assert "duplicate_key error" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    ("dialect_name", "orig"),
+    [
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=1299)),
+        ("mysql", _DriverError(1048, "whatever")),
+    ],
+)
+def test_wrap_sqlalchemy_exception_unknown_native_code(dialect_name: str, orig: Exception) -> None:
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(dialect_name=dialect_name, error_messages={"integrity": "integrity"}),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, orig)
+
+    assert excinfo.type is IntegrityError
+    assert str(excinfo.value) == "integrity"

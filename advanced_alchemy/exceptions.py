@@ -1,7 +1,7 @@
 import re
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Callable, Optional, TypedDict, Union, cast
+from typing import Any, Callable, Final, Optional, TypedDict, Union, cast
 
 from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
 from sqlalchemy.exc import InvalidRequestError as SQLAlchemyInvalidRequestError
@@ -23,12 +23,57 @@ __all__ = (
 )
 
 
-DUPLICATE_KEY_REGEXES = {
+SQLSTATE_TO_ERROR_KEY: Final[dict[str, str]] = {
+    "23505": "duplicate_key",
+    "23503": "foreign_key",
+    "23514": "check_constraint",
+}
+
+SQLITE_ERRORCODE_TO_ERROR_KEY: Final[dict[int, str]] = {
+    2067: "duplicate_key",
+    1555: "duplicate_key",
+    787: "foreign_key",
+    275: "check_constraint",
+}
+
+MYSQL_ERRNO_TO_ERROR_KEY: Final[dict[int, str]] = {
+    1062: "duplicate_key",
+    1169: "duplicate_key",
+    1216: "foreign_key",
+    1217: "foreign_key",
+    1451: "foreign_key",
+    1452: "foreign_key",
+    3819: "check_constraint",
+    4025: "check_constraint",
+}
+
+ORACLE_ERRNO_TO_ERROR_KEY: Final[dict[int, str]] = {
+    1: "duplicate_key",
+    2291: "foreign_key",
+    2292: "foreign_key",
+    2290: "check_constraint",
+}
+
+MSSQL_ERRNO_TO_ERROR_KEY: Final[dict[int, str]] = {
+    2601: "duplicate_key",
+    2627: "duplicate_key",
+}
+
+
+DUPLICATE_KEY_REGEXES: Final[dict[str, list[re.Pattern[str]]]] = {
     "postgresql": [
         re.compile(
             r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$",
         ),
         re.compile(r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*$"),
+    ],
+    "cockroachdb": [
+        re.compile(
+            r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$",
+        ),
+        re.compile(r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*$"),
+        re.compile(r"(?i).*duplicate key value.*"),
+        re.compile(r"(?i).*unique constraint.*failed.*"),
     ],
     "sqlite": [
         re.compile(r"^.*columns?(?P<columns>[^)]+)(is|are)\s+not\s+unique$"),
@@ -38,16 +83,38 @@ DUPLICATE_KEY_REGEXES = {
     "mysql": [
         re.compile(r"^.*\b1062\b.*Duplicate entry '(?P<value>.*)' for key '(?P<columns>[^']+)'.*$"),
         re.compile(r"^.*\b1062\b.*Duplicate entry \\'(?P<value>.*)\\' for key \\'(?P<columns>.+)\\'.*$"),
+        re.compile(r"^.*\b(1062|1169)\b.*Duplicate entry.*$"),
     ],
-    "oracle": [],
-    "spanner+spanner": [],
-    "duckdb": [],
-    "mssql": [],
+    "mariadb": [
+        re.compile(r"^.*\b1062\b.*Duplicate entry '(?P<value>.*)' for key '(?P<columns>[^']+)'.*$"),
+        re.compile(r"^.*\b1062\b.*Duplicate entry \\'(?P<value>.*)\\' for key \\'(?P<columns>.+)\\'.*$"),
+        re.compile(r"^.*\b(1062|1169)\b.*Duplicate entry.*$"),
+    ],
+    "oracle": [
+        re.compile(r"(?i).*ORA-00001:\s*unique constraint.*violated.*"),
+        re.compile(r"(?i).*ORA-00001.*"),
+    ],
+    "spanner": [
+        re.compile(r"(?i).*ALREADY_EXISTS:.*(unique constraint|already exists).*"),
+        re.compile(r"(?i).*already exists:\s*row.*"),
+    ],
+    "spanner+spanner": [
+        re.compile(r"(?i).*ALREADY_EXISTS:.*(unique constraint|already exists).*"),
+        re.compile(r"(?i).*already exists:\s*row.*"),
+    ],
+    "duckdb": [
+        re.compile(r"(?i).*Constraint Error: Duplicate key.*"),
+        re.compile(r"(?i).*PRIMARY KEY or UNIQUE constraint violation.*"),
+    ],
+    "mssql": [
+        re.compile(r"(?i).*\b(2601|2627)\b.*Cannot insert duplicate key.*"),
+        re.compile(r"(?i).*Cannot insert duplicate key.*"),
+        re.compile(r"(?i).*Violation of (PRIMARY KEY|UNIQUE KEY) constraint.*"),
+    ],
     "bigquery": [],
-    "cockroach": [],
 }
 
-FOREIGN_KEY_REGEXES = {
+FOREIGN_KEY_REGEXES: Final[dict[str, list[re.Pattern[str]]]] = {
     "postgresql": [
         re.compile(
             r".*on table \"(?P<table>[^\"]+)\" violates "
@@ -56,6 +123,16 @@ FOREIGN_KEY_REGEXES = {
             r"is (not present in|still referenced from) table "
             r"\"(?P<key_table>[^\"]+)\".",
         ),
+    ],
+    "cockroachdb": [
+        re.compile(
+            r".*on table \"(?P<table>[^\"]+)\" violates "
+            r"foreign key constraint \"(?P<constraint>[^\"]+)\".*\n"
+            r"DETAIL:  Key \((?P<key>.+)\)=\(.+\) "
+            r"is (not present in|still referenced from) table "
+            r"\"(?P<key_table>[^\"]+)\".",
+        ),
+        re.compile(r"(?i).*foreign key constraint.*violated.*"),
     ],
     "sqlite": [
         re.compile(r"(?i).*foreign key constraint failed"),
@@ -67,28 +144,129 @@ FOREIGN_KEY_REGEXES = {
             r'CONSTRAINT [`"](?P<constraint>.+)[`"] FOREIGN KEY '
             r'\([`"](?P<key>.+)[`"]\) REFERENCES [`"](?P<key_table>.+)[`"] ',
         ),
+        re.compile(r"(?i).*\b(1216|1217|1451|1452)\b.*foreign key constraint fails.*"),
     ],
-    "oracle": [],
-    "spanner+spanner": [],
-    "duckdb": [],
-    "mssql": [],
+    "mariadb": [
+        re.compile(
+            r".*Cannot (add|delete) or update a (child|parent) row: "
+            r'a foreign key constraint fails \([`"].+[`"]\.[`"](?P<table>.+)[`"], '
+            r'CONSTRAINT [`"](?P<constraint>.+)[`"] FOREIGN KEY '
+            r'\([`"](?P<key>.+)[`"]\) REFERENCES [`"](?P<key_table>.+)[`"] ',
+        ),
+        re.compile(r"(?i).*\b(1216|1217|1451|1452)\b.*foreign key constraint fails.*"),
+    ],
+    "oracle": [
+        re.compile(r"(?i).*ORA-0229[12]:\s*integrity constraint.*violated.*"),
+        re.compile(r"(?i).*ORA-0229[12].*"),
+    ],
+    "spanner": [
+        re.compile(r"(?i).*FAILED_PRECONDITION:.*Foreign key constraint.*"),
+        re.compile(r"(?i).*Foreign key violation.*"),
+    ],
+    "spanner+spanner": [
+        re.compile(r"(?i).*FAILED_PRECONDITION:.*Foreign key constraint.*"),
+        re.compile(r"(?i).*Foreign key violation.*"),
+    ],
+    "duckdb": [
+        re.compile(r"(?i).*Constraint Error: Foreign Key Constraint Violation.*"),
+        re.compile(r"(?i).*violates foreign key constraint.*"),
+    ],
+    "mssql": [
+        re.compile(r"(?i).*\b547\b.*conflicted with the (FOREIGN KEY|REFERENCE) constraint.*"),
+        re.compile(r"(?i).*conflicted with the (FOREIGN KEY|REFERENCE) constraint.*"),
+    ],
     "bigquery": [],
-    "cockroach": [],
 }
 
-CHECK_CONSTRAINT_REGEXES = {
+CHECK_CONSTRAINT_REGEXES: Final[dict[str, list[re.Pattern[str]]]] = {
     "postgresql": [
-        re.compile(r".*new row for relation \"(?P<table>.+)\" violates check constraint (?P<check_name>.+)"),
+        re.compile(r".*new row for relation \"(?P<table>.+)\" violates check constraint \"?(?P<check_name>[^\"]+)\"?"),
     ],
-    "sqlite": [],
-    "mysql": [],
-    "oracle": [],
-    "spanner+spanner": [],
-    "duckdb": [],
-    "mssql": [],
+    "cockroachdb": [
+        re.compile(r".*new row for relation \"(?P<table>.+)\" violates check constraint \"?(?P<check_name>[^\"]+)\"?"),
+        re.compile(r"(?i).*check constraint.*violated.*"),
+    ],
+    "sqlite": [
+        re.compile(r"(?i).*CHECK constraint failed.*"),
+    ],
+    "mysql": [
+        re.compile(r"(?i).*Check constraint '(?P<check_name>.+)' is violated.*"),
+        re.compile(r"(?i).*\b3819\b.*Check constraint.*is violated.*"),
+    ],
+    "mariadb": [
+        re.compile(r"(?i).*Constraint '(?P<check_name>.+)' failed.*"),
+        re.compile(r"(?i).*\b4025\b.*Constraint.*failed.*"),
+        re.compile(r"(?i).*Check constraint '(?P<check_name>.+)' is violated.*"),
+    ],
+    "oracle": [
+        re.compile(r"(?i).*ORA-02290:\s*check constraint.*violated.*"),
+        re.compile(r"(?i).*ORA-02290.*"),
+    ],
+    "spanner": [
+        re.compile(r"(?i).*FAILED_PRECONDITION:.*Check constraint.*"),
+    ],
+    "spanner+spanner": [
+        re.compile(r"(?i).*FAILED_PRECONDITION:.*Check constraint.*"),
+    ],
+    "duckdb": [
+        re.compile(r"(?i).*Constraint Error: CHECK constraint.*"),
+    ],
+    "mssql": [
+        re.compile(r"(?i).*\b547\b.*conflicted with the CHECK constraint.*"),
+        re.compile(r"(?i).*conflicted with the CHECK constraint.*"),
+    ],
     "bigquery": [],
-    "cockroach": [],
 }
+
+
+_MSSQL_CONSTRAINT_VIOLATION_CODE: Final[int] = 547
+
+
+def _get_driver_code(orig: BaseException, dialect_name: Optional[str]) -> Optional[str]:
+    """Classify driver-specific integer or string error codes."""
+    if not orig.args:
+        return None
+    first_arg = orig.args[0]
+    if (
+        isinstance(first_arg, int)
+        and (dialect_name in {"mysql", "mariadb"} or dialect_name is None)
+        and (key := MYSQL_ERRNO_TO_ERROR_KEY.get(first_arg))
+    ):
+        return key
+    if dialect_name == "oracle" or dialect_name is None:
+        ora_code = getattr(first_arg, "code", first_arg)
+        if isinstance(ora_code, int) and (key := ORACLE_ERRNO_TO_ERROR_KEY.get(ora_code)):
+            return key
+    if dialect_name == "mssql" or dialect_name is None:
+        number = getattr(orig, "number", first_arg if isinstance(first_arg, int) else None)
+        if isinstance(number, int):
+            if key := MSSQL_ERRNO_TO_ERROR_KEY.get(number):
+                return key
+            if number == _MSSQL_CONSTRAINT_VIOLATION_CODE:
+                detail = " - ".join(str(arg) for arg in orig.args).upper()
+                return "foreign_key" if ("FOREIGN KEY" in detail or "REFERENCE" in detail) else "check_constraint"
+    return None
+
+
+def _get_error_key_by_code(orig: Optional[BaseException], dialect_name: Optional[str] = None) -> Optional[str]:
+    """Classify a DBAPI integrity error by driver error code.
+
+    Args:
+        orig: The DBAPI exception.
+        dialect_name: The name of the dialect, or None if unknown.
+
+    Returns:
+        The error message key, or None when no known code is present.
+    """
+    if orig is None:
+        return None
+    sqlstate = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
+    if isinstance(sqlstate, str) and (key := SQLSTATE_TO_ERROR_KEY.get(sqlstate)):
+        return key
+    sqlite_errorcode = getattr(orig, "sqlite_errorcode", None)
+    if isinstance(sqlite_errorcode, int) and (key := SQLITE_ERRORCODE_TO_ERROR_KEY.get(sqlite_errorcode)):
+        return key
+    return _get_driver_code(orig, dialect_name)
 
 
 class AdvancedAlchemyError(Exception):
@@ -240,7 +418,9 @@ class ErrorMessages(TypedDict, total=False):
     not_found: Union[str, Callable[[Exception], str]]
 
 
-def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) -> str:
+def _get_error_message(error_messages: Optional[ErrorMessages], key: str, exc: Exception) -> str:
+    if error_messages is None:
+        return f"{key} error: {exc}"
     template: Union[str, Callable[[Exception], str]] = error_messages.get(key, f"{key} error: {exc}")  # type: ignore[assignment]
     if callable(template):  # pyright: ignore[reportUnknownArgumentType]
         template = template(exc)  # pyright: ignore[reportUnknownVariableType]
@@ -304,24 +484,46 @@ def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
     except SQLAlchemyIntegrityError as exc:
         if wrap_exceptions is False:
             raise
-        if error_messages is not None and dialect_name is not None:
+        if (key := _get_error_key_by_code(exc.orig, dialect_name)) is not None:
+            exception_cls = {
+                "duplicate_key": DuplicateKeyError,
+                "foreign_key": ForeignKeyError,
+                "check_constraint": IntegrityError,
+            }.get(key, IntegrityError)
+            raise exception_cls(
+                detail=_get_error_message(error_messages=error_messages, key=key, exc=exc),
+            ) from exc
+
+        orig_args = getattr(exc.orig, "args", None)
+        detail = " - ".join(str(exc_arg) for exc_arg in orig_args) if orig_args else ""
+        if dialect_name is not None:
             keys_to_regex = {
                 "duplicate_key": (DUPLICATE_KEY_REGEXES.get(dialect_name, []), DuplicateKeyError),
                 "check_constraint": (CHECK_CONSTRAINT_REGEXES.get(dialect_name, []), IntegrityError),
                 "foreign_key": (FOREIGN_KEY_REGEXES.get(dialect_name, []), ForeignKeyError),
             }
-            detail = " - ".join(str(exc_arg) for exc_arg in exc.orig.args) if exc.orig.args else ""  # type: ignore[union-attr] # pyright: ignore[reportArgumentType,reportOptionalMemberAccess]
-            for key, (regexes, exception) in keys_to_regex.items():
+            for category_key, (regexes, exception) in keys_to_regex.items():
                 for regex in regexes:
-                    if (match := regex.findall(detail)) and match[0]:
+                    if regex.search(detail):
                         raise exception(
-                            detail=_get_error_message(error_messages=error_messages, key=key, exc=exc),
+                            detail=_get_error_message(error_messages=error_messages, key=category_key, exc=exc),
                         ) from exc
+        else:
+            for category_key, mapping, exception in (
+                ("duplicate_key", DUPLICATE_KEY_REGEXES, DuplicateKeyError),
+                ("foreign_key", FOREIGN_KEY_REGEXES, ForeignKeyError),
+                ("check_constraint", CHECK_CONSTRAINT_REGEXES, IntegrityError),
+            ):
+                for regex_list in mapping.values():
+                    for regex in regex_list:
+                        if regex.search(detail):
+                            raise exception(
+                                detail=_get_error_message(error_messages=error_messages, key=category_key, exc=exc),
+                            ) from exc
 
-            raise IntegrityError(
-                detail=_get_error_message(error_messages=error_messages, key="integrity", exc=exc),
-            ) from exc
-        raise IntegrityError(detail=f"An integrity error occurred: {exc}") from exc
+        raise IntegrityError(
+            detail=_get_error_message(error_messages=error_messages, key="integrity", exc=exc),
+        ) from exc
     except SQLAlchemyInvalidRequestError as exc:
         if wrap_exceptions is False:
             raise

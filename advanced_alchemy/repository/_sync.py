@@ -3640,7 +3640,11 @@ class SQLAlchemySyncQueryRepository:
         Returns:
             The retrieved instance.
         """
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
+        with wrap_sqlalchemy_exception(
+            error_messages=self.error_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        ):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             execution_options = {"bind_group": bind_group} if bind_group else None
             instance = (self.execute(statement, execution_options=execution_options)).scalar_one_or_none()
@@ -3662,7 +3666,11 @@ class SQLAlchemySyncQueryRepository:
         Returns:
             The retrieved instance or None
         """
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
+        with wrap_sqlalchemy_exception(
+            error_messages=self.error_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        ):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             execution_options = {"bind_group": bind_group} if bind_group else None
             instance = (self.execute(statement, execution_options=execution_options)).scalar_one_or_none()
@@ -3679,7 +3687,11 @@ class SQLAlchemySyncQueryRepository:
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
+        with wrap_sqlalchemy_exception(
+            error_messages=self.error_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        ):
             statement = statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(
                 None,
             )
@@ -3754,7 +3766,11 @@ class SQLAlchemySyncQueryRepository:
             Count of records returned by query using an analytical window function, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
+        with wrap_sqlalchemy_exception(
+            error_messages=self.error_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        ):
             statement = statement.add_columns(over(sql_func.count(text("1"))))
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             execution_options = {"bind_group": bind_group} if bind_group else None
@@ -3788,7 +3804,11 @@ class SQLAlchemySyncQueryRepository:
             Count of records returned by query using 2 queries, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
+        with wrap_sqlalchemy_exception(
+            error_messages=self.error_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        ):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             execution_options = {"bind_group": bind_group} if bind_group else None
             count_result = self.session.execute(
@@ -3812,7 +3832,11 @@ class SQLAlchemySyncQueryRepository:
         Returns:
             The list of instances, after filtering applied.
         """
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
+        with wrap_sqlalchemy_exception(
+            error_messages=self.error_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        ):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             execution_options = {"bind_group": bind_group} if bind_group else None
             result = self.execute(statement, execution_options=execution_options)
@@ -3850,7 +3874,11 @@ class SQLAlchemySyncQueryRepository:
             The filtered statement.
         """
 
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
+        with wrap_sqlalchemy_exception(
+            error_messages=self.error_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        ):
             return statement.filter_by(**kwargs)
 
     # the following is all sqlalchemy implementation detail, and shouldn't be directly accessed

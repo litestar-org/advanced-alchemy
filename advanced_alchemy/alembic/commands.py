@@ -29,6 +29,12 @@ class AlembicSpannerImpl(DefaultImpl):
     __dialect__ = "spanner+spanner"
 
 
+class AlembicSpannerDirectImpl(DefaultImpl):
+    """Alembic implementation for Spanner (direct)."""
+
+    __dialect__ = "spanner"
+
+
 class AlembicDuckDBImpl(DefaultImpl):
     """Alembic implementation for DuckDB."""
 
@@ -78,7 +84,7 @@ class AlembicCommandConfig(_AlembicCommandConfig):
         self.template_directory = template_directory
         self.bind_key = bind_key
         self.version_table_name = version_table_name
-        self.version_table_pk = engine.dialect.name != "spanner+spanner"
+        self.version_table_pk = engine.dialect.name not in {"spanner", "spanner+spanner"}
         self.version_table_schema = version_table_schema
         self.render_as_batch = render_as_batch
         self.user_module_prefix = user_module_prefix
