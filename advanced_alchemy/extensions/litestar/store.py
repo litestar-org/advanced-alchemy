@@ -22,7 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, Session, declarative_mixin, declared_attr, mapped_column
+from sqlalchemy.orm import Mapped, Session, declared_attr, mapped_column
 
 from advanced_alchemy.base import UUIDv7Base
 
@@ -51,7 +51,6 @@ _POSTGRES_VERSION_SUPPORTING_MERGE: Final = 15
 _DISABLE_POSTGRES_MERGE: Final = True
 
 
-@declarative_mixin
 class StoreModelMixin(UUIDv7Base):
     """Mixin for session storage."""
 
