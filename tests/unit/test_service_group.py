@@ -1,13 +1,14 @@
 """Unit tests for ServiceGroup and provide_services multi-service acquisition."""
 
 from collections.abc import AsyncGenerator, Generator
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from advanced_alchemy.config import SQLAlchemySyncConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.service import (
     AsyncServiceProvider,
@@ -304,3 +305,84 @@ def test_framework_re_exports() -> None:
     assert litestar_providers_provide_services is provide_services
     assert LitestarServiceGroup is ServiceGroup
     assert litestar_provide_services is provide_services
+
+
+@pytest.mark.asyncio
+async def test_service_group_provide_async() -> None:
+    session = MagicMock(spec=AsyncSession)
+    group = ServiceGroup(FakeUserService, FakeRoleService)
+    provider = group.provide()
+
+    async for services in provider(db_session=session):
+        users, roles = services
+        assert isinstance(users, FakeUserService)
+        assert isinstance(roles, FakeRoleService)
+        assert users.session is session
+        assert roles.session is session
+
+
+def test_service_group_provide_sync() -> None:
+    session = MagicMock(spec=Session)
+    group = ServiceGroup(FakeSyncUserService, FakeSyncRoleService)
+    sync_config = MagicMock(spec=SQLAlchemySyncConfig)
+    type(sync_config).__name__ = "SQLAlchemySyncConfig"
+    sync_config.session_dependency_key = "sync_session"
+    provider = group.provide(config=cast(SQLAlchemySyncConfig, sync_config))
+
+    for services in provider(sync_session=session):
+        users, roles = services
+        assert isinstance(users, FakeSyncUserService)
+        assert isinstance(roles, FakeSyncRoleService)
+        assert users.session is session
+        assert roles.session is session
+
+
+@pytest.mark.asyncio
+async def test_sync_session_in_async_context_raises_error() -> None:
+    session = MagicMock(spec=Session)
+    with pytest.raises(ImproperConfigurationError, match="synchronous Session cannot be used in an async context"):
+        async with provide_services(FakeUserService, session=session):
+            pass
+
+
+def test_async_session_in_sync_context_raises_error() -> None:
+    session = MagicMock(spec=AsyncSession)
+    with pytest.raises(ImproperConfigurationError, match="asynchronous AsyncSession cannot be used in a sync context"):
+        with provide_services(FakeSyncUserService, session=session):
+            pass
+
+
+def test_async_provider_in_sync_context_raises_error() -> None:
+    session = MagicMock(spec=Session)
+
+    async def async_provider(sess: Any) -> AsyncGenerator[Any, None]:
+        yield sess
+
+    with pytest.raises(
+        ImproperConfigurationError, match="asynchronous service provider cannot be used in a synchronous 'with' block"
+    ):
+        with provide_services(async_provider, session=session):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_sync_session_from_config_in_async_context_raises_error() -> None:
+    config = MagicMock()
+    config_session_ctx = MagicMock()
+    del config_session_ctx.__aenter__
+    config.get_session.return_value = config_session_ctx
+
+    with pytest.raises(ImproperConfigurationError, match="Config returned a synchronous session context"):
+        async with provide_services(FakeUserService, config=config):
+            pass
+
+
+def test_async_session_from_config_in_sync_context_raises_error() -> None:
+    config = MagicMock()
+    config_session_ctx = MagicMock()
+    del config_session_ctx.__enter__
+    config.get_session.return_value = config_session_ctx
+
+    with pytest.raises(ImproperConfigurationError, match="Config returned an asynchronous session context"):
+        with provide_services(FakeSyncUserService, config=config):
+            pass
