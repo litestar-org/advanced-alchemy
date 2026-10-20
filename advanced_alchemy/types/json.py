@@ -1,3 +1,4 @@
+import functools
 from typing import Any, Optional, Union
 
 from sqlalchemy import text, util
@@ -84,9 +85,9 @@ class ORA_JSONB(TypeDecorator[dict[str, Any]], SchemaType):  # noqa: N801
         e = schema.CheckConstraint(
             sqltext,
             name=f"{column.name}_is_json",
-            _create_rule=util.portable_instancemethod(  # type: ignore[no-untyped-call]
+            _create_rule=functools.partial(
                 self._should_create_constraint,
-                {"variant_mapping": variant_mapping},
+                variant_mapping=variant_mapping,
             ),
             _type_bound=True,
         )
