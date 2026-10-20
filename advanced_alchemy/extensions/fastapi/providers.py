@@ -43,13 +43,18 @@ from advanced_alchemy.filters import (
     SearchFilter,
 )
 from advanced_alchemy.service import (
+    AsyncServiceProvider,
     Empty,
     EmptyType,
     ErrorMessages,
     LoadSpec,
     ModelT,
+    ServiceGroup,
+    ServiceSpec,
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
+    SyncServiceProvider,
+    provide_services,
 )
 from advanced_alchemy.utils.dependencies import (
     ChoiceField,
@@ -81,14 +86,19 @@ SyncServiceT_co = TypeVar("SyncServiceT_co", bound=SQLAlchemySyncRepositoryServi
 
 __all__ = (
     "DEPENDENCY_DEFAULTS",
+    "AsyncServiceProvider",
     "ChoiceField",
     "DependencyCache",
     "DependencyDefaults",
     "FieldNameType",
     "FilterConfig",
+    "ServiceGroup",
+    "ServiceSpec",
+    "SyncServiceProvider",
     "dep_cache",
     "provide_filters",
     "provide_service",
+    "provide_services",
 )
 
 _CACHE_NAMESPACE = "advanced_alchemy.extensions.fastapi.providers"
