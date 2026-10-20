@@ -16,9 +16,8 @@ from sqlalchemy import (
     StatementLambdaElement,
     Update,
 )
-from sqlalchemy.orm import InstrumentedAttribute, Session, class_mapper
+from sqlalchemy.orm import InstrumentedAttribute, Load, Session, class_mapper
 from sqlalchemy.orm.scoping import scoped_session
-from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
 from sqlalchemy.sql.dml import ReturningUpdate
 from sqlalchemy.sql.selectable import ForUpdateParameter
 from typing_extensions import Self
@@ -568,7 +567,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: Optional[List[_AbstractLoad]],
+        loader_options: Optional[List[Load]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]:
         return self.statement  # type: ignore[no-any-return] # pyright: ignore[reportReturnType]

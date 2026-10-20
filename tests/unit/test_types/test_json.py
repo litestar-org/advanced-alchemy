@@ -152,3 +152,13 @@ def test_set_table_check_constraint_only_created_for_oracle() -> None:
     assert rule is not None
     assert rule(oracle) is True
     assert rule(postgres) is False
+
+
+def test_process_result_value_without_oracledb_ver() -> None:
+    """Process result value succeeds on dialects that do not define oracledb_ver attribute."""
+    from sqlalchemy.dialects import oracle
+
+    dialect = oracle.dialect()
+    assert not hasattr(dialect, "oracledb_ver")
+    result = ORA_JSONB().process_result_value(b'{"a": 1}', dialect)
+    assert result == {"a": 1}

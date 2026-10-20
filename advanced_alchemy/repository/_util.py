@@ -24,6 +24,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import NoInspectionAvailable
 from sqlalchemy.orm import (
     InstrumentedAttribute,
+    Load,
     MapperProperty,
     RelationshipProperty,
     class_mapper,
@@ -31,9 +32,6 @@ from sqlalchemy.orm import (
     lazyload,
     object_session,
     selectinload,
-)
-from sqlalchemy.orm.strategy_options import (
-    _AbstractLoad,  # pyright: ignore[reportPrivateUsage]
 )
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 from sqlalchemy.sql.base import ExecutableOption
@@ -73,7 +71,7 @@ DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
 
 WhereClauseT = ColumnExpressionArgument[bool]
 SingleLoad: TypeAlias = Union[
-    _AbstractLoad,
+    Load,
     Literal["*"],
     InstrumentedAttribute[Any],
     RelationshipProperty[Any],
@@ -575,56 +573,56 @@ def model_from_dict(model: type[ModelT], /, **kwargs: Any) -> ModelT:
 
 def get_abstract_loader_options(
     loader_options: Union[LoadSpec, None],
-    default_loader_options: Union[list[_AbstractLoad], None] = None,
+    default_loader_options: Union[list[Load], None] = None,
     default_options_have_wildcards: bool = False,
     merge_with_default: bool = True,
     inherit_lazy_relationships: bool = True,
     cycle_count: int = 0,
-) -> tuple[list[_AbstractLoad], bool]:
+) -> tuple[list[Load], bool]:
     """Generate SQLAlchemy loader options for eager loading relationships.
 
     Args:
         loader_options :class:`~advanced_alchemy.repository.typing.LoadSpec`|:class:`None`  Specification for how to load relationships. Can be:
             - None: Use defaults
-            - :class:`sqlalchemy.orm.strategy_options._AbstractLoad`: Direct SQLAlchemy loader option
+            - :class:`sqlalchemy.orm.Load`: Direct SQLAlchemy loader option
             - :class:`sqlalchemy.orm.InstrumentedAttribute`: Model relationship attribute
             - :class:`sqlalchemy.orm.RelationshipProperty`: SQLAlchemy relationship
             - str: "*" for wildcard loading
             - :class:`typing.Sequence` of the above
-        default_loader_options: :class:`typing.Sequence` of :class:`sqlalchemy.orm.strategy_options._AbstractLoad` loader options to start with.
+        default_loader_options: :class:`typing.Sequence` of :class:`sqlalchemy.orm.Load` loader options to start with.
         default_options_have_wildcards: Whether the default options contain wildcards.
         merge_with_default: Whether to merge the default options with the loader options.
         inherit_lazy_relationships: Whether to inherit the ``lazy`` configuration from the model's relationships.
         cycle_count: Number of times this function has been called recursively.
 
     Returns:
-        tuple[:class:`list`[:class:`sqlalchemy.orm.strategy_options._AbstractLoad`], bool]: A tuple containing:
-            - :class:`list` of :class:`sqlalchemy.orm.strategy_options._AbstractLoad` SQLAlchemy loader option objects
+        tuple[:class:`list`[:class:`sqlalchemy.orm.Load`], bool]: A tuple containing:
+            - :class:`list` of :class:`sqlalchemy.orm.Load` SQLAlchemy loader option objects
             - Boolean indicating if any wildcard loaders are present
     """
-    loads: list[_AbstractLoad] = []
+    loads: list[Load] = []
     if cycle_count == 0 and not inherit_lazy_relationships:
-        loads.append(lazyload("*"))
+        loads.append(cast("Load", lazyload("*")))
     if cycle_count == 0 and merge_with_default and default_loader_options is not None:
         loads.extend(default_loader_options)
     options_have_wildcards = default_options_have_wildcards
     if loader_options is None:
         return (loads, options_have_wildcards)
-    if isinstance(loader_options, _AbstractLoad):
+    if isinstance(loader_options, Load):
         return ([loader_options], options_have_wildcards)
     if isinstance(loader_options, InstrumentedAttribute):
         loader_options = [loader_options.property]
     if isinstance(loader_options, RelationshipProperty):
         class_ = loader_options.class_attribute
         return (
-            [selectinload(class_)]
+            [cast("Load", selectinload(class_))]
             if loader_options.uselist
-            else [joinedload(class_, innerjoin=loader_options.innerjoin)],
+            else [cast("Load", joinedload(class_, innerjoin=loader_options.innerjoin))],
             options_have_wildcards if loader_options.uselist else True,
         )
     if isinstance(loader_options, str) and loader_options == "*":
         options_have_wildcards = True
-        return ([joinedload("*")], options_have_wildcards)
+        return ([cast("Load", joinedload("*"))], options_have_wildcards)
     if isinstance(loader_options, (list, tuple)):
         for attribute in loader_options:  # pyright: ignore[reportUnknownVariableType]
             if isinstance(attribute, (list, tuple)):
@@ -956,7 +954,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
             return []
         table = cast("Table", self.model_type.__table__)
         if any(
-            col.onupdate is not None and hasattr(getattr(col.onupdate, "arg", None), "_compiler_dispatch")
+            bool(col.onupdate is not None and col.onupdate.is_clause_element)
             for col in table.columns
         ):
             return None
@@ -1011,7 +1009,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         sql_default_columns = {
             column.key
             for column in table.columns
-            if column.default is not None and hasattr(getattr(column.default, "arg", None), "_compiler_dispatch")
+            if bool(column.default is not None and column.default.is_clause_element)
         }
         return any(not sql_default_columns.issubset(row.keys()) for row in input_rows)
 
@@ -1047,10 +1045,10 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
             if prepared_row.get(column.key) is not None:
                 continue
             value_default = column.onupdate if column.onupdate is not None else column.default
-            default_value = getattr(value_default, "arg", None) if value_default is not None else None
-            if hasattr(default_value, "_compiler_dispatch"):
+            if value_default is not None and value_default.is_clause_element:
                 prepared_row.pop(column.key, None)
                 continue
+            default_value = getattr(value_default, "arg", None) if value_default is not None else None
             if callable(default_value):
                 prepared_row[column.key] = resolve_column_default(default_value)
                 continue

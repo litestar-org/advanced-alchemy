@@ -39,9 +39,8 @@ from sqlalchemy import (
 )
 from sqlalchemy import func as sql_func
 from sqlalchemy.exc import MissingGreenlet, NoInspectionAvailable
-from sqlalchemy.orm import InstrumentedAttribute, Session
+from sqlalchemy.orm import InstrumentedAttribute, Load, Session
 from sqlalchemy.orm.scoping import scoped_session
-from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
 from sqlalchemy.sql import ColumnElement
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from sqlalchemy.sql.selectable import ForUpdateArg, ForUpdateParameter
@@ -329,7 +328,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: Optional[List[_AbstractLoad]],
+        loader_options: Optional[List[Load]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]: ...
 
@@ -900,7 +899,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def _get_loader_options(
         self,
         loader_options: Optional[LoadSpec],
-    ) -> Union[tuple[List[_AbstractLoad], bool], tuple[None, bool]]:
+    ) -> Union[tuple[List[Load], bool], tuple[None, bool]]:
         if loader_options is None:
             # use the defaults set at initialization
             return self._default_loader_options, self._loader_options_have_wildcards or self._uniquify
@@ -1360,7 +1359,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def _get_base_stmt(
         *,
         statement: StatementTypeT,
-        loader_options: Optional[List[_AbstractLoad]],
+        loader_options: Optional[List[Load]],
         execution_options: Optional[dict[str, Any]],
     ) -> StatementTypeT:
         """Get base statement with options applied.
@@ -1412,7 +1411,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         id_chunk: List[Any],
         supports_returning: bool,
         statement_type: Literal["delete", "select"] = "delete",
-        loader_options: Optional[List[_AbstractLoad]],
+        loader_options: Optional[List[Load]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Select[tuple[ModelT]], Delete, ReturningDelete[tuple[ModelT]]]:
         # Base statement is static
@@ -2425,7 +2424,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: Union[List[_AbstractLoad], None],
+        loader_options: Union[List[Load], None],
         execution_options: Union[dict[str, Any], None],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]:
         # Base update statement is static
@@ -2750,7 +2749,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     @staticmethod
     def _get_count_stmt(
         statement: Select[tuple[ModelT]],
-        loader_options: Optional[List[_AbstractLoad]],  # noqa: ARG004
+        loader_options: Optional[List[Load]],  # noqa: ARG004
         execution_options: Optional[dict[str, Any]],  # noqa: ARG004
     ) -> Select[tuple[int]]:
         # Count statement transformations are static
@@ -3150,7 +3149,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         conflict_columns: List[str],
         update_columns: List[str],
         execution_options: Optional[dict[str, Any]],
-        loader_options: Optional[List[_AbstractLoad]],
+        loader_options: Optional[List[Load]],
     ) -> Optional[List[ModelT]]:
         """Execute one chunk of a native upsert.
 

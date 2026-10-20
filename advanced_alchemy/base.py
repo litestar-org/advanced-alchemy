@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Optional, Protocol, Union, cast
 from uuid import UUID
 
 from sqlalchemy import Date, MetaData, String
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -177,8 +178,9 @@ def model_to_dict(instance: "ModelProtocol", exclude: Optional[set[str]] = None)
         return to_dict_fn(exclude=exclude)  # type: ignore[no-any-return]
 
     exclude_fields: set[str] = {"sa_orm_sentinel", "_sentinel"}
-    with contextlib.suppress(AttributeError):
-        exclude_fields = exclude_fields.union(cast("set[str]", instance._sa_instance_state.unloaded))  # type: ignore[attr-defined,union-attr]  # noqa: SLF001
+    ins = sa_inspect(instance)
+    if ins is not None and hasattr(ins, "unloaded"):
+        exclude_fields = exclude_fields.union(ins.unloaded)
     if exclude:
         exclude_fields = exclude_fields.union(exclude)
     mapper = class_mapper(type(instance))
@@ -208,11 +210,13 @@ class BasicAttributes:
         Returns:
             Dict[str, Any]: A dict representation of the model
         """
-        exclude = {"sa_orm_sentinel", "_sentinel"}.union(self._sa_instance_state.unloaded).union(exclude or [])  # type: ignore[attr-defined]
+        ins = sa_inspect(self)
+        unloaded = ins.unloaded if ins is not None and hasattr(ins, "unloaded") else ()
+        exclude_fields = {"sa_orm_sentinel", "_sentinel"}.union(unloaded).union(exclude or [])
         return {
             field: getattr(self, field)
             for field in self.__mapper__.columns.keys()  # noqa: SIM118
-            if field not in exclude
+            if field not in exclude_fields
         }
 
 

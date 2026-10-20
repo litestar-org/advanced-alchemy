@@ -16,8 +16,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio.scoping import async_scoped_session
-from sqlalchemy.orm import InstrumentedAttribute, class_mapper
-from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
+from sqlalchemy.orm import InstrumentedAttribute, Load, class_mapper
 from sqlalchemy.sql.dml import ReturningUpdate
 from sqlalchemy.sql.selectable import ForUpdateParameter
 from typing_extensions import Self
@@ -567,7 +566,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: Optional[List[_AbstractLoad]],
+        loader_options: Optional[List[Load]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]:
         return self.statement  # type: ignore[no-any-return] # pyright: ignore[reportReturnType]

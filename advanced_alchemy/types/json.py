@@ -1,5 +1,5 @@
 import functools
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 from sqlalchemy import text, util
 from sqlalchemy.dialects.oracle import BLOB as ORA_BLOB
@@ -35,6 +35,7 @@ class ORA_JSONB(TypeDecorator[dict[str, Any]], SchemaType):  # noqa: N801
         """Initialize JSON type"""
         self.name = kwargs.pop("name", None)
         self.oracle_strict = kwargs.pop("oracle_strict", True)
+        super().__init__()
 
     def coerce_compared_value(self, op: Any, value: Any) -> Any:
         return self.impl.coerce_compared_value(op=op, value=value)  # type: ignore[no-untyped-call, call-arg]
@@ -54,7 +55,8 @@ class ORA_JSONB(TypeDecorator[dict[str, Any]], SchemaType):  # noqa: N801
         return value if value is None else encode_json(value)
 
     def process_result_value(self, value: Union[bytes, None], dialect: Dialect) -> Optional[Any]:
-        if dialect.oracledb_ver < (2,):  # type: ignore[attr-defined]
+        oracledb_ver = cast("tuple[int, ...]", getattr(dialect, "oracledb_ver", (0, 0)))
+        if oracledb_ver < (2,):
             return value if value is None else decode_json(value)
         return value
 
