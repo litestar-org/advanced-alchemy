@@ -1,0 +1,245 @@
+"""Unit tests for ServiceGroup and provide_services multi-service acquisition."""
+
+from collections.abc import AsyncGenerator, Generator
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+
+from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.service import (
+    AsyncServiceProvider,
+    ServiceGroup,
+    ServiceSpec,
+    SyncServiceProvider,
+    provide_services,
+)
+
+
+def test_type_alias_exports() -> None:
+    assert AsyncServiceProvider is not None
+    assert SyncServiceProvider is not None
+    assert ServiceSpec is not None
+
+
+class FakeUserService:
+    """Mock async service taking a session keyword argument."""
+
+    def __init__(self, *, session: AsyncSession) -> None:
+        self.session = session
+
+
+class FakeRoleService:
+    """Mock async service taking a session keyword argument."""
+
+    def __init__(self, *, session: AsyncSession) -> None:
+        self.session = session
+
+
+class FakeSyncUserService:
+    """Mock sync service taking a session keyword argument."""
+
+    def __init__(self, *, session: Session) -> None:
+        self.session = session
+
+
+class FakeSyncRoleService:
+    """Mock sync service taking a session keyword argument."""
+
+    def __init__(self, *, session: Session) -> None:
+        self.session = session
+
+
+@pytest.mark.asyncio
+async def test_provide_services_async_classes() -> None:
+    session = MagicMock(spec=AsyncSession)
+
+    async with provide_services(FakeUserService, FakeRoleService, session=session) as (users, roles):
+        assert isinstance(users, FakeUserService)
+        assert isinstance(roles, FakeRoleService)
+        assert users.session is session
+        assert roles.session is session
+
+
+@pytest.mark.asyncio
+async def test_provide_services_async_generators_lifo_cleanup() -> None:
+    cleanup_log: list[str] = []
+    session = MagicMock(spec=AsyncSession)
+
+    async def provide_user(sess: AsyncSession) -> AsyncGenerator[FakeUserService, None]:
+        try:
+            yield FakeUserService(session=sess)
+        finally:
+            cleanup_log.append("user_cleanup")
+
+    async def provide_role(sess: AsyncSession) -> AsyncGenerator[FakeRoleService, None]:
+        try:
+            yield FakeRoleService(session=sess)
+        finally:
+            cleanup_log.append("role_cleanup")
+
+    async with provide_services(provide_user, provide_role, session=session) as (users, roles):
+        assert isinstance(users, FakeUserService)
+        assert isinstance(roles, FakeRoleService)
+        assert not cleanup_log
+
+    assert cleanup_log == ["role_cleanup", "user_cleanup"]
+
+
+@pytest.mark.asyncio
+async def test_provide_services_mixed_classes_and_providers() -> None:
+    cleanup_ran = False
+    session = MagicMock(spec=AsyncSession)
+
+    async def provide_role(sess: AsyncSession) -> AsyncGenerator[FakeRoleService, None]:
+        try:
+            yield FakeRoleService(session=sess)
+        finally:
+            nonlocal cleanup_ran
+            cleanup_ran = True
+
+    async with provide_services(FakeUserService, provide_role, session=session) as (users, roles):
+        assert isinstance(users, FakeUserService)
+        assert isinstance(roles, FakeRoleService)
+
+    assert cleanup_ran
+
+
+def test_provide_services_sync_classes() -> None:
+    session = MagicMock(spec=Session)
+
+    with provide_services(FakeSyncUserService, FakeSyncRoleService, session=session) as (users, roles):
+        assert isinstance(users, FakeSyncUserService)
+        assert isinstance(roles, FakeSyncRoleService)
+        assert users.session is session
+        assert roles.session is session
+
+
+def test_provide_services_sync_generators_lifo_cleanup() -> None:
+    cleanup_log: list[str] = []
+    session = MagicMock(spec=Session)
+
+    def provide_sync_user(sess: Session) -> Generator[FakeSyncUserService, None, None]:
+        try:
+            yield FakeSyncUserService(session=sess)
+        finally:
+            cleanup_log.append("sync_user_cleanup")
+
+    def provide_sync_role(sess: Session) -> Generator[FakeSyncRoleService, None, None]:
+        try:
+            yield FakeSyncRoleService(session=sess)
+        finally:
+            cleanup_log.append("sync_role_cleanup")
+
+    with provide_services(provide_sync_user, provide_sync_role, session=session) as (users, roles):
+        assert isinstance(users, FakeSyncUserService)
+        assert isinstance(roles, FakeSyncRoleService)
+        assert not cleanup_log
+
+    assert cleanup_log == ["sync_role_cleanup", "sync_user_cleanup"]
+
+
+@pytest.mark.asyncio
+async def test_provide_services_with_async_config() -> None:
+    session = MagicMock(spec=AsyncSession)
+    config = MagicMock()
+    config_session_ctx = AsyncMock()
+    config_session_ctx.__aenter__.return_value = session
+    config.get_session.return_value = config_session_ctx
+
+    async with provide_services(FakeUserService, config=config) as (users,):
+        assert isinstance(users, FakeUserService)
+        assert users.session is session
+
+    config.get_session.assert_called_once()
+    config_session_ctx.__aenter__.assert_awaited_once()
+    config_session_ctx.__aexit__.assert_awaited_once()
+
+
+def test_provide_services_with_sync_config() -> None:
+    session = MagicMock(spec=Session)
+    config = MagicMock()
+    config_session_ctx = MagicMock()
+    config_session_ctx.__enter__.return_value = session
+    config.get_session.return_value = config_session_ctx
+
+    with provide_services(FakeSyncUserService, config=config) as (users,):
+        assert isinstance(users, FakeSyncUserService)
+        assert users.session is session
+
+    config.get_session.assert_called_once()
+    config_session_ctx.__enter__.assert_called_once()
+    config_session_ctx.__exit__.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_service_group_reusability() -> None:
+    session = MagicMock(spec=AsyncSession)
+    group = ServiceGroup(FakeUserService, FakeRoleService)
+
+    async with group.new(session=session) as (users, roles):
+        assert isinstance(users, FakeUserService)
+        assert isinstance(roles, FakeRoleService)
+
+
+def test_missing_session_and_config_raises_error() -> None:
+    with pytest.raises(ImproperConfigurationError, match="session, config, or connection"):
+        with provide_services(FakeSyncUserService):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_missing_session_and_config_async_raises_error() -> None:
+    with pytest.raises(ImproperConfigurationError, match="session, config, or connection"):
+        async with provide_services(FakeUserService):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_partial_failure_closes_entered_providers() -> None:
+    cleanup_ran = False
+
+    async def cleanup_provider(session: AsyncSession) -> AsyncGenerator[FakeUserService, None]:
+        try:
+            yield FakeUserService(session=session)
+        finally:
+            nonlocal cleanup_ran
+            cleanup_ran = True
+
+    async def failing_provider(session: AsyncSession) -> AsyncGenerator[Any, None]:
+        if repr(session) == "unused":
+            yield None
+        raise RuntimeError("entry failure")
+
+    session = MagicMock(spec=AsyncSession)
+
+    with pytest.raises(RuntimeError, match="entry failure"):
+        async with provide_services(cleanup_provider, failing_provider, session=session):
+            pass
+
+    assert cleanup_ran
+
+
+@pytest.mark.asyncio
+async def test_user_exception_inside_block_triggers_cleanup() -> None:
+    cleanup_ran = False
+
+    async def cleanup_provider(session: AsyncSession) -> AsyncGenerator[FakeUserService, None]:
+        try:
+            yield FakeUserService(session=session)
+        finally:
+            nonlocal cleanup_ran
+            cleanup_ran = True
+
+    session = MagicMock(spec=AsyncSession)
+
+    async def raise_user_error() -> None:
+        async with provide_services(cleanup_provider, session=session):
+            raise ValueError("inner user error")
+
+    with pytest.raises(ValueError, match="inner user error"):
+        await raise_user_error()
+
+    assert cleanup_ran
