@@ -6,7 +6,7 @@ import re
 import string
 from collections import abc
 from collections.abc import Iterable
-from typing import Any, List, Literal, Optional, Union, cast, overload
+from typing import Any, List, Literal, Self, cast, overload
 from unittest.mock import create_autospec
 
 from sqlalchemy import (
@@ -20,7 +20,6 @@ from sqlalchemy.orm import InstrumentedAttribute, Load, Session, class_mapper
 from sqlalchemy.orm.scoping import scoped_session
 from sqlalchemy.sql.dml import ReturningUpdate
 from sqlalchemy.sql.selectable import ForUpdateParameter
-from typing_extensions import Self
 
 from advanced_alchemy.exceptions import ErrorMessages, IntegrityError, NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
@@ -52,7 +51,6 @@ from advanced_alchemy.repository.memory.base import (
 )
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
-from advanced_alchemy.utils.deprecation import warn_deprecation
 from advanced_alchemy.utils.text import slugify
 
 
@@ -61,13 +59,13 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     __database__: SQLAlchemyMultiStore[ModelT] = SQLAlchemyMultiStore(SQLAlchemyInMemoryStore)
     __database_registry__: dict[type[Self], SQLAlchemyMultiStore[ModelT]] = {}
-    loader_options: Optional[LoadSpec] = None
+    loader_options: LoadSpec | None = None
     """Default loader options for the repository."""
-    execution_options: Optional[dict[str, Any]] = None
+    execution_options: dict[str, Any] | None = None
     """Default execution options for the repository."""
     model_type: type[ModelT]
     id_attribute: Any = "id"
-    match_fields: Optional[Union[List[str], str]] = None
+    match_fields: List[str] | str | None = None
     uniquify: bool = False
     _exclude_kwargs: set[str] = {
         "statement",
@@ -91,17 +89,17 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     def __init__(
         self,
         *,
-        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
-        session: Union[Session, scoped_session[Session]],
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        session: Session | scoped_session[Session],
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        order_by: List[OrderingPair] | OrderingPair | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
         wrap_exceptions: bool = True,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
         **kwargs: Any,
     ) -> None:
         self.session = session
@@ -220,9 +218,9 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     @staticmethod
     def _get_error_messages(
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        default_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-    ) -> Optional[ErrorMessages]:
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        default_messages: ErrorMessages | EmptyType | None = Empty,
+    ) -> ErrorMessages | None:
         if error_messages == Empty:
             error_messages = None
         if default_messages == Empty:
@@ -251,14 +249,14 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def __collection__(
         self,
-        identity: Optional[type[AnyObject]] = None,
-    ) -> Union[InMemoryStore[AnyObject], InMemoryStore[ModelT]]:
+        identity: type[AnyObject] | None = None,
+    ) -> InMemoryStore[AnyObject] | InMemoryStore[ModelT]:
         if identity:
             return self.__database__.store(identity)
         return self.__filtered_store__ or self.__database__.store(self.model_type)
 
     @staticmethod
-    def check_not_found(item_or_none: Union[ModelT, None]) -> ModelT:
+    def check_not_found(item_or_none: ModelT | None) -> ModelT:
         if item_or_none is None:
             msg = "No item found when one was expected"
             raise NotFoundError(msg)
@@ -267,8 +265,8 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     @classmethod
     def get_id_attribute_value(
         cls,
-        item: Union[ModelT, type[ModelT]],
-        id_attribute: Union[str, InstrumentedAttribute[Any], None] = None,
+        item: ModelT | type[ModelT],
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> Any:
         """Get value of attribute named as :attr:`id_attribute` on ``item``.
 
@@ -289,7 +287,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         cls,
         item_id: Any,
         item: ModelT,
-        id_attribute: Union[str, InstrumentedAttribute[Any], None] = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
     ) -> ModelT:
         """Return the ``item`` after the ID is set to the appropriate attribute.
 
@@ -314,7 +312,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     def _apply_limit_offset_pagination(result: List[ModelT], limit: int, offset: int) -> List[ModelT]:
         return result[offset:limit]
 
-    def _extract_field_name(self, field: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]") -> str:
+    def _extract_field_name(self, field: "str | ColumnElement[Any] | InstrumentedAttribute[Any]") -> str:
         """Extract string field name from various input types.
 
         Args:
@@ -336,7 +334,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     def _filter_in_collection(
         self,
         result: List[ModelT],
-        field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
+        field_name: "str | ColumnElement[Any] | InstrumentedAttribute[Any]",
         values: abc.Collection[Any],
     ) -> List[ModelT]:
         field_str = self._extract_field_name(field_name)
@@ -345,7 +343,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     def _filter_not_in_collection(
         self,
         result: List[ModelT],
-        field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
+        field_name: "str | ColumnElement[Any] | InstrumentedAttribute[Any]",
         values: abc.Collection[Any],
     ) -> List[ModelT]:
         if not values:
@@ -356,11 +354,11 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     def _filter_on_datetime_field(
         self,
         result: List[ModelT],
-        field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
-        before: Optional[datetime.datetime] = None,
-        after: Optional[datetime.datetime] = None,
-        on_or_before: Optional[datetime.datetime] = None,
-        on_or_after: Optional[datetime.datetime] = None,
+        field_name: "str | ColumnElement[Any] | InstrumentedAttribute[Any]",
+        before: datetime.datetime | None = None,
+        after: datetime.datetime | None = None,
+        on_or_before: datetime.datetime | None = None,
+        on_or_after: datetime.datetime | None = None,
     ) -> List[ModelT]:
         field_str = self._extract_field_name(field_name)
         result_: List[ModelT] = []
@@ -379,7 +377,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     @staticmethod
     def _filter_by_like(
         result: List[ModelT],
-        field_name: Union[str, set[str]],
+        field_name: str | set[str],
         value: str,
         ignore_case: bool,
         escape_wildcards: bool = False,
@@ -402,7 +400,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     @staticmethod
     def _filter_by_not_like(
         result: List[ModelT],
-        field_name: Union[str, set[str]],
+        field_name: str | set[str],
         value: str,
         ignore_case: bool,
         escape_wildcards: bool = False,
@@ -426,7 +424,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self,
         result: Iterable[ModelT],
         /,
-        kwargs: Union[dict[Any, Any], Iterable[tuple[Any, Any]]],
+        kwargs: dict[Any, Any] | Iterable[tuple[Any, Any]],
     ) -> List[ModelT]:
         kwargs_: dict[Any, Any] = kwargs if isinstance(kwargs, dict) else dict(*kwargs)  # pyright: ignore
         kwargs_ = self._exclude_unused_kwargs(kwargs_)  # pyright: ignore
@@ -438,9 +436,9 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     def _order_by(
         self,
         result: List[ModelT],
-        field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
+        field_name: "str | ColumnElement[Any] | InstrumentedAttribute[Any]",
         sort_desc: bool = False,
-        nulls: Optional[Literal["first", "last"]] = None,
+        nulls: Literal["first", "last"] | None = None,
     ) -> List[ModelT]:
         attribute = self._extract_field_name(field_name)
         if nulls is None:
@@ -456,7 +454,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
     def _apply_filters(
         self,
         result: List[ModelT],
-        *filters: Union[StatementFilter, ColumnElement[bool]],
+        *filters: StatementFilter | ColumnElement[bool],
         apply_pagination: bool = True,
     ) -> List[ModelT]:
         for filter_ in filters:
@@ -514,9 +512,9 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def _get_match_fields(
         self,
-        match_fields: Union[List[str], str, None],
-        id_attribute: Optional[str] = None,
-    ) -> Optional[List[str]]:
+        match_fields: List[str] | str | None,
+        id_attribute: str | None = None,
+    ) -> List[str] | None:
         id_attribute = id_attribute or self.id_attribute
         match_fields = match_fields or self.match_fields
         if isinstance(match_fields, str):
@@ -525,7 +523,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def _get_many_and_count_basic(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
+        *filters: StatementFilter | ColumnElement[bool],
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
         result = self.get_many(*filters, **kwargs)
@@ -533,7 +531,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def _get_many_and_count_window(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
+        *filters: StatementFilter | ColumnElement[bool],
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
         return self._get_many_and_count_basic(*filters, **kwargs)
@@ -567,58 +565,58 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: Optional[List[Load]],
-        execution_options: Optional[dict[str, Any]],
-    ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]:
+        loader_options: List[Load] | None,
+        execution_options: dict[str, Any] | None,
+    ) -> Update | ReturningUpdate[tuple[ModelT]]:
         return self.statement  # type: ignore[no-any-return] # pyright: ignore[reportReturnType]
 
     @classmethod
-    def check_health(cls, session: Union[Session, scoped_session[Session]]) -> bool:
+    def check_health(cls, session: Session | scoped_session[Session]) -> bool:
         return True
 
     def get(
         self,
         item_id: PrimaryKeyType,
         *,
-        auto_expunge: Optional[bool] = None,
-        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
-        id_attribute: Union[str, InstrumentedAttribute[Any], None] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
         with_for_update: ForUpdateParameter = None,
         use_cache: bool = True,
-        bind_group: Optional[str] = None,
+        bind_group: str | None = None,
     ) -> ModelT:
         return self._find_or_raise_not_found(item_id)
 
     def get_one(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        auto_expunge: Optional[bool] = None,
-        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        *filters: StatementFilter | ColumnElement[bool],
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
         **kwargs: Any,
     ) -> ModelT:
         return self.check_not_found(self.get_one_or_none(**kwargs))
 
     def get_one_or_none(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        auto_expunge: Optional[bool] = None,
-        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        *filters: StatementFilter | ColumnElement[bool],
+        auto_expunge: bool | None = None,
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
         **kwargs: Any,
-    ) -> Union[ModelT, None]:
+    ) -> ModelT | None:
         result = self._filter_result_by_kwargs(self.__collection__().get_all(), kwargs)
         if len(result) > 1:
             msg = "Multiple objects when one was expected"
@@ -627,19 +625,19 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def get_or_upsert(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: Union[List[str], str, None] = None,
+        *filters: StatementFilter | ColumnElement[bool],
+        match_fields: List[str] | str | None = None,
         upsert: bool = True,
-        attribute_names: Optional[Iterable[str]] = None,
+        attribute_names: Iterable[str] | None = None,
         with_for_update: ForUpdateParameter = None,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        auto_refresh: Optional[bool] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         kwargs_ = self._exclude_unused_kwargs(kwargs)
@@ -665,18 +663,18 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def get_and_update(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: Union[List[str], str, None] = None,
-        attribute_names: Optional[Iterable[str]] = None,
+        *filters: StatementFilter | ColumnElement[bool],
+        match_fields: List[str] | str | None = None,
+        attribute_names: Iterable[str] | None = None,
         with_for_update: ForUpdateParameter = None,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        auto_refresh: Optional[bool] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         kwargs_ = self._exclude_unused_kwargs(kwargs)
@@ -701,9 +699,9 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def exists(
         self,
-        *filters: "Union[StatementFilter, ColumnElement[bool]]",
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        *filters: "StatementFilter | ColumnElement[bool]",
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
         **kwargs: Any,
     ) -> bool:
         existing = self.count(*filters, **kwargs)
@@ -711,9 +709,9 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def count(
         self,
-        *filters: "Union[StatementFilter, ColumnElement[bool]]",
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        *filters: "StatementFilter | ColumnElement[bool]",
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
         **kwargs: Any,
     ) -> int:
         result = self._apply_filters(self.__collection__().get_all(), *filters)
@@ -723,11 +721,11 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self,
         data: ModelT,
         *,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        auto_refresh: Optional[bool] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        bind_group: Optional[str] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        bind_group: str | None = None,
     ) -> ModelT:
         try:
             self.__database__.add(self.model_type, data)
@@ -740,10 +738,10 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self,
         data: List[ModelT],
         *,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        bind_group: Optional[str] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        bind_group: str | None = None,
     ) -> List[ModelT]:
         for obj in data:
             self.add(obj)  # pyright: ignore[reportCallIssue]
@@ -753,17 +751,17 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self,
         data: ModelT,
         *,
-        attribute_names: Optional[Iterable[str]] = None,
+        attribute_names: Iterable[str] | None = None,
         with_for_update: ForUpdateParameter = None,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        auto_refresh: Optional[bool] = None,
-        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
     ) -> ModelT:
         pk_value = self.get_primary_key_value(data)
         self._find_or_raise_not_found(pk_value)
@@ -773,13 +771,13 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self,
         data: List[ModelT],
         *,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
     ) -> List[ModelT]:
         return [self.__collection__().update(obj) for obj in data if obj in self.__collection__()]
 
@@ -787,14 +785,14 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self,
         item_id: PrimaryKeyType,
         *,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
     ) -> ModelT:
         store_key = self._get_store_key(item_id)
         try:
@@ -806,15 +804,15 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self,
         item_ids: List[PrimaryKeyType],
         *,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
-        chunk_size: Optional[int] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        chunk_size: int | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
     ) -> List[ModelT]:
         deleted: List[ModelT] = []
         for id_ in item_ids:
@@ -826,15 +824,15 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
 
     def delete_where(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        *filters: StatementFilter | ColumnElement[bool],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
         sanity_check: bool = True,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
         **kwargs: Any,
     ) -> List[ModelT]:
         result = self.__collection__().get_all()
@@ -847,17 +845,17 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self,
         data: ModelT,
         *,
-        attribute_names: Optional[Iterable[str]] = None,
+        attribute_names: Iterable[str] | None = None,
         with_for_update: ForUpdateParameter = None,
-        auto_expunge: Optional[bool] = None,
-        auto_commit: Optional[bool] = None,
-        auto_refresh: Optional[bool] = None,
-        match_fields: Optional[Union[List[str], str]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        auto_expunge: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_refresh: bool | None = None,
+        match_fields: List[str] | str | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
     ) -> ModelT:
         # sourcery skip: assign-if-exp, reintroduce-else
         if data in self.__collection__():
@@ -868,99 +866,48 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
         self,
         data: List[ModelT],
         *,
-        auto_expunge: Optional[bool] = None,
-        auto_commit: Optional[bool] = None,
+        auto_expunge: bool | None = None,
+        auto_commit: bool | None = None,
         no_merge: bool = False,
-        match_fields: Optional[Union[List[str], str]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
-        chunk_size: Optional[int] = None,
+        match_fields: List[str] | str | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
+        chunk_size: int | None = None,
     ) -> List[ModelT]:
         _ = chunk_size
         return [self.upsert(item) for item in data]
 
     def get_many_and_count(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
-        auto_expunge: Optional[bool] = None,
-        count_with_window_function: Optional[bool] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
+        *filters: StatementFilter | ColumnElement[bool],
+        statement: Select[tuple[ModelT]] | StatementLambdaElement | None = None,
+        auto_expunge: bool | None = None,
+        count_with_window_function: bool | None = None,
+        order_by: List[OrderingPair] | OrderingPair | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
         use_cache: bool = True,
-        bind_group: Optional[str] = None,
+        bind_group: str | None = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
         return self._get_many_and_count_basic(*filters, **kwargs)
 
-    def list_and_count(
-        self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
-        auto_expunge: Optional[bool] = None,
-        count_with_window_function: Optional[bool] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        use_cache: bool = True,
-        bind_group: Optional[str] = None,
-        **kwargs: Any,
-    ) -> tuple[List[ModelT], int]:
-        """List of records and total count returned by query.
-
-        .. deprecated:: 1.10.0
-            Use :meth:`get_many_and_count` instead.
-        """
-        warn_deprecation(
-            version="1.10.0",
-            deprecated_name="list_and_count",
-            kind="method",
-            removal_in="2.0.0",
-            alternative="get_many_and_count",
-        )
-        return self.get_many_and_count(*filters, **kwargs)
-
     def get_many(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        uniquify: Optional[bool] = None,
+        *filters: StatementFilter | ColumnElement[bool],
+        uniquify: bool | None = None,
         use_cache: bool = True,
-        bind_group: Optional[str] = None,
+        bind_group: str | None = None,
         **kwargs: Any,
     ) -> List[ModelT]:
         result = self.__collection__().get_all()
         result = self._apply_filters(result, *filters)
         return self._filter_result_by_kwargs(result, kwargs)
-
-    def list(
-        self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        uniquify: Optional[bool] = None,
-        use_cache: bool = True,
-        bind_group: Optional[str] = None,
-        **kwargs: Any,
-    ) -> List[ModelT]:
-        """List of records returned by query.
-
-        .. deprecated:: 1.10.0
-            Use :meth:`get_many` instead.
-        """
-        warn_deprecation(
-            version="1.10.0",
-            deprecated_name="list",
-            kind="method",
-            removal_in="2.0.0",
-            alternative="get_many",
-        )
-        return self.get_many(*filters, **kwargs)
 
 
 class SQLAlchemySyncMockSlugRepository(
@@ -970,13 +917,13 @@ class SQLAlchemySyncMockSlugRepository(
     def get_by_slug(
         self,
         slug: str,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
         **kwargs: Any,
-    ) -> Union[ModelT, None]:
+    ) -> ModelT | None:
         return self.get_one_or_none(slug=slug)
 
     def get_available_slug(

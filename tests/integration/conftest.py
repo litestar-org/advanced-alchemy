@@ -29,51 +29,6 @@ if TYPE_CHECKING:
     from pytest import MonkeyPatch
 
 
-_DIALECT_XDIST_GROUPS = frozenset(
-    {
-        "cockroachdb",
-        "duckdb",
-        "mock",
-        "mssql",
-        "mysql",
-        "oracle18",
-        "oracle23",
-        "postgres",
-        "spanner",
-        "sqlite",
-    }
-)
-
-
-@pytest.hookimpl(tryfirst=True)
-def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Consolidate xdist_group markers so database-backed tests group strictly by database engine."""
-    parent_groups: dict[object, list[pytest.Mark]] = {}
-    for item in items:
-        for node in item.iter_parents():
-            if node is item or node in parent_groups:
-                continue
-            marks = [m for m in node.own_markers if m.name == "xdist_group"]
-            if marks:
-                parent_groups[node] = marks
-                node.own_markers = [m for m in node.own_markers if m.name != "xdist_group"]
-
-    for item in items:
-        own_xdist = [
-            m
-            for m in item.own_markers
-            if m.name == "xdist_group"
-            and (m.args[0] if m.args else m.kwargs.get("name", "default")) in _DIALECT_XDIST_GROUPS
-        ]
-        if own_xdist:
-            item.own_markers = [m for m in item.own_markers if m.name != "xdist_group"] + [own_xdist[0]]
-        elif not any(m.name == "xdist_group" for m in item.own_markers):
-            for node in item.iter_parents():
-                if node in parent_groups:
-                    item.own_markers.extend(parent_groups[node])
-                    break
-
-
 @pytest.fixture(scope="session", autouse=True)
 def configure_safe_logging(request: pytest.FixtureRequest) -> None:
     """Configure logging to prevent I/O errors during parallel test execution.

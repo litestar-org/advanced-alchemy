@@ -1,7 +1,7 @@
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
-from typing import Callable, Optional, TypeVar
+from typing import Optional, TypeVar
 
 import pytest
 

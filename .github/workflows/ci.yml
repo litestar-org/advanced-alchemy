@@ -96,13 +96,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
     uses: ./.github/workflows/test.yml
     with:
       coverage: ${{ matrix.python-version == '3.13' }}
       python-version: ${{ matrix.python-version }}
       # Python 3.15 is non-blocking until every dependency ships 3.15 wheels
-      experimental: ${{ matrix.python-version == '3.15' || matrix.python-version == '3.9' || matrix.python-version == '3.10' }}
+      experimental: ${{ matrix.python-version == '3.15' }}
   sonar:
     needs:
       - test

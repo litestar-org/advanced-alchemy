@@ -76,7 +76,7 @@ def test_convert_datetime_to_gmt_iso_naive() -> None:
 
 
 def test_convert_datetime_to_gmt_iso_aware() -> None:
-    dt = datetime.datetime(2025, 12, 17, 10, 30, 0, tzinfo=datetime.timezone.utc)
+    dt = datetime.datetime(2025, 12, 17, 10, 30, 0, tzinfo=datetime.UTC)
     assert convert_datetime_to_gmt_iso(dt) == "2025-12-17T10:30:00Z"
 
 
@@ -568,7 +568,7 @@ def test_msgspec_custom_type_encoders_override_native_values() -> None:
                 "decimal": Decimal("1.2"),
                 "uuid": UUID("12345678-1234-5678-1234-567812345678"),
                 "bytes": b"abc",
-                "datetime": datetime.datetime(2026, 1, 2, 3, 4, 5, tzinfo=datetime.timezone.utc),
+                "datetime": datetime.datetime(2026, 1, 2, 3, 4, 5, tzinfo=datetime.UTC),
             }
         )
     )
@@ -943,133 +943,12 @@ def test_decode_complex_type_each_typed_marker(marker: dict[str, Any], expected:
     assert decode_complex_type(marker) == expected
 
 
-def _import_attr(module_name: str, attr_name: str) -> Any:
-    module = importlib.import_module(module_name)
-    return getattr(module, attr_name)
-
-
-@pytest.mark.parametrize(
-    ("name", "new_module"),
-    [
-        ("BaseModel", "advanced_alchemy.typing"),
-        ("PYDANTIC_INSTALLED", "advanced_alchemy.typing"),
-        ("encode_json", "advanced_alchemy.utils.serialization"),
-        ("decode_json", "advanced_alchemy.utils.serialization"),
-        ("encode_complex_type", "advanced_alchemy.utils.serialization"),
-        ("decode_complex_type", "advanced_alchemy.utils.serialization"),
-        ("convert_datetime_to_gmt_iso", "advanced_alchemy.utils.serialization"),
-        ("convert_date_to_iso", "advanced_alchemy.utils.serialization"),
-    ],
-)
-def test_legacy_serialization_shim_emits_deprecation_warning(name: str, new_module: str) -> None:
-    with pytest.warns(DeprecationWarning, match=rf"Use '{new_module}\.{name}' instead"):
-        value = _import_attr("advanced_alchemy._serialization", name)
-
-    canonical = getattr(importlib.import_module(new_module), name)
-    assert value is canonical
-
-
-def test_legacy_serialization_shim_unknown_attribute_raises() -> None:
-    with pytest.raises(AttributeError, match="not_a_real_name"):
-        _import_attr("advanced_alchemy._serialization", "not_a_real_name")
-
-
-def test_legacy_serialization_shim_lists_renames_in_all() -> None:
-    import advanced_alchemy._serialization as shim
-
-    expected = {
-        "BaseModel",
-        "PYDANTIC_INSTALLED",
-        "encode_json",
-        "decode_json",
-        "encode_complex_type",
-        "decode_complex_type",
-        "convert_datetime_to_gmt_iso",
-        "convert_date_to_iso",
-    }
-    assert expected.issubset(set(shim.__all__))
-
-
-@pytest.mark.parametrize(
-    ("name", "new_module"),
-    [
-        # Foundational typing surface
-        ("ATTRS_INSTALLED", "advanced_alchemy.typing"),
-        ("CATTRS_INSTALLED", "advanced_alchemy.typing"),
-        ("LITESTAR_INSTALLED", "advanced_alchemy.typing"),
-        ("MSGSPEC_INSTALLED", "advanced_alchemy.typing"),
-        ("PYDANTIC_INSTALLED", "advanced_alchemy.typing"),
-        ("SQLMODEL_INSTALLED", "advanced_alchemy.typing"),
-        ("UNSET", "advanced_alchemy.typing"),
-        ("BaseModel", "advanced_alchemy.typing"),
-        ("Struct", "advanced_alchemy.typing"),
-        ("TypeAdapter", "advanced_alchemy.typing"),
-        ("UnsetType", "advanced_alchemy.typing"),
-        ("FailFast", "advanced_alchemy.typing"),
-        ("DTOData", "advanced_alchemy.typing"),
-        ("T", "advanced_alchemy.typing"),
-        # Schema/dict/attrs guards and helpers
-        ("schema_dump", "advanced_alchemy.utils.serialization"),
-        ("ModelDictT", "advanced_alchemy.utils.serialization"),
-        ("ModelDictListT", "advanced_alchemy.utils.serialization"),
-        ("ModelDTOT", "advanced_alchemy.utils.serialization"),
-        ("FilterTypeT", "advanced_alchemy.utils.serialization"),
-        ("SupportedSchemaModel", "advanced_alchemy.utils.serialization"),
-        ("is_attrs_instance", "advanced_alchemy.utils.serialization"),
-        ("is_dto_data", "advanced_alchemy.utils.serialization"),
-        ("is_msgspec_struct", "advanced_alchemy.utils.serialization"),
-        ("is_pydantic_model", "advanced_alchemy.utils.serialization"),
-        ("is_schema", "advanced_alchemy.utils.serialization"),
-        ("is_dict", "advanced_alchemy.utils.serialization"),
-        ("get_type_adapter", "advanced_alchemy.utils.serialization"),
-        ("structure", "advanced_alchemy.utils.serialization"),
-        ("unstructure", "advanced_alchemy.utils.serialization"),
-        ("fields", "advanced_alchemy.utils.serialization"),
-        ("asdict", "advanced_alchemy.utils.serialization"),
-        ("has", "advanced_alchemy.utils.serialization"),
-    ],
-)
-def test_legacy_service_typing_shim_emits_deprecation_warning(name: str, new_module: str) -> None:
-    with pytest.warns(DeprecationWarning, match=rf"Use '{new_module}\.{name}' instead"):
-        value = _import_attr("advanced_alchemy.service.typing", name)
-
-    canonical = getattr(importlib.import_module(new_module), name)
-    assert value is canonical
-
-
-def test_typing_dict_protocol_emits_deprecation_warning() -> None:
-    with pytest.warns(DeprecationWarning, match=r"DictProtocol.*1\.11\.0.*removed in 2\.0\.0"):
-        value = _import_attr("advanced_alchemy.typing", "DictProtocol")
-
-    assert value is _import_attr("advanced_alchemy._typing", "DictProtocol")
-
-
 def test_typing_canonical_exports_do_not_emit_deprecation_warning() -> None:
     typing_module = importlib.import_module("advanced_alchemy.typing")
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         assert getattr(typing_module, "PYDANTIC_INSTALLED") is PYDANTIC_INSTALLED
-
-
-def test_legacy_service_typing_dict_protocol_remains_compatible() -> None:
-    with pytest.warns(DeprecationWarning, match="DictProtocol"):
-        value = _import_attr("advanced_alchemy.service.typing", "DictProtocol")
-
-    assert value is _import_attr("advanced_alchemy._typing", "DictProtocol")
-
-
-def test_legacy_service_typing_shim_unknown_attribute_raises() -> None:
-    with pytest.raises(AttributeError, match="not_a_real_name"):
-        _import_attr("advanced_alchemy.service.typing", "not_a_real_name")
-
-
-def test_legacy_service_typing_shim_keeps_pydantic_use_failfast() -> None:
-    import advanced_alchemy.service.typing as shim
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        assert shim.PYDANTIC_USE_FAILFAST is False
 
 
 # ----------------------------------------------------------------------

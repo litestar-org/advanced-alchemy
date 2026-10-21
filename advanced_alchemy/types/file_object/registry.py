@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, overload
+from typing import TYPE_CHECKING, Any, overload
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.utils.module_loader import import_string
@@ -22,8 +23,8 @@ class StorageRegistry(metaclass=SingletonMeta):
     def __init__(
         self,
         json_serializer: "Callable[[Any], str]" = encode_json,
-        json_deserializer: Callable[[Union[str, bytes]], Any] = decode_json,
-        default_backend: "Union[str, type[StorageBackend]]" = DEFAULT_BACKEND,
+        json_deserializer: Callable[[str | bytes], Any] = decode_json,
+        default_backend: "str | type[StorageBackend]" = DEFAULT_BACKEND,
     ) -> None:
         """Initialize the PortalProvider."""
         self._registry: dict[str, StorageBackend] = {}
@@ -33,7 +34,7 @@ class StorageRegistry(metaclass=SingletonMeta):
             DEFAULT_BACKEND if isinstance(default_backend, str) else default_backend.__qualname__
         )
 
-    def set_default_backend(self, default_backend: "Union[str, type[StorageBackend]]") -> None:
+    def set_default_backend(self, default_backend: "str | type[StorageBackend]") -> None:
         """Set the default storage backend.
 
         Args:
@@ -77,7 +78,7 @@ class StorageRegistry(metaclass=SingletonMeta):
     def register_backend(self, value: "StorageBackend", key: None = None) -> None: ...
     @overload
     def register_backend(self, value: "StorageBackend", key: str) -> None: ...
-    def register_backend(self, value: "Union[StorageBackend, str]", key: "Optional[str]" = None) -> None:
+    def register_backend(self, value: "StorageBackend | str", key: "str | None" = None) -> None:
         """Register a new storage backend in the registry.
 
         Args:

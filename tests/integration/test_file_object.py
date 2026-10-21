@@ -1,5 +1,4 @@
 import logging
-import sys
 from collections.abc import AsyncGenerator, Generator
 from contextlib import suppress
 from pathlib import Path
@@ -13,7 +12,7 @@ from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from advanced_alchemy._listeners import set_async_context, setup_file_object_listeners
+from advanced_alchemy._listeners import AsyncFileObjectListener, SyncFileObjectListener
 from advanced_alchemy.base import create_registry
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.types.file_object import (
@@ -31,7 +30,6 @@ logger = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.xdist_group("file_object"),
 ]
 
 
@@ -39,23 +37,34 @@ def remove_listeners() -> None:
     """Remove file object listeners safely to prevent test interactions."""
     from sqlalchemy.event import contains
 
-    from advanced_alchemy._listeners import FileObjectListener
+    for listener_cls in (SyncFileObjectListener, AsyncFileObjectListener):
+        for event_name in ("before_flush", "after_commit", "after_rollback"):
+            fn = getattr(listener_cls, event_name)
+            if contains(Session, event_name, fn):
+                with suppress(InvalidRequestError):
+                    event.remove(Session, event_name, fn)
 
-    # Only try to remove listeners if they're actually registered
-    if contains(Session, "before_flush", FileObjectListener.before_flush):
-        with suppress(InvalidRequestError):
-            event.remove(Session, "before_flush", FileObjectListener.before_flush)
 
-    if contains(Session, "after_commit", FileObjectListener.after_commit):
-        with suppress(InvalidRequestError):
-            event.remove(Session, "after_commit", FileObjectListener.after_commit)
+def register_sync_listeners() -> None:
+    """Register SyncFileObjectListener on Session for sync integration tests."""
+    from sqlalchemy.event import contains
 
-    if contains(Session, "after_rollback", FileObjectListener.after_rollback):
-        with suppress(InvalidRequestError):
-            event.remove(Session, "after_rollback", FileObjectListener.after_rollback)
+    remove_listeners()
+    for event_name in ("before_flush", "after_commit", "after_rollback"):
+        fn = getattr(SyncFileObjectListener, event_name)
+        if not contains(Session, event_name, fn):
+            event.listen(Session, event_name, fn)
 
-    # Reset async context flag to ensure clean state
-    set_async_context(False)
+
+def register_async_listeners() -> None:
+    """Register AsyncFileObjectListener on Session for async integration tests."""
+    from sqlalchemy.event import contains
+
+    remove_listeners()
+    for event_name in ("before_flush", "after_commit", "after_rollback"):
+        fn = getattr(AsyncFileObjectListener, event_name)
+        if not contains(Session, event_name, fn):
+            event.listen(Session, event_name, fn)
 
 
 def rustfs_endpoint_url(rustfs_service: RustfsService) -> str:
@@ -231,9 +240,6 @@ async def async_session(
     async_db_engine: AsyncEngine, storage_registry: "StorageRegistry"
 ) -> AsyncGenerator[AsyncSession, None]:
     """Provides a SQLAlchemy session scoped to the test session."""
-    # Create session with flag for listener to identify async operations
-    set_async_context(True)
-
     async_session_factory = async_sessionmaker(
         async_db_engine,
         expire_on_commit=False,
@@ -244,15 +250,8 @@ async def async_session(
         logger.debug(f"Created async session: {id(db_session)}, with info: {db_session.info}")
         yield db_session
 
-    # Reset async context flag
-    set_async_context(False)
-
 
 @pytest.mark.xdist_group("file_object")
-@pytest.mark.xfail(
-    sys.version_info < (3, 10),
-    reason="s3fs endpoint_url parameter incompatible with Python 3.9",
-)
 async def test_fsspec_s3_basic_operations_async(
     storage_registry: StorageRegistry,
     rustfs_service: RustfsService,
@@ -314,10 +313,6 @@ async def test_fsspec_s3_basic_operations_async(
 
 
 @pytest.mark.xdist_group("file_object")
-@pytest.mark.xfail(
-    sys.version_info < (3, 10),
-    reason="s3fs endpoint_url parameter incompatible with Python 3.9",
-)
 def test_fsspec_s3_basic_operations_sync(
     storage_registry: StorageRegistry,
     rustfs_service: RustfsService,
@@ -677,10 +672,7 @@ async def test_obstore_update_async_with_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
     """Test listener deletes old file when attribute is updated and session committed."""
-    # Set async context flag to enable async operations in the listener
-    set_async_context(True)
-
-    setup_file_object_listeners()
+    register_async_listeners()
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"Old file content"
     new_content = b"New file content"
@@ -727,10 +719,7 @@ async def test_obstore_delete_async_on_update_clear_with_listener(
     Note that AsyncSession in SQLAlchemy 2.0 has limitations with event listeners.
     We will manually handle cleanup of files to ensure proper functionality.
     """
-    # Set async context flag to enable async operations in the listener
-    set_async_context(True)
-
-    setup_file_object_listeners()
+    register_async_listeners()
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"File to clear"
     old_path = "clear_me_async.log"
@@ -771,10 +760,7 @@ async def test_obstore_delete_async_multiple_removed_with_listener(
     MutableList tracking doesn't work properly with AsyncSession, so we use direct
     assignment for updates instead of mutating the list in-place.
     """
-    # Set async context flag to enable async operations in the listener
-    set_async_context(True)
-
-    setup_file_object_listeners()
+    register_async_listeners()
     backend = storage_registry.get_backend("local_test_store")
     content1 = b"img1"
     content2 = b"img2"
@@ -1397,7 +1383,6 @@ async def test_file_object_save_async_no_data(storage_registry: StorageRegistry)
         await obj.save_async()
 
 
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_sqlalchemy_single_file_persist_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:
@@ -1441,8 +1426,7 @@ async def test_obstore_backend_listener_sqlalchemy_single_file_persist_async(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
     """Test saving and loading a model with a single StoredObject using synchronous SQLAlchemy session."""
-    setup_file_object_listeners()
-    set_async_context(True)
+    register_async_listeners()
     file_content = b"SQLAlchemy Async Integration Test"
     doc_name = "Sync Integration Doc"
     file_path = "sqlalchemy_single_async.bin"
@@ -1475,7 +1459,6 @@ async def test_obstore_backend_listener_sqlalchemy_single_file_persist_async(
     assert loaded_content == file_content
 
 
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_sqlalchemy_multiple_files_persist_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:
@@ -1529,12 +1512,11 @@ def test_obstore_backend_sqlalchemy_multiple_files_persist_sync(
     assert loaded_obj2.get_content() == img2_content
 
 
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_delete_on_update_clear_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:
     """Test listener deletes old file when attribute is cleared using synchronous SQLAlchemy session."""
-    setup_file_object_listeners()
+    register_sync_listeners()
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"File to clear sync"
     old_path = "clear_me_sync.log"
@@ -1569,8 +1551,7 @@ async def test_obstore_backend_listener_delete_on_update_clear_async(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
     """Test listener deletes old file when attribute is cleared using asynchronous SQLAlchemy session."""
-    setup_file_object_listeners()
-    set_async_context(True)
+    register_async_listeners()
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"File to clear sync"
     old_path = "clear_me_sync.log"
@@ -1600,10 +1581,9 @@ async def test_obstore_backend_listener_delete_on_update_clear_async(
 
 
 @pytest.mark.flaky(reruns=5)
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_update_file_object_sync(session: Session, storage_registry: StorageRegistry) -> None:
     """Test listener deletes old file when attribute is updated and session committed using synchronous SQLAlchemy session."""
-    setup_file_object_listeners()
+    register_sync_listeners()
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"Old file content sync"
     new_content = b"New file content sync"
@@ -1646,7 +1626,7 @@ async def test_obstore_backend_listener_update_file_object_async(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
     """Test listener deletes old file when attribute is updated and session committed using asynchronous SQLAlchemy session."""
-    setup_file_object_listeners()
+    register_async_listeners()
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"Old file content sync"
     new_content = b"New file content sync"
@@ -1683,13 +1663,11 @@ async def test_obstore_backend_listener_update_file_object_async(
 
 
 @pytest.mark.flaky(reruns=5)
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_delete_multiple_removed_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:
     """Test listener deletes files removed from a multiple list using synchronous SQLAlchemy session."""
-    set_async_context(False)
-    setup_file_object_listeners()
+    register_sync_listeners()
     backend = storage_registry.get_backend("local_test_store")
     content1 = b"img1_sync_multi"
     content2 = b"img2_sync_multi"
@@ -1737,8 +1715,7 @@ async def test_obstore_backend_listener_delete_multiple_removed_async(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
     """Test listener deletes files removed from a multiple list using asynchronous SQLAlchemy session."""
-    set_async_context(True)
-    setup_file_object_listeners()
+    register_async_listeners()
     backend = storage_registry.get_backend("local_test_store")
     content1 = b"img1_async_multi"
     content2 = b"img2_async_multi"

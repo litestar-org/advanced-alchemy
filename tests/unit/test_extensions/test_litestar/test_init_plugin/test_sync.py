@@ -43,7 +43,8 @@ from advanced_alchemy.extensions.litestar.plugins.init.config.sync import (
 )
 
 if TYPE_CHECKING:
-    from typing import Any, Callable
+    from collections.abc import Callable
+    from typing import Any
 
     from litestar.types import Scope
 

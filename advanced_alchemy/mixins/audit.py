@@ -10,14 +10,14 @@ class AuditColumns:
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTimeUTC(timezone=True),
-        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        default=lambda: datetime.datetime.now(datetime.UTC),
         sort_order=3002,
     )
     """Date/time of instance creation."""
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTimeUTC(timezone=True),
-        default=lambda: datetime.datetime.now(datetime.timezone.utc),
-        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        onupdate=lambda: datetime.datetime.now(datetime.UTC),
         sort_order=3003,
     )
     """Date/time of instance last update."""
@@ -25,5 +25,5 @@ class AuditColumns:
     @validates("created_at", "updated_at")
     def validate_tz_info(self, _: str, value: datetime.datetime) -> datetime.datetime:
         if value.tzinfo is None:
-            value = value.replace(tzinfo=datetime.timezone.utc)
+            value = value.replace(tzinfo=datetime.UTC)
         return value

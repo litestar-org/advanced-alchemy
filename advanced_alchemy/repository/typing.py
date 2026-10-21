@@ -1,8 +1,8 @@
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 from sqlalchemy import UnaryExpression
 from sqlalchemy.orm import InstrumentedAttribute
-from typing_extensions import TypeAlias, TypeVar
+from typing_extensions import TypeVar
 
 if TYPE_CHECKING:
     from sqlalchemy import RowMapping, Select
@@ -48,14 +48,14 @@ RowMappingT = TypeVar("RowMappingT", bound="RowMapping")
 
 :class:`~sqlalchemy.engine.RowMapping`
 """
-ModelOrRowMappingT = TypeVar("ModelOrRowMappingT", bound="Union[base.ModelProtocol, RowMapping]")
+ModelOrRowMappingT = TypeVar("ModelOrRowMappingT", bound="base.ModelProtocol | RowMapping")
 """Type variable for models or row mappings.
 
 :class:`~advanced_alchemy.base.ModelProtocol` | :class:`~sqlalchemy.engine.RowMapping`
 """
 SQLAlchemySyncRepositoryT = TypeVar(
     "SQLAlchemySyncRepositoryT",
-    bound="Union[SQLAlchemySyncRepository[Any], SQLAlchemySyncMockRepository[Any]]",
+    bound="SQLAlchemySyncRepository[Any] | SQLAlchemySyncMockRepository[Any]",
     default="Any",
 )
 """Type variable for synchronous SQLAlchemy repositories.
@@ -64,14 +64,14 @@ SQLAlchemySyncRepositoryT = TypeVar(
 """
 SQLAlchemyAsyncRepositoryT = TypeVar(
     "SQLAlchemyAsyncRepositoryT",
-    bound="Union[SQLAlchemyAsyncRepository[Any], SQLAlchemyAsyncMockRepository[Any]]",
+    bound="SQLAlchemyAsyncRepository[Any] | SQLAlchemyAsyncMockRepository[Any]",
     default="Any",
 )
 """Type variable for asynchronous SQLAlchemy repositories.
 
 :class:`~advanced_alchemy.repository.SQLAlchemyAsyncRepository`
 """
-OrderingPair: TypeAlias = Union[tuple[Union[str, InstrumentedAttribute[Any]], bool], UnaryExpression[Any]]
+OrderingPair: TypeAlias = tuple[str | InstrumentedAttribute[Any], bool] | UnaryExpression[Any]
 """Type alias for ordering pairs.
 
 A tuple of (column, ascending) where:
@@ -81,7 +81,7 @@ A tuple of (column, ascending) where:
 
 This type is used to specify ordering criteria for repository queries.
 """
-PrimaryKeyType: TypeAlias = Union[Any, tuple[Any, ...], dict[str, Any]]
+PrimaryKeyType: TypeAlias = Any | tuple[Any, ...] | dict[str, Any]
 """Type alias for primary key values.
 
 Supports three formats:

@@ -6,13 +6,13 @@ including both synchronous and asynchronous database configurations.
 
 import contextlib
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, Union, cast
 
 from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool  # pyright: ignore[reportUnknownVariableType]
 from starlette.requests import Request
-from typing_extensions import Literal
 
 from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config import EngineConfig as _EngineConfig
@@ -101,7 +101,7 @@ class SessionMiddleware:
                 setattr(request.state, f"{self.config.session_key}_response_status", status_code)
             await send(message)
 
-        exc_to_raise: Optional[BaseException] = None
+        exc_to_raise: BaseException | None = None
         try:
             await self.app(scope, receive, send_wrapper)
         except Exception as exc:  # noqa: BLE001
@@ -186,7 +186,7 @@ class EngineConfig(_EngineConfig):
 class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
     """SQLAlchemy Async config for Starlette."""
 
-    app: "Optional[Starlette]" = None
+    app: "Starlette | None" = None
     """The Starlette application instance."""
     commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
     """The commit mode to use for database sessions."""
@@ -317,7 +317,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         # Store response status for generator dependencies to access during cleanup
         setattr(request.state, f"{self.session_key}_response_status", response.status_code)
 
-        session = cast("Optional[AsyncSession]", getattr(request.state, self.session_key, None))
+        session = cast("AsyncSession | None", getattr(request.state, self.session_key, None))
 
         # Check if session is managed by a generator dependency (e.g., provide_service)
         is_generator_managed = getattr(request.state, f"{self.session_key}_generator_managed", False)
@@ -351,7 +351,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     """SQLAlchemy Sync config for Starlette."""
 
-    app: "Optional[Starlette]" = None
+    app: "Starlette | None" = None
     """The Starlette application instance."""
     commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
     """The commit mode to use for database sessions."""
@@ -480,7 +480,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         # Store response status for generator dependencies to access during cleanup
         setattr(request.state, f"{self.session_key}_response_status", response.status_code)
 
-        session = cast("Optional[Session]", getattr(request.state, self.session_key, None))
+        session = cast("Session | None", getattr(request.state, self.session_key, None))
 
         # Check if session is managed by a generator dependency (e.g., provide_service)
         is_generator_managed = getattr(request.state, f"{self.session_key}_generator_managed", False)

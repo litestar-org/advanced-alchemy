@@ -5,12 +5,11 @@ including both synchronous and asynchronous database configurations.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
 
 from click import echo
 from flask import g, has_request_context
 from sqlalchemy.exc import OperationalError
-from typing_extensions import Literal
 
 from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config import EngineConfig as _EngineConfig
@@ -21,6 +20,8 @@ from advanced_alchemy.routing.maker import dispose_session_maker_async, dispose_
 from advanced_alchemy.utils.serialization import decode_json, encode_json, schema_dump
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from flask import Flask, Response
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Session
@@ -29,7 +30,7 @@ if TYPE_CHECKING:
 
 __all__ = ("EngineConfig", "SQLAlchemyAsyncConfig", "SQLAlchemySyncConfig")
 
-ConfigT = TypeVar("ConfigT", bound="Union[SQLAlchemySyncConfig, SQLAlchemyAsyncConfig]")
+ConfigT = TypeVar("ConfigT", bound="SQLAlchemySyncConfig | SQLAlchemyAsyncConfig")
 
 
 def serializer(value: "Any") -> str:
@@ -76,7 +77,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         commit_mode: The commit mode to use for database sessions.
     """
 
-    app: "Optional[Flask]" = None
+    app: "Flask | None" = None
     """The Flask application instance."""
     commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
     """The commit mode to use for database sessions."""
@@ -97,7 +98,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             self.engine_instance = self.get_engine()
         return super().create_session_maker()
 
-    def init_app(self, app: "Flask", portal: "Optional[Portal]" = None) -> None:
+    def init_app(self, app: "Flask", portal: "Portal | None" = None) -> None:
         """Initialize the Flask application with this configuration.
 
         Args:
@@ -124,7 +125,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             if not has_request_context():
                 return response
 
-            db_session = cast("Optional[Session]", g.pop(f"advanced_alchemy_session_{self.bind_key}", None))
+            db_session = cast("Session | None", g.pop(f"advanced_alchemy_session_{self.bind_key}", None))
             if db_session is not None:
                 if (self.commit_mode == "autocommit" and 200 <= response.status_code < 300) or (  # noqa: PLR2004
                     self.commit_mode == "autocommit_include_redirect" and 200 <= response.status_code < 400  # noqa: PLR2004
@@ -165,7 +166,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         commit_mode: The commit mode to use for database sessions.
     """
 
-    app: "Optional[Flask]" = None
+    app: "Flask | None" = None
     """The Flask application instance."""
     commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
     """The commit mode to use for database sessions."""
@@ -185,7 +186,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             self.engine_instance = self.get_engine()
         return super().create_session_maker()
 
-    def init_app(self, app: "Flask", portal: "Optional[Portal]" = None) -> None:
+    def init_app(self, app: "Flask", portal: "Portal | None" = None) -> None:
         """Initialize the Flask application with this configuration.
 
         Args:
@@ -218,7 +219,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             if not has_request_context():
                 return response
 
-            db_session = cast("Optional[AsyncSession]", g.pop(f"advanced_alchemy_session_{self.bind_key}", None))
+            db_session = cast("AsyncSession | None", g.pop(f"advanced_alchemy_session_{self.bind_key}", None))
             if db_session is not None:
                 p = getattr(db_session, "_session_portal", None) or portal
                 if (self.commit_mode == "autocommit" and 200 <= response.status_code < 300) or (  # noqa: PLR2004
@@ -229,9 +230,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             return response
 
         @app.teardown_appcontext
-        def close_db_session(_: "Optional[BaseException]" = None) -> None:  # pyright: ignore[reportUnusedFunction]
+        def close_db_session(_: "BaseException | None" = None) -> None:  # pyright: ignore[reportUnusedFunction]
             """Close the session at the end of the request."""
-            db_session = cast("Optional[AsyncSession]", g.pop(f"advanced_alchemy_session_{self.bind_key}", None))
+            db_session = cast("AsyncSession | None", g.pop(f"advanced_alchemy_session_{self.bind_key}", None))
             if db_session is not None:
                 p = getattr(db_session, "_session_portal", None) or portal
                 _ = p.call(db_session.close)

@@ -1,8 +1,7 @@
-from typing import Any, TypeVar, cast, no_type_check
+from typing import Any, Self, TypeVar, cast, no_type_check
 
 from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.ext.mutable import MutableList as SQLMutableList
-from typing_extensions import Self
 
 T = TypeVar("T", bound="Any")
 

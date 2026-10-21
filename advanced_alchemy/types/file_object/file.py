@@ -2,10 +2,9 @@
 
 import mimetypes
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 from sqlalchemy.ext.mutable import MutableList
-from typing_extensions import TypeAlias
 
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.file_object._typing import PYDANTIC_INSTALLED, GetCoreSchemaHandler, core_schema
@@ -43,18 +42,18 @@ class FileObject:
 
     def __init__(
         self,
-        backend: "Union[str, StorageBackend]",
+        backend: "str | StorageBackend",
         filename: str,
-        to_filename: Optional[str] = None,
-        content_type: Optional[str] = None,
-        size: Optional[int] = None,
-        last_modified: Optional[float] = None,
-        checksum: Optional[str] = None,
-        etag: Optional[str] = None,
-        version_id: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None,
-        source_path: "Optional[PathLike]" = None,
-        content: "Optional[Union[DataLike, AsyncDataLike]]" = None,
+        to_filename: str | None = None,
+        content_type: str | None = None,
+        size: int | None = None,
+        last_modified: float | None = None,
+        checksum: str | None = None,
+        etag: str | None = None,
+        version_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        source_path: "PathLike | None" = None,
+        content: "DataLike | AsyncDataLike | None" = None,
     ) -> None:
         """Perform post-initialization validation and setup.
 
@@ -74,7 +73,7 @@ class FileObject:
         self._filename = filename
         self._content_type = content_type
         self._to_filename = to_filename
-        self._resolved_backend: Optional[StorageBackend] = backend if isinstance(backend, StorageBackend) else None
+        self._resolved_backend: StorageBackend | None = backend if isinstance(backend, StorageBackend) else None
         self._raw_backend = backend
         self._pending_source_path = Path(source_path) if source_path is not None else None
         self._pending_source_content = content
@@ -145,7 +144,7 @@ class FileObject:
         self._metadata = value
 
     @property
-    def size(self) -> "Optional[int]":
+    def size(self) -> "int | None":
         return self._size
 
     @size.setter
@@ -153,7 +152,7 @@ class FileObject:
         self._size = value
 
     @property
-    def last_modified(self) -> "Optional[float]":
+    def last_modified(self) -> "float | None":
         return self._last_modified
 
     @last_modified.setter
@@ -161,7 +160,7 @@ class FileObject:
         self._last_modified = value
 
     @property
-    def checksum(self) -> "Optional[str]":
+    def checksum(self) -> "str | None":
         return self._checksum
 
     @checksum.setter
@@ -169,7 +168,7 @@ class FileObject:
         self._checksum = value
 
     @property
-    def etag(self) -> "Optional[str]":
+    def etag(self) -> "str | None":
         return self._etag
 
     @etag.setter
@@ -177,7 +176,7 @@ class FileObject:
         self._etag = value
 
     @property
-    def version_id(self) -> "Optional[str]":
+    def version_id(self) -> "str | None":
         return self._version_id
 
     @version_id.setter
@@ -215,7 +214,7 @@ class FileObject:
             "backend": self.backend.key,
         }
 
-    def get_content(self, *, options: "Optional[dict[str, Any]]" = None) -> bytes:
+    def get_content(self, *, options: "dict[str, Any] | None" = None) -> bytes:
         """Get the file content from the storage backend.
 
         Args:
@@ -226,7 +225,7 @@ class FileObject:
         """
         return self.backend.get_content(self.path, options=options)
 
-    async def get_content_async(self, *, options: "Optional[dict[str, Any]]" = None) -> bytes:
+    async def get_content_async(self, *, options: "dict[str, Any] | None" = None) -> bytes:
         """Get the file content from the storage backend asynchronously.
 
         Args:
@@ -240,7 +239,7 @@ class FileObject:
     def sign(
         self,
         *,
-        expires_in: "Optional[int]" = None,
+        expires_in: "int | None" = None,
         for_upload: bool = False,
     ) -> str:
         """Generate a signed URL for the file.
@@ -266,7 +265,7 @@ class FileObject:
     async def sign_async(
         self,
         *,
-        expires_in: "Optional[int]" = None,
+        expires_in: "int | None" = None,
         for_upload: bool = False,
     ) -> str:
         """Generate a signed URL for the file asynchronously.
@@ -306,9 +305,9 @@ class FileObject:
 
     def save(
         self,
-        data: Optional[DataLike] = None,
+        data: DataLike | None = None,
         *,
-        use_multipart: Optional[bool] = None,
+        use_multipart: bool | None = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
     ) -> "FileObject":
@@ -359,9 +358,9 @@ class FileObject:
 
     async def save_async(
         self,
-        data: Optional[AsyncDataLike] = None,
+        data: AsyncDataLike | None = None,
         *,
-        use_multipart: Optional[bool] = None,
+        use_multipart: bool | None = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
     ) -> "FileObject":

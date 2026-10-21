@@ -76,7 +76,7 @@ nitpicky = True
 nitpick_ignore: list[str] = []
 nitpick_ignore_regex: list[str] = []
 
-auto_pytabs_min_version = (3, 9)
+auto_pytabs_min_version = (3, 11)
 auto_pytabs_max_version = (3, 13)
 
 napoleon_google_docstring = True
@@ -152,6 +152,9 @@ autodoc_type_aliases = {
     "RenameStrategy": "litestar.dto.types.RenameStrategy",
     "Union": "typing.Union",
     "Callable": "typing.Callable",
+    "Mapping": "collections.abc.Mapping",
+    "IsolationLevel": "sqlalchemy.engine.interfaces.IsolationLevel",
+    "Pool": "sqlalchemy.pool.Pool",
     "Any": "typing.Any",
     "Optional": "typing.Optional",
     "_EchoFlagType": "advanced_alchemy.config._EchoFlagType",

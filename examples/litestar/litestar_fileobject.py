@@ -1,4 +1,4 @@
-from typing import Annotated, Any, Optional, Union
+from typing import Annotated, Any
 from uuid import UUID
 
 import uvicorn
@@ -48,12 +48,12 @@ class DocumentModel(base.UUIDBase):
 
 # Pydantic Schema
 class Document(BaseModel):
-    id: Optional[UUID]
+    id: UUID | None
     name: str
-    file: Optional[FileObject] = Field(default=None, exclude=True)
+    file: FileObject | None = Field(default=None, exclude=True)
 
     @computed_field
-    def file_url(self) -> Optional[Union[str, list[str]]]:
+    def file_url(self) -> str | list[str] | None:
         if self.file is None:
             return None
         return self.file.sign()
@@ -63,14 +63,14 @@ class CreateDocument(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
     name: str
-    file: Optional[UploadFile] = None
+    file: UploadFile | None = None
 
 
 class PatchDocument(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
-    name: Optional[str] = None
-    file: Optional[UploadFile] = None
+    name: str | None = None
+    file: UploadFile | None = None
 
 
 # Advanced Alchemy Service

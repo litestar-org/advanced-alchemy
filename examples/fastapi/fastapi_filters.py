@@ -6,7 +6,7 @@
 # ]
 # ///
 import datetime
-from typing import Annotated, Optional
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI
@@ -36,13 +36,13 @@ author_router = APIRouter()
 class AuthorModel(base.UUIDBase):
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[Optional[datetime.date]]
+    dob: Mapped[datetime.date | None]
 
 
 class Author(BaseModel):
-    id: Optional[UUID]
+    id: UUID | None
     name: str
-    dob: Optional[datetime.date]
+    dob: datetime.date | None
 
 
 class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):

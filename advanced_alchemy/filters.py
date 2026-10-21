@@ -22,18 +22,18 @@ See Also:
 import datetime
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from operator import attrgetter
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     ClassVar,
     Generic,
     Literal,
-    Optional,
-    Union,
+    TypeAlias,
+    TypedDict,
+    TypeVar,
     cast,
 )
 
@@ -61,15 +61,14 @@ from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import operators as op
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from sqlalchemy.sql.elements import UnaryExpression
-from typing_extensions import TypeAlias, TypedDict, TypeVar
 
 from advanced_alchemy.base import ModelProtocol
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import InstrumentedAttribute
 
-    FilterFieldName: TypeAlias = Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]
-    InstrumentedField: TypeAlias = Union[ColumnElement[Any], InstrumentedAttribute[Any]]
+    FilterFieldName: TypeAlias = str | ColumnElement[Any] | InstrumentedAttribute[Any]
+    InstrumentedField: TypeAlias = ColumnElement[Any] | InstrumentedAttribute[Any]
 else:
     FilterFieldName: TypeAlias = Any
     InstrumentedField: TypeAlias = Any
@@ -109,9 +108,12 @@ ModelT = TypeVar("ModelT", bound=ModelProtocol)
 StatementFilterT = TypeVar("StatementFilterT", bound="StatementFilter")
 StatementTypeT = TypeVar(
     "StatementTypeT",
-    bound=Union[
-        ReturningDelete[tuple[Any]], ReturningUpdate[tuple[Any]], Select[tuple[Any]], Select[Any], Update, Delete
-    ],
+    bound=ReturningDelete[tuple[Any]]
+    | ReturningUpdate[tuple[Any]]
+    | Select[tuple[Any]]
+    | Select[Any]
+    | Update
+    | Delete,
 )
 
 logger = logging.getLogger("advanced_alchemy")
@@ -210,9 +212,9 @@ class BeforeAfter(StatementFilter):
 
     field_name: FilterFieldName
     """Field name, model attribute, or func expression."""
-    before: Optional[datetime.datetime]
+    before: datetime.datetime | None
     """Filter results where field is earlier than this value."""
-    after: Optional[datetime.datetime]
+    after: datetime.datetime | None
     """Filter results where field is later than this value."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
@@ -256,9 +258,9 @@ class OnBeforeAfter(StatementFilter):
 
     field_name: FilterFieldName
     """Field name, model attribute, or func expression."""
-    on_or_before: Optional[datetime.datetime]
+    on_or_before: datetime.datetime | None
     """Filter results where field is on or earlier than this value."""
-    on_or_after: Optional[datetime.datetime]
+    on_or_after: datetime.datetime | None
     """Filter results where field is on or later than this value."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
@@ -304,7 +306,7 @@ class CollectionFilter(InAnyFilter, Generic[T]):
 
     field_name: FilterFieldName
     """Field name, model attribute, or func expression."""
-    values: Union[Collection[T], None]
+    values: Collection[T] | None
     """Values for the ``IN`` clause. If this is None, no filter is applied.
         An empty list will force an empty result set (WHERE 1=-1)"""
 
@@ -354,9 +356,9 @@ class BooleanFilter(StatementFilter):
     If ``value`` is ``None``, the statement is returned unchanged.
     """
 
-    field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]"
+    field_name: "str | ColumnElement[Any] | InstrumentedAttribute[Any]"
     """Field name, model attribute, or func expression."""
-    value: Optional[bool]
+    value: bool | None
     """Boolean value to match. If None, no filter is applied."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
@@ -388,7 +390,7 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
 
     field_name: FilterFieldName
     """Field name, model attribute, or func expression."""
-    values: Union[Collection[T], None]
+    values: Collection[T] | None
     """Values for the ``NOT IN`` clause. If None or empty, no filter is applied."""
 
     def append_to_statement(
@@ -616,7 +618,7 @@ class OrderBy(StatementFilter):
     """Field name, model attribute, or func expression (e.g., ``func.random()``)."""
     sort_order: Literal["asc", "desc"] = "asc"
     """Sort direction ("asc" or "desc")."""
-    nulls: Optional[Literal["first", "last"]] = None
+    nulls: Literal["first", "last"] | None = None
     """Where NULLs sort. ``None`` leaves the placement to the database."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
@@ -694,11 +696,11 @@ class SearchFilter(StatementFilter):
         - :meth:`sqlalchemy.sql.expression.ColumnOperators.ilike`: Case-insensitive LIKE
     """
 
-    field_name: Union[str, set[str]]
+    field_name: str | set[str]
     """Name or set of names of model attributes to search on."""
     value: str
     """Text to match within the field(s)."""
-    ignore_case: Optional[bool] = False
+    ignore_case: bool | None = False
     """Whether to use case-insensitive matching."""
     escape_wildcards: bool = False
     """Whether to treat ``%`` and ``_`` in :attr:`value` as literal characters."""
@@ -1286,7 +1288,7 @@ class MultiFilter(StatementFilter):
                     statement = filter_group.append_to_statement(statement, model)
         return statement
 
-    def _create_filter(self, condition: dict[str, Any]) -> Optional[StatementFilter]:
+    def _create_filter(self, condition: dict[str, Any]) -> StatementFilter | None:
         """Create a filter instance from a condition dictionary.
 
         Args:
@@ -1327,25 +1329,25 @@ class MultiFilter(StatementFilter):
 
 
 # Define FilterTypes using direct class references
-FilterTypes: TypeAlias = Union[
-    BeforeAfter,
-    OnBeforeAfter,
-    BooleanFilter,
-    ChoicesFilter[Any],
-    CollectionFilter[Any],
-    LimitOffset,
-    NullFilter,
-    NotNullFilter,
-    OrderBy,
-    SearchFilter,
-    NotInCollectionFilter[Any],
-    NotInSearchFilter,
-    ExistsFilter,
-    NotExistsFilter,
-    ComparisonFilter,
-    MultiFilter,
-    FilterGroup,
-]
+FilterTypes: TypeAlias = (
+    BeforeAfter
+    | OnBeforeAfter
+    | BooleanFilter
+    | ChoicesFilter[Any]
+    | CollectionFilter[Any]
+    | LimitOffset
+    | NullFilter
+    | NotNullFilter
+    | OrderBy
+    | SearchFilter
+    | NotInCollectionFilter[Any]
+    | NotInSearchFilter
+    | ExistsFilter
+    | NotExistsFilter
+    | ComparisonFilter
+    | MultiFilter
+    | FilterGroup
+)
 """Aggregate type alias of the types supported for collection filtering."""
 
 

@@ -193,4 +193,3 @@ def test_init_plugin_registers_repository_error_handler_with_int_status_handler(
     )
     assert RepositoryError not in app_with_custom_repo_exc.exception_handlers
     assert app_with_custom_repo_exc.exception_handlers[NotFoundError] is custom_not_found_handler
-

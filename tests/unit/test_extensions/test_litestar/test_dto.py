@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import datetime
-import sys
-from typing import TYPE_CHECKING, Annotated, ClassVar
+from typing import TYPE_CHECKING, Annotated, ClassVar, TypeVar
 from uuid import UUID, uuid4
 
 import pytest
@@ -17,7 +16,6 @@ from litestar.testing import RequestFactory
 from litestar.typing import FieldDefinition
 from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, declared_attr, mapped_column, relationship
-from typing_extensions import TypeVar
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.litestar.dto import (
@@ -283,7 +281,7 @@ from typing import Dict, List, Set, Tuple, Type, List
 
 from sqlalchemy import ForeignKey, Integer
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from typing_extensions import Annotated
+from typing import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 
@@ -328,7 +326,7 @@ from typing import Dict, List, Set, Tuple, Type, List
 
 from sqlalchemy import ForeignKey, Integer
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, Relationship
-from typing_extensions import Annotated
+from typing import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 
@@ -370,7 +368,7 @@ from __future__ import annotations
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from typing_extensions import Annotated
+from typing import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 
@@ -412,7 +410,7 @@ from typing import Dict, List, Set, Tuple, Type, Union
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from typing_extensions import Annotated
+from typing import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO
 
@@ -430,7 +428,6 @@ dto_type = SQLAlchemyDTO[A]
     assert vars(model)["a"] is None
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 async def test_dto_mapped_union_type(
     create_module: Callable[[str], ModuleType],
     asgi_connection: Request[Any, Any, Any],
@@ -445,7 +442,7 @@ from typing import Dict, List, Set, Tuple, Type, Union, Optional
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from typing_extensions import Annotated
+from typing import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO
 
@@ -517,7 +514,7 @@ from typing import Dict, List, Set, Tuple, Type, Optional
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from typing_extensions import Annotated
+from typing import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 
@@ -557,7 +554,7 @@ from typing import Optional
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from typing_extensions import Annotated
+from typing import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 
@@ -621,7 +618,7 @@ from typing import Dict, List, Set, Tuple, Type, TYPE_CHECKING
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing_extensions import Annotated
+from typing import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 
@@ -664,7 +661,7 @@ from typing import Dict, List, Set, Tuple, Type, Union
 from sqlalchemy import ForeignKey, Integer
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import JSON, ARRAY
-from typing_extensions import Annotated
+from typing import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO
 
@@ -781,7 +778,7 @@ from __future__ import annotations
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, DynamicMapped, Mapped, mapped_column, relationship, WriteOnlyMapped
 from typing import List
-from typing_extensions import Annotated
+from typing import Annotated
 
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 
@@ -824,7 +821,7 @@ from __future__ import annotations
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, WriteOnlyMapped, mapped_column, relationship
 from typing import List
-from typing_extensions import Annotated
+from typing import Annotated
 
 from litestar.dto.field import Mark, dto_field
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
@@ -862,7 +859,7 @@ def test_dto_exclude_and_include_skip_untyped_descriptors(
 from __future__ import annotations
 
 from typing import Optional
-from typing_extensions import Annotated
+from typing import Annotated
 import sqlalchemy
 from sqlalchemy import ForeignKey
 from sqlalchemy.ext.associationproxy import association_proxy
@@ -905,13 +902,14 @@ include_dto = SQLAlchemyDTO[
 """,
     )
 
-    exclude_field_names = {f.name for f in module.exclude_dto.generate_field_definitions(module.ItemWithUntypedDescriptors)}
+    exclude_field_names = {
+        f.name for f in module.exclude_dto.generate_field_definitions(module.ItemWithUntypedDescriptors)
+    }
     assert "untyped_hybrid" not in exclude_field_names
     assert "untyped_proxy" not in exclude_field_names
     assert {"id", "name", "related_id", "related"}.issubset(exclude_field_names)
 
-    include_field_names = {f.name for f in module.include_dto.generate_field_definitions(module.ItemWithUntypedDescriptors)}
+    include_field_names = {
+        f.name for f in module.include_dto.generate_field_definitions(module.ItemWithUntypedDescriptors)
+    }
     assert include_field_names == {"id", "name", "related"}
-
-
-

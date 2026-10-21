@@ -7,7 +7,7 @@
 #   "obstore"
 # ]
 # ///
-from typing import Annotated, Any, Optional, Union
+from typing import Annotated, Any
 from uuid import UUID
 
 import uvicorn
@@ -73,12 +73,12 @@ class DocumentService(service.SQLAlchemyAsyncRepositoryService[DocumentModel]):
 
 
 class Document(BaseModel):
-    id: Optional[UUID]
+    id: UUID | None
     name: str
-    file: Optional[FileObject] = Field(default=None, exclude=True)
+    file: FileObject | None = Field(default=None, exclude=True)
 
     @computed_field
-    def file_url(self) -> Optional[Union[str, list[str]]]:
+    def file_url(self) -> str | list[str] | None:
         if self.file is None:
             return None
         return self.file.sign()
@@ -111,7 +111,7 @@ async def list_documents(
 async def create_document(
     documents_service: Annotated[DocumentService, Depends(alchemy.provide_service(DocumentService))],
     name: Annotated[str, Form()],
-    file: Annotated[Optional[UploadFile], File()] = None,
+    file: Annotated[UploadFile | None, File()] = None,
 ) -> Document:
     obj = await documents_service.create(
         DocumentModel(
@@ -142,8 +142,8 @@ async def get_document(
 async def update_document(
     documents_service: Annotated[DocumentService, Depends(alchemy.provide_service(DocumentService))],
     document_id: UUID,
-    name: Annotated[Optional[str], Form()] = None,
-    file: Annotated[Optional[UploadFile], File()] = None,
+    name: Annotated[str | None, Form()] = None,
+    file: Annotated[UploadFile | None, File()] = None,
 ) -> Document:
     update_data: dict[str, Any] = {}
     if name is not None:

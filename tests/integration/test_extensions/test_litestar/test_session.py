@@ -36,7 +36,6 @@ from tests.integration.helpers import cleanup_database, cleanup_database_async
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.xdist_group("litestar_session"),  # Isolate session tests to prevent interference
 ]
 
 
@@ -415,7 +414,7 @@ async def test_async_session_backend_delete_expired(
     if getattr(async_session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
 
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     test_session_model = async_session_backend.model
 
     # Create mix of expired and active sessions

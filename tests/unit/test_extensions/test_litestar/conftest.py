@@ -5,11 +5,11 @@ import os
 import random
 import string
 import sys
-from collections.abc import AsyncGenerator, Generator, Sequence
+from collections.abc import AsyncGenerator, Callable, Generator, Sequence
 from dataclasses import replace
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable, cast
+from typing import Any, TypeVar, cast
 from unittest.mock import ANY
 
 import pytest
@@ -30,7 +30,6 @@ from pytest import FixtureRequest, MonkeyPatch
 from sqlalchemy import Engine, NullPool, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
-from typing_extensions import TypeVar
 
 from advanced_alchemy.alembic.commands import AlembicCommands
 from advanced_alchemy.config.common import GenericSQLAlchemyConfig

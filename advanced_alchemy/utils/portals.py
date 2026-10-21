@@ -4,13 +4,13 @@ import asyncio
 import functools
 import queue
 import threading
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Optional, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, cast
 from warnings import warn
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine
+    from collections.abc import Callable, Coroutine
 
 __all__ = ("Portal", "PortalProvider", "PortalProviderSingleton")
 
@@ -20,7 +20,7 @@ _R = TypeVar("_R")
 class PortalProviderSingleton(type):
     """A singleton metaclass for PortalProvider that creates unique instances per event loop."""
 
-    _instances: "ClassVar[dict[tuple[type, Optional[asyncio.AbstractEventLoop]], PortalProvider]]" = {}
+    _instances: "ClassVar[dict[tuple[type, asyncio.AbstractEventLoop | None], PortalProvider]]" = {}
 
     def __call__(cls, *args: Any, **kwargs: Any) -> "PortalProvider":
         # Use a tuple of the class and loop as the key
@@ -33,19 +33,19 @@ class PortalProviderSingleton(type):
 class PortalProvider(metaclass=PortalProviderSingleton):
     """A provider for creating and managing threaded portals."""
 
-    def __init__(self, /, loop: Optional[asyncio.AbstractEventLoop] = None) -> None:
+    def __init__(self, /, loop: asyncio.AbstractEventLoop | None = None) -> None:
         """Initialize the PortalProvider."""
         self._request_queue: queue.Queue[
             tuple[
                 Callable[..., Coroutine[Any, Any, Any]],
                 tuple[Any, ...],
                 dict[str, Any],
-                queue.Queue[tuple[Optional[Any], Optional[Exception]]],
+                queue.Queue[tuple[Any | None, Exception | None]],
             ]
         ] = queue.Queue()
-        self._result_queue: queue.Queue[tuple[Optional[Any], Optional[Exception]]] = queue.Queue()
-        self._loop: Optional[asyncio.AbstractEventLoop] = loop
-        self._thread: Optional[threading.Thread] = None
+        self._result_queue: queue.Queue[tuple[Any | None, Exception | None]] = queue.Queue()
+        self._loop: asyncio.AbstractEventLoop | None = loop
+        self._thread: threading.Thread | None = None
         self._ready_event: threading.Event = threading.Event()
 
     @property
@@ -142,7 +142,7 @@ class PortalProvider(metaclass=PortalProviderSingleton):
             raise ImproperConfigurationError(msg)
 
         # Create a new result queue
-        local_result_queue: queue.Queue[tuple[Optional[_R], Optional[Exception]]] = queue.Queue()
+        local_result_queue: queue.Queue[tuple[_R | None, Exception | None]] = queue.Queue()
 
         # Send the request to the background thread
         self._request_queue.put((func, args, kwargs, local_result_queue))
@@ -173,7 +173,7 @@ class PortalProvider(metaclass=PortalProviderSingleton):
     @staticmethod
     def _handle_future_result(
         future: "asyncio.Future[Any]",
-        local_result_queue: "queue.Queue[tuple[Optional[Any], Optional[Exception]]]",
+        local_result_queue: "queue.Queue[tuple[Any | None, Exception | None]]",
     ) -> None:  # pragma: no cover
         """Handles the result or exception from the completed future."""
         try:

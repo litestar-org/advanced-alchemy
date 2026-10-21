@@ -32,7 +32,7 @@ import enum
 import json
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import MISSING as DATACLASS_MISSING
 from dataclasses import dataclass
 from dataclasses import fields as dataclass_fields
@@ -44,13 +44,12 @@ from typing import (
     TYPE_CHECKING,
     Annotated,
     Any,
-    Callable,
     Final,
     Literal,
-    Optional,
     Protocol,
+    TypeAlias,
+    TypeGuard,
     TypeVar,
-    Union,
     cast,
     overload,
     runtime_checkable,
@@ -58,7 +57,6 @@ from typing import (
 from uuid import UUID
 
 from sqlalchemy import RowMapping
-from typing_extensions import TypeAlias, TypeGuard
 
 from advanced_alchemy.typing import (
     ATTRS_INSTALLED,
@@ -178,24 +176,22 @@ PYDANTIC_USE_FAILFAST = False  # leave permanently disabled for now
 FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
 """Type variable for filter types."""
 
-SupportedSchemaModel: TypeAlias = Union[StructLike, BaseModelLike, AttrsLike]
+SupportedSchemaModel: TypeAlias = StructLike | BaseModelLike | AttrsLike
 """Type alias for objects that support schema conversion methods (model_dump, asdict, etc.)."""
 
-ModelDTOT = TypeVar("ModelDTOT", bound="Union[SupportedSchemaModel, Any]")
+ModelDTOT = TypeVar("ModelDTOT", bound="SupportedSchemaModel | Any")
 """Type variable for model DTOs."""
 
 PydanticOrMsgspecT = SupportedSchemaModel
 """Type alias for supported schema models."""
 
-ModelDictT: TypeAlias = "Union[dict[str, Any], ModelT, SupportedSchemaModel, DTODataLike[ModelT], Any]"
+ModelDictT: TypeAlias = "dict[str, Any] | ModelT | SupportedSchemaModel | DTODataLike[ModelT] | Any"
 """Type alias for model dictionaries."""
 
-ModelDictListT: TypeAlias = "Sequence[Union[dict[str, Any], ModelT, SupportedSchemaModel, Any]]"
+ModelDictListT: TypeAlias = "Sequence[dict[str, Any] | ModelT | SupportedSchemaModel | Any]"
 """Type alias for model dictionary lists."""
 
-BulkModelDictT: TypeAlias = (
-    "Union[Sequence[Union[dict[str, Any], ModelT, SupportedSchemaModel, Any]], DTODataLike[list[ModelT]]]"
-)
+BulkModelDictT: TypeAlias = "Sequence[dict[str, Any] | ModelT | SupportedSchemaModel | Any] | DTODataLike[list[ModelT]]"
 """Type alias for bulk model dictionaries."""
 
 
@@ -217,7 +213,7 @@ DEFAULT_SCHEMA_DUMP_CONFIG: Final = SchemaDumpConfig()
 _INCLUSIVE_SCHEMA_DUMP_CONFIG: Final = SchemaDumpConfig(exclude_unset=False, exclude_sentinels=False)
 
 
-def _get_schema_dump_config(exclude_unset: bool, config: "Optional[SchemaDumpConfig]") -> SchemaDumpConfig:
+def _get_schema_dump_config(exclude_unset: bool, config: "SchemaDumpConfig | None") -> SchemaDumpConfig:
     """Resolve backwards-compatible schema dump configuration."""
     if config is not None:
         return config
@@ -269,7 +265,7 @@ def convert_datetime_to_gmt_iso(dt: datetime.datetime) -> str:
         '2025-12-17T10:30:00Z'
     """
     if not dt.tzinfo:
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
+        dt = dt.replace(tzinfo=datetime.UTC)
     return dt.isoformat().replace("+00:00", "Z")
 
 
@@ -429,7 +425,7 @@ def is_schema(v: Any) -> "TypeGuard[SupportedSchemaModel]":
     return is_msgspec_struct(v) or is_pydantic_model(v) or is_attrs_instance(v)
 
 
-def is_schema_or_dict(v: Any) -> "TypeGuard[Union[SupportedSchemaModel, dict[str, Any]]]":
+def is_schema_or_dict(v: Any) -> "TypeGuard[SupportedSchemaModel | dict[str, Any]]":
     """Check if a value is a msgspec Struct, Pydantic model, attrs class, or dict."""
     return is_schema(v) or is_dict(v)
 
@@ -450,14 +446,12 @@ def is_schema_without_field(v: Any, field_name: str) -> "TypeGuard[SupportedSche
     return is_schema(v) and not hasattr(v, field_name)
 
 
-def is_schema_or_dict_with_field(v: Any, field_name: str) -> "TypeGuard[Union[SupportedSchemaModel, dict[str, Any]]]":
+def is_schema_or_dict_with_field(v: Any, field_name: str) -> "TypeGuard[SupportedSchemaModel | dict[str, Any]]":
     """Check if a value is a msgspec Struct, Pydantic model, attrs instance, or dict with a specific field."""
     return is_schema_with_field(v, field_name) or is_dict_with_field(v, field_name)
 
 
-def is_schema_or_dict_without_field(
-    v: Any, field_name: str
-) -> "TypeGuard[Union[SupportedSchemaModel, dict[str, Any]]]":
+def is_schema_or_dict_without_field(v: Any, field_name: str) -> "TypeGuard[SupportedSchemaModel | dict[str, Any]]":
     """Check if a value is a msgspec Struct, Pydantic model, attrs instance, or dict without a specific field."""
     return is_schema_or_dict(v) and not is_schema_or_dict_with_field(v, field_name)
 
@@ -479,11 +473,11 @@ def _dump_pydantic_model(data: BaseModelLike, dump_config: SchemaDumpConfig) -> 
 def _dump_msgspec_struct(data: StructLike, dump_config: SchemaDumpConfig) -> "dict[str, Any]":
     """Dump a msgspec struct according to the schema dump config."""
     fields = data.__struct_fields__
-    default_values: Optional[dict[str, Any]] = None
+    default_values: dict[str, Any] | None = None
     if dump_config.exclude_defaults:
         defaults = getattr(data, "__struct_defaults__", ())
         if defaults:
-            default_values = dict(zip(fields[-len(defaults) :], defaults))
+            default_values = dict(zip(fields[-len(defaults) :], defaults, strict=False))
     dumped: dict[str, Any] = {}
     for field_name in fields:
         if not hasattr(data, field_name):
@@ -533,7 +527,7 @@ def _dump_dataclass_instance(data: Any, dump_config: SchemaDumpConfig) -> "dict[
     return dumped
 
 
-def _dump_schema_model(data: Any, dump_config: SchemaDumpConfig) -> "Optional[dict[str, Any]]":
+def _dump_schema_model(data: Any, dump_config: SchemaDumpConfig) -> "dict[str, Any] | None":
     """Dump a supported schema-like object according to the schema dump config."""
     if is_pydantic_model(data):
         return _dump_pydantic_model(data, dump_config)
@@ -551,7 +545,7 @@ def schema_dump(
     data: "RowMapping",
     exclude_unset: bool = True,
     *,
-    config: "Optional[SchemaDumpConfig]" = None,
+    config: "SchemaDumpConfig | None" = None,
 ) -> "dict[str, Any]": ...
 
 
@@ -560,7 +554,7 @@ def schema_dump(
     data: "Row[Any]",
     exclude_unset: bool = True,
     *,
-    config: "Optional[SchemaDumpConfig]" = None,
+    config: "SchemaDumpConfig | None" = None,
 ) -> "dict[str, Any]": ...
 
 
@@ -569,7 +563,7 @@ def schema_dump(
     data: "DTODataLike[Any]",
     exclude_unset: bool = True,
     *,
-    config: "Optional[SchemaDumpConfig]" = None,
+    config: "SchemaDumpConfig | None" = None,
 ) -> "dict[str, Any]": ...
 
 
@@ -578,7 +572,7 @@ def schema_dump(  # pyright: ignore[reportOverlappingOverload]
     data: "ModelT",
     exclude_unset: bool = True,
     *,
-    config: "Optional[SchemaDumpConfig]" = None,
+    config: "SchemaDumpConfig | None" = None,
 ) -> "ModelT": ...
 
 
@@ -587,16 +581,16 @@ def schema_dump(
     data: Any,
     exclude_unset: bool = True,
     *,
-    config: "Optional[SchemaDumpConfig]" = None,
+    config: "SchemaDumpConfig | None" = None,
 ) -> "dict[str, Any]": ...
 
 
 def schema_dump(  # noqa: PLR0911
-    data: "Union[dict[str, Any], ModelT, SupportedSchemaModel, DTODataLike[ModelT], RowMapping, Row[Any]]",
+    data: "dict[str, Any] | ModelT | SupportedSchemaModel | DTODataLike[ModelT] | RowMapping | Row[Any]",
     exclude_unset: bool = True,
     *,
-    config: "Optional[SchemaDumpConfig]" = None,
-) -> "Union[dict[str, Any], ModelT]":
+    config: "SchemaDumpConfig | None" = None,
+) -> "dict[str, Any] | ModelT":
     """Dump a data object to a dictionary."""
     dump_config = _get_schema_dump_config(exclude_unset=exclude_unset, config=config)
     if is_dict(data):
@@ -735,9 +729,9 @@ class JSONSerializer(Protocol):
     def encode(self, data: Any, *, as_bytes: Literal[True]) -> bytes: ...
 
     @overload
-    def encode(self, data: Any, *, as_bytes: bool) -> "Union[str, bytes]": ...
+    def encode(self, data: Any, *, as_bytes: bool) -> "str | bytes": ...
 
-    def encode(self, data: Any, *, as_bytes: bool = False) -> "Union[str, bytes]":
+    def encode(self, data: Any, *, as_bytes: bool = False) -> "str | bytes":
         """Encode data to JSON.
 
         Args:
@@ -749,7 +743,7 @@ class JSONSerializer(Protocol):
         """
         ...
 
-    def decode(self, data: "Union[str, bytes]", *, decode_bytes: bool = True) -> Any:
+    def decode(self, data: "str | bytes", *, decode_bytes: bool = True) -> Any:
         """Decode JSON to Python object.
 
         Args:
@@ -771,7 +765,7 @@ class BaseJSONSerializer(ABC):
 
     __slots__ = ("_custom_type_encoders", "_type_encoders")
 
-    def __init__(self, type_encoders: "Optional[TypeEncodersMap]" = None) -> None:
+    def __init__(self, type_encoders: "TypeEncodersMap | None" = None) -> None:
         """Initialize serializer with optional custom type encoders.
 
         Args:
@@ -788,7 +782,7 @@ class BaseJSONSerializer(ABC):
     def _get_type_encoder(
         value: Any,
         type_encoders: Mapping[type, Callable[[Any], Any]],
-    ) -> "Optional[Callable[[Any], Any]]":
+    ) -> "Callable[[Any], Any] | None":
         """Return the encoder matching ``value`` by exact type or MRO."""
         for base in value.__class__.__mro__[:-1]:
             encoder = type_encoders.get(base)
@@ -812,7 +806,7 @@ class BaseJSONSerializer(ABC):
     def _apply_custom_type_encoders_to_tuple(self, value: tuple[object, ...]) -> tuple[Any, ...]:
         return tuple(self._apply_custom_type_encoders(item) for item in value)
 
-    def _apply_custom_type_encoders_to_set(self, value: Union[set[object], frozenset[object]]) -> list[Any]:
+    def _apply_custom_type_encoders_to_set(self, value: set[object] | frozenset[object]) -> list[Any]:
         return [self._apply_custom_type_encoders(item) for item in value]
 
     def _apply_custom_type_encoders(self, value: Any) -> Any:
@@ -828,7 +822,7 @@ class BaseJSONSerializer(ABC):
         if isinstance(value, tuple):
             return self._apply_custom_type_encoders_to_tuple(cast("tuple[object, ...]", value))
         if isinstance(value, (set, frozenset)):
-            return self._apply_custom_type_encoders_to_set(cast("Union[set[object], frozenset[object]]", value))
+            return self._apply_custom_type_encoders_to_set(cast("set[object] | frozenset[object]", value))
         return value
 
     def _prepare_data_for_encode(self, data: Any) -> Any:
@@ -870,15 +864,15 @@ class BaseJSONSerializer(ABC):
 
     @overload
     @abstractmethod
-    def encode(self, data: Any, *, as_bytes: bool) -> "Union[str, bytes]": ...
+    def encode(self, data: Any, *, as_bytes: bool) -> "str | bytes": ...
 
     @abstractmethod
-    def encode(self, data: Any, *, as_bytes: bool = False) -> "Union[str, bytes]":
+    def encode(self, data: Any, *, as_bytes: bool = False) -> "str | bytes":
         """Encode data to JSON."""
         ...
 
     @abstractmethod
-    def decode(self, data: "Union[str, bytes]", *, decode_bytes: bool = True) -> Any:
+    def decode(self, data: "str | bytes", *, decode_bytes: bool = True) -> Any:
         """Decode JSON to Python object."""
         ...
 
@@ -909,8 +903,8 @@ class MsgspecSerializer(BaseJSONSerializer):
 
     def __init__(
         self,
-        type_encoders: "Optional[TypeEncodersMap]" = None,
-        enc_hook: "Optional[Callable[[Any], Any]]" = None,
+        type_encoders: "TypeEncodersMap | None" = None,
+        enc_hook: "Callable[[Any], Any] | None" = None,
     ) -> None:
         """Initialize msgspec serializer.
 
@@ -934,9 +928,9 @@ class MsgspecSerializer(BaseJSONSerializer):
     def encode(self, data: Any, *, as_bytes: Literal[True]) -> bytes: ...
 
     @overload
-    def encode(self, data: Any, *, as_bytes: bool) -> "Union[str, bytes]": ...
+    def encode(self, data: Any, *, as_bytes: bool) -> "str | bytes": ...
 
-    def encode(self, data: Any, *, as_bytes: bool = False) -> "Union[str, bytes]":
+    def encode(self, data: Any, *, as_bytes: bool = False) -> "str | bytes":
         """Encode data to JSON using msgspec.
 
         Args:
@@ -949,7 +943,7 @@ class MsgspecSerializer(BaseJSONSerializer):
         result = self._encoder.encode(self._prepare_data_for_encode(data))
         return result if as_bytes else result.decode("utf-8")
 
-    def decode(self, data: "Union[str, bytes]", *, decode_bytes: bool = True) -> Any:
+    def decode(self, data: "str | bytes", *, decode_bytes: bool = True) -> Any:
         """Decode JSON using msgspec.
 
         Args:
@@ -980,7 +974,7 @@ class OrjsonSerializer(BaseJSONSerializer):
 
     __slots__ = ("_enc_hook",)
 
-    def __init__(self, type_encoders: "Optional[TypeEncodersMap]" = None) -> None:
+    def __init__(self, type_encoders: "TypeEncodersMap | None" = None) -> None:
         """Initialize orjson serializer.
 
         Args:
@@ -996,9 +990,9 @@ class OrjsonSerializer(BaseJSONSerializer):
     def encode(self, data: Any, *, as_bytes: Literal[True]) -> bytes: ...
 
     @overload
-    def encode(self, data: Any, *, as_bytes: bool) -> "Union[str, bytes]": ...
+    def encode(self, data: Any, *, as_bytes: bool) -> "str | bytes": ...
 
-    def encode(self, data: Any, *, as_bytes: bool = False) -> "Union[str, bytes]":
+    def encode(self, data: Any, *, as_bytes: bool = False) -> "str | bytes":
         """Encode data to JSON using orjson.
 
         Args:
@@ -1018,7 +1012,7 @@ class OrjsonSerializer(BaseJSONSerializer):
         result: bytes = orjson_module.dumps(self._prepare_data_for_encode(data), default=self._enc_hook, option=options)
         return result if as_bytes else result.decode("utf-8")
 
-    def decode(self, data: "Union[str, bytes]", *, decode_bytes: bool = True) -> Any:
+    def decode(self, data: "str | bytes", *, decode_bytes: bool = True) -> Any:
         """Decode JSON using orjson.
 
         Args:
@@ -1050,7 +1044,7 @@ class StandardLibSerializer(BaseJSONSerializer):
 
     __slots__ = ("_enc_hook",)
 
-    def __init__(self, type_encoders: "Optional[TypeEncodersMap]" = None) -> None:
+    def __init__(self, type_encoders: "TypeEncodersMap | None" = None) -> None:
         """Initialize standard library serializer.
 
         Args:
@@ -1066,9 +1060,9 @@ class StandardLibSerializer(BaseJSONSerializer):
     def encode(self, data: Any, *, as_bytes: Literal[True]) -> bytes: ...
 
     @overload
-    def encode(self, data: Any, *, as_bytes: bool) -> "Union[str, bytes]": ...
+    def encode(self, data: Any, *, as_bytes: bool) -> "str | bytes": ...
 
-    def encode(self, data: Any, *, as_bytes: bool = False) -> "Union[str, bytes]":
+    def encode(self, data: Any, *, as_bytes: bool = False) -> "str | bytes":
         """Encode data to JSON using standard library.
 
         Args:
@@ -1081,7 +1075,7 @@ class StandardLibSerializer(BaseJSONSerializer):
         result = json.dumps(self._prepare_data_for_encode(data), default=self._enc_hook)
         return result.encode("utf-8") if as_bytes else result
 
-    def decode(self, data: "Union[str, bytes]", *, decode_bytes: bool = True) -> Any:
+    def decode(self, data: "str | bytes", *, decode_bytes: bool = True) -> Any:
         """Decode JSON using standard library.
 
         Args:
@@ -1104,7 +1098,7 @@ class StandardLibSerializer(BaseJSONSerializer):
 
 _serializer_cache: "dict[frozenset[tuple[type, int]], JSONSerializer]" = {}
 _cache_lock: Final[threading.RLock] = threading.RLock()
-_default_serializer: "Optional[JSONSerializer]" = None
+_default_serializer: "JSONSerializer | None" = None
 
 
 def _create_default_serializer() -> "JSONSerializer":
@@ -1138,7 +1132,7 @@ def _create_serializer(type_encoders: "TypeEncodersMap") -> "JSONSerializer":
     return StandardLibSerializer(type_encoders=type_encoders)
 
 
-def get_serializer(type_encoders: "Optional[TypeEncodersMap]" = None) -> "JSONSerializer":
+def get_serializer(type_encoders: "TypeEncodersMap | None" = None) -> "JSONSerializer":
     """Get a cached serializer instance.
 
     This factory function returns cached serializer instances to avoid
@@ -1220,9 +1214,9 @@ def encode_json(data: Any, *, type_encoders: TypeEncodersMap, as_bytes: Literal[
 def encode_json(
     data: Any,
     *,
-    type_encoders: "Optional[TypeEncodersMap]" = None,
+    type_encoders: "TypeEncodersMap | None" = None,
     as_bytes: bool = False,
-) -> "Union[str, bytes]":
+) -> "str | bytes":
     """Encode data to JSON with optional custom type encoders.
 
     This is the primary interface for JSON encoding in Advanced Alchemy.
@@ -1261,7 +1255,7 @@ def encode_json(
     return serializer.encode(data, as_bytes=as_bytes)
 
 
-def decode_json(data: "Union[str, bytes]", *, decode_bytes: bool = True) -> Any:
+def decode_json(data: "str | bytes", *, decode_bytes: bool = True) -> Any:
     """Decode JSON string or bytes to Python object.
 
     Args:
@@ -1315,7 +1309,7 @@ def encode_complex_type(obj: Any) -> Any:  # noqa: PLR0911
     if isinstance(obj, UUID):
         return {"__type__": "uuid", "value": str(obj)}
     if isinstance(obj, (set, frozenset)):
-        items: list[Any] = list(cast("Union[set[Any], frozenset[Any]]", obj))  # type: ignore[redundant-cast]
+        items: list[Any] = list(cast("set[Any] | frozenset[Any]", obj))  # type: ignore[redundant-cast]
         return {"__type__": "set", "value": items}
     return None
 

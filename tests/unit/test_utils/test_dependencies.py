@@ -1,6 +1,6 @@
 """Unit tests for shared dependency-injection utilities."""
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any, cast
 from unittest.mock import MagicMock
 
@@ -21,7 +21,7 @@ from advanced_alchemy.utils.singleton import SingletonMeta
 pytestmark = pytest.mark.unit
 
 
-class StatusChoice(str, Enum):
+class StatusChoice(StrEnum):
     ACTIVE = "active"
     PENDING = "pending"
 

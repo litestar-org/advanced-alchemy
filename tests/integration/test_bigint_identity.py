@@ -13,11 +13,9 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.xdist_group("bigint_identity"),
 ]
 
 
-@pytest.mark.xdist_group("loader")
 def test_ap_sync(monkeypatch: MonkeyPatch, engine: Engine) -> None:
     # Skip problematic engines
     dialect_name = getattr(engine.dialect, "name", "")
@@ -103,7 +101,6 @@ def test_ap_sync(monkeypatch: MonkeyPatch, engine: Engine) -> None:
         # add more assertions
 
 
-@pytest.mark.xdist_group("loader")
 async def test_ap_async(monkeypatch: MonkeyPatch, async_engine: AsyncEngine) -> None:
     # Skip problematic engines
     dialect_name = getattr(async_engine.dialect, "name", "")

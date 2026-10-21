@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Generator, Sequence
 from pathlib import Path
 from typing import cast
@@ -16,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from advanced_alchemy import base, mixins
-from advanced_alchemy._listeners import is_async_context
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.flask import (
     AdvancedAlchemy,
@@ -102,7 +100,6 @@ def test_sync_extension_init(setup_database: Path) -> None:
         assert "advanced_alchemy" in app.extensions
         assert isinstance(extension, AdvancedAlchemy)
         session = extension.get_sync_session()
-        assert is_async_context() is False
         assert isinstance(session, Session)
 
 
@@ -115,7 +112,6 @@ def test_sync_extension_init_with_app(setup_database: Path) -> None:
         assert "advanced_alchemy" in app.extensions
         assert isinstance(extension, AdvancedAlchemy)
         session = extension.get_sync_session()
-        assert is_async_context() is False
         assert isinstance(session, Session)
 
 
@@ -142,15 +138,6 @@ def test_async_extension_init(setup_database: Path) -> None:
         assert "advanced_alchemy" in app.extensions
         session = extension.get_session("async")
         assert isinstance(session, AsyncSession)
-        # Note: is_async_context() is deprecated since v1.9.0. The actual return value
-        # depends on whether an event loop is running in the calling thread.
-        # Flask's portal provider runs async in a separate thread, so the calling thread
-        # may not have an event loop. We just verify the deprecation warning is raised.
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            is_async_context()
-            assert len(w) >= 1
-            assert any("deprecated" in str(warning.message).lower() for warning in w)
         extension.portal_provider.stop()
 
 

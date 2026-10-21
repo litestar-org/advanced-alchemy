@@ -1,7 +1,7 @@
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 if TYPE_CHECKING:
     from alembic.migration import MigrationContext
@@ -29,8 +29,8 @@ class _ConsoleProxy:
 
 def _resolve_alchemy_configs(
     ctx: "Any",
-    config_path: Optional[str] = None,
-) -> "Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]":
+    config_path: str | None = None,
+) -> "Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]":
     """Load or retrieve SQLAlchemy configs from ``config_path`` or ``ctx.obj``."""
     from rich import get_console
 
@@ -63,13 +63,13 @@ def _resolve_alchemy_configs(
     if not configs:
         msg = "Missing option '--config' / '-c'."
         raise click.UsageError(msg, ctx=ctx)
-    return cast("Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]", configs)
+    return cast("Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]", configs)
 
 
 def _config_option(click_mod: Any) -> Callable[[Any], Any]:
     """Build a reusable ``--config`` / ``-c`` Click option decorator."""
 
-    def _callback(ctx: "Any", _param: "Any", value: Optional[str]) -> Optional[str]:
+    def _callback(ctx: "Any", _param: "Any", value: str | None) -> str | None:
         if value is not None:
             _resolve_alchemy_configs(ctx, value)
         return value
@@ -160,8 +160,8 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     )
 
     def get_config_by_bind_key(
-        ctx: "click.Context", bind_key: Optional[str]
-    ) -> "Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]":
+        ctx: "click.Context", bind_key: str | None
+    ) -> "SQLAlchemyAsyncConfig | SQLAlchemySyncConfig":
         """Get the SQLAlchemy config for the specified bind key.
 
         Args:
@@ -189,7 +189,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @config_option
     @bind_key_option
     @verbose_option
-    def show_database_revision(bind_key: Optional[str], verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    def show_database_revision(bind_key: str | None, verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Show current database revision."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
@@ -219,7 +219,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         default="-1",
     )
     def downgrade_database(  # pyright: ignore[reportUnusedFunction]
-        bind_key: Optional[str], revision: str, sql: bool, tag: Optional[str], no_prompt: bool
+        bind_key: str | None, revision: str, sql: bool, tag: str | None, no_prompt: bool
     ) -> None:
         """Downgrade the database to the latest revision."""
         from rich.prompt import Confirm
@@ -258,7 +258,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         default="head",
     )
     def upgrade_database(  # pyright: ignore[reportUnusedFunction]
-        bind_key: Optional[str], revision: str, sql: bool, tag: Optional[str], no_prompt: bool
+        bind_key: str | None, revision: str, sql: bool, tag: str | None, no_prompt: bool
     ) -> None:
         """Upgrade the database to the latest revision."""
         from rich.prompt import Confirm
@@ -288,7 +288,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         "--tag", type=str, default=None, help="Arbitrary 'tag' that can be intercepted by custom env.py scripts"
     )
     @click.option("--purge", is_flag=True, default=False, help="Delete all entries in version table before stamping")
-    def stamp(bind_key: Optional[str], revision: str, sql: bool, tag: Optional[str], purge: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    def stamp(bind_key: str | None, revision: str, sql: bool, tag: str | None, purge: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Stamp the revision table with the given revision."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
@@ -304,7 +304,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     )
     @config_option
     @bind_key_option
-    def check_revision(bind_key: Optional[str]) -> None:  # pyright: ignore[reportUnusedFunction]
+    def check_revision(bind_key: str | None) -> None:  # pyright: ignore[reportUnusedFunction]
         """Check for pending upgrade operations."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
@@ -321,7 +321,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @config_option
     @click.argument("revision", type=str)
     @bind_key_option
-    def edit_revision(bind_key: Optional[str], revision: str) -> None:  # pyright: ignore[reportUnusedFunction]
+    def edit_revision(bind_key: str | None, revision: str) -> None:  # pyright: ignore[reportUnusedFunction]
         """Edit revision script with system editor."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
@@ -338,7 +338,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @config_option
     @bind_key_option
     @click.option("--sql", is_flag=True, default=False, help="Generate SQL output instead of executing")
-    def ensure_version_table(bind_key: Optional[str], sql: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    def ensure_version_table(bind_key: str | None, sql: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Ensure alembic version table exists."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
@@ -361,7 +361,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         default=False,
         help="Resolve dependencies between heads",
     )
-    def show_heads(bind_key: Optional[str], verbose: bool, resolve_dependencies: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    def show_heads(bind_key: str | None, verbose: bool, resolve_dependencies: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Show current heads."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
@@ -391,9 +391,9 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         help="Indicate the current revision",
     )
     def show_history(  # pyright: ignore[reportUnusedFunction]
-        bind_key: Optional[str],
+        bind_key: str | None,
         verbose: bool,
-        rev_range: Optional[str],
+        rev_range: str | None,
         indicate_current: bool,
     ) -> None:
         """Show revision history."""
@@ -421,11 +421,11 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @click.option("--rev-id", type=str, default=None, help="Specify custom revision ID")
     @no_prompt_option
     def merge_revisions(  # pyright: ignore[reportUnusedFunction]
-        bind_key: Optional[str],
+        bind_key: str | None,
         revisions: str,
-        message: Optional[str],
-        branch_label: Optional[str],
-        rev_id: Optional[str],
+        message: str | None,
+        branch_label: str | None,
+        rev_id: str | None,
         no_prompt: bool,
     ) -> None:
         """Merge revisions (resolves multiple heads)."""
@@ -455,7 +455,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @config_option
     @click.argument("revision", type=str)
     @bind_key_option
-    def show_revision(bind_key: Optional[str], revision: str) -> None:  # pyright: ignore[reportUnusedFunction]
+    def show_revision(bind_key: str | None, revision: str) -> None:  # pyright: ignore[reportUnusedFunction]
         """Show details of a specific revision."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
@@ -472,7 +472,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @config_option
     @bind_key_option
     @verbose_option
-    def show_branches(bind_key: Optional[str], verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    def show_branches(bind_key: str | None, verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Show branch points."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
@@ -488,7 +488,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     )
     @config_option
     @bind_key_option
-    def list_init_templates(bind_key: Optional[str]) -> None:  # pyright: ignore[reportUnusedFunction]
+    def list_init_templates(bind_key: str | None) -> None:  # pyright: ignore[reportUnusedFunction]
         """List available initialization templates."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
@@ -513,7 +513,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @click.option("--package", is_flag=True, default=True, help="Create `__init__.py` for created folder")
     @no_prompt_option
     def init_alembic(  # pyright: ignore[reportUnusedFunction]
-        bind_key: Optional[str], directory: Optional[str], multidb: bool, package: bool, no_prompt: bool
+        bind_key: str | None, directory: str | None, multidb: bool, package: bool, no_prompt: bool
     ) -> None:
         """Initialize the database migrations."""
         from rich.prompt import Confirm
@@ -552,15 +552,15 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @click.option("--rev-id", default=None, help="Specify a ID to use for revision.")
     @no_prompt_option
     def create_revision(  # pyright: ignore[reportUnusedFunction]
-        bind_key: Optional[str],
-        message: Optional[str],
+        bind_key: str | None,
+        message: str | None,
         autogenerate: bool,
         sql: bool,
         head: str,
         splice: bool,
-        branch_label: Optional[str],
-        version_path: Optional[str],
-        rev_id: Optional[str],
+        branch_label: str | None,
+        version_path: str | None,
+        rev_id: str | None,
         no_prompt: bool,
     ) -> None:
         """Create a new database revision."""
@@ -615,7 +615,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @config_option
     @bind_key_option
     @no_prompt_option
-    def drop_all(bind_key: Optional[str], no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
+    def drop_all(bind_key: str | None, no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Drop all tables from the database."""
         from anyio import run
         from rich.prompt import Confirm
@@ -631,7 +631,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         )
 
         async def _drop_all(
-            configs: "Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]",
+            configs: "Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]",
         ) -> None:
             for config in configs:
                 engine = config.get_engine()
@@ -659,7 +659,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         default=Path.cwd() / "fixtures",
         required=False,
     )
-    def dump_table_data(bind_key: Optional[str], table_names: tuple[str, ...], dump_dir: Path) -> None:  # pyright: ignore[reportUnusedFunction]
+    def dump_table_data(bind_key: str | None, table_names: tuple[str, ...], dump_dir: Path) -> None:  # pyright: ignore[reportUnusedFunction]
         """Dump table data to JSON files."""
         from anyio import run
         from rich.prompt import Confirm
