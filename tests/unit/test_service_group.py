@@ -299,6 +299,9 @@ def test_framework_re_exports() -> None:
         ServiceGroup as LitestarServiceGroup,
     )
     from advanced_alchemy.extensions.litestar.service import (
+        SQLAlchemyAsyncRepositoryService as LitestarAsyncRepoService,
+    )
+    from advanced_alchemy.extensions.litestar.service import (
         provide_services as litestar_provide_services,
     )
 
@@ -307,6 +310,7 @@ def test_framework_re_exports() -> None:
     assert LitestarProvidersServiceGroup is ServiceGroup
     assert litestar_providers_provide_services is provide_services
     assert LitestarServiceGroup is ServiceGroup
+    assert LitestarAsyncRepoService is SQLAlchemyAsyncRepositoryService
     assert litestar_provide_services is provide_services
 
 
