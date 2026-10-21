@@ -2,7 +2,7 @@
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from sqlalchemy import Connection, Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -126,11 +126,9 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
             SyncFileObjectListener,
             touch_updated_timestamp,
         )
+        from advanced_alchemy.routing import RoutingSyncSessionMaker
 
-        # Use routing session maker if routing is configured
         if self.routing_config is not None:
-            from advanced_alchemy.routing import RoutingSyncSessionMaker
-
             routing_maker: Callable[[], Session] = RoutingSyncSessionMaker(
                 routing_config=self.routing_config,
                 engine_config=self.engine_config_dict,
@@ -140,19 +138,24 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
         else:
             self.session_maker = super().create_session_maker()
 
+        event_target: Optional[sessionmaker[Any]] = None
         if isinstance(self.session_maker, sessionmaker):
-            session_maker = cast(
+            event_target = cast(
                 "sessionmaker[Session]",
                 self.session_maker,  # pyright: ignore[reportUnknownMemberType]
             )
+        elif isinstance(self.session_maker, RoutingSyncSessionMaker):
+            event_target = self.session_maker.sync_session_maker
+
+        if event_target is not None:
             if self.enable_file_object_listener:
-                event.listen(session_maker, "before_flush", SyncFileObjectListener.before_flush)
-                event.listen(session_maker, "after_commit", SyncFileObjectListener.after_commit)
-                event.listen(session_maker, "after_rollback", SyncFileObjectListener.after_rollback)
+                event.listen(event_target, "before_flush", SyncFileObjectListener.before_flush)
+                event.listen(event_target, "after_commit", SyncFileObjectListener.after_commit)
+                event.listen(event_target, "after_rollback", SyncFileObjectListener.after_rollback)
             if self.enable_touch_updated_timestamp_listener:
-                event.listen(session_maker, "before_flush", touch_updated_timestamp)
-            event.listen(session_maker, "after_commit", SyncCacheListener.after_commit)
-            event.listen(session_maker, "after_rollback", SyncCacheListener.after_rollback)
+                event.listen(event_target, "before_flush", touch_updated_timestamp)
+            event.listen(event_target, "after_commit", SyncCacheListener.after_commit)
+            event.listen(event_target, "after_rollback", SyncCacheListener.after_rollback)
 
         if self.session_maker is None:  # pyright: ignore
             msg = "Session maker was not initialized."  # type: ignore[unreachable]

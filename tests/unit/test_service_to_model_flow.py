@@ -64,19 +64,25 @@ class TrackingService(SQLAlchemyAsyncRepositoryService[MockModel, MockRepository
     repository_type = MockRepository
 
     def __init__(self) -> None:
-        # Create mock repository
         self._repository = MockRepository()
-        # Mock model with proper SQLAlchemy attributes
         mock_model = MockModel()
         mock_model.id = "existing-id"  # type: ignore[assignment]
         mock_model.name = "existing"
         mock_model.dob = None  # type: ignore[assignment]
         self._repository.get = AsyncMock(return_value=mock_model)  # type: ignore[method-assign]
-        self._repository.update = AsyncMock(side_effect=lambda data, **kwargs: data)  # type: ignore[method-assign]
+        self._repository.update = AsyncMock(side_effect=self._simulate_repo_update)  # type: ignore[method-assign]
 
-        # Track method calls
         self.to_model_calls: list[tuple[Any, Optional[str]]] = []
         self.to_model_on_update_calls: list[Any] = []
+
+    async def _simulate_repo_update(self, data: MockModel, **kwargs: Any) -> MockModel:
+        """Simulate repository.update fetching the existing instance and merging attributes."""
+        item_id = self._repository.get_id_attribute_value(data)
+        existing = await self._repository.get(item_id, with_for_update=kwargs.get("with_for_update"))
+        for key, value in data.__dict__.items():
+            if not key.startswith("_") and key != self._repository.id_attribute:
+                setattr(existing, key, value)
+        return existing
 
     @property
     def repository(self) -> MockRepository:
@@ -105,19 +111,25 @@ class TrackingSyncService(SQLAlchemySyncRepositoryService[MockModel, MockSyncRep
     repository_type = MockSyncRepository
 
     def __init__(self) -> None:
-        # Create mock repository
         self._repository = MockSyncRepository()
-        # Mock model with proper SQLAlchemy attributes
         mock_model = MockModel()
         mock_model.id = "existing-id"  # type: ignore[assignment]
         mock_model.name = "existing"
         mock_model.dob = None  # type: ignore[assignment]
         self._repository.get = MagicMock(return_value=mock_model)  # type: ignore[method-assign]
-        self._repository.update = MagicMock(side_effect=lambda data, **kwargs: data)  # type: ignore[method-assign]
+        self._repository.update = MagicMock(side_effect=self._simulate_repo_update)  # type: ignore[method-assign]
 
-        # Track method calls
         self.to_model_calls: list[tuple[Any, Optional[str]]] = []
         self.to_model_on_update_calls: list[Any] = []
+
+    def _simulate_repo_update(self, data: MockModel, **kwargs: Any) -> MockModel:
+        """Simulate sync repository.update fetching the existing instance and merging attributes."""
+        item_id = self._repository.get_id_attribute_value(data)
+        existing = self._repository.get(item_id, with_for_update=kwargs.get("with_for_update"))
+        for key, value in data.__dict__.items():
+            if not key.startswith("_") and key != self._repository.id_attribute:
+                setattr(existing, key, value)
+        return existing
 
     @property
     def repository(self) -> MockSyncRepository:
@@ -551,9 +563,34 @@ def test_sync_update_preserves_existing_instance_attributes() -> None:
     """Test that sync update with item_id preserves existing instance attributes."""
     service = TrackingSyncService()
 
-    # Update only name field
     result = service.update({"name": "New Name"}, item_id="test-id")
 
-    # Existing ID should be preserved from existing instance
     assert result.name == "New Name"
-    assert result.id == "existing-id"  # From mock repository's get()
+    assert result.id == "existing-id"
+
+
+@pytest.mark.asyncio
+async def test_update_with_item_id_does_not_prefetch_in_service() -> None:
+    """Test that service.update sets PK on converted model and delegates single fetch to repository.update."""
+    service = TrackingService()
+    service.repository.update = AsyncMock(side_effect=lambda data, **kwargs: data)  # type: ignore[method-assign]
+
+    result = await service.update({"name": "Single Fetch"}, item_id="target-id")
+
+    get_mock = cast(AsyncMock, service.repository.get)
+    get_mock.assert_not_awaited()
+    assert result.id == "target-id"
+    assert result.name == "Single Fetch"
+
+
+def test_sync_update_with_item_id_does_not_prefetch_in_service() -> None:
+    """Test that sync service.update sets PK on converted model and delegates single fetch to repository.update."""
+    service = TrackingSyncService()
+    service.repository.update = MagicMock(side_effect=lambda data, **kwargs: data)  # type: ignore[method-assign]
+
+    result = service.update({"name": "Single Fetch"}, item_id="target-id")
+
+    get_mock = cast(MagicMock, service.repository.get)
+    get_mock.assert_not_called()
+    assert result.id == "target-id"
+    assert result.name == "Single Fetch"

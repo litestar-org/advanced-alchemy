@@ -1,5 +1,5 @@
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Union, cast
 
@@ -27,6 +27,68 @@ class _ConsoleProxy:
         get_console().print(*args, **kwargs)
 
 
+def _resolve_alchemy_configs(
+    ctx: "Any",
+    config_path: Optional[str] = None,
+) -> "Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]":
+    """Load or retrieve SQLAlchemy configs from ``config_path`` or ``ctx.obj``."""
+    from rich import get_console
+
+    from advanced_alchemy.utils import module_loader
+    from advanced_alchemy.utils.cli_tools import click
+
+    ctx.ensure_object(dict)
+    if config_path is not None:
+        console = get_console()
+        cwd = str(Path.cwd())
+        added_cwd = False
+        if cwd not in sys.path:
+            sys.path.insert(0, cwd)
+            added_cwd = True
+
+        try:
+            config_instance = module_loader.import_string(config_path)
+            if isinstance(config_instance, Sequence):
+                ctx.obj["configs"] = config_instance
+            else:
+                ctx.obj["configs"] = [config_instance]
+        except ImportError as e:
+            console.print(f"[red]Error loading config: {e}[/]")
+            ctx.exit(1)
+        finally:
+            if added_cwd and cwd in sys.path and sys.path[0] == cwd:
+                sys.path.remove(cwd)
+
+    configs = ctx.obj.get("configs")
+    if not configs:
+        msg = "Missing option '--config' / '-c'."
+        raise click.UsageError(msg, ctx=ctx)
+    return cast("Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]", configs)
+
+
+def _config_option(click_mod: Any) -> Callable[[Any], Any]:
+    """Build a reusable ``--config`` / ``-c`` Click option decorator."""
+
+    def _callback(ctx: "Any", _param: "Any", value: Optional[str]) -> Optional[str]:
+        if value is not None:
+            _resolve_alchemy_configs(ctx, value)
+        return value
+
+    return cast(
+        "Callable[[Any], Any]",
+        click_mod.option(
+            "--config",
+            "-c",
+            help="Dotted path to SQLAlchemy config(s) (e.g. 'myapp.config.alchemy_configs')",
+            required=False,
+            default=None,
+            type=str,
+            expose_value=False,
+            callback=_callback,
+        ),
+    )
+
+
 def get_alchemy_group() -> "Group":
     """Get the Advanced Alchemy CLI group.
 
@@ -39,46 +101,17 @@ def get_alchemy_group() -> "Group":
     from advanced_alchemy.exceptions import MissingDependencyError
     from advanced_alchemy.utils.cli_tools import click, group
 
-    if click is None:  # pragma: no cover - defensive guard
+    if click is None:  # pragma: no cover
         raise MissingDependencyError(package="click", install_package="cli")
 
+    config_option = _config_option(click)
+
     @group(name="alchemy")  # pyright: ignore
-    @click.option(
-        "--config",
-        help="Dotted path to SQLAlchemy config(s) (e.g. 'myapp.config.alchemy_configs')",
-        required=True,
-        type=str,
-    )
+    @config_option
     @click.pass_context
-    def alchemy_group(ctx: "click.Context", config: str) -> None:
+    def alchemy_group(ctx: "click.Context") -> None:
         """Advanced Alchemy CLI commands."""
-        from pathlib import Path
-
-        from rich import get_console
-
-        from advanced_alchemy.utils import module_loader
-
-        console = get_console()
         ctx.ensure_object(dict)
-
-        # Add current working directory to sys.path to allow loading local config modules
-        cwd = str(Path.cwd())
-        if cwd not in sys.path:
-            sys.path.insert(0, cwd)
-
-        try:
-            config_instance = module_loader.import_string(config)
-            if isinstance(config_instance, Sequence):
-                ctx.obj["configs"] = config_instance
-            else:
-                ctx.obj["configs"] = [config_instance]
-        except ImportError as e:
-            console.print(f"[red]Error loading config: {e}[/]")
-            ctx.exit(1)
-        finally:
-            # Clean up: remove the cwd from sys.path if we added it
-            if cwd in sys.path and sys.path[0] == cwd:
-                sys.path.remove(cwd)
 
     return alchemy_group
 
@@ -102,6 +135,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     if database_group is None:
         database_group = get_alchemy_group()
 
+    config_option = _config_option(click)
     bind_key_option = click.option(
         "--bind-key",
         help="Specify which SQLAlchemy config to use by bind key",
@@ -137,13 +171,13 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         Returns:
             The SQLAlchemy config for the specified bind key.
         """
-        configs = ctx.obj["configs"]
+        configs = _resolve_alchemy_configs(ctx)
         if bind_key is None:
-            return cast("Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]", configs[0])
+            return configs[0]
 
         for config in configs:
             if config.bind_key == bind_key:
-                return cast("Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]", config)
+                return config
 
         console.print(f"[red]No config found for bind key: {bind_key}[/]")
         sys.exit(1)
@@ -152,6 +186,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         name="show-current-revision",
         help="Shows the current revision for the database.",
     )
+    @config_option
     @bind_key_option
     @verbose_option
     def show_database_revision(bind_key: Optional[str], verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
@@ -159,8 +194,8 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
-        console.rule("[yellow]Listing current revision[/]", align="left")
         sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        console.rule("[yellow]Listing current revision[/]", align="left")
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.current(verbose=verbose)
 
@@ -168,6 +203,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         name="downgrade",
         help="Downgrade database to a specific revision.",
     )
+    @config_option
     @bind_key_option
     @click.option("--sql", type=bool, help="Generate SQL output for offline migrations.", default=False, is_flag=True)
     @click.option(
@@ -191,6 +227,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
         console.rule("[yellow]Starting database downgrade process[/]", align="left")
         input_confirmed = (
             True
@@ -198,7 +235,6 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
             else Confirm.ask(f"Are you sure you want to downgrade the database to the `{revision}` revision?")
         )
         if input_confirmed:
-            sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
             alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
             alembic_commands.downgrade(revision=revision, sql=sql, tag=tag)
 
@@ -206,6 +242,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         name="upgrade",
         help="Upgrade database to a specific revision.",
     )
+    @config_option
     @bind_key_option
     @click.option("--sql", type=bool, help="Generate SQL output for offline migrations.", default=False, is_flag=True)
     @click.option(
@@ -229,6 +266,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
         console.rule("[yellow]Starting database upgrade process[/]", align="left")
         input_confirmed = (
             True
@@ -236,13 +274,13 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
             else Confirm.ask(f"[bold]Are you sure you want migrate the database to the `{revision}` revision?[/]")
         )
         if input_confirmed:
-            sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
             alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
             alembic_commands.upgrade(revision=revision, sql=sql, tag=tag)
 
     @database_group.command(
         help="Stamp the revision table with the given revision; don't run any migrations",
     )
+    @config_option
     @click.argument("revision", type=str)
     @bind_key_option
     @click.option("--sql", is_flag=True, default=False, help="Generate SQL output for offline migrations")
@@ -255,8 +293,8 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
-        console.rule("[yellow]Stamping revision table[/]", align="left")
         sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        console.rule("[yellow]Stamping revision table[/]", align="left")
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.stamp(revision=revision, sql=sql, tag=tag, purge=purge)
 
@@ -264,14 +302,15 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         name="check",
         help="Check if the target database is up to date",
     )
+    @config_option
     @bind_key_option
     def check_revision(bind_key: Optional[str]) -> None:  # pyright: ignore[reportUnusedFunction]
         """Check for pending upgrade operations."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
-        console.rule("[yellow]Checking for pending migrations[/]", align="left")
         sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        console.rule("[yellow]Checking for pending migrations[/]", align="left")
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.check()
 
@@ -279,6 +318,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         name="edit",
         help="Edit a revision file using $EDITOR",
     )
+    @config_option
     @click.argument("revision", type=str)
     @bind_key_option
     def edit_revision(bind_key: Optional[str], revision: str) -> None:  # pyright: ignore[reportUnusedFunction]
@@ -286,8 +326,8 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
-        console.rule(f"[yellow]Opening revision {revision} in editor[/]", align="left")
         sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        console.rule(f"[yellow]Opening revision {revision} in editor[/]", align="left")
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.edit(revision=revision)
 
@@ -295,6 +335,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         name="ensure-version",
         help="Create the alembic version table if it doesn't exist",
     )
+    @config_option
     @bind_key_option
     @click.option("--sql", is_flag=True, default=False, help="Generate SQL output instead of executing")
     def ensure_version_table(bind_key: Optional[str], sql: bool) -> None:  # pyright: ignore[reportUnusedFunction]
@@ -302,8 +343,8 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
-        console.rule("[yellow]Ensuring version table exists[/]", align="left")
         sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        console.rule("[yellow]Ensuring version table exists[/]", align="left")
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.ensure_version(sql=sql)
 
@@ -311,6 +352,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         name="heads",
         help="Show current available heads in the script directory",
     )
+    @config_option
     @bind_key_option
     @verbose_option
     @click.option(
@@ -324,8 +366,8 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
-        console.rule("[yellow]Showing current heads[/]", align="left")
         sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        console.rule("[yellow]Showing current heads[/]", align="left")
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.heads(verbose=verbose, resolve_dependencies=resolve_dependencies)
 
@@ -333,6 +375,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         name="history",
         help="List changeset scripts in chronological order",
     )
+    @config_option
     @bind_key_option
     @verbose_option
     @click.option(
@@ -357,8 +400,8 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
-        console.rule("[yellow]Showing revision history[/]", align="left")
         sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        console.rule("[yellow]Showing revision history[/]", align="left")
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.history(
             rev_range=rev_range,
@@ -370,6 +413,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         name="merge",
         help="Merge two revisions together, creating a new migration file",
     )
+    @config_option
     @click.argument("revisions", type=str)
     @bind_key_option
     @click.option("-m", "--message", type=str, default=None, help="Merge message")
@@ -390,12 +434,12 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
         console.rule("[yellow]Merging revisions[/]", align="left")
 
         if message is None:
             message = "merge revisions" if no_prompt else Prompt.ask("Enter merge message")
 
-        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.merge(
             revisions=revisions,
@@ -408,6 +452,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         name="show",
         help="Show the revision denoted by the given symbol",
     )
+    @config_option
     @click.argument("revision", type=str)
     @bind_key_option
     def show_revision(bind_key: Optional[str], revision: str) -> None:  # pyright: ignore[reportUnusedFunction]
@@ -415,8 +460,8 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
-        console.rule(f"[yellow]Showing revision {revision}[/]", align="left")
         sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        console.rule(f"[yellow]Showing revision {revision}[/]", align="left")
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.show(rev=revision)
 
@@ -424,6 +469,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         name="branches",
         help="Show current branch points in the migration history",
     )
+    @config_option
     @bind_key_option
     @verbose_option
     def show_branches(bind_key: Optional[str], verbose: bool) -> None:  # pyright: ignore[reportUnusedFunction]
@@ -431,8 +477,8 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
-        console.rule("[yellow]Showing branch points[/]", align="left")
         sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        console.rule("[yellow]Showing branch points[/]", align="left")
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.branches(verbose=verbose)
 
@@ -440,14 +486,15 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         name="list-templates",
         help="List available Alembic migration templates",
     )
+    @config_option
     @bind_key_option
     def list_init_templates(bind_key: Optional[str]) -> None:  # pyright: ignore[reportUnusedFunction]
         """List available initialization templates."""
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
-        console.rule("[yellow]Available templates[/]", align="left")
         sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
+        console.rule("[yellow]Available templates[/]", align="left")
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.list_templates()
 
@@ -455,6 +502,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         name="init",
         help="Initialize migrations for the project.",
     )
+    @config_option
     @bind_key_option
     @click.argument(
         "directory",
@@ -473,21 +521,22 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         from advanced_alchemy.alembic.commands import AlembicCommands
 
         ctx = cast("click.Context", click.get_current_context())
+        configs = [get_config_by_bind_key(ctx, bind_key)] if bind_key is not None else _resolve_alchemy_configs(ctx)
         console.rule("[yellow]Initializing database migrations.", align="left")
         input_confirmed = (
             True if no_prompt else Confirm.ask("[bold]Are you sure you want initialize migrations for the project?[/]")
         )
         if input_confirmed:
-            configs = [get_config_by_bind_key(ctx, bind_key)] if bind_key is not None else ctx.obj["configs"]
             for config in configs:
-                directory = config.alembic_config.script_location if directory is None else directory
+                target_directory = config.alembic_config.script_location if directory is None else directory
                 alembic_commands = AlembicCommands(sqlalchemy_config=config)
-                alembic_commands.init(directory=cast("str", directory), multidb=multidb, package=package)
+                alembic_commands.init(directory=target_directory, multidb=multidb, package=package)
 
     @database_group.command(
         name="make-migrations",
         help="Create a new migration revision.",
     )
+    @config_option
     @bind_key_option
     @click.option("-m", "--message", default=None, help="Revision message")
     @click.option(
@@ -544,11 +593,11 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
                 directives.clear()
 
         ctx = cast("click.Context", click.get_current_context())
+        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
         console.rule("[yellow]Starting database upgrade process[/]", align="left")
         if message is None:
             message = "autogenerated" if no_prompt else Prompt.ask("Please enter a message describing this revision")
 
-        sqlalchemy_config = get_config_by_bind_key(ctx, bind_key)
         alembic_commands = AlembicCommands(sqlalchemy_config=sqlalchemy_config)
         alembic_commands.revision(
             message=message,
@@ -563,6 +612,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         )
 
     @database_group.command(name="drop-all", help="Drop all tables from the database.")
+    @config_option
     @bind_key_option
     @no_prompt_option
     def drop_all(bind_key: Optional[str], no_prompt: bool) -> None:  # pyright: ignore[reportUnusedFunction]
@@ -574,6 +624,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         from advanced_alchemy.base import metadata_registry
 
         ctx = cast("click.Context", click.get_current_context())
+        configs = [get_config_by_bind_key(ctx, bind_key)] if bind_key is not None else _resolve_alchemy_configs(ctx)
         console.rule("[yellow]Dropping all tables from the database[/]", align="left")
         input_confirmed = no_prompt or Confirm.ask(
             "[bold red]Are you sure you want to drop all tables from the database?"
@@ -587,10 +638,10 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
                 await drop_all(engine, config.alembic_config.version_table_name, metadata_registry.get(config.bind_key))
 
         if input_confirmed:
-            configs = [get_config_by_bind_key(ctx, bind_key)] if bind_key is not None else ctx.obj["configs"]
             run(_drop_all, configs)
 
     @database_group.command(name="dump-data", help="Dump specified tables from the database to JSON files.")
+    @config_option
     @bind_key_option
     @click.option(
         "--table",
@@ -617,6 +668,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         from advanced_alchemy.base import metadata_registry, orm_registry
 
         ctx = cast("click.Context", click.get_current_context())
+        configs = [get_config_by_bind_key(ctx, bind_key)] if bind_key is not None else _resolve_alchemy_configs(ctx)
         all_tables = "*" in table_names
 
         if all_tables and not Confirm.ask(
@@ -625,7 +677,6 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
             return console.rule("[red bold]No data was dumped.", style="red", align="left")
 
         async def _dump_tables() -> None:
-            configs = [get_config_by_bind_key(ctx, bind_key)] if bind_key is not None else ctx.obj["configs"]
             for config in configs:
                 target_tables = set(metadata_registry.get(config.bind_key).tables)
 

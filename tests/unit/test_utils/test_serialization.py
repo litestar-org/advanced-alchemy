@@ -16,7 +16,9 @@ from typing import Any
 from uuid import UUID
 
 import pytest
+from msgspec import Struct
 
+from advanced_alchemy.service._util import ResultConverter
 from advanced_alchemy.typing import (
     ATTRS_INSTALLED,
     MSGSPEC_INSTALLED,
@@ -1092,3 +1094,19 @@ def test_pydantic_support() -> None:
         age: int
 
     assert encode_json({"model": MyModel(name="test", age=25)}) == '{"model":{"name":"test","age":25}}'
+
+
+def test_result_converter_to_schema_preserves_zero_total() -> None:
+    """Verify ResultConverter.to_schema preserves total=0 even when items are present."""
+
+    class ItemSchema(Struct):
+        name: str
+
+    converter = ResultConverter()
+    paginated = converter.to_schema(
+        data=[{"name": "alpha"}],
+        total=0,
+        schema_type=ItemSchema,
+    )
+    assert paginated.total == 0
+    assert len(paginated.items) == 1

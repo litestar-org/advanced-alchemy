@@ -120,11 +120,12 @@ def _normalize_cache_key_value(value: Any) -> Any:
             normalized_dict[str(k)] = _normalize_cache_key_value(v)
         return normalized_dict
     if dataclasses.is_dataclass(value) and not isinstance(value, type):  # pyright: ignore[reportUnknownArgumentType]
-        return _normalize_cache_key_value(dataclasses.asdict(value))
+        return {
+            field.name: _normalize_cache_key_value(getattr(value, field.name)) for field in dataclasses.fields(value)
+        }
     if isinstance(value, InstrumentedAttribute):
         return {"__attr__": value.key}
     if isinstance(value, ColumnElement):
-        # Safe fallback for non-dataclass expressions in ordering/kwargs.
         value_expr = cast("ColumnElement[Any]", value)  # type: ignore[redundant-cast]
         return {"__sql__": str(value_expr)}
 
@@ -155,6 +156,7 @@ def _build_cache_key(  # pyright: ignore[reportUnusedFunction]
     execution_options: dict[str, Any],
     uniquify: bool,
     count_with_window_function: Optional[bool] = None,
+    bind_group: Optional[str] = None,
 ) -> Optional[str]:
     """Build a stable cache key for list/list_and_count operations.
 
@@ -190,6 +192,8 @@ def _build_cache_key(  # pyright: ignore[reportUnusedFunction]
     }
     if count_with_window_function is not None:
         payload["count_with_window_function"] = bool(count_with_window_function)
+    if bind_group is not None:
+        payload["bind_group"] = bind_group
 
     try:
         encoded = encode_json(_canonicalize_cache_key_value(payload)).encode("utf-8")
@@ -731,7 +735,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
                 if apply_pagination:
                     statement = filter_.append_to_statement(statement, self.model_type)
             elif isinstance(filter_, (InAnyFilter,)):
-                statement = filter_.append_to_statement(statement, self.model_type)
+                statement = filter_.append_to_statement(statement, self.model_type, prefer_any=self._prefer_any)
             elif isinstance(filter_, ColumnElement):
                 statement = cast("StatementTypeT", statement.where(filter_))
             else:
@@ -753,9 +757,14 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         Returns:
             StatementTypeT: The filtered SQL statement.
         """
-        for key, val in dict(kwargs).items():
-            field = get_instrumented_attr(self.model_type, key)
-            statement = cast("StatementTypeT", statement.where(field == val))
+        if isinstance(kwargs, dict):
+            for key, val in kwargs.items():  # pyright: ignore[reportUnknownVariableType]
+                field = get_instrumented_attr(self.model_type, key)  # pyright: ignore[reportArgumentType]
+                statement = cast("StatementTypeT", statement.where(field == val))  # pyright: ignore[reportUnknownArgumentType]
+        else:
+            for key, val in kwargs:
+                field = get_instrumented_attr(self.model_type, key)
+                statement = cast("StatementTypeT", statement.where(field == val))
         return statement
 
     def _apply_order_by(
@@ -953,10 +962,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         if not data:
             return []
         table = cast("Table", self.model_type.__table__)
-        if any(
-            bool(col.onupdate is not None and col.onupdate.is_clause_element)
-            for col in table.columns
-        ):
+        if any(bool(col.onupdate is not None and col.onupdate.is_clause_element) for col in table.columns):
             return None
         protected_columns = set(strategy.conflict_columns)
         protected_columns.update(column.key for column in table.primary_key.columns)
@@ -1315,7 +1321,7 @@ def snapshot_and_detach_relationships(instance: Any, mapper: Any) -> dict[str, A
             continue
         for related in related_items:
             related_state: Any = inspect(related, raiseerr=False)  # pyright: ignore[reportUnknownVariableType]
-            if related is None or related_state is None or object_session(related) is None:
+            if related is None or related_state is None:
                 continue
             # Read the raw, already-loaded value to avoid triggering a lazy load
             # (or raising, for relationships configured with ``lazy="raise"``):

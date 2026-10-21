@@ -156,9 +156,8 @@ def test_set_table_check_constraint_only_created_for_oracle() -> None:
 
 def test_process_result_value_without_oracledb_ver() -> None:
     """Process result value succeeds on dialects that do not define oracledb_ver attribute."""
-    from sqlalchemy.dialects import oracle
-
-    dialect = oracle.dialect()
+    dialect = MagicMock(spec=Dialect)
+    dialect.name = "oracle"
     assert not hasattr(dialect, "oracledb_ver")
     result = ORA_JSONB().process_result_value(b'{"a": 1}', dialect)
     assert result == {"a": 1}

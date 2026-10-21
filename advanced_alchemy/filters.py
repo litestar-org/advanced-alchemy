@@ -924,28 +924,36 @@ class ExistsFilter(StatementFilter):
 
     Example:
     --------
-        Basic usage with AND conditions::
+        Basic usage with a correlated subquery::
 
             from sqlalchemy import select
             from advanced_alchemy.filters import ExistsFilter
 
             filter = ExistsFilter(
-                values=[User.email.like("%@example.com%")],
+                values=[
+                    User.organization_id == Organization.id,
+                    User.email.like("%@example.com%"),
+                ],
             )
             statement = filter.append_to_statement(
                 select(Organization), Organization
             )
 
-        This will return only organizations where the user's email contains "@example.com".
+        This will return only organizations where at least one correlated user's email contains "@example.com".
 
-        Using OR conditions::
+        Combining correlation with OR conditions::
+
+            from sqlalchemy import or_
 
             filter = ExistsFilter(
-                values=[User.role == "admin", User.role == "owner"],
-                operator="or",
+                values=[
+                    User.organization_id == Organization.id,
+                    or_(User.role == "admin", User.role == "owner"),
+                ],
+                operator="and",
             )
 
-        This will return organizations where the user's role is either "admin" OR "owner".
+        This will return organizations that have a user whose role is either "admin" OR "owner".
 
     See Also:
     --------
@@ -1003,17 +1011,11 @@ class ExistsFilter(StatementFilter):
             ColumnElement[bool]:
                 A correlated EXISTS expression for use in a WHERE clause
         """
-        # Handle empty values list case
         if not self.values:
-            # Use explicitly imported 'false' from sqlalchemy
-            # Return SQLAlchemy FALSE expression
             return false()
 
-        # Combine all values with AND or OR (using the operator specified in the filter)
-        # This creates a single boolean expression from multiple conditions
         combined_conditions = self._get_combined_conditions()
 
-        # Create a correlated subquery with the combined conditions
         try:
             subquery = select(1).where(combined_conditions)
             correlated_subquery = subquery.correlate(model.__table__)
@@ -1034,8 +1036,6 @@ class ExistsFilter(StatementFilter):
             StatementTypeT:
                 Modified statement with EXISTS condition
         """
-        # We apply the exists clause regardless of whether self.values is empty,
-        # as get_exists_clause handles the empty case by returning false().
         exists_clause = self.get_exists_clause(model)
         return cast("StatementTypeT", statement.where(exists_clause))
 
@@ -1061,28 +1061,36 @@ class NotExistsFilter(StatementFilter):
 
     Example:
     --------
-        Basic usage with AND conditions::
+        Basic usage with a correlated subquery::
 
             from sqlalchemy import select
             from advanced_alchemy.filters import NotExistsFilter
 
             filter = NotExistsFilter(
-                values=[User.email.like("%@example.com%")],
+                values=[
+                    User.organization_id == Organization.id,
+                    User.email.like("%@example.com%"),
+                ],
             )
             statement = filter.append_to_statement(
                 select(Organization), Organization
             )
 
-        This will return only organizations where the user's email does NOT contain "@example.com".
+        This will return only organizations where no correlated user's email contains "@example.com".
 
-        Using OR conditions::
+        Combining correlation with OR conditions::
+
+            from sqlalchemy import or_
 
             filter = NotExistsFilter(
-                values=[User.role == "admin", User.role == "owner"],
-                operator="or",
+                values=[
+                    User.organization_id == Organization.id,
+                    or_(User.role == "admin", User.role == "owner"),
+                ],
+                operator="and",
             )
 
-        This will return organizations where the user's role is NEITHER "admin" NOR "owner".
+        This will return organizations that have neither an "admin" nor an "owner" user.
 
     See Also:
     --------
@@ -1136,12 +1144,9 @@ class NotExistsFilter(StatementFilter):
             ColumnElement[bool]:
                 A correlated NOT EXISTS expression for use in a WHERE clause
         """
-        # Handle empty values list case
         if not self.values:
-            # Return SQLAlchemy TRUE expression
             return true()
 
-        # Combine conditions and create correlated subquery
         combined_conditions = self._get_combined_conditions()
         subquery = select(1).where(combined_conditions)
         correlated_subquery = subquery.correlate(model.__table__)
@@ -1160,8 +1165,6 @@ class NotExistsFilter(StatementFilter):
             StatementTypeT:
                 Modified statement with NOT EXISTS condition
         """
-        # We apply the exists clause regardless of whether self.values is empty,
-        # as get_exists_clause handles the empty case by returning true.
         exists_clause = self.get_exists_clause(model)
         return cast("StatementTypeT", statement.where(exists_clause))
 

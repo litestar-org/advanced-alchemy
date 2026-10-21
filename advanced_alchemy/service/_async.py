@@ -10,7 +10,6 @@ from functools import cached_property
 from typing import Any, ClassVar, Generic, List, Optional, Union, cast
 
 from sqlalchemy import Select
-from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio.scoping import async_scoped_session
 from sqlalchemy.orm import InstrumentedAttribute
@@ -25,8 +24,8 @@ from advanced_alchemy.filters import StatementFilter
 from advanced_alchemy.repository import (
     SQLAlchemyAsyncQueryRepository,
 )
-from advanced_alchemy.repository._util import LoadSpec, model_from_dict, snapshot_and_detach_relationships
-from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, SQLAlchemyAsyncRepositoryT
+from advanced_alchemy.repository._util import LoadSpec, model_from_dict, validate_composite_pk_value
+from advanced_alchemy.repository.typing import ModelT, OrderingPair, PrimaryKeyType, SQLAlchemyAsyncRepositoryT
 from advanced_alchemy.service._util import ResultConverter, resolve_item_ids
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.deprecation import warn_deprecation
@@ -477,14 +476,14 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             Representation of created instances.
         """
         dump_config = schema_dump_config if schema_dump_config is not None else self.schema_dump_config
-        operation_map = {
-            "create": self.to_model_on_create,
-            "update": self.to_model_on_update,
-            "delete": self.to_model_on_delete,
-            "upsert": self.to_model_on_upsert,
-        }
-        if operation and (op := operation_map.get(operation)):
-            data = await op(data)
+        if operation == "create":
+            data = await self.to_model_on_create(data)
+        elif operation == "update":
+            data = await self.to_model_on_update(data)
+        elif operation == "delete":
+            data = await self.to_model_on_delete(data)
+        elif operation == "upsert":
+            data = await self.to_model_on_upsert(data)
         if isinstance(data, self.model_type):
             return data
         if is_dict(data):
@@ -876,51 +875,24 @@ class SQLAlchemyAsyncRepositoryService(
         Returns:
             Updated representation.
         """
-        # ALWAYS convert data through to_model first to ensure operation hooks are called
-        # This ensures custom to_model() implementations receive the operation="update" parameter
-        # and that to_model_on_update() is properly invoked via the operation_map
         data = await self.to_model(data, "update", schema_dump_config=schema_dump_config)
 
         if item_id is not None:
-            # When item_id is provided, update existing instance rather than replacing it
-            # This preserves relationships and database-managed fields
-            instance_state = sa_inspect(data)  # pyright: ignore[reportOptionalMemberAccess]
-
-            # A `to_model_on_update` hook may have built ``data`` as a transient
-            # instance and assigned already-persistent related objects onto one
-            # of its relationships (e.g. resolving m2m ids into model instances).
-            # That assignment's back_populates sync pollutes the related objects'
-            # own collections with a reference to the (soon to be discarded)
-            # transient ``data``, which the very next query below would try to
-            # autoflush and warn about. Snapshot the explicitly-set relationship
-            # values and undo that pollution before it can reach a flush.
-            relationship_values = snapshot_and_detach_relationships(data, instance_state)
-
-            existing_instance: ModelT = await self.repository.get(
-                item_id,
-                id_attribute=id_attribute,
-                load=load,
-                execution_options=execution_options,
-                with_for_update=with_for_update,
-                bind_group=bind_group,
-            )
-
-            # Extract attributes from converted model to update existing instance
-            # Only copy attributes that were explicitly set (present in instance state)
-            for attr in instance_state.mapper.attrs:  # type: ignore[union-attr]  # pyright: ignore[reportOptionalMemberAccess]
-                # Check if attribute was explicitly set in the instance
-                if attr.key in instance_state.dict:  # type: ignore[union-attr]  # pyright: ignore[reportOptionalMemberAccess]
-                    value = (
-                        relationship_values[attr.key]
-                        if attr.key in relationship_values
-                        else getattr(data, attr.key, MISSING)
-                    )
-                    if value is not MISSING and hasattr(existing_instance, attr.key):
-                        setattr(existing_instance, attr.key, value)
-
-            data = existing_instance
+            if id_attribute is None and self.repository.has_composite_pk:
+                pk_tuple = validate_composite_pk_value(
+                    item_id,
+                    self.repository.pk_attr_names,
+                    self.model_type.__name__,
+                )
+                for attr_name, value in zip(self.repository.pk_attr_names, pk_tuple):
+                    setattr(data, attr_name, value)
+            else:
+                data = self.repository.set_id_attribute_value(
+                    item_id=item_id,
+                    item=data,
+                    id_attribute=id_attribute,
+                )
         elif id_attribute is None and self.repository.has_composite_pk:
-            # For composite PKs, check if all PK values are present
             if not self.repository.has_primary_key_values(data):
                 pk_names = ", ".join(self.repository.pk_attr_names)
                 msg = f"Could not identify composite PK values. Required attributes: {pk_names}"
@@ -932,7 +904,6 @@ class SQLAlchemyAsyncRepositoryService(
             )
             is None
         ):
-            # No item_id provided and no ID on model - error
             msg = (
                 "Could not identify ID attribute value.  One of the following is required: "
                 f"``item_id`` or ``data.{id_attribute or self.repository.id_attribute}``"

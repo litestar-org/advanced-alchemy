@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import datetime
 import decimal
 from collections.abc import AsyncGenerator, Collection, Generator
@@ -35,16 +36,20 @@ from advanced_alchemy.filters import (
 )
 from advanced_alchemy.operations import UpsertStrategy
 from advanced_alchemy.repository import (
+    SQLAlchemyAsyncQueryRepository,
     SQLAlchemyAsyncRepository,
+    SQLAlchemySyncQueryRepository,
     SQLAlchemySyncRepository,
 )
 from advanced_alchemy.repository._util import (
+    DEFAULT_ERROR_MESSAGE_TEMPLATES,
     _build_cache_key,
     _normalize_cache_key_value,
     column_has_defaults,
     model_from_dict,
 )
 from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
+from advanced_alchemy.utils.dataclass import Empty
 from advanced_alchemy.utils.serialization import (
     is_msgspec_struct,
     is_pydantic_model,
@@ -2789,3 +2794,136 @@ def test_mock_repository_search_honors_escape_wildcards(filter_type: type[Search
     expected_literal = [1] if filter_type is SearchFilter else [2]
     assert [item.id for item in literal] == expected_literal
     assert sorted(item.id for item in pattern) == ([1, 2] if filter_type is SearchFilter else [])
+
+
+def test_build_cache_key_with_bind_group() -> None:
+    """Verify _build_cache_key includes bind_group to isolate routed sessions."""
+    key_primary = _build_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="get_many",
+        filters=[],
+        kwargs={},
+        order_by=None,
+        execution_options={},
+        uniquify=False,
+        bind_group="default",
+    )
+    key_replica = _build_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="get_many",
+        filters=[],
+        kwargs={},
+        order_by=None,
+        execution_options={},
+        uniquify=False,
+        bind_group="read",
+    )
+    key_none = _build_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="get_many",
+        filters=[],
+        kwargs={},
+        order_by=None,
+        execution_options={},
+        uniquify=False,
+        bind_group=None,
+    )
+
+    assert key_primary is not None
+    assert key_replica is not None
+    assert key_none is not None
+    assert key_primary != key_replica
+    assert key_primary != key_none
+
+
+def test_normalize_cache_key_value_dataclass_no_deepcopy(monkeypatch: MonkeyPatch) -> None:
+    """Verify _normalize_cache_key_value normalizes dataclasses without copy.deepcopy."""
+
+    def fail_deepcopy(*args: Any, **kwargs: Any) -> Any:
+        msg = "deepcopy should not be called"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(copy, "deepcopy", fail_deepcopy)
+    filter_obj = CollectionFilter(field_name="id", values={3, 1, 2})
+    normalized = _normalize_cache_key_value(filter_obj)
+    assert normalized == {"field_name": "id", "values": [1, 2, 3]}
+
+
+def test_get_error_messages_default_fast_path() -> None:
+    """Verify _get_error_messages returns default_messages directly when no overrides are given."""
+    result_empty = SQLAlchemySyncRepository._get_error_messages(Empty, DEFAULT_ERROR_MESSAGE_TEMPLATES)
+    result_none = SQLAlchemySyncRepository._get_error_messages(None, DEFAULT_ERROR_MESSAGE_TEMPLATES)
+    assert result_empty is DEFAULT_ERROR_MESSAGE_TEMPLATES
+    assert result_none is DEFAULT_ERROR_MESSAGE_TEMPLATES
+
+    overridden = SQLAlchemySyncRepository._get_error_messages({"not_found": "custom"}, DEFAULT_ERROR_MESSAGE_TEMPLATES)
+    assert overridden is not None
+    assert overridden is not DEFAULT_ERROR_MESSAGE_TEMPLATES
+    assert overridden["not_found"] == "custom"
+
+
+async def test_repository_uniquify_argument_does_not_mutate_instance_flag(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    mock_repo_execute: AnyMock,
+) -> None:
+    """Verify passing uniquify=True on a single call does not mutate self._uniquify."""
+    mock_repo_execute.return_value = MagicMock(scalars=MagicMock(return_value=[]))
+    assert mock_repo._uniquify is False
+
+    await maybe_async(mock_repo.get_many(uniquify=True))
+    assert mock_repo._uniquify is False
+    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=True)
+
+    await maybe_async(mock_repo.get_many())
+    assert mock_repo._uniquify is False
+    mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)
+
+
+def test_repository_apply_filters_passes_prefer_any(mocker: MockerFixture) -> None:
+    """Verify _apply_filters forwards prefer_any=self._prefer_any to CollectionFilter."""
+
+    class PreferAnyRepo(SQLAlchemySyncRepository[UUIDModel]):
+        model_type = UUIDModel
+
+    mock_bind = MagicMock()
+    mock_bind.dialect.name = "postgresql"
+    repo = PreferAnyRepo(session=MagicMock(spec=Session, bind=mock_bind))
+    assert repo._prefer_any is True
+    in_filter = CollectionFilter(field_name="id", values=[uuid4()])
+    not_in_filter = NotInCollectionFilter(field_name="id", values=[uuid4()])
+    spy_in = mocker.spy(in_filter, "append_to_statement")
+    spy_not_in = mocker.spy(not_in_filter, "append_to_statement")
+
+    repo._apply_filters(in_filter, not_in_filter, statement=repo.statement)
+
+    spy_in.assert_called_once_with(repo.statement, UUIDModel, prefer_any=True)
+    spy_not_in.assert_called_once_with(spy_in.spy_return, UUIDModel, prefer_any=True)
+
+
+async def test_query_repository_get_many_and_count_respects_window_function_flag(mocker: MockerFixture) -> None:
+    """Verify SQLAlchemyAsyncQueryRepository and SQLAlchemySyncQueryRepository honor count_with_window_function."""
+    sync_repo = SQLAlchemySyncQueryRepository(session=MagicMock(spec=Session, bind=MagicMock()))
+    sync_window = mocker.patch.object(sync_repo, "_get_many_and_count_window", return_value=([], 0))
+    sync_basic = mocker.patch.object(sync_repo, "_get_many_and_count_basic", return_value=([], 0))
+
+    statement = MagicMock()
+    sync_repo.get_many_and_count(statement)
+    sync_window.assert_called_once_with(statement=statement, bind_group=None)
+    sync_basic.assert_not_called()
+
+    sync_repo.get_many_and_count(statement, count_with_window_function=False)
+    sync_basic.assert_called_once_with(statement=statement, bind_group=None)
+
+    async_repo = SQLAlchemyAsyncQueryRepository(session=AsyncMock(spec=AsyncSession, bind=MagicMock()))
+    async_window = mocker.patch.object(async_repo, "_get_many_and_count_window", return_value=([], 0))
+    async_basic = mocker.patch.object(async_repo, "_get_many_and_count_basic", return_value=([], 0))
+
+    await async_repo.get_many_and_count(statement)
+    async_window.assert_called_once_with(statement=statement, bind_group=None)
+    async_basic.assert_not_called()
+
+    await async_repo.get_many_and_count(statement, count_with_window_function=False)
+    async_basic.assert_called_once_with(statement=statement, bind_group=None)

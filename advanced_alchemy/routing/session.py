@@ -226,9 +226,10 @@ class RoutingAsyncSession(AsyncSession):
 
         sync_selectors = {name: _SyncEngineSelectorWrapper(selector) for name, selector in selectors.items()}
         self.bind: Optional[Union[AsyncEngine, AsyncConnection]] = None  # type: ignore[assignment]
+        sync_session_class = kwargs.pop("sync_session_class", RoutingSyncSession)
 
         super().__init__(
-            sync_session_class=RoutingSyncSession,
+            sync_session_class=sync_session_class,
             routing_config=routing_config,
             selectors=sync_selectors,
             default_engine=default_engine.sync_engine,

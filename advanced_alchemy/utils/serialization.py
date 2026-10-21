@@ -214,6 +214,7 @@ class SchemaDumpConfig:
 
 
 DEFAULT_SCHEMA_DUMP_CONFIG: Final = SchemaDumpConfig()
+_INCLUSIVE_SCHEMA_DUMP_CONFIG: Final = SchemaDumpConfig(exclude_unset=False, exclude_sentinels=False)
 
 
 def _get_schema_dump_config(exclude_unset: bool, config: "Optional[SchemaDumpConfig]") -> SchemaDumpConfig:
@@ -222,11 +223,11 @@ def _get_schema_dump_config(exclude_unset: bool, config: "Optional[SchemaDumpCon
         return config
     if exclude_unset:
         return DEFAULT_SCHEMA_DUMP_CONFIG
-    return SchemaDumpConfig(exclude_unset=False, exclude_sentinels=False)
+    return _INCLUSIVE_SCHEMA_DUMP_CONFIG
 
 
-def _get_pydantic_missing_sentinel() -> Any:
-    """Return Pydantic's experimental MISSING sentinel when available."""
+def _resolve_pydantic_missing_sentinel() -> Any:
+    """Resolve Pydantic's experimental MISSING sentinel once at import time."""
     if not PYDANTIC_INSTALLED:
         return None
     try:
@@ -234,6 +235,14 @@ def _get_pydantic_missing_sentinel() -> Any:
     except ImportError:  # pragma: no cover - depends on installed Pydantic version
         return None
     return MISSING
+
+
+_PYDANTIC_MISSING_SENTINEL: Final[Any] = _resolve_pydantic_missing_sentinel()
+
+
+def _get_pydantic_missing_sentinel() -> Any:
+    """Return Pydantic's experimental MISSING sentinel when available."""
+    return _PYDANTIC_MISSING_SENTINEL if PYDANTIC_INSTALLED else None
 
 
 # ============================================================================
@@ -470,9 +479,11 @@ def _dump_pydantic_model(data: BaseModelLike, dump_config: SchemaDumpConfig) -> 
 def _dump_msgspec_struct(data: StructLike, dump_config: SchemaDumpConfig) -> "dict[str, Any]":
     """Dump a msgspec struct according to the schema dump config."""
     fields = data.__struct_fields__
-    defaults = getattr(data, "__struct_defaults__", ())
-    default_fields = fields[-len(defaults) :] if defaults else ()
-    default_values = dict(zip(default_fields, defaults))
+    default_values: Optional[dict[str, Any]] = None
+    if dump_config.exclude_defaults:
+        defaults = getattr(data, "__struct_defaults__", ())
+        if defaults:
+            default_values = dict(zip(fields[-len(defaults) :], defaults))
     dumped: dict[str, Any] = {}
     for field_name in fields:
         if not hasattr(data, field_name):
@@ -482,7 +493,7 @@ def _dump_msgspec_struct(data: StructLike, dump_config: SchemaDumpConfig) -> "di
             continue
         if dump_config.exclude_none and value is None:
             continue
-        if dump_config.exclude_defaults and field_name in default_values and value == default_values[field_name]:
+        if default_values is not None and field_name in default_values and value == default_values[field_name]:
             continue
         dumped[field_name] = value
     return dumped

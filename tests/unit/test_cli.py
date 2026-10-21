@@ -64,6 +64,36 @@ def test_show_current_revision(cli_runner: CliRunner, database_cli: Group, mock_
         mock_alembic.return_value.current.assert_called_once_with(verbose=False)
 
 
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["show-current-revision", "--config", "tests.unit.fixtures.configs"],
+        ["show-current-revision", "-c", "tests.unit.fixtures.configs"],
+        ["-c", "tests.unit.fixtures.configs", "show-current-revision"],
+        ["upgrade", "--config", "tests.unit.fixtures.configs", "--no-prompt", "head"],
+        ["downgrade", "-c", "tests.unit.fixtures.configs", "--no-prompt"],
+    ],
+)
+def test_config_option_before_and_after_subcommand(
+    cli_runner: CliRunner,
+    database_cli: Group,
+    args: list[str],
+) -> None:
+    """Test that --config / -c works both before and after the subcommand name."""
+    with patch("advanced_alchemy.alembic.commands.AlembicCommands") as mock_alembic:
+        result = cli_runner.invoke(database_cli, args)
+        assert result.exit_code == 0, result.output
+        mock_alembic.assert_called_once()
+
+
+def test_missing_config_option_fails(cli_runner: CliRunner) -> None:
+    """Test that invoking a subcommand without --config fails with a usage error."""
+    cli_group = add_migration_commands()
+    result = cli_runner.invoke(cli_group, ["show-current-revision"])
+    assert result.exit_code != 0
+    assert "--config" in result.output
+
+
 @pytest.mark.parametrize("no_prompt", [True, False])
 def test_downgrade_database(
     cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock, no_prompt: bool
@@ -81,9 +111,7 @@ def test_downgrade_database(
             mock_alembic.assert_called_once()
             mock_alembic.return_value.downgrade.assert_called_once_with(revision="-1", sql=False, tag=None)
         else:
-            # it's going to be -1 because we abort the task since we don't fill in the prompt
             assert result.exit_code == 1
-            # When prompting is enabled, we need to check if the confirmation was shown
             assert "Are you sure you want to downgrade" in result.output
 
 
@@ -102,7 +130,6 @@ def test_upgrade_database(cli_runner: CliRunner, database_cli: Group, mock_conte
             mock_alembic.assert_called_once()
             mock_alembic.return_value.upgrade.assert_called_once_with(revision="head", sql=False, tag=None)
         else:
-            # it's going to be -1 because we abort the task since we don't fill in the prompt
             assert result.exit_code == 1
             assert "Are you sure you want migrate the database" in result.output
 
@@ -313,7 +340,6 @@ def test_cli_group_creation() -> None:
     """Test that the CLI group is created correctly."""
     cli_group = add_migration_commands()
     assert cli_group.name == "alchemy"
-    # Original commands
     assert "show-current-revision" in cli_group.commands
     assert "upgrade" in cli_group.commands
     assert "downgrade" in cli_group.commands
@@ -322,7 +348,6 @@ def test_cli_group_creation() -> None:
     assert "drop-all" in cli_group.commands
     assert "dump-data" in cli_group.commands
     assert "stamp" in cli_group.commands
-    # New commands added for Alembic CLI alignment
     assert "check" in cli_group.commands
     assert "edit" in cli_group.commands
     assert "ensure-version" in cli_group.commands
@@ -339,7 +364,6 @@ def test_external_config_loading(cli_runner: CliRunner) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Create an external config file in the temp directory
         config_file = temp_path / "external_config.py"
         config_file.write_text("""
 from advanced_alchemy.config import SQLAlchemyAsyncConfig
@@ -350,19 +374,14 @@ config = SQLAlchemyAsyncConfig(
 )
 """)
 
-        # Change to the temp directory
         original_cwd = os.getcwd()
         try:
             os.chdir(temp_dir)
 
-            # Test that the external config can be loaded
             cli_group = add_migration_commands()
 
-            # Use a minimal command that doesn't require database setup
-            # but still needs the config to be loaded successfully
             result = cli_runner.invoke(cli_group, ["--config", "external_config.config", "--help"])
 
-            # Should succeed without import errors
             assert result.exit_code == 0
             assert "Error loading config" not in result.output
             assert "No module named" not in result.output
@@ -376,7 +395,6 @@ def test_external_config_loading_multiple_configs(cli_runner: CliRunner) -> None
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Create an external config file with multiple configs
         config_file = temp_path / "multi_config.py"
         config_file.write_text("""
 from advanced_alchemy.config import SQLAlchemyAsyncConfig
@@ -393,7 +411,6 @@ configs = [
 ]
 """)
 
-        # Change to the temp directory
         original_cwd = os.getcwd()
         try:
             os.chdir(temp_dir)
@@ -401,7 +418,6 @@ configs = [
             cli_group = add_migration_commands()
             result = cli_runner.invoke(cli_group, ["--config", "multi_config.configs", "--help"])
 
-            # Should succeed without import errors
             assert result.exit_code == 0
             assert "Error loading config" not in result.output
             assert "No module named" not in result.output
@@ -413,16 +429,13 @@ configs = [
 def test_external_config_loading_nonexistent_module(cli_runner: CliRunner) -> None:
     """Test appropriate error when external module doesn't exist."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Change to empty temp directory
         original_cwd = os.getcwd()
         try:
             os.chdir(temp_dir)
 
             cli_group = add_migration_commands()
-            # Use actual command to trigger config loading, not --help
             result = cli_runner.invoke(cli_group, ["--config", "nonexistent_module.config", "show-current-revision"])
 
-            # Should fail with appropriate error
             assert result.exit_code == 1
             assert "Error loading config" in result.output
             assert "No module named 'nonexistent_module'" in result.output
@@ -436,28 +449,22 @@ def test_external_config_loading_nonexistent_attribute(cli_runner: CliRunner) ->
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Create an external config file without the expected attribute
         config_file = temp_path / "bad_config.py"
         config_file.write_text("""
-# This module exists but doesn't have a 'missing_attr' attribute
 from advanced_alchemy.config import SQLAlchemyAsyncConfig
 
 some_other_var = "not a config"
 """)
 
-        # Change to the temp directory
         original_cwd = os.getcwd()
         try:
             os.chdir(temp_dir)
 
             cli_group = add_migration_commands()
-            # Use actual command to trigger config loading, not --help
             result = cli_runner.invoke(cli_group, ["--config", "bad_config.missing_attr", "show-current-revision"])
 
-            # Should fail with appropriate error
             assert result.exit_code == 1
             assert "Error loading config" in result.output
-            # The actual error message may vary, but it should indicate the attribute issue
 
         finally:
             os.chdir(original_cwd)

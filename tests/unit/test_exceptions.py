@@ -272,8 +272,16 @@ def test_wrap_sqlalchemy_exception_integrity_error_by_native_code(
         ("oracle", "ORA-02291: integrity constraint (APP.FK_CHILD) violated - parent key not found", ForeignKeyError),
         ("oracle", "ORA-02292: integrity constraint (APP.FK_CHILD) violated - child record found", ForeignKeyError),
         ("oracle", "ORA-02290: check constraint (APP.CK_AGE) violated", IntegrityError),
-        ("mssql", "Cannot insert duplicate key row in object 'dbo.users' with unique index 'UQ_email'.", DuplicateKeyError),
-        ("mssql", "The INSERT statement conflicted with the FOREIGN KEY constraint 'FK_orders_users'.", ForeignKeyError),
+        (
+            "mssql",
+            "Cannot insert duplicate key row in object 'dbo.users' with unique index 'UQ_email'.",
+            DuplicateKeyError,
+        ),
+        (
+            "mssql",
+            "The INSERT statement conflicted with the FOREIGN KEY constraint 'FK_orders_users'.",
+            ForeignKeyError,
+        ),
         ("mssql", "The INSERT statement conflicted with the CHECK constraint 'CK_positive'.", IntegrityError),
         ("duckdb", "Constraint Error: Duplicate key 'id: 1' violates primary key constraint", DuplicateKeyError),
         ("duckdb", "Constraint Error: Foreign Key Constraint Violation", ForeignKeyError),
