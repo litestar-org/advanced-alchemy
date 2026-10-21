@@ -430,6 +430,7 @@ def _create_statement_filters(  # noqa: C901, PLR0915
         )
 
     if search_fields := config.get("search"):
+        parsed_field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else set(search_fields)
 
         def provide_search_filter(
             search_string: Annotated[
@@ -447,11 +448,8 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                 ),
             ] = config.get("search_ignore_case", False),
         ) -> SearchFilter:
-            # Handle both string and set input types for search fields
-            field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else set(search_fields)
-
             return SearchFilter(
-                field_name=field_names,
+                field_name=parsed_field_names,
                 value=search_string,  # type: ignore[arg-type]
                 ignore_case=ignore_case or False,
                 escape_wildcards=config.get("search_escape_wildcards", False),

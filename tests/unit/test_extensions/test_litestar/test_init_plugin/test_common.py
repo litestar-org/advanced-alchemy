@@ -6,12 +6,16 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
+from litestar import Litestar, MediaType, Request, Response, get
 from litestar.datastructures import State
 from litestar.params import FromQuery
+from litestar.status_codes import HTTP_500_INTERNAL_SERVER_ERROR
 from sqlalchemy import create_engine
 
-from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.exceptions import ImproperConfigurationError, NotFoundError, RepositoryError
+from advanced_alchemy.extensions.litestar import SQLAlchemyInitPlugin
 from advanced_alchemy.extensions.litestar._utils import _SCOPE_NAMESPACE  # pyright: ignore[reportPrivateUsage]
+from advanced_alchemy.extensions.litestar.exception_handler import exception_to_http_response
 from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.common import SESSION_SCOPE_KEY
 
@@ -150,12 +154,43 @@ def test_app_state(config_cls: type[SQLAlchemySyncConfig], monkeypatch: MonkeyPa
 
 
 def test_namespace_resolution() -> None:
-    # https://github.com/litestar-org/advanced-alchemy/issues/256
-
-    from litestar import Litestar, get
-
     @get("/")
     async def handler(param: FromQuery[datetime.datetime], other_param: FromQuery[uuid.UUID]) -> None:
         return None
 
     Litestar([handler])
+
+
+def test_init_plugin_registers_repository_error_handler_with_int_status_handler() -> None:
+    """Verify integer status code handlers do not disable the default RepositoryError handler."""
+
+    def custom_500_handler(_: Request[Any, Any, Any], __: Exception) -> Response[Any]:
+        return Response(
+            content={"detail": "custom 500"},
+            media_type=MediaType.JSON,
+            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    config = SQLAlchemySyncConfig(connection_string="sqlite://")
+    app = Litestar(
+        route_handlers=[],
+        exception_handlers={HTTP_500_INTERNAL_SERVER_ERROR: custom_500_handler},
+        plugins=[SQLAlchemyInitPlugin(config=config)],
+    )
+    assert app.exception_handlers[HTTP_500_INTERNAL_SERVER_ERROR] is custom_500_handler
+    assert app.exception_handlers[RepositoryError] is exception_to_http_response
+
+    def custom_not_found_handler(_: Request[Any, Any, Any], __: NotFoundError) -> Response[Any]:
+        return Response(content={"detail": "custom not found"}, media_type=MediaType.JSON, status_code=404)
+
+    app_with_custom_repo_exc = Litestar(
+        route_handlers=[],
+        exception_handlers={
+            HTTP_500_INTERNAL_SERVER_ERROR: custom_500_handler,
+            NotFoundError: custom_not_found_handler,
+        },
+        plugins=[SQLAlchemyInitPlugin(config=config)],
+    )
+    assert RepositoryError not in app_with_custom_repo_exc.exception_handlers
+    assert app_with_custom_repo_exc.exception_handlers[NotFoundError] is custom_not_found_handler
+
