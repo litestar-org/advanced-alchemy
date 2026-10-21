@@ -170,9 +170,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
 
             user_id: Mapped[int] = mapped_column(primary_key=True)
             role_id: Mapped[int] = mapped_column(primary_key=True)
-            assigned_at: Mapped[datetime.datetime] = mapped_column(
-                default=lambda: datetime.datetime.now(datetime.timezone.utc)
-            )
+            assigned_at: Mapped[datetime.datetime] = mapped_column(default=lambda: datetime.datetime.now(datetime.UTC))
             is_active: Mapped[bool] = mapped_column(default=True)
 
     else:  # bigint
@@ -298,9 +296,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
 
             user_id: Mapped[int] = mapped_column(primary_key=True)
             role_id: Mapped[int] = mapped_column(primary_key=True)
-            assigned_at: Mapped[datetime.datetime] = mapped_column(
-                default=lambda: datetime.datetime.now(datetime.timezone.utc)
-            )
+            assigned_at: Mapped[datetime.datetime] = mapped_column(default=lambda: datetime.datetime.now(datetime.UTC))
             is_active: Mapped[bool] = mapped_column(default=True)
 
     # Return all models
@@ -347,15 +343,15 @@ class TestDataManager:
                         "id": UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
                         "name": "Agatha Christie",
                         "dob": datetime.date(1890, 9, 15),
-                        "created_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
-                        "updated_at": datetime.datetime(2023, 5, 11, tzinfo=datetime.timezone.utc),
+                        "created_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.UTC),
+                        "updated_at": datetime.datetime(2023, 5, 11, tzinfo=datetime.UTC),
                     },
                     {
                         "id": UUID("5ef29f3c-3560-4d15-ba6b-a2e5c721e4d2"),
                         "name": "Leo Tolstoy",
                         "dob": datetime.date(1828, 9, 9),
-                        "created_at": datetime.datetime(2023, 5, 2, tzinfo=datetime.timezone.utc),
-                        "updated_at": datetime.datetime(2023, 5, 15, tzinfo=datetime.timezone.utc),
+                        "created_at": datetime.datetime(2023, 5, 2, tzinfo=datetime.UTC),
+                        "updated_at": datetime.datetime(2023, 5, 15, tzinfo=datetime.UTC),
                     },
                 ],
                 "rules": [
@@ -363,15 +359,15 @@ class TestDataManager:
                         "id": UUID("f34545b9-663c-4fce-915d-dd1ae9cea42a"),
                         "name": "Initial loading rule.",
                         "config": {"url": "https://example.org", "setting_123": 1},
-                        "created_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
-                        "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                        "created_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.UTC),
+                        "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.UTC),
                     },
                     {
                         "id": UUID("f34545b9-663c-4fce-915d-dd1ae9cea34b"),
                         "name": "Secondary loading rule.",
                         "config": {"url": "https://example.org", "bar": "foo", "setting_123": 4},
-                        "created_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
-                        "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                        "created_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.UTC),
+                        "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.UTC),
                     },
                 ],
                 "secrets": [
@@ -385,19 +381,19 @@ class TestDataManager:
                     {
                         "user_id": 1,
                         "role_id": 10,
-                        "assigned_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
+                        "assigned_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.UTC),
                         "is_active": True,
                     },
                     {
                         "user_id": 1,
                         "role_id": 20,
-                        "assigned_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                        "assigned_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.UTC),
                         "is_active": True,
                     },
                     {
                         "user_id": 2,
                         "role_id": 10,
-                        "assigned_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
+                        "assigned_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.UTC),
                         "is_active": False,
                     },
                 ],
@@ -409,15 +405,15 @@ class TestDataManager:
                     "id": 2023,
                     "name": "Agatha Christie",
                     "dob": datetime.date(1890, 9, 15),
-                    "created_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
-                    "updated_at": datetime.datetime(2023, 5, 11, tzinfo=datetime.timezone.utc),
+                    "created_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.UTC),
+                    "updated_at": datetime.datetime(2023, 5, 11, tzinfo=datetime.UTC),
                 },
                 {
                     "id": 2024,
                     "name": "Leo Tolstoy",
                     "dob": datetime.date(1828, 9, 9),
-                    "created_at": datetime.datetime(2023, 5, 2, tzinfo=datetime.timezone.utc),
-                    "updated_at": datetime.datetime(2023, 5, 15, tzinfo=datetime.timezone.utc),
+                    "created_at": datetime.datetime(2023, 5, 2, tzinfo=datetime.UTC),
+                    "updated_at": datetime.datetime(2023, 5, 15, tzinfo=datetime.UTC),
                 },
             ],
             "rules": [
@@ -425,15 +421,15 @@ class TestDataManager:
                     "id": 2025,
                     "name": "Initial loading rule.",
                     "config": {"url": "https://example.org", "setting_123": 1},
-                    "created_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
-                    "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                    "created_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.UTC),
+                    "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.UTC),
                 },
                 {
                     "id": 2026,
                     "name": "Secondary loading rule.",
                     "config": {"url": "https://example.org", "bar": "foo", "setting_123": 4},
-                    "created_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
-                    "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                    "created_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.UTC),
+                    "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.UTC),
                 },
             ],
             "secrets": [
@@ -447,19 +443,19 @@ class TestDataManager:
                 {
                     "user_id": 1,
                     "role_id": 10,
-                    "assigned_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
+                    "assigned_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.UTC),
                     "is_active": True,
                 },
                 {
                     "user_id": 1,
                     "role_id": 20,
-                    "assigned_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                    "assigned_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.UTC),
                     "is_active": True,
                 },
                 {
                     "user_id": 2,
                     "role_id": 10,
-                    "assigned_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
+                    "assigned_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.UTC),
                     "is_active": False,
                 },
             ],

@@ -13,9 +13,18 @@ optional-dependency placeholder types.  Public re-exports live in
 import enum
 from dataclasses import dataclass
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any, ClassVar, Final, Optional, Protocol, Union, cast, runtime_checkable
-
-from typing_extensions import Literal, TypeVar, dataclass_transform
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Final,
+    Literal,
+    Protocol,
+    TypeVar,
+    cast,
+    dataclass_transform,
+    runtime_checkable,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Mapper
@@ -53,13 +62,6 @@ class DataclassProtocol(Protocol):
     """Protocol for instance checking dataclasses."""
 
     __dataclass_fields__: "ClassVar[dict[str, Any]]"
-
-
-@runtime_checkable
-class DictProtocol(Protocol):
-    """Protocol for objects with a __dict__ attribute."""
-
-    __dict__: dict[str, Any]
 
 
 # ---------------------------------------------------------------------------
@@ -103,15 +105,15 @@ class BaseModelLike:
         self,
         /,
         *,
-        include: "Optional[Any]" = None,  # noqa: ARG002
-        exclude: "Optional[Any]" = None,  # noqa: ARG002
-        context: "Optional[Any]" = None,  # noqa: ARG002
+        include: "Any | None" = None,  # noqa: ARG002
+        exclude: "Any | None" = None,  # noqa: ARG002
+        context: "Any | None" = None,  # noqa: ARG002
         by_alias: bool = False,  # noqa: ARG002
         exclude_unset: bool = False,  # noqa: ARG002
         exclude_defaults: bool = False,  # noqa: ARG002
         exclude_none: bool = False,  # noqa: ARG002
         round_trip: bool = False,  # noqa: ARG002
-        warnings: "Union[bool, Literal['none', 'warn', 'error']]" = True,  # noqa: ARG002
+        warnings: "bool | Literal['none', 'warn', 'error']" = True,  # noqa: ARG002
         serialize_as_any: bool = False,  # noqa: ARG002
     ) -> "dict[str, Any]":
         """Placeholder implementation."""
@@ -121,15 +123,15 @@ class BaseModelLike:
         self,
         /,
         *,
-        include: "Optional[Any]" = None,  # noqa: ARG002
-        exclude: "Optional[Any]" = None,  # noqa: ARG002
-        context: "Optional[Any]" = None,  # noqa: ARG002
+        include: "Any | None" = None,  # noqa: ARG002
+        exclude: "Any | None" = None,  # noqa: ARG002
+        context: "Any | None" = None,  # noqa: ARG002
         by_alias: bool = False,  # noqa: ARG002
         exclude_unset: bool = False,  # noqa: ARG002
         exclude_defaults: bool = False,  # noqa: ARG002
         exclude_none: bool = False,  # noqa: ARG002
         round_trip: bool = False,  # noqa: ARG002
-        warnings: "Union[bool, Literal['none', 'warn', 'error']]" = True,  # noqa: ARG002
+        warnings: "bool | Literal['none', 'warn', 'error']" = True,  # noqa: ARG002
         serialize_as_any: bool = False,  # noqa: ARG002
     ) -> str:
         """Placeholder implementation."""
@@ -143,9 +145,9 @@ class TypeAdapterStub:
         self,
         type: Any,  # noqa: A002
         *,
-        config: "Optional[Any]" = None,  # noqa: ARG002
+        config: "Any | None" = None,  # noqa: ARG002
         _parent_depth: int = 2,  # noqa: ARG002
-        module: "Optional[str]" = None,  # noqa: ARG002
+        module: "str | None" = None,  # noqa: ARG002
     ) -> None:
         """Initialize."""
         self._type = type
@@ -155,10 +157,10 @@ class TypeAdapterStub:
         object: Any,
         /,
         *,
-        strict: "Optional[bool]" = None,  # noqa: ARG002
-        from_attributes: "Optional[bool]" = None,  # noqa: ARG002
-        context: "Optional[dict[str, Any]]" = None,  # noqa: ARG002
-        experimental_allow_partial: "Union[bool, Literal['off', 'on', 'trailing-strings']]" = False,  # noqa: ARG002
+        strict: "bool | None" = None,  # noqa: ARG002
+        from_attributes: "bool | None" = None,  # noqa: ARG002
+        context: "dict[str, Any] | None" = None,  # noqa: ARG002
+        experimental_allow_partial: "bool | Literal['off', 'on', 'trailing-strings']" = False,  # noqa: ARG002
     ) -> Any:
         """Validate Python object."""
         return object
@@ -206,8 +208,8 @@ def convert_stub(  # noqa: PLR0913
     *,
     strict: bool = True,  # noqa: ARG001
     from_attributes: bool = False,  # noqa: ARG001
-    dec_hook: "Optional[Any]" = None,  # noqa: ARG001
-    builtin_types: "Optional[Any]" = None,  # noqa: ARG001
+    dec_hook: "Any | None" = None,  # noqa: ARG001
+    builtin_types: "Any | None" = None,  # noqa: ARG001
     str_keys: bool = False,  # noqa: ARG001
 ) -> Any:
     """Placeholder implementation."""
@@ -375,7 +377,7 @@ class EmptyEnum(enum.Enum):
     EMPTY = 0
 
 
-EmptyType = Union[Literal[EmptyEnum.EMPTY], UnsetType]
+EmptyType = Literal[EmptyEnum.EMPTY] | UnsetType
 Empty: Final = EmptyEnum.EMPTY
 
 
@@ -405,7 +407,6 @@ __all__ = (
     "DTOData",
     "DTODataLike",
     "DataclassProtocol",
-    "DictProtocol",
     "Empty",
     "EmptyEnum",
     "EmptyType",

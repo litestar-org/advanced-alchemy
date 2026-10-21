@@ -1,7 +1,7 @@
 """Null cache region implementation for when dogpile.cache is not installed."""
 
-from collections.abc import Awaitable
-from typing import Any, Callable, Optional, Protocol, TypeVar
+from collections.abc import Awaitable, Callable
+from typing import Any, Protocol, TypeVar
 
 __all__ = (
     "NO_VALUE",
@@ -19,13 +19,13 @@ class SyncCacheRegionProtocol(Protocol):
     This protocol is compatible with both dogpile.cache.CacheRegion and NullRegion.
     """
 
-    def get(self, key: str, expiration_time: Optional[int] = None) -> Any: ...
+    def get(self, key: str, expiration_time: int | None = None) -> Any: ...
 
     def get_or_create(
         self,
         key: str,
         creator: Callable[[], T],
-        expiration_time: Optional[int] = None,
+        expiration_time: int | None = None,
     ) -> T: ...
 
     def set(self, key: str, value: Any) -> None: ...
@@ -37,8 +37,8 @@ class SyncCacheRegionProtocol(Protocol):
     def configure(
         self,
         backend: str,
-        expiration_time: Optional[int] = None,
-        arguments: Optional[dict[str, Any]] = None,
+        expiration_time: int | None = None,
+        arguments: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> "SyncCacheRegionProtocol": ...
 
@@ -50,13 +50,13 @@ class AsyncCacheRegionProtocol(Protocol):
     suitable for use with native async cache backends.
     """
 
-    async def get(self, key: str, expiration_time: Optional[int] = None) -> Any: ...
+    async def get(self, key: str, expiration_time: int | None = None) -> Any: ...
 
     async def get_or_create(
         self,
         key: str,
         creator: Callable[[], Awaitable[T]],
-        expiration_time: Optional[int] = None,
+        expiration_time: int | None = None,
     ) -> T: ...
 
     async def set(self, key: str, value: Any) -> None: ...
@@ -68,8 +68,8 @@ class AsyncCacheRegionProtocol(Protocol):
     async def configure(
         self,
         backend: str,
-        expiration_time: Optional[int] = None,
-        arguments: Optional[dict[str, Any]] = None,
+        expiration_time: int | None = None,
+        arguments: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> "AsyncCacheRegionProtocol": ...
 
@@ -102,7 +102,7 @@ class NullRegion:
 
     __slots__ = ()
 
-    def get(self, key: str, expiration_time: Optional[int] = None) -> Any:
+    def get(self, key: str, expiration_time: int | None = None) -> Any:
         """Get a value from the cache (always returns NO_VALUE).
 
         Args:
@@ -118,7 +118,7 @@ class NullRegion:
         self,
         key: str,
         creator: Callable[[], T],
-        expiration_time: Optional[int] = None,
+        expiration_time: int | None = None,
     ) -> T:
         """Get or create a value (always calls the creator).
 
@@ -153,8 +153,8 @@ class NullRegion:
     def configure(
         self,
         backend: str,
-        expiration_time: Optional[int] = None,
-        arguments: Optional[dict[str, Any]] = None,
+        expiration_time: int | None = None,
+        arguments: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> "NullRegion":
         """Configure the region (no-op, returns self).

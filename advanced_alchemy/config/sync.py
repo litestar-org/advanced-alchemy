@@ -1,8 +1,9 @@
 """Sync SQLAlchemy configuration module."""
 
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import Connection, Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -11,8 +12,7 @@ from advanced_alchemy.config.common import GenericAlembicConfig, GenericSessionC
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
-    from typing import Callable
+    from collections.abc import Callable, Generator
 
     from advanced_alchemy.config.routing import RoutingConfig
 
@@ -74,7 +74,7 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
 
     The configuration options are documented in the Alembic documentation.
     """
-    routing_config: "Optional[RoutingConfig]" = None
+    routing_config: "RoutingConfig | None" = None
     """Optional read/write routing configuration.
 
     When provided, enables automatic routing of read operations to replicas
@@ -84,17 +84,23 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
         When using ``routing_config``, do not set ``connection_string``.
         The primary connection is specified in the routing config.
     """
+    encryption_key: "str | bytes | Callable[[], str | bytes] | None" = None
+    """Optional default encryption key registered for :class:`~advanced_alchemy.types.EncryptedString`,
+    :class:`~advanced_alchemy.types.EncryptedText`, and :class:`~advanced_alchemy.types.TOTPSecret` columns
+    that omit an explicit ``key`` argument.
+    """
 
     def __post_init__(self) -> None:
-        # Validate routing config vs connection_string
+        if self.encryption_key is not None:
+            from advanced_alchemy.types.encrypted_string import set_default_encryption_key
+
+            set_default_encryption_key(self.encryption_key)
         if self.routing_config is not None and self.connection_string is not None:
             msg = "Provide either 'connection_string' or 'routing_config', not both"
             raise ImproperConfigurationError(msg)
-        # If routing_config is set, use its primary as the connection_string for compatibility
         if self.routing_config is not None:
             self.connection_string = self.routing_config.primary_connection_string
             if self.connection_string is None:
-                # Try to get from default group engines
                 configs = self.routing_config.get_engine_configs(self.routing_config.default_group)
                 if configs:
                     self.connection_string = configs[0].connection_string
@@ -138,7 +144,7 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
         else:
             self.session_maker = super().create_session_maker()
 
-        event_target: Optional[sessionmaker[Any]] = None
+        event_target: sessionmaker[Any] | None = None
         if isinstance(self.session_maker, sessionmaker):
             event_target = cast(
                 "sessionmaker[Session]",

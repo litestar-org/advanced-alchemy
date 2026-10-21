@@ -1,7 +1,7 @@
 import re
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from typing import Any, Callable, Optional, TypedDict, Union, cast
+from typing import Any, TypedDict, cast
 
 from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
 from sqlalchemy.exc import InvalidRequestError as SQLAlchemyInvalidRequestError
@@ -215,7 +215,7 @@ class MissingDependencyError(AdvancedAlchemyError, ImportError):
         install_package: Optional alternative package name to install.
     """
 
-    def __init__(self, package: str, install_package: Optional[str] = None) -> None:
+    def __init__(self, package: str, install_package: str | None = None) -> None:
         super().__init__(
             f"Package {package!r} is not installed but required. You can install it by running "
             f"'pip install advanced_alchemy[{install_package or package}]' to install advanced_alchemy with the required extra "
@@ -317,30 +317,32 @@ class InvalidRequestError(RepositoryError):
 class ErrorMessages(TypedDict, total=False):
     """Custom error message templates or callables keyed by error category."""
 
-    duplicate_key: Union[str, Callable[[Exception], str]]
+    duplicate_key: str | Callable[[Exception], str]
     """Error message or callable for duplicate key constraint violations."""
-    integrity: Union[str, Callable[[Exception], str]]
+    integrity: str | Callable[[Exception], str]
     """Error message or callable for general integrity constraint violations."""
-    foreign_key: Union[str, Callable[[Exception], str]]
+    foreign_key: str | Callable[[Exception], str]
     """Error message or callable for foreign key constraint violations."""
-    multiple_rows: Union[str, Callable[[Exception], str]]
+    multiple_rows: str | Callable[[Exception], str]
     """Error message or callable for queries returning multiple rows when one was expected."""
-    check_constraint: Union[str, Callable[[Exception], str]]
+    check_constraint: str | Callable[[Exception], str]
     """Error message or callable for check constraint violations."""
-    other: Union[str, Callable[[Exception], str]]
+    other: str | Callable[[Exception], str]
     """Error message or callable for unclassified repository exceptions."""
-    not_found: Union[str, Callable[[Exception], str]]
+    not_found: str | Callable[[Exception], str]
     """Error message or callable when no matching row is found."""
 
 
-def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) -> str:
-    template: Union[str, Callable[[Exception], str]] = error_messages.get(key, f"{key} error: {exc}")  # type: ignore[assignment]
+def _get_error_message(error_messages: ErrorMessages | None, key: str, exc: Exception) -> str:
+    if error_messages is None:
+        return f"{key} error: {exc}"
+    template: str | Callable[[Exception], str] = error_messages.get(key, f"{key} error: {exc}")  # type: ignore[assignment]
     if callable(template):  # pyright: ignore[reportUnknownArgumentType]
         template = template(exc)  # pyright: ignore[reportUnknownVariableType]
     return template  # pyright: ignore[reportUnknownVariableType]
 
 
-def _get_error_key_by_code(orig: Optional[BaseException], dialect_name: str) -> Optional[str]:
+def _get_error_key_by_code(orig: BaseException | None, dialect_name: str) -> str | None:
     """Classify a DBAPI integrity error by the native error code exposed by the driver.
 
     Checks ``error_type`` for DuckDB, ``sqlstate`` / ``pgcode`` for PostgreSQL and
@@ -370,7 +372,7 @@ def _get_error_key_by_code(orig: Optional[BaseException], dialect_name: str) -> 
     if isinstance(sqlite_errorcode, int) and not isinstance(sqlite_errorcode, bool):
         return SQLITE_ERRORCODE_TO_ERROR_KEY.get(sqlite_errorcode)
     driver_args: tuple[Any, ...] = getattr(orig, "args", ())
-    dialect_key: Optional[str] = None
+    dialect_key: str | None = None
     if dialect_name in {"mysql", "mariadb"}:
         mysql_errno = getattr(orig, "errno", None)
         if not (isinstance(mysql_errno, int) and not isinstance(mysql_errno, bool)) and driver_args:
@@ -386,8 +388,8 @@ def _get_error_key_by_code(orig: Optional[BaseException], dialect_name: str) -> 
 
 @contextmanager
 def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
-    error_messages: Optional[ErrorMessages] = None,
-    dialect_name: Optional[str] = None,
+    error_messages: ErrorMessages | None = None,
+    dialect_name: str | None = None,
     wrap_exceptions: bool = True,
 ) -> Generator[None, None, None]:
     """Do something within context to raise a ``RepositoryError`` chained

@@ -4,9 +4,7 @@ import os
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterable, AsyncIterator, Iterable, Iterator, Sequence
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Any, Optional, TypeVar, Union
-
-from typing_extensions import TypeAlias
+from typing import IO, TYPE_CHECKING, Any, TypeAlias, TypeVar
 
 if TYPE_CHECKING:
     from advanced_alchemy.types.file_object.file import FileObject
@@ -14,11 +12,11 @@ if TYPE_CHECKING:
 # Type variables
 T = TypeVar("T")
 StorageBackendT = TypeVar("StorageBackendT", bound="StorageBackend")
-PathLike: TypeAlias = Union[str, Path, os.PathLike[Any]]
-DataLike: TypeAlias = Union[IO[bytes], Path, bytes, Iterator[bytes], Iterable[bytes]]
-AsyncDataLike: TypeAlias = Union[
-    IO[bytes], Path, bytes, AsyncIterator[bytes], AsyncIterable[bytes], Iterator[bytes], Iterable[bytes]
-]
+PathLike: TypeAlias = str | Path | os.PathLike[Any]
+DataLike: TypeAlias = IO[bytes] | Path | bytes | Iterator[bytes] | Iterable[bytes]
+AsyncDataLike: TypeAlias = (
+    IO[bytes] | Path | bytes | AsyncIterator[bytes] | AsyncIterable[bytes] | Iterator[bytes] | Iterable[bytes]
+)
 
 
 class StorageBackend(ABC):
@@ -56,7 +54,7 @@ class StorageBackend(ABC):
         return str(path)
 
     @abstractmethod
-    def get_content(self, path: "PathLike", *, options: Optional[dict[str, Any]] = None) -> bytes:
+    def get_content(self, path: "PathLike", *, options: dict[str, Any] | None = None) -> bytes:
         """Get the content of a file.
 
         Args:
@@ -68,7 +66,7 @@ class StorageBackend(ABC):
         """
 
     @abstractmethod
-    async def get_content_async(self, path: "PathLike", *, options: Optional[dict[str, Any]] = None) -> bytes:
+    async def get_content_async(self, path: "PathLike", *, options: dict[str, Any] | None = None) -> bytes:
         """Get the content of a file asynchronously.
 
         Args:
@@ -85,7 +83,7 @@ class StorageBackend(ABC):
         file_object: "FileObject",
         data: "DataLike",
         *,
-        use_multipart: "Optional[bool]" = None,
+        use_multipart: "bool | None" = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
     ) -> "FileObject":
@@ -108,7 +106,7 @@ class StorageBackend(ABC):
         file_object: "FileObject",
         data: AsyncDataLike,
         *,
-        use_multipart: Optional[bool] = None,
+        use_multipart: bool | None = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
     ) -> "FileObject":
@@ -126,7 +124,7 @@ class StorageBackend(ABC):
         """
 
     @abstractmethod
-    def delete_object(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
+    def delete_object(self, paths: PathLike | Sequence[PathLike]) -> None:
         """Delete one or more files.
 
         Args:
@@ -134,7 +132,7 @@ class StorageBackend(ABC):
         """
 
     @abstractmethod
-    async def delete_object_async(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
+    async def delete_object_async(self, paths: PathLike | Sequence[PathLike]) -> None:
         """Delete one or more files asynchronously.
 
         Args:
@@ -144,11 +142,11 @@ class StorageBackend(ABC):
     @abstractmethod
     def sign(
         self,
-        paths: Union[PathLike, Sequence[PathLike]],
+        paths: PathLike | Sequence[PathLike],
         *,
-        expires_in: Optional[int] = None,
+        expires_in: int | None = None,
         for_upload: bool = False,
-    ) -> Union[str, list[str]]:
+    ) -> str | list[str]:
         """Generate a signed URL for one or more files.
 
         Args:
@@ -163,11 +161,11 @@ class StorageBackend(ABC):
     @abstractmethod
     async def sign_async(
         self,
-        paths: Union[PathLike, Sequence[PathLike]],
+        paths: PathLike | Sequence[PathLike],
         *,
-        expires_in: Optional[int] = None,
+        expires_in: int | None = None,
         for_upload: bool = False,
-    ) -> Union[str, list[str]]:
+    ) -> str | list[str]:
         """Generate a signed URL for one or more files asynchronously.
 
         Args:

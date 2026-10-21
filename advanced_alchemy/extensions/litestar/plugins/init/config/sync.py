@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, Union, cast
 
 from litestar.cli._utils import console  # pyright: ignore
 from litestar.constants import HTTP_RESPONSE_START
@@ -27,7 +27,7 @@ from advanced_alchemy.routing.maker import dispose_session_maker_sync
 logger = logging.getLogger("advanced_alchemy.extensions.litestar")
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Callable
 
     from litestar import Litestar
     from litestar.datastructures.state import State
@@ -63,7 +63,7 @@ def default_handler_maker(
         Returns:
             None
         """
-        session = cast("Optional[Session]", get_aa_scope_state(scope, session_scope_key))
+        session = cast("Session | None", get_aa_scope_state(scope, session_scope_key))
         if session and message["type"] in SESSION_TERMINUS_ASGI_EVENTS:
             session.close()
             delete_aa_scope_state(scope, session_scope_key)
@@ -76,8 +76,8 @@ default_before_send_handler = default_handler_maker()
 
 def autocommit_handler_maker(
     commit_on_redirect: bool = False,
-    extra_commit_statuses: "Optional[set[int]]" = None,
-    extra_rollback_statuses: "Optional[set[int]]" = None,
+    extra_commit_statuses: "set[int] | None" = None,
+    extra_rollback_statuses: "set[int] | None" = None,
     session_scope_key: str = SESSION_SCOPE_KEY,
 ) -> "Callable[[Message, Scope], None]":
     """Set up the handler to issue a transaction commit or rollback based on specified status codes
@@ -113,7 +113,7 @@ def autocommit_handler_maker(
             scope: An ASGI-``Scope``
 
         """
-        session = cast("Optional[Session]", get_aa_scope_state(scope, session_scope_key))
+        session = cast("Session | None", get_aa_scope_state(scope, session_scope_key))
         try:
             if session is not None and message["type"] == HTTP_RESPONSE_START:
                 if (message["status"] in commit_range or message["status"] in extra_commit_statuses) and message[
@@ -142,9 +142,9 @@ autocommit_before_send_handler = autocommit_handler_maker()
 class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     """Litestar Sync SQLAlchemy Configuration."""
 
-    before_send_handler: Optional[
-        Union["BeforeMessageSendHookHandler", Literal["autocommit", "autocommit_include_redirects"]]
-    ] = None
+    before_send_handler: (
+        Union["BeforeMessageSendHookHandler", Literal["autocommit", "autocommit_include_redirects"]] | None
+    ) = None
     """Handler to call before the ASGI message is sent.
 
     The handler should handle closing the session stored in the ASGI scope, if it's still open, and committing and
@@ -172,7 +172,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     set_default_exception_handler: bool = True
     """Sets the default exception handler on application start."""
 
-    def _ensure_unique(self, registry_name: str, key: str, new_key: Optional[str] = None, _iter: int = 0) -> str:
+    def _ensure_unique(self, registry_name: str, key: str, new_key: str | None = None, _iter: int = 0) -> str:
         new_key = new_key if new_key is not None else key
         if new_key in getattr(self.__class__, registry_name, {}):
             _iter += 1
@@ -253,7 +253,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Returns:
             A session instance.
         """
-        session = cast("Optional[Session]", get_aa_scope_state(scope, self.session_scope_key))
+        session = cast("Session | None", get_aa_scope_state(scope, self.session_scope_key))
         if session is None:
             # Reset routing context for request-scoped isolation when creating a new session
             reset_routing_context()

@@ -5,7 +5,8 @@ with properly configured primary and replica engines.
 """
 
 import warnings
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -59,8 +60,8 @@ class RoutingSyncSessionMaker:
     def __init__(
         self,
         routing_config: RoutingConfig,
-        engine_config: Optional[dict[str, Any]] = None,
-        session_config: Optional[dict[str, Any]] = None,
+        engine_config: dict[str, Any] | None = None,
+        session_config: dict[str, Any] | None = None,
         create_engine_callable: Callable[[str], Engine] = create_engine,
     ) -> None:
         """Initialize the session maker.
@@ -269,8 +270,8 @@ class RoutingAsyncSessionMaker:
     def __init__(
         self,
         routing_config: RoutingConfig,
-        engine_config: Optional[dict[str, Any]] = None,
-        session_config: Optional[dict[str, Any]] = None,
+        engine_config: dict[str, Any] | None = None,
+        session_config: dict[str, Any] | None = None,
         create_engine_callable: Callable[[str], AsyncEngine] = create_async_engine,
     ) -> None:
         """Initialize the async session maker.

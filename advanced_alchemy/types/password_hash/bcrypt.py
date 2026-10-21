@@ -1,6 +1,6 @@
 """Bcrypt Hashing Backend."""
 
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.password_hash.base import HashingBackend
@@ -49,7 +49,7 @@ class BcryptHasher(HashingBackend):
         """Configured bcrypt version prefix."""
         return self._prefix
 
-    def hash(self, value: Union[str, bytes]) -> str:
+    def hash(self, value: str | bytes) -> str:
         """Hash the password using Bcrypt.
 
         Args:

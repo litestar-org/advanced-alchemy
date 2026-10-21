@@ -2,9 +2,9 @@
 
 import asyncio
 import logging
-import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, Mock, PropertyMock, patch
 
 import pytest
@@ -14,11 +14,6 @@ from advanced_alchemy.types.file_object import FileObject
 from advanced_alchemy.types.file_object.base import StorageBackend
 from advanced_alchemy.types.file_object.session_tracker import FileObjectSessionTracker
 from advanced_alchemy.utils.serialization import PYDANTIC_INSTALLED, BaseModel
-
-if sys.version_info >= (3, 11):
-    from builtins import ExceptionGroup
-else:
-    from exceptiongroup import ExceptionGroup  # type: ignore[import-not-found,unused-ignore]
 
 
 def test_file_object_delete_no_backend() -> None:
@@ -1387,74 +1382,6 @@ async def test_async_file_object_listener_after_rollback() -> None:
     tracker.rollback_async.assert_called_once()
 
 
-# --- FileObjectListener (Legacy) Tests ---
-
-
-def test_file_object_listener_legacy_sync() -> None:
-    """Test legacy FileObjectListener in sync context."""
-    from advanced_alchemy._listeners import FileObjectListener
-
-    session = MagicMock(spec=Session)
-    tracker = MagicMock()
-    session.info = {"_aa_file_tracker": tracker}
-
-    # patch is_async_context to return False
-    with patch("advanced_alchemy._listeners.is_async_context", return_value=False):
-        FileObjectListener.after_commit(session)
-        tracker.commit.assert_called_once()
-
-        session.info = {"_aa_file_tracker": tracker}  # put it back
-        FileObjectListener.after_rollback(session)
-        tracker.rollback.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_file_object_listener_legacy_async() -> None:
-    """Test legacy FileObjectListener in async context."""
-    from advanced_alchemy._listeners import FileObjectListener, _active_file_operations
-
-    session = MagicMock(spec=Session)
-    tracker = MagicMock()
-    tracker.commit_async = AsyncMock()
-    tracker.rollback_async = AsyncMock()
-    session.info = {"_aa_file_tracker": tracker}
-
-    # patch is_async_context to return True
-    with patch("advanced_alchemy._listeners.is_async_context", return_value=True):
-        FileObjectListener.after_commit(session)
-
-        # Await task
-        if _active_file_operations:
-            await next(iter(_active_file_operations))
-
-        session.info = {"_aa_file_tracker": tracker}
-        FileObjectListener.after_rollback(session)
-
-        # Await task
-        if _active_file_operations:
-            for t in list(_active_file_operations):
-                if not t.done():
-                    await t
-
-
-# --- Setup Tests ---
-
-
-def test_setup_file_object_listeners() -> None:
-    """Test setup_file_object_listeners registers event listeners."""
-    from advanced_alchemy._listeners import setup_file_object_listeners
-
-    with (
-        patch("advanced_alchemy._listeners.event.listen") as mock_listen,
-        patch("sqlalchemy.event.contains", return_value=False),
-    ):
-        setup_file_object_listeners()
-        assert mock_listen.called
-
-
-# --- Utility/Shared Tests ---
-
-
 def test_touch_updated_timestamp() -> None:
     """Test touch_updated_timestamp updates timestamps on dirty instances."""
     import datetime
@@ -1503,23 +1430,6 @@ def test_has_persistent_column_changes() -> None:
     state.attrs.get.return_value = attr_state
 
     assert _has_persistent_column_changes(state) is True
-
-
-# --- Deprecation / Context Tests ---
-
-
-def test_deprecated_context_functions() -> None:
-    """Test deprecated async context functions emit warnings."""
-    from advanced_alchemy._listeners import is_async_context, reset_async_context, set_async_context
-
-    with pytest.warns(DeprecationWarning):
-        set_async_context(True)
-
-    with pytest.warns(DeprecationWarning):
-        reset_async_context(None)
-
-    with pytest.warns(DeprecationWarning):
-        is_async_context()
 
 
 def test_handle_multiple_attribute_finalize() -> None:

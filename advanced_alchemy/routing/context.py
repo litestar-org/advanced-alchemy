@@ -7,7 +7,6 @@ including the sticky-to-primary behavior after writes.
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from typing import Optional
 
 __all__ = (
     "bind_group_var",
@@ -34,7 +33,7 @@ When ``True``, all operations will use the primary database regardless
 of operation type or stickiness state.
 """
 
-bind_group_var: ContextVar[Optional[str]] = ContextVar("bind_group", default=None)
+bind_group_var: ContextVar[str | None] = ContextVar("bind_group", default=None)
 """Context variable for explicitly selecting a bind group.
 
 When set, this overrides the automatic routing logic to use the specified
@@ -124,7 +123,7 @@ def use_bind_group(name: str) -> Generator[None, None, None]:
     Yields:
         None
     """
-    token: Token[Optional[str]] = bind_group_var.set(name)
+    token: Token[str | None] = bind_group_var.set(name)
     try:
         yield
     finally:

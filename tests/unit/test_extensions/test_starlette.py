@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import sys
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Callable, Union, cast
+from typing import TYPE_CHECKING, Literal, Union, assert_type, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -17,7 +16,6 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.routing import Route
 from starlette.testclient import TestClient
-from typing_extensions import Literal, assert_type
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.starlette import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
@@ -29,10 +27,6 @@ if TYPE_CHECKING:
 
 
 AnyConfig = Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]
-pytestmark = pytest.mark.xfail(
-    condition=sys.version_info < (3, 9),
-    reason="Certain versions of Starlette and FastAPI are stated to still support 3.8, but there are documented incompatibilities on various versions that have not been yanked.  Marking 3.8 as an acceptable failure for now.",
-)
 
 
 @pytest.fixture()

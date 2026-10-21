@@ -7,8 +7,9 @@ including both synchronous and asynchronous database configurations.
 import asyncio
 import contextlib
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, cast
+from typing import Any, Literal, cast
 
 from sanic import HTTPResponse, Request, Sanic
 from sqlalchemy import Engine
@@ -26,7 +27,6 @@ except ModuleNotFoundError:  # pragma: no cover
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
-from typing_extensions import Literal
 
 from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config import EngineConfig as _EngineConfig
@@ -105,7 +105,7 @@ class EngineConfig(_EngineConfig):
 class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
     """SQLAlchemy Async config for Sanic."""
 
-    _app: "Optional[Sanic[Any, Any]]" = None
+    _app: "Sanic[Any, Any] | None" = None
     """The Sanic application instance."""
     commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
     """The commit mode to use for database sessions."""
@@ -202,15 +202,15 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             if hasattr(self.app.ctx, self.session_maker_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
                 delattr(self.app.ctx, self.session_maker_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
 
-        @self.app.middleware("request")  # type: ignore[misc,untyped-decorator]  # pyright: ignore[reportUnknownMemberType]
+        @self.app.middleware("request")  # pyright: ignore[reportUnknownMemberType]
         async def on_request(request: Request) -> None:  # pyright: ignore[reportUnusedFunction]
-            session = cast("Optional[AsyncSession]", getattr(request.ctx, self.session_key, None))
+            session = cast("AsyncSession | None", getattr(request.ctx, self.session_key, None))
             if session is None:
                 setattr(request.ctx, self.session_key, self.get_session())
 
-        @self.app.middleware("response")  # type: ignore[misc,untyped-decorator]
+        @self.app.middleware("response")  # type: ignore[arg-type]
         async def on_response(request: Request, response: HTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
-            session = cast("Optional[AsyncSession]", getattr(request.ctx, self.session_key, None))
+            session = cast("AsyncSession | None", getattr(request.ctx, self.session_key, None))
             if session is not None:
                 await self.session_handler(session=session, request=request, response=response)
 
@@ -325,7 +325,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
 class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     """SQLAlchemy Sync config for Starlette."""
 
-    _app: "Optional[Sanic[Any, Any]]" = None
+    _app: "Sanic[Any, Any] | None" = None
     """The Sanic application instance."""
     commit_mode: Literal["manual", "autocommit", "autocommit_include_redirect"] = "manual"
     """The commit mode to use for database sessions."""
@@ -414,15 +414,15 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         async def on_shutdown(_: Any) -> None:  # pyright: ignore[reportUnusedFunction]
             await self.on_shutdown()
 
-        @self.app.middleware("request")  # type: ignore[misc,untyped-decorator]  # pyright: ignore[reportUnknownMemberType]
+        @self.app.middleware("request")  # pyright: ignore[reportUnknownMemberType]
         async def on_request(request: Request) -> None:  # pyright: ignore[reportUnusedFunction]
-            session = cast("Optional[Session]", getattr(request.ctx, self.session_key, None))
+            session = cast("Session | None", getattr(request.ctx, self.session_key, None))
             if session is None:
                 setattr(request.ctx, self.session_key, self.get_session())
 
-        @self.app.middleware("response")  # type: ignore[misc,untyped-decorator]
+        @self.app.middleware("response")  # type: ignore[arg-type]
         async def on_response(request: Request, response: HTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
-            session = cast("Optional[Session]", getattr(request.ctx, self.session_key, None))
+            session = cast("Session | None", getattr(request.ctx, self.session_key, None))
             if session is not None:
                 await self.session_handler(session=session, request=request, response=response)
 

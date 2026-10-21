@@ -8,7 +8,7 @@ Async Repositories
 ------------------
 
 .. autoclass:: advanced_alchemy.repository.SQLAlchemyAsyncRepository
-    :members: add, get, list, list_and_count, update, delete, count
+    :members: add, get, get_many, update, delete, count
     :no-inherited-members:
     :show-inheritance:
 
@@ -18,7 +18,7 @@ Async Repositories
     :show-inheritance:
 
 .. autoclass:: advanced_alchemy.repository.SQLAlchemyAsyncQueryRepository
-    :members: get_one, list, list_and_count
+    :members: get_one
     :no-inherited-members:
     :show-inheritance:
 

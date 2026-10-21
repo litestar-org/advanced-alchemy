@@ -8,7 +8,7 @@ Async Services
 --------------
 
 .. autoclass:: advanced_alchemy.service.SQLAlchemyAsyncRepositoryReadService
-    :members: repository_type, get, count, list, list_and_count
+    :members: repository_type, get, get_many, get_many_and_count, count
     :no-inherited-members:
     :show-inheritance:
 

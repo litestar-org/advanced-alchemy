@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import inspect
-import sys
 import unittest.mock
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timedelta
-from enum import Enum, IntEnum
+from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
 
@@ -53,13 +52,6 @@ from advanced_alchemy.service import (
 )
 from advanced_alchemy.types.identity import BigIntIdentity
 from tests.helpers import anext_
-
-if sys.version_info >= (3, 11):
-    from enum import StrEnum
-else:
-
-    class StrEnum(str, Enum):  # type: ignore[no-redef]
-        """Compatibility shim for testing string enum behavior on Python < 3.11."""
 
 
 class StatusChoice(StrEnum):

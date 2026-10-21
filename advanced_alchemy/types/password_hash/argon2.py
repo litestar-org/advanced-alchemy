@@ -1,6 +1,6 @@
 """Argon2 Hashing Backend using argon2-cffi."""
 
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.password_hash.base import HashingBackend
@@ -32,7 +32,7 @@ class Argon2Hasher(HashingBackend):
 
         self.hasher = PasswordHasher(**kwargs)
 
-    def hash(self, value: "Union[str, bytes]") -> str:
+    def hash(self, value: "str | bytes") -> str:
         """Hash the password using Argon2.
 
         Args:
@@ -78,7 +78,7 @@ class Argon2Hasher(HashingBackend):
         except Exception:  # noqa: BLE001
             return False
 
-    def compare_expression(self, column: "ColumnElement[str]", plain: "Union[str, bytes]") -> "BinaryExpression[bool]":
+    def compare_expression(self, column: "ColumnElement[str]", plain: "str | bytes") -> "BinaryExpression[bool]":
         """Direct SQL comparison is not supported for Argon2.
 
         Raises:

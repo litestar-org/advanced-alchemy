@@ -6,13 +6,12 @@ import concurrent.futures
 import logging
 import threading
 import uuid
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 from functools import partial
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from advanced_alchemy.cache._null import NO_VALUE, NullRegion, SyncCacheRegionProtocol
 from advanced_alchemy.cache.serializers import default_deserializer, default_serializer
-from advanced_alchemy.utils.deprecation import warn_deprecation
 from advanced_alchemy.utils.sync_tools import async_
 
 if TYPE_CHECKING:
@@ -144,10 +143,10 @@ class CacheManager:
         # Model version tokens are stored in-cache for cross-process consistency.
         # Use a random token per commit to avoid lost updates without requiring
         # backend-specific atomic increment support.
-        self._region: Optional[SyncCacheRegionProtocol] = None
+        self._region: SyncCacheRegionProtocol | None = None
         self._model_versions: dict[str, str] = {}
         self._async_inflight: dict[str, asyncio.Task[Any]] = {}
-        self._async_inflight_lock: Optional[asyncio.Lock] = None
+        self._async_inflight_lock: asyncio.Lock | None = None
         self._sync_inflight: dict[str, concurrent.futures.Future[Any]] = {}
         self._sync_inflight_lock = threading.Lock()
 
@@ -271,7 +270,7 @@ class CacheManager:
         self,
         key: str,
         creator: Callable[[], T],
-        expiration_time: Optional[int] = None,
+        expiration_time: int | None = None,
     ) -> T:
         """Get a value from cache or create it using the creator function (sync).
 
@@ -313,8 +312,8 @@ class CacheManager:
         model_name: str,
         entity_id: Any,
         model_class: type[T],
-        bind_group: Optional[str] = None,
-    ) -> Optional[T]:
+        bind_group: str | None = None,
+    ) -> T | None:
         """Get a cached entity by model name and ID (sync).
 
         Args:
@@ -354,7 +353,7 @@ class CacheManager:
         model_name: str,
         entity_id: Any,
         entity: Any,
-        bind_group: Optional[str] = None,
+        bind_group: str | None = None,
     ) -> None:
         """Cache an entity (sync).
 
@@ -375,7 +374,7 @@ class CacheManager:
         except Exception:
             logger.exception("Failed to serialize entity %s:%s", model_name, entity_id)
 
-    def invalidate_entity_sync(self, model_name: str, entity_id: Any, bind_group: Optional[str] = None) -> None:
+    def invalidate_entity_sync(self, model_name: str, entity_id: Any, bind_group: str | None = None) -> None:
         """Invalidate the cache for a specific entity (sync).
 
         This should be called after an entity is created, updated, or deleted
@@ -438,7 +437,7 @@ class CacheManager:
 
         return "0"
 
-    def get_many_sync(self, key: str, model_class: type[T]) -> Optional[list[T]]:
+    def get_many_sync(self, key: str, model_class: type[T]) -> list[T] | None:
         """Get a cached list of entities (sync).
 
         The list is stored as base64-encoded serialized entity payloads.
@@ -485,7 +484,7 @@ class CacheManager:
         except Exception:
             logger.exception("Failed to serialize cached list for key %s", key)
 
-    def get_many_and_count_sync(self, key: str, model_class: type[T]) -> Optional[tuple[list[T], int]]:
+    def get_many_and_count_sync(self, key: str, model_class: type[T]) -> tuple[list[T], int] | None:
         """Get a cached list+count payload (sync)."""
         cached = self.get_sync(key)
         if cached is DOGPILE_NO_VALUE or cached is NO_VALUE:
@@ -526,66 +525,6 @@ class CacheManager:
         except Exception:
             logger.exception("Failed to serialize cached list_and_count for key %s", key)
 
-    def get_list_sync(self, key: str, model_class: type[T]) -> Optional[list[T]]:
-        """Get a cached list of entities (sync).
-
-        .. deprecated:: 1.10.0
-            Use :meth:`get_many_sync` instead.
-        """
-        warn_deprecation(
-            version="1.10.0",
-            deprecated_name="get_list_sync",
-            kind="method",
-            removal_in="2.0.0",
-            alternative="get_many_sync",
-        )
-        return self.get_many_sync(key, model_class)
-
-    def set_list_sync(self, key: str, items: list[Any]) -> None:
-        """Cache a list of entities (sync).
-
-        .. deprecated:: 1.10.0
-            Use :meth:`set_many_sync` instead.
-        """
-        warn_deprecation(
-            version="1.10.0",
-            deprecated_name="set_list_sync",
-            kind="method",
-            removal_in="2.0.0",
-            alternative="set_many_sync",
-        )
-        self.set_many_sync(key, items)
-
-    def get_list_and_count_sync(self, key: str, model_class: type[T]) -> Optional[tuple[list[T], int]]:
-        """Get a cached list+count payload (sync).
-
-        .. deprecated:: 1.10.0
-            Use :meth:`get_many_and_count_sync` instead.
-        """
-        warn_deprecation(
-            version="1.10.0",
-            deprecated_name="get_list_and_count_sync",
-            kind="method",
-            removal_in="2.0.0",
-            alternative="get_many_and_count_sync",
-        )
-        return self.get_many_and_count_sync(key, model_class)
-
-    def set_list_and_count_sync(self, key: str, items: list[Any], count: int) -> None:
-        """Cache a list+count payload (sync).
-
-        .. deprecated:: 1.10.0
-            Use :meth:`set_many_and_count_sync` instead.
-        """
-        warn_deprecation(
-            version="1.10.0",
-            deprecated_name="set_list_and_count_sync",
-            kind="method",
-            removal_in="2.0.0",
-            alternative="set_many_and_count_sync",
-        )
-        self.set_many_and_count_sync(key, items, count)
-
     def singleflight_sync(self, key: str, creator: Callable[[], T]) -> T:
         """Coalesce concurrent sync cache misses per-process.
 
@@ -593,7 +532,7 @@ class CacheManager:
         cross-process locking.
         """
         with self._sync_inflight_lock:
-            future: Optional[concurrent.futures.Future[Any]] = self._sync_inflight.get(key)
+            future: concurrent.futures.Future[Any] | None = self._sync_inflight.get(key)
             if future is None:
                 future = concurrent.futures.Future()
                 self._sync_inflight[key] = future
@@ -665,7 +604,7 @@ class CacheManager:
         self,
         key: str,
         creator: Callable[[], T],
-        expiration_time: Optional[int] = None,
+        expiration_time: int | None = None,
     ) -> T:
         """Get a value from cache or create it using the creator function (async).
 
@@ -693,8 +632,8 @@ class CacheManager:
         model_name: str,
         entity_id: Any,
         model_class: type[T],
-        bind_group: Optional[str] = None,
-    ) -> Optional[T]:
+        bind_group: str | None = None,
+    ) -> T | None:
         """Get a cached entity by model name and ID (async).
 
         Args:
@@ -715,7 +654,7 @@ class CacheManager:
         model_name: str,
         entity_id: Any,
         entity: Any,
-        bind_group: Optional[str] = None,
+        bind_group: str | None = None,
     ) -> None:
         """Cache an entity (async).
 
@@ -729,7 +668,7 @@ class CacheManager:
         """
         await async_(self.set_entity_sync)(model_name, entity_id, entity, bind_group)
 
-    async def invalidate_entity_async(self, model_name: str, entity_id: Any, bind_group: Optional[str] = None) -> None:
+    async def invalidate_entity_async(self, model_name: str, entity_id: Any, bind_group: str | None = None) -> None:
         """Invalidate the cache for a specific entity (async).
 
         This should be called after an entity is created, updated, or deleted
@@ -774,7 +713,7 @@ class CacheManager:
         """
         return await async_(self.get_model_version_sync)(model_name)
 
-    async def get_many_async(self, key: str, model_class: type[T]) -> Optional[list[T]]:
+    async def get_many_async(self, key: str, model_class: type[T]) -> list[T] | None:
         """Get a cached list of entities (async)."""
         return await async_(self.get_many_sync)(key, model_class)
 
@@ -782,73 +721,13 @@ class CacheManager:
         """Cache a list of entities (async)."""
         await async_(self.set_many_sync)(key, items)
 
-    async def get_many_and_count_async(self, key: str, model_class: type[T]) -> Optional[tuple[list[T], int]]:
+    async def get_many_and_count_async(self, key: str, model_class: type[T]) -> tuple[list[T], int] | None:
         """Get a cached list+count payload (async)."""
         return await async_(self.get_many_and_count_sync)(key, model_class)
 
     async def set_many_and_count_async(self, key: str, items: list[Any], count: int) -> None:
         """Cache a list+count payload (async)."""
         await async_(self.set_many_and_count_sync)(key, items, count)
-
-    async def get_list_async(self, key: str, model_class: type[T]) -> Optional[list[T]]:
-        """Get a cached list of entities (async).
-
-        .. deprecated:: 1.10.0
-            Use :meth:`get_many_async` instead.
-        """
-        warn_deprecation(
-            version="1.10.0",
-            deprecated_name="get_list_async",
-            kind="method",
-            removal_in="2.0.0",
-            alternative="get_many_async",
-        )
-        return await self.get_many_async(key, model_class)
-
-    async def set_list_async(self, key: str, items: list[Any]) -> None:
-        """Cache a list of entities (async).
-
-        .. deprecated:: 1.10.0
-            Use :meth:`set_many_async` instead.
-        """
-        warn_deprecation(
-            version="1.10.0",
-            deprecated_name="set_list_async",
-            kind="method",
-            removal_in="2.0.0",
-            alternative="set_many_async",
-        )
-        await self.set_many_async(key, items)
-
-    async def get_list_and_count_async(self, key: str, model_class: type[T]) -> Optional[tuple[list[T], int]]:
-        """Get a cached list+count payload (async).
-
-        .. deprecated:: 1.10.0
-            Use :meth:`get_many_and_count_async` instead.
-        """
-        warn_deprecation(
-            version="1.10.0",
-            deprecated_name="get_list_and_count_async",
-            kind="method",
-            removal_in="2.0.0",
-            alternative="get_many_and_count_async",
-        )
-        return await self.get_many_and_count_async(key, model_class)
-
-    async def set_list_and_count_async(self, key: str, items: list[Any], count: int) -> None:
-        """Cache a list+count payload (async).
-
-        .. deprecated:: 1.10.0
-            Use :meth:`set_many_and_count_async` instead.
-        """
-        warn_deprecation(
-            version="1.10.0",
-            deprecated_name="set_list_and_count_async",
-            kind="method",
-            removal_in="2.0.0",
-            alternative="set_many_and_count_async",
-        )
-        await self.set_many_and_count_async(key, items, count)
 
     async def singleflight_async(self, key: str, creator: Callable[[], Coroutine[Any, Any, T]]) -> T:
         """Coalesce concurrent async cache misses per-process.

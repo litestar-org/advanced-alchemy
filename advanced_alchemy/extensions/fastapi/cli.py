@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional, cast
+from typing import TYPE_CHECKING, cast
 
 from advanced_alchemy.cli import add_migration_commands
 from advanced_alchemy.exceptions import ImproperConfigurationError
@@ -22,7 +22,7 @@ def get_database_migration_plugin(app: "FastAPI") -> "AdvancedAlchemy":  # pragm
     Returns:
         The Advanced Alchemy extension instance.
     """
-    extension = cast("Optional[AdvancedAlchemy]", getattr(app.state, "advanced_alchemy", None))
+    extension = cast("AdvancedAlchemy | None", getattr(app.state, "advanced_alchemy", None))
     if extension is None:
         msg = "Failed to initialize database CLI. The Advanced Alchemy extension is not properly configured."
         raise ImproperConfigurationError(msg)

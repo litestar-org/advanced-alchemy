@@ -1,7 +1,7 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import sessionmaker as sync_sessionmaker
@@ -15,7 +15,7 @@ from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.utils.dataclass import Empty
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Callable
 
     from sqlalchemy.orm import Session
 
@@ -33,7 +33,7 @@ __all__ = (
 class AsyncSessionConfig(GenericSessionConfig[AsyncConnection, AsyncEngine, AsyncSession]):
     """SQLAlchemy async session config."""
 
-    sync_session_class: "Optional[Union[type[Session], EmptyType]]" = Empty
+    sync_session_class: "type[Session] | EmptyType | None" = Empty
     """A :class:`Session <sqlalchemy.orm.Session>` subclass or other callable which will be used to construct the
     :class:`Session <sqlalchemy.orm.Session>` which will be proxied. This parameter may be used to provide custom
     :class:`Session <sqlalchemy.orm.Session>` subclasses. Defaults to the
@@ -91,7 +91,7 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
 
     The configuration options are documented in the Alembic documentation.
     """
-    routing_config: "Optional[RoutingConfig]" = None
+    routing_config: "RoutingConfig | None" = None
     """Optional read/write routing configuration.
 
     When provided, enables automatic routing of read operations to replicas
@@ -101,17 +101,23 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
         When using ``routing_config``, do not set ``connection_string``.
         The primary connection is specified in the routing config.
     """
+    encryption_key: "str | bytes | Callable[[], str | bytes] | None" = None
+    """Optional default encryption key registered for :class:`~advanced_alchemy.types.EncryptedString`,
+    :class:`~advanced_alchemy.types.EncryptedText`, and :class:`~advanced_alchemy.types.TOTPSecret` columns
+    that omit an explicit ``key`` argument.
+    """
 
     def __post_init__(self) -> None:
-        # Validate routing config vs connection_string
+        if self.encryption_key is not None:
+            from advanced_alchemy.types.encrypted_string import set_default_encryption_key
+
+            set_default_encryption_key(self.encryption_key)
         if self.routing_config is not None and self.connection_string is not None:
             msg = "Provide either 'connection_string' or 'routing_config', not both"
             raise ImproperConfigurationError(msg)
-        # If routing_config is set, use its primary as the connection_string for compatibility
         if self.routing_config is not None:
             self.connection_string = self.routing_config.primary_connection_string
             if self.connection_string is None:
-                # Try to get from default group engines
                 configs = self.routing_config.get_engine_configs(self.routing_config.default_group)
                 if configs:
                     self.connection_string = configs[0].connection_string

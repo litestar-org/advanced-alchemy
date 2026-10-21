@@ -3,7 +3,7 @@
 import tempfile
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 import msgspec
@@ -48,7 +48,7 @@ class AttachmentModel(base.UUIDBase):
 
     __tablename__ = "litestar_attachment"
     title: Mapped[str]
-    document: Mapped[Optional[FileObject]] = mapped_column(
+    document: Mapped[FileObject | None] = mapped_column(
         StoredObject(backend="litestar_docs_fs"),
         nullable=True,
     )
@@ -59,7 +59,7 @@ class AttachmentSchema(msgspec.Struct):
 
     id: UUID
     title: str
-    filename: Optional[str] = None
+    filename: str | None = None
 
 
 class AttachmentRepository(repository.SQLAlchemyAsyncRepository[AttachmentModel]):
@@ -89,7 +89,7 @@ async def set_session_value(
 async def get_session_value(
     key: FromPath[str],
     request: Request[Any, Any, Any],
-) -> dict[str, Optional[str]]:
+) -> dict[str, str | None]:
     """Read a key-value pair from the server-side session."""
     return {"key": key, "value": request.session.get(key)}
 

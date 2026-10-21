@@ -1,6 +1,6 @@
 import datetime
-from collections.abc import Awaitable, Generator
-from typing import Any, Callable, TypeVar
+from collections.abc import Awaitable, Callable, Generator
+from typing import Any, TypeVar
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session as SyncSession
 
 from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
+from advanced_alchemy.extensions.litestar.session import SQLAlchemySessionBackendBase
 from advanced_alchemy.extensions.litestar.store import SQLAlchemyStore, StoreModelMixin
 
 # Type variable for the callable in the patch
@@ -25,7 +26,7 @@ class MockDateTime:
     def __init__(self, fixed_time: datetime.datetime) -> None:
         self.fixed_time = fixed_time
 
-    def now(self, tz: datetime.timezone = datetime.timezone.utc) -> datetime.datetime:
+    def now(self, tz: datetime.timezone = datetime.UTC) -> datetime.datetime:
         return self.fixed_time
 
 
@@ -110,7 +111,7 @@ def sync_store(mock_sync_config: MagicMock) -> SQLAlchemyStore[SQLAlchemySyncCon
 
 def test_store_model_mixin_is_expired_property() -> None:
     """Test the is_expired hybrid property."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     expired_store = MockStoreModel(expires_at=now - datetime.timedelta(seconds=1))
     active_store = MockStoreModel(expires_at=now + datetime.timedelta(seconds=10))
 
@@ -451,7 +452,7 @@ async def test_store_expires_in_async(
     async_store: SQLAlchemyStore[SQLAlchemyAsyncConfig], mock_async_session: AsyncMock, monkeypatch: MonkeyPatch
 ) -> None:
     """Test getting expiration time using async store."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     expires_at = now + datetime.timedelta(seconds=3600)
     monkeypatch.setattr("advanced_alchemy.extensions.litestar.store.datetime.datetime", MockDateTime(now))
 
@@ -475,7 +476,7 @@ async def test_store_expires_in_sync(
 ) -> None:
     """Test getting expiration time using sync store."""
     key = "test_key"
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     expires_at = now + datetime.timedelta(seconds=3600)
     mock_datetime = MockDateTime(now)
     monkeypatch.setattr("advanced_alchemy.extensions.litestar.store.datetime.datetime", mock_datetime)
@@ -505,3 +506,29 @@ async def test_store_context_manager() -> None:
     store = SQLAlchemyStore(config=MagicMock(spec=SQLAlchemyAsyncConfig), model=MockStoreModel)
     async with store:
         pass  # Context manager should not raise any errors
+
+
+@pytest.mark.asyncio()
+async def test_store_get_miss_does_not_commit(
+    async_store: SQLAlchemyStore[SQLAlchemyAsyncConfig],
+    mock_async_session: AsyncMock,
+    sync_store_with_mock_async: SQLAlchemyStore[SQLAlchemySyncConfig],
+    mock_sync_session: MagicMock,
+) -> None:
+    """Verify read-only cache misses do not issue an explicit session.commit()."""
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_async_session.execute.return_value = mock_result
+    mock_sync_session.execute.return_value.scalar_one_or_none.return_value = None
+
+    assert await async_store.get("missing") is None
+    mock_async_session.commit.assert_not_awaited()
+
+    assert await sync_store_with_mock_async.get("missing") is None
+    mock_sync_session.commit.assert_not_called()
+
+
+def test_store_and_session_backend_slots() -> None:
+    """Verify __slots__ declarations match instance attributes for store and session backend."""
+    assert SQLAlchemyStore.__slots__ == ("_config", "_is_async", "_model", "_session_maker")
+    assert SQLAlchemySessionBackendBase.__slots__ == ("_model", "_session_maker")

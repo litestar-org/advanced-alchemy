@@ -3,7 +3,7 @@
 import datetime
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.file_object._utils import get_mtime_equivalent, get_or_generate_etag
@@ -82,7 +82,7 @@ class ObstoreBackend(StorageBackend):
 
     driver = "obstore"
 
-    def __init__(self, key: str, fs: "Union[ObjectStore, str]", **kwargs: "Any") -> None:
+    def __init__(self, key: str, fs: "ObjectStore | str", **kwargs: "Any") -> None:
         """Initialize ObstoreBackend.
 
         Args:
@@ -95,7 +95,7 @@ class ObstoreBackend(StorageBackend):
         self.key = key
         self.options = kwargs
 
-    def get_content(self, path: "PathLike", *, options: "Optional[dict[str, Any]]" = None) -> bytes:
+    def get_content(self, path: "PathLike", *, options: "dict[str, Any] | None" = None) -> bytes:
         """Return the bytes stored at the specified location.
 
         Args:
@@ -110,7 +110,7 @@ class ObstoreBackend(StorageBackend):
         obj = self.fs.get(self._to_path(path), **supported_options)
         return obj.bytes().to_bytes()  # type: ignore[no-any-return]
 
-    async def get_content_async(self, path: "PathLike", *, options: "Optional[dict[str, Any]]" = None) -> bytes:
+    async def get_content_async(self, path: "PathLike", *, options: "dict[str, Any] | None" = None) -> bytes:
         """Return the bytes stored at the specified location asynchronously.
 
         Args:
@@ -130,7 +130,7 @@ class ObstoreBackend(StorageBackend):
         file_object: "FileObject",
         data: "DataLike",
         *,
-        use_multipart: "Optional[bool]" = None,
+        use_multipart: "bool | None" = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
     ) -> "FileObject":
@@ -172,7 +172,7 @@ class ObstoreBackend(StorageBackend):
         info = self.fs.head(file_object.path)
         file_object.size = cast("int", info.get("size", file_object.size))  # pyright: ignore
         file_object.last_modified = (
-            get_mtime_equivalent(info) or datetime.datetime.now(tz=datetime.timezone.utc).timestamp()  # pyright: ignore
+            get_mtime_equivalent(info) or datetime.datetime.now(tz=datetime.UTC).timestamp()  # pyright: ignore
         )
         file_object.etag = get_or_generate_etag(file_object, info, file_object.last_modified)  # pyright: ignore
         # Merge backend metadata if available and different
@@ -187,7 +187,7 @@ class ObstoreBackend(StorageBackend):
         file_object: "FileObject",
         data: "AsyncDataLike",
         *,
-        use_multipart: "Optional[bool]" = None,
+        use_multipart: "bool | None" = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
     ) -> "FileObject":
@@ -229,7 +229,7 @@ class ObstoreBackend(StorageBackend):
         info = await self.fs.head_async(file_object.path)
         file_object.size = cast("int", info.get("size", file_object.size))  # pyright: ignore
         file_object.last_modified = (
-            get_mtime_equivalent(info) or datetime.datetime.now(tz=datetime.timezone.utc).timestamp()  # pyright: ignore
+            get_mtime_equivalent(info) or datetime.datetime.now(tz=datetime.UTC).timestamp()  # pyright: ignore
         )
         file_object.etag = get_or_generate_etag(file_object, info, file_object.last_modified)  # pyright: ignore
         # Merge backend metadata if available and different
@@ -239,7 +239,7 @@ class ObstoreBackend(StorageBackend):
 
         return file_object
 
-    def delete_object(self, paths: "Union[PathLike, Sequence[PathLike]]") -> None:
+    def delete_object(self, paths: "PathLike | Sequence[PathLike]") -> None:
         """Delete the specified paths.
 
         Args:
@@ -252,7 +252,7 @@ class ObstoreBackend(StorageBackend):
 
         self.fs.delete(path_list)
 
-    async def delete_object_async(self, paths: "Union[PathLike, Sequence[PathLike]]") -> None:
+    async def delete_object_async(self, paths: "PathLike | Sequence[PathLike]") -> None:
         """Delete the specified paths asynchronously.
 
         Args:
@@ -267,11 +267,11 @@ class ObstoreBackend(StorageBackend):
 
     def sign(
         self,
-        paths: "Union[PathLike, Sequence[PathLike]]",
+        paths: "PathLike | Sequence[PathLike]",
         *,
-        expires_in: "Optional[int]" = None,
+        expires_in: "int | None" = None,
         for_upload: bool = False,
-    ) -> "Union[str, list[str]]":
+    ) -> "str | list[str]":
         """Create a signed URL for accessing or uploading the file.
 
         Args:
@@ -303,11 +303,11 @@ class ObstoreBackend(StorageBackend):
 
     async def sign_async(
         self,
-        paths: "Union[PathLike, Sequence[PathLike]]",
+        paths: "PathLike | Sequence[PathLike]",
         *,
-        expires_in: "Optional[int]" = None,
+        expires_in: "int | None" = None,
         for_upload: bool = False,
-    ) -> "Union[str, list[str]]":
+    ) -> "str | list[str]":
         """Sign a URL for a given path asynchronously.
 
         Args:
