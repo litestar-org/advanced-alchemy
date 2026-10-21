@@ -118,7 +118,7 @@ class SQLAlchemySessionBackendBase(ServerSideSessionBackend, ABC, Generic[SQLAlc
           SQLAlchemyPlugin.
     """
 
-    __slots__ = ("_model", "_session_maker")
+    __slots__ = ("_alchemy", "_config", "_model")
 
     def __init__(
         self,

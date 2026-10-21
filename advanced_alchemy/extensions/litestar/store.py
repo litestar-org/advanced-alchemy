@@ -15,7 +15,6 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     delete,
-    func,
     insert,
     select,
     update,
@@ -115,7 +114,7 @@ class StoreModelMixin(UUIDv7Base):
         Returns:
             SQL-Expression to check if the session has expired.
         """
-        return cast("BooleanClauseList", func.now() > cls.expires_at)
+        return cast("BooleanClauseList", datetime.datetime.now(datetime.timezone.utc) > cls.expires_at)
 
 
 class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
@@ -124,7 +123,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
     Supports both synchronous and asynchronous SQLAlchemy configurations.
     """
 
-    __slots__ = ("_config", "_is_async", "_model", "_session_maker")
+    __slots__ = ("_config", "_is_async", "_model")
 
     def __init__(
         self,
@@ -139,7 +138,7 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
             model: The SQLAlchemy model to use for storing data. Defaults to :class:`StoreItem`.
             namespace: A virtual namespace for keys. If not given, defaults to ``LITESTAR``.
                 Namespacing can be explicitly disabled by passing ``None``. This will make
-                :meth:`.delete_all` unavailable.
+                :meth:`.delete_all` and :meth:`.delete_expired` unavailable.
         """
         self._config = config
         self._model = model
@@ -393,7 +392,6 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
                 session.commit()
                 return self._decode_base64_value(value, dialect_name)
 
-            session.commit()  # Commit even if not found
             return None
 
     async def _get_async(self, key: str, renew_for: Optional[Union[int, datetime.timedelta]] = None) -> Optional[bytes]:
@@ -431,7 +429,6 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
                 await session.commit()
                 return self._decode_base64_value(value, dialect_name)
 
-            await session.commit()  # Commit even if not found
             return None
 
     async def get(self, key: str, renew_for: Optional[Union[int, datetime.timedelta]] = None) -> Optional[bytes]:
@@ -501,6 +498,43 @@ class SQLAlchemyStore(NamespacedStore, Generic[SQLAlchemyConfigT]):
             await self._delete_all_async()
         else:
             await async_(self._delete_all_sync)()
+
+    def _delete_expired_sync(self) -> None:
+        if self.namespace is None:
+            msg = "Cannot perform delete operation: No namespace configured"
+            raise ImproperlyConfiguredException(msg)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        with self._get_sync_session() as session, session.begin():
+            session.execute(
+                delete(self._model).where(self._model.namespace == self.namespace, self._model.expires_at <= now)
+            )
+            session.commit()
+
+    async def _delete_expired_async(self) -> None:
+        if self.namespace is None:
+            msg = "Cannot perform delete operation: No namespace configured"
+            raise ImproperlyConfiguredException(msg)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        async with self._get_async_session() as session, session.begin():
+            await session.execute(
+                delete(self._model).where(self._model.namespace == self.namespace, self._model.expires_at <= now)
+            )
+            await session.commit()
+
+    async def delete_expired(self) -> None:
+        """Delete expired values in this namespace using either a sync or async backend.
+
+        Values expiring at or before the current time are deleted. Values without an
+        expiration time and values in other namespaces are preserved. Call this method
+        periodically to reclaim storage; expired values are otherwise only hidden by reads.
+
+        Raises:
+            ImproperlyConfiguredException: If no namespace is configured.
+        """
+        if self._is_async:
+            await self._delete_expired_async()
+        else:
+            await async_(self._delete_expired_sync)()
 
     def _exists_sync(self, key: str) -> bool:
         db_key, db_namespace = self._make_key(key)

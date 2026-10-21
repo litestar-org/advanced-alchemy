@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session as SyncSession
 
 from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
+from advanced_alchemy.extensions.litestar.session import SQLAlchemySessionBackendBase
 from advanced_alchemy.extensions.litestar.store import SQLAlchemyStore, StoreModelMixin
 
 # Type variable for the callable in the patch
@@ -368,6 +369,52 @@ async def test_store_delete_all_no_namespace_sync(mock_sync_config: MagicMock) -
 
 
 @pytest.mark.asyncio()
+async def test_store_delete_expired_async(
+    async_store: SQLAlchemyStore[SQLAlchemyAsyncConfig], mock_async_session: AsyncMock
+) -> None:
+    """Expired-entry cleanup executes and commits with an async session."""
+    await async_store.delete_expired()
+
+    mock_async_session.execute.assert_awaited_once()
+    mock_async_session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio()
+async def test_store_delete_expired_sync(
+    sync_store_with_mock_async: SQLAlchemyStore[SQLAlchemySyncConfig], mock_sync_session: MagicMock
+) -> None:
+    """Expired-entry cleanup executes and commits with a sync session."""
+    await sync_store_with_mock_async.delete_expired()
+
+    mock_sync_session.execute.assert_called_once()
+    mock_sync_session.commit.assert_called_once()
+
+
+@pytest.mark.asyncio()
+async def test_store_delete_expired_no_namespace_async(
+    async_store: SQLAlchemyStore[SQLAlchemyAsyncConfig], mock_async_config: MagicMock
+) -> None:
+    """Cleanup without a namespace fails before opening an async session."""
+    async_store.namespace = None
+    with pytest.raises(ImproperlyConfiguredException, match="Cannot perform delete operation: No namespace configured"):
+        await async_store.delete_expired()
+
+    mock_async_config.get_session.assert_not_called()
+
+
+@pytest.mark.asyncio()
+async def test_store_delete_expired_no_namespace_sync(
+    sync_store_with_mock_async: SQLAlchemyStore[SQLAlchemySyncConfig], mock_sync_config: MagicMock
+) -> None:
+    """Cleanup without a namespace fails before opening a sync session."""
+    sync_store_with_mock_async.namespace = None
+    with pytest.raises(ImproperlyConfiguredException, match="Cannot perform delete operation: No namespace configured"):
+        await sync_store_with_mock_async.delete_expired()
+
+    mock_sync_config.get_session.assert_not_called()
+
+
+@pytest.mark.asyncio()
 async def test_store_exists_async(
     async_store: SQLAlchemyStore[SQLAlchemyAsyncConfig], mock_async_session: AsyncMock
 ) -> None:
@@ -459,3 +506,30 @@ async def test_store_context_manager() -> None:
     store = SQLAlchemyStore(config=MagicMock(spec=SQLAlchemyAsyncConfig), model=MockStoreModel)
     async with store:
         pass  # Context manager should not raise any errors
+
+
+@pytest.mark.asyncio()
+async def test_store_get_miss_does_not_commit(
+    async_store: SQLAlchemyStore[SQLAlchemyAsyncConfig],
+    mock_async_session: AsyncMock,
+    sync_store_with_mock_async: SQLAlchemyStore[SQLAlchemySyncConfig],
+    mock_sync_session: MagicMock,
+) -> None:
+    """Verify read-only cache misses do not issue an explicit session.commit()."""
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_async_session.execute.return_value = mock_result
+    mock_sync_session.execute.return_value.scalar_one_or_none.return_value = None
+
+    assert await async_store.get("missing") is None
+    mock_async_session.commit.assert_not_awaited()
+
+    assert await sync_store_with_mock_async.get("missing") is None
+    mock_sync_session.commit.assert_not_called()
+
+
+def test_store_and_session_backend_slots() -> None:
+    """Verify __slots__ declarations match instance attributes for store and session backend."""
+    assert SQLAlchemyStore.__slots__ == ("_config", "_is_async", "_model")
+    assert SQLAlchemySessionBackendBase.__slots__ == ("_alchemy", "_config", "_model")
+
