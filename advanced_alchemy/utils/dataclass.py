@@ -1,12 +1,11 @@
 from dataclasses import Field, fields, is_dataclass
 from inspect import isclass
-from typing import TYPE_CHECKING, Any, ClassVar, Optional, Protocol, final, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, final, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from collections.abc import Set as AbstractSet
-
-    from typing_extensions import TypeAlias, TypeGuard
+    from typing import TypeAlias, TypeGuard
 
 __all__ = (
     "DataclassProtocol",
@@ -40,8 +39,8 @@ def extract_dataclass_fields(
     dt: "DataclassProtocol",
     exclude_none: bool = False,
     exclude_empty: bool = False,
-    include: "Optional[AbstractSet[str]]" = None,
-    exclude: "Optional[AbstractSet[str]]" = None,
+    include: "AbstractSet[str] | None" = None,
+    exclude: "AbstractSet[str] | None" = None,
 ) -> "tuple[Field[Any], ...]":
     """Extract dataclass fields.
 
@@ -80,8 +79,8 @@ def extract_dataclass_items(
     dt: "DataclassProtocol",
     exclude_none: bool = False,
     exclude_empty: bool = False,
-    include: "Optional[AbstractSet[str]]" = None,
-    exclude: "Optional[AbstractSet[str]]" = None,
+    include: "AbstractSet[str] | None" = None,
+    exclude: "AbstractSet[str] | None" = None,
 ) -> tuple[tuple[str, Any], ...]:
     """Extract dataclass name, value pairs.
 
@@ -106,7 +105,7 @@ def simple_asdict(
     exclude_none: bool = False,
     exclude_empty: bool = False,
     convert_nested: bool = True,
-    exclude: "Optional[AbstractSet[str]]" = None,
+    exclude: "AbstractSet[str] | None" = None,
 ) -> "dict[str, Any]":
     """Convert a dataclass to a dictionary.
 

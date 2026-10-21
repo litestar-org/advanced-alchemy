@@ -3,7 +3,7 @@
 import asyncio
 import datetime
 from collections.abc import Generator
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, Optional, TypeAlias, Union, cast
 from unittest.mock import create_autospec
 from uuid import UUID
 
@@ -31,12 +31,6 @@ from advanced_alchemy.repository.memory import (
 )
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
 from tests.helpers import maybe_async
-
-# Python 3.9 compatibility for typing.TypeAlias
-try:  # Python >= 3.10
-    from typing import TypeAlias  # type: ignore[attr-defined]
-except Exception:  # Python 3.9 fallback
-    from typing_extensions import TypeAlias  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from time_machine import Coordinates
@@ -194,7 +188,7 @@ def _clear_in_memory_db() -> "Generator[None, None, None]":  # pyright: ignore[r
 
 @pytest.fixture()
 def frozen_datetime() -> "Generator[Coordinates, None, None]":
-    with travel(lambda: datetime.datetime.now(datetime.timezone.utc), tick=False) as frozen:
+    with travel(lambda: datetime.datetime.now(datetime.UTC), tick=False) as frozen:
         yield frozen
 
 
@@ -328,7 +322,7 @@ async def test_repo_create_method(seeded_test_session_async: "tuple[AsyncSession
     session, models = seeded_test_session_async
     author_repo = create_repository(session, models["author"])
 
-    new_author_data = {"name": "Test Author", "dob": datetime.datetime.now(datetime.timezone.utc).date()}
+    new_author_data = {"name": "Test Author", "dob": datetime.datetime.now(datetime.UTC).date()}
 
     new_author = await maybe_async(author_repo.create(new_author_data))
     assert new_author.name == "Test Author"
@@ -518,7 +512,7 @@ async def test_service_create_method(seeded_test_session_async: "tuple[AsyncSess
     _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
-    new_author_data = {"name": "Service Test Author", "dob": datetime.datetime.now(datetime.timezone.utc).date()}
+    new_author_data = {"name": "Service Test Author", "dob": datetime.datetime.now(datetime.UTC).date()}
 
     new_author = await maybe_async(author_service.create(new_author_data))
     assert new_author.name == "Service Test Author"
@@ -609,7 +603,7 @@ async def test_repo_filter_before_after(seeded_test_session_async: "tuple[AsyncS
     author_repo = create_repository(session, models["author"])
 
     # Test date filtering
-    cutoff_date = datetime.datetime(2023, 4, 1, tzinfo=datetime.timezone.utc)
+    cutoff_date = datetime.datetime(2023, 4, 1, tzinfo=datetime.UTC)
     filter_obj = BeforeAfter(field_name="created_at", before=cutoff_date, after=None)
 
     authors = await maybe_async(author_repo.get_many(filter_obj))

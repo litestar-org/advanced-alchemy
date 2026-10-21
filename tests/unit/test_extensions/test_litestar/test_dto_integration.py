@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cached_property
 from types import ModuleType
-from typing import Annotated, Any, Callable, Optional
+from typing import Annotated, Any, Optional
 from uuid import UUID
 
 import pytest

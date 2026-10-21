@@ -7,7 +7,7 @@
 # ]
 # ///
 import datetime
-from typing import Annotated, Optional
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI
@@ -41,7 +41,7 @@ class AuthorModel(base.UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[Optional[datetime.date]]
+    dob: Mapped[datetime.date | None]
 
 
 class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
@@ -57,19 +57,19 @@ class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
 
 # Pydantic Models
 class Author(BaseModel):
-    id: Optional[UUID]
+    id: UUID | None
     name: str
-    dob: Optional[datetime.date]
+    dob: datetime.date | None
 
 
 class AuthorCreate(BaseModel):
     name: str
-    dob: Optional[datetime.date]
+    dob: datetime.date | None
 
 
 class AuthorUpdate(BaseModel):
-    name: Optional[str]
-    dob: Optional[datetime.date]
+    name: str | None
+    dob: datetime.date | None
 
 
 @author_router.get(path="/authors", response_model=service.OffsetPagination[Author])

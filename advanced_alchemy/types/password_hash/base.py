@@ -1,7 +1,7 @@
 """Base classes for password hashing backends."""
 
 import abc
-from typing import Any, Optional, Union, cast
+from typing import Any, cast
 
 from sqlalchemy import BinaryExpression, ColumnElement, FunctionElement, String, TypeDecorator
 
@@ -14,13 +14,13 @@ class HashingBackend(abc.ABC):
     """
 
     @staticmethod
-    def _ensure_bytes(value: Union[str, bytes]) -> bytes:
+    def _ensure_bytes(value: str | bytes) -> bytes:
         if isinstance(value, str):
             return value.encode("utf-8")
         return value
 
     @abc.abstractmethod
-    def hash(self, value: "Union[str, bytes]") -> "Union[str, Any]":
+    def hash(self, value: "str | bytes") -> "str | Any":
         """Hash the given value.
 
         Args:
@@ -31,7 +31,7 @@ class HashingBackend(abc.ABC):
         """
 
     @abc.abstractmethod
-    def verify(self, plain: "Union[str, bytes]", hashed: str) -> bool:
+    def verify(self, plain: "str | bytes", hashed: str) -> bool:
         """Verify a plain text value against a hash.
 
         Args:
@@ -57,7 +57,7 @@ class HashingBackend(abc.ABC):
         """
 
     @abc.abstractmethod
-    def compare_expression(self, column: "ColumnElement[str]", plain: "Union[str, bytes]") -> "BinaryExpression[bool]":
+    def compare_expression(self, column: "ColumnElement[str]", plain: "str | bytes") -> "BinaryExpression[bool]":
         """Generate a SQLAlchemy expression for comparing a column with a plain text value.
 
         This is an optional advanced extension point for backends that can compare a hash
@@ -92,7 +92,7 @@ class HashedPassword:
         self.hash_string = hash_string
         self.backend = backend
 
-    def verify(self, plain_password: "Union[str, bytes]") -> bool:
+    def verify(self, plain_password: "str | bytes") -> bool:
         """Verify a plain text password against this hash.
 
         Args:
@@ -103,7 +103,7 @@ class HashedPassword:
         """
         return self.backend.verify(plain_password, self.hash_string)
 
-    def verify_and_update(self, plain_password: "Union[str, bytes]") -> "tuple[bool, Optional[str]]":
+    def verify_and_update(self, plain_password: "str | bytes") -> "tuple[bool, str | None]":
         """Verify a password and return a fresh hash when the stored one is stale.
 
         Args:
@@ -159,7 +159,7 @@ class PasswordHash(TypeDecorator[str]):
         """
         return str
 
-    def process_bind_param(self, value: Any, dialect: Any) -> "Union[str, FunctionElement[str], None]":
+    def process_bind_param(self, value: Any, dialect: Any) -> "str | FunctionElement[str] | None":
         """Process the value before binding it to the SQL statement.
 
         This method hashes the value using the specified backend.
@@ -185,7 +185,7 @@ class PasswordHash(TypeDecorator[str]):
         # Otherwise, assume it's a string or HashedPassword object (convert to string)
         return str(hashed_value)
 
-    def process_result_value(self, value: Any, dialect: Any) -> "Union[HashedPassword, None]":  # type: ignore[override]
+    def process_result_value(self, value: Any, dialect: Any) -> "HashedPassword | None":  # type: ignore[override]
         """Process the value after retrieving it from the database.
 
         This method wraps the hash string in a HashedPassword object.
@@ -202,9 +202,7 @@ class PasswordHash(TypeDecorator[str]):
         # Ensure the retrieved value is a string before passing to HashedPassword
         return HashedPassword(str(value), self.backend)
 
-    def compare_value(
-        self, column: "ColumnElement[str]", plain_password: "Union[str, bytes]"
-    ) -> "BinaryExpression[bool]":
+    def compare_value(self, column: "ColumnElement[str]", plain_password: "str | bytes") -> "BinaryExpression[bool]":
         """Generate a SQLAlchemy expression for comparing a column with a plain text password.
 
         This is an optional advanced extension point for backends that can compare a hash

@@ -11,8 +11,6 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Natural Language :: English",
   "Operating System :: OS Independent",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -31,8 +29,6 @@ dependencies = [
   "alembic>=1.12.0",
   "typing-extensions>=4.0.0",
   "greenlet",
-  "eval-type-backport ; python_full_version < '3.10'",
-  "exceptiongroup ; python_full_version < '3.11'",
 ]
 description = "Ready-to-go SQLAlchemy concoctions."
 keywords = ["sqlalchemy", "alembic", "litestar", "sanic", "fastapi", "flask"]
@@ -46,8 +42,8 @@ maintainers = [
 ]
 name = "advanced_alchemy"
 readme = "docs/PYPI_README.md"
-requires-python = ">=3.9"
-version = "1.12.0"
+requires-python = ">=3.11"
+version = "2.0.0a1"
 
 [project.urls]
 Changelog = "https://advanced-alchemy.litestar.dev/latest/changelog"
@@ -105,8 +101,7 @@ doc = [
   "accessible-pygments>=0.0.5",
   "auto-pytabs[sphinx]>=0.5.0",
   "shibuya",
-  "sphinx>=7.0.0; python_version <= \"3.9\"",
-  "sphinx>=8.0.0; python_version >= \"3.10\"",
+  "sphinx>=8.0.0",
   "sphinx-autobuild>=2021.3.14",
   "sphinx-copybutton>=0.5.2",
   "sphinx-click>=6.0.0",
@@ -123,11 +118,9 @@ fastapi = ["fastapi[all]>=0.115.3", "starlette"]
 flask = ["flask-sqlalchemy>=3.1.1", "flask[async]"]
 fsspec = ["fsspec>=2024.10.0"]
 lint = [
-  # Mypy checks the project with Python 3.9 grammar even when it runs on a
-  # newer interpreter. Keep typed dependency sources parseable by that target.
-  "anyio>=4.13,<4.14; python_version >= '3.10'",
-  "click>=8.3,<8.4; python_version >= '3.10'",
-  "filelock==3.29.0; python_version >= '3.10'",
+  "anyio>=4.13,<4.14",
+  "click>=8.3,<8.4",
+  "filelock==3.29.0",
   "mypy>=1.13.0,<2.0.0",
   "numpy<2.5",
   "pre-commit>=3.5.0",
@@ -162,7 +155,7 @@ test = [
   "attrs",
   "cattrs",
   "sqlmodel",
-  "dishka ; python_version >= \"3.10\"",
+  "dishka",
   "dogpile.cache",
   "pydantic-extra-types",
   "numpy",
@@ -191,7 +184,7 @@ test = [
 allow_dirty = true
 commit = false
 commit_args = "--no-verify"
-current_version = "1.12.0"
+current_version = "2.0.0a1"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"
@@ -315,7 +308,7 @@ line-length = 120
 exclude = [".venv", "node_modules"]
 line-length = 120
 src = ["advanced_alchemy", "tests", "docs", "tools"]
-target-version = "py39"
+target-version = "py311"
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -456,7 +449,7 @@ disallow_untyped_decorators = true
 exclude = ["docs/conftest.py"]
 implicit_reexport = false
 packages = ["advanced_alchemy", "tests", "docs", "examples"]
-python_version = "3.9"
+python_version = "3.11"
 show_error_codes = true
 strict = true
 warn_redundant_casts = true
@@ -507,20 +500,12 @@ ignore_missing_imports = true
 module = ["opentelemetry.*"]
 
 [[tool.mypy.overrides]]
-module = "advanced_alchemy._serialization"
-warn_unused_ignores = false
-
-[[tool.mypy.overrides]]
 disallow_untyped_decorators = false
 module = "advanced_alchemy.extensions.litestar.cli"
 
 [[tool.mypy.overrides]]
 disallow_untyped_decorators = false
 module = "advanced_alchemy.types.json"
-
-[[tool.mypy.overrides]]
-module = "advanced_alchemy.service.typing"
-warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 module = "advanced_alchemy.alembic.templates.*.env"
@@ -566,7 +551,7 @@ exclude = [
   "examples/flask/flask_services.py",
 ]
 include = ["advanced_alchemy"]
-pythonVersion = "3.9"
+pythonVersion = "3.11"
 reportMissingTypeStubs = false
 reportPrivateImportUsage = false
 reportUnknownMemberType = false
@@ -597,15 +582,11 @@ SQLAlchemyAsyncSlugRepositoryProtocol = "SQLAlchemySyncSlugRepositoryProtocol"
 "async_scoped_session" = "scoped_session"
 "bump_model_version_async" = "bump_model_version_sync"
 "get_entity_async" = "get_entity_sync"
-"get_list_and_count_async" = "get_list_and_count_sync"
-"get_list_async" = "get_list_sync"
 "get_many_and_count_async" = "get_many_and_count_sync"
 "get_many_async" = "get_many_sync"
 "get_model_version_async" = "get_model_version_sync"
 "invalidate_entity_async" = "invalidate_entity_sync"
 "set_entity_async" = "set_entity_sync"
-"set_list_and_count_async" = "set_list_and_count_sync"
-"set_list_async" = "set_list_sync"
 "set_many_and_count_async" = "set_many_and_count_sync"
 "set_many_async" = "set_many_sync"
 "singleflight_async" = "singleflight_sync"

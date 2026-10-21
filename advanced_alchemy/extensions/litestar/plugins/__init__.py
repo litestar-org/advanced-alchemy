@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from typing import Union
 
 from litestar.config.app import AppConfig
 from litestar.plugins import InitPluginProtocol
@@ -19,9 +18,7 @@ class SQLAlchemyPlugin(InitPluginProtocol, _slots_base.SlotsBase):
 
     def __init__(
         self,
-        config: Union[
-            SQLAlchemyAsyncConfig, SQLAlchemySyncConfig, Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]
-        ],
+        config: SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig],
     ) -> None:
         """Initialize ``SQLAlchemyPlugin``.
 
@@ -33,7 +30,7 @@ class SQLAlchemyPlugin(InitPluginProtocol, _slots_base.SlotsBase):
     @property
     def config(
         self,
-    ) -> Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]:
+    ) -> Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]:
         return self._config
 
     def on_app_init(self, app_config: AppConfig) -> AppConfig:

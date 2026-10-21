@@ -5,7 +5,7 @@ read/write routing via the ``get_bind()`` method.
 """
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Union, cast
 
 from sqlalchemy import Delete, Insert, Update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,8 +81,8 @@ class RoutingSyncSession(Session):
 
     def get_bind(
         self,
-        mapper: Optional[Union["Mapper[Any]", type[Any]]] = None,
-        clause: Optional[Any] = None,
+        mapper: Union["Mapper[Any]", type[Any]] | None = None,
+        clause: Any | None = None,
         **kwargs: Any,
     ) -> "Engine":
         """Route to appropriate engine based on operation and context.
@@ -139,7 +139,7 @@ class RoutingSyncSession(Session):
         # or if it's the default group and we want to be safe
         return self._default_engine
 
-    def _should_use_default_group(self, clause: Optional[Any]) -> bool:
+    def _should_use_default_group(self, clause: Any | None) -> bool:
         """Determine if the operation should use the default (writer) group.
 
         Args:
@@ -169,7 +169,7 @@ class RoutingSyncSession(Session):
 
         return self._has_for_update(clause)
 
-    def _has_for_update(self, clause: Optional[Any]) -> bool:
+    def _has_for_update(self, clause: Any | None) -> bool:
         """Check if the clause has FOR UPDATE.
 
         Args:
@@ -225,7 +225,7 @@ class RoutingAsyncSession(AsyncSession):
         kwargs.pop("binds", None)
 
         sync_selectors = {name: _SyncEngineSelectorWrapper(selector) for name, selector in selectors.items()}
-        self.bind: Optional[Union[AsyncEngine, AsyncConnection]] = None  # type: ignore[assignment]
+        self.bind: AsyncEngine | AsyncConnection | None = None  # type: ignore[assignment]
         sync_session_class = kwargs.pop("sync_session_class", RoutingSyncSession)
 
         super().__init__(

@@ -5,7 +5,7 @@ import datetime
 import decimal
 import hashlib
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Final, Literal, Optional, Protocol, Union, cast, overload
+from typing import Any, Final, Literal, Protocol, TypeAlias, cast, overload
 
 from sqlalchemy import (
     Column,
@@ -37,7 +37,6 @@ from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 from sqlalchemy.sql.base import ExecutableOption
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from sqlalchemy.sql.elements import Label
-from typing_extensions import TypeAlias
 
 from advanced_alchemy.base import ModelProtocol, model_to_dict
 from advanced_alchemy.exceptions import ErrorMessages, RepositoryError
@@ -70,16 +69,12 @@ DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
 }
 
 WhereClauseT = ColumnExpressionArgument[bool]
-SingleLoad: TypeAlias = Union[
-    Load,
-    Literal["*"],
-    InstrumentedAttribute[Any],
-    RelationshipProperty[Any],
-    MapperProperty[Any],
-]
-LoadCollection: TypeAlias = Sequence[Union[SingleLoad, Sequence[SingleLoad]]]
+SingleLoad: TypeAlias = (
+    Load | Literal["*"] | InstrumentedAttribute[Any] | RelationshipProperty[Any] | MapperProperty[Any]
+)
+LoadCollection: TypeAlias = Sequence[SingleLoad | Sequence[SingleLoad]]
 ExecutableOptions: TypeAlias = Sequence[ExecutableOption]
-LoadSpec: TypeAlias = Union[LoadCollection, SingleLoad, ExecutableOption, ExecutableOptions]
+LoadSpec: TypeAlias = LoadCollection | SingleLoad | ExecutableOption | ExecutableOptions
 
 
 def _sort_kv_by_key_str(kv: tuple[object, object]) -> str:
@@ -150,14 +145,14 @@ def _build_cache_key(  # pyright: ignore[reportUnusedFunction]
     model_name: str,
     version_token: str,
     method: str,
-    filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+    filters: Sequence[StatementFilter | ColumnElement[bool]],
     kwargs: dict[str, Any],
-    order_by: Optional[Union[list[OrderingPair], OrderingPair]],
+    order_by: list[OrderingPair] | OrderingPair | None,
     execution_options: dict[str, Any],
     uniquify: bool,
-    count_with_window_function: Optional[bool] = None,
-    bind_group: Optional[str] = None,
-) -> Optional[str]:
+    count_with_window_function: bool | None = None,
+    bind_group: str | None = None,
+) -> str | None:
     """Build a stable cache key for list/list_and_count operations.
 
     Returns None if the query specification includes non-cacheable filter
@@ -169,7 +164,7 @@ def _build_cache_key(  # pyright: ignore[reportUnusedFunction]
             return None
         normalized_filters.append({"type": filter_.__class__.__name__, "data": _normalize_cache_key_value(filter_)})
 
-    normalized_order_by: Optional[list[Any]] = None
+    normalized_order_by: list[Any] | None = None
     if order_by is not None:
         order_items = order_by if isinstance(order_by, list) else [order_by]
         normalized_order_by = []
@@ -204,11 +199,7 @@ def _build_cache_key(  # pyright: ignore[reportUnusedFunction]
     return f"{model_name}:{method}:{digest}"
 
 
-OrderByT: TypeAlias = Union[
-    str,
-    InstrumentedAttribute[Any],
-    RelationshipProperty[Any],
-]
+OrderByT: TypeAlias = str | InstrumentedAttribute[Any] | RelationshipProperty[Any]
 
 # NOTE: For backward compatibility with Litestar - this is imported from here within the litestar codebase.
 wrap_sqlalchemy_exception = _wrap_sqlalchemy_exception
@@ -227,7 +218,7 @@ DEFAULT_ERROR_MESSAGE_TEMPLATES: ErrorMessages = {
 
 def get_instrumented_attr(
     model: type[ModelProtocol],
-    key: Union[str, InstrumentedAttribute[Any]],
+    key: str | InstrumentedAttribute[Any],
 ) -> InstrumentedAttribute[Any]:
     """Get an instrumented attribute from a model.
 
@@ -576,8 +567,8 @@ def model_from_dict(model: type[ModelT], /, **kwargs: Any) -> ModelT:
 
 
 def get_abstract_loader_options(
-    loader_options: Union[LoadSpec, None],
-    default_loader_options: Union[list[Load], None] = None,
+    loader_options: LoadSpec | None,
+    default_loader_options: list[Load] | None = None,
     default_options_have_wildcards: bool = False,
     merge_with_default: bool = True,
     inherit_lazy_relationships: bool = True,
@@ -673,9 +664,9 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
 
     model_type: type[ModelT]
     """The SQLAlchemy model class this repository manages."""
-    prefer_any_dialects: Optional[tuple[str]] = ("postgresql",)
+    prefer_any_dialects: tuple[str] | None = ("postgresql",)
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
-    order_by: Optional[Union[list[OrderingPair], OrderingPair]] = None
+    order_by: list[OrderingPair] | OrderingPair | None = None
     """List or single :class:`~advanced_alchemy.repository.typing.OrderingPair` to use for sorting."""
     _prefer_any: bool = False
     """Whether to prefer ANY() over IN() in queries."""
@@ -685,7 +676,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     @overload
     def _apply_filters(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
+        *filters: StatementFilter | ColumnElement[bool],
         apply_pagination: bool = True,
         statement: Select[tuple[ModelT]],
     ) -> Select[tuple[ModelT]]: ...
@@ -693,7 +684,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     @overload
     def _apply_filters(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
+        *filters: StatementFilter | ColumnElement[bool],
         apply_pagination: bool = True,
         statement: Delete,
     ) -> Delete: ...
@@ -701,22 +692,22 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     @overload
     def _apply_filters(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
+        *filters: StatementFilter | ColumnElement[bool],
         apply_pagination: bool = True,
-        statement: Union[ReturningDelete[tuple[ModelT]], ReturningUpdate[tuple[ModelT]]],
-    ) -> Union[ReturningDelete[tuple[ModelT]], ReturningUpdate[tuple[ModelT]]]: ...
+        statement: ReturningDelete[tuple[ModelT]] | ReturningUpdate[tuple[ModelT]],
+    ) -> ReturningDelete[tuple[ModelT]] | ReturningUpdate[tuple[ModelT]]: ...
 
     @overload
     def _apply_filters(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
+        *filters: StatementFilter | ColumnElement[bool],
         apply_pagination: bool = True,
         statement: Update,
     ) -> Update: ...
 
     def _apply_filters(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
+        *filters: StatementFilter | ColumnElement[bool],
         apply_pagination: bool = True,
         statement: StatementTypeT,
     ) -> StatementTypeT:
@@ -745,7 +736,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     def _filter_select_by_kwargs(
         self,
         statement: StatementTypeT,
-        kwargs: Union[dict[Any, Any], Iterable[tuple[Any, Any]]],
+        kwargs: dict[Any, Any] | Iterable[tuple[Any, Any]],
     ) -> StatementTypeT:
         """Filter a statement using keyword arguments.
 
@@ -770,10 +761,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
     def _apply_order_by(
         self,
         statement: StatementTypeT,
-        order_by: Union[
-            OrderingPair,
-            list[OrderingPair],
-        ],
+        order_by: OrderingPair | list[OrderingPair],
     ) -> StatementTypeT:
         """Apply ordering to a SQL statement.
 
@@ -847,7 +835,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
 
         return any(value is not None and type(value) not in DEFAULT_SAFE_TYPES for value in matched_values)
 
-    def _get_insertmanyvalues_max_parameters(self, chunk_size: Optional[int] = None) -> int:
+    def _get_insertmanyvalues_max_parameters(self, chunk_size: int | None = None) -> int:
         if chunk_size is not None:
             if chunk_size < 1:
                 msg = "chunk_size must be greater than zero"
@@ -858,7 +846,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
             return dialect_limit
         return DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS
 
-    def _get_upsert_chunk_size(self, column_count: int, chunk_size: Optional[int]) -> int:
+    def _get_upsert_chunk_size(self, column_count: int, chunk_size: int | None) -> int:
         """Calculate native-upsert rows per chunk using dialect parameter and page limits."""
         parameter_limited_rows = max(1, self._get_insertmanyvalues_max_parameters(chunk_size) // max(1, column_count))
         dialect_page_size = getattr(self._dialect, "insertmanyvalues_page_size", None)
@@ -880,7 +868,12 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
             return tuple_(*match_columns).in_(match_values)
         return or_(
             *[
-                and_(*[column == row[field_name] for column, field_name in zip(match_columns, match_fields)])
+                and_(
+                    *[
+                        column == row[field_name]
+                        for column, field_name in zip(match_columns, match_fields, strict=False)
+                    ]
+                )
                 for row in row_chunk
             ]
         )
@@ -907,7 +900,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
                     len(existing_key) == len(match_key)
                     and all(
                         compare_values(existing_value, key_value)
-                        for existing_value, key_value in zip(existing_key, match_key)
+                        for existing_value, key_value in zip(existing_key, match_key, strict=False)
                     )
                     for existing_key in unhashable_match_keys
                 )
@@ -950,7 +943,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         self,
         data: Sequence[ModelT],
         strategy: UpsertStrategy,
-    ) -> Optional[list[str]]:
+    ) -> list[str] | None:
         """Resolve columns that have uniform update intent across the batch.
 
         Native DML bypasses ORM default/onupdate handling. Only explicitly set
@@ -1095,12 +1088,12 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
             except TypeError:
                 unhashable_instances.append((match_key, instance))
 
-        ordered_instances: list[Optional[ModelT]] = []
+        ordered_instances: list[ModelT | None] = []
         matched_instance_ids: set[int] = set()
         for row in input_rows:
             match_key = tuple(row[field_name] for field_name in match_fields)
             try:
-                matched_instance: Optional[ModelT] = instances_by_match_key.get(match_key)
+                matched_instance: ModelT | None = instances_by_match_key.get(match_key)
             except TypeError:
                 matched_instance = next(
                     (
@@ -1109,7 +1102,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
                         if len(candidate_key) == len(match_key)
                         and all(
                             compare_values(candidate_value, key_value)
-                            for candidate_value, key_value in zip(candidate_key, match_key)
+                            for candidate_value, key_value in zip(candidate_key, match_key, strict=False)
                         )
                     ),
                     None,

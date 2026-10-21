@@ -8,13 +8,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session
 
-from advanced_alchemy._listeners import is_async_context
 from advanced_alchemy.base import BigIntPrimaryKey
 from advanced_alchemy.extensions.litestar import (
     SQLAlchemyAsyncConfig,
     SQLAlchemyInitPlugin,
     SQLAlchemySyncConfig,
 )
+from advanced_alchemy.utils.sync_tools import is_async_context
 
 
 # Test Function
@@ -168,10 +168,9 @@ def test_plugin_is_async_context(tmp_path: Path) -> None:
         assert response.json() == {"is_async": True}
 
 
-@pytest.mark.filterwarnings("error:Call to deprecated function 'set_async_context':DeprecationWarning")
 @pytest.mark.parametrize("is_async", [True, False])
-def test_provide_session_does_not_call_deprecated_set_async_context(tmp_path: Path, is_async: bool) -> None:
-    """Providing a session must not emit the ``set_async_context`` deprecation warning."""
+def test_provide_session_sync_and_async(tmp_path: Path, is_async: bool) -> None:
+    """Test providing a session in sync and async Litestar configurations."""
     db_path = tmp_path / "litestar_deprecation_test.db"
     config: Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]
     if is_async:

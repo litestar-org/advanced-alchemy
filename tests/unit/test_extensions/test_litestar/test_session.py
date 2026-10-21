@@ -1,6 +1,6 @@
 import datetime
-from collections.abc import Awaitable, Generator
-from typing import Any, Callable, TypeVar
+from collections.abc import Awaitable, Callable, Generator
+from typing import Any, TypeVar
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -27,7 +27,7 @@ class MockDateTime:
     def __init__(self, fixed_time: datetime.datetime) -> None:
         self.fixed_time = fixed_time
 
-    def now(self, tz: datetime.timezone = datetime.timezone.utc) -> datetime.datetime:
+    def now(self, tz: datetime.timezone = datetime.UTC) -> datetime.datetime:
         return self.fixed_time
 
 
@@ -144,7 +144,7 @@ def test_backend_config_backend_class_sync(
 
 def test_session_model_mixin_is_expired_property() -> None:
     """Test the is_expired hybrid property."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     expired_session = MockSessionModel(expires_at=now - datetime.timedelta(seconds=1))
     active_session = MockSessionModel(expires_at=now + datetime.timedelta(seconds=10))
 
@@ -193,7 +193,7 @@ async def test_async_backend_get_session_obj_found(
     """Test _get_session_obj finds an existing session."""
     mock_scalar_result = MagicMock()
     expected_session = mock_session_model(
-        session_id="test_id", data=b"data", expires_at=datetime.datetime.now(datetime.timezone.utc)
+        session_id="test_id", data=b"data", expires_at=datetime.datetime.now(datetime.UTC)
     )
     mock_scalar_result.one_or_none.return_value = expected_session
     mock_async_session.scalars.return_value = mock_scalar_result
@@ -231,7 +231,7 @@ async def test_async_backend_get_existing_not_expired(
     mock_async_session: MagicMock,
 ) -> None:
     """Test getting an existing, non-expired session."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     expires_at = now + datetime.timedelta(seconds=async_backend.config.max_age)
     session_data = b"session_data"
     session_id = "existing_session"
@@ -257,7 +257,7 @@ async def test_async_backend_get_existing_expired(
     mock_async_session: MagicMock,
 ) -> None:
     """Test getting an expired session returns None and deletes it."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     expires_at = now - datetime.timedelta(seconds=1)  # Expired
     session_data = b"expired_data"
     session_id = "expired_session"
@@ -298,7 +298,7 @@ async def test_async_backend_set_new_session(
     monkeypatch: MonkeyPatch,
 ) -> None:
     """Test setting a new session."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     monkeypatch.setattr("advanced_alchemy.extensions.litestar.session.datetime.datetime", MockDateTime(now))
 
     with patch.object(async_backend, "_get_session_obj", return_value=None) as mock_get_obj:
@@ -322,7 +322,7 @@ async def test_async_backend_set_update_existing_session(
     monkeypatch: MonkeyPatch,
 ) -> None:
     """Test updating an existing session's data and expiry."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     monkeypatch.setattr("advanced_alchemy.extensions.litestar.session.datetime.datetime", MockDateTime(now))
 
     mock_existing_session = mock_session_model(
@@ -401,7 +401,7 @@ async def test_async_backend_delete_expired(
     mock_async_session.__aenter__.return_value = mock_async_session
     mock_async_session.__aexit__.return_value = None
 
-    fixed_time = datetime.datetime.now(datetime.timezone.utc)
+    fixed_time = datetime.datetime.now(datetime.UTC)
     mock_datetime = MockDateTime(fixed_time)
     monkeypatch.setattr("advanced_alchemy.extensions.litestar.session.datetime.datetime", mock_datetime)
 
@@ -544,7 +544,7 @@ def test_sync_backend_internal_get_sync_existing_not_expired(
     mock_sync_session: MagicMock,
 ) -> None:
     """Test the internal _get_sync method for existing, non-expired session."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     mock_datetime = MockDateTime(now)
     monkeypatch.setattr("advanced_alchemy.extensions.litestar.session.datetime.datetime", mock_datetime)
 
@@ -576,7 +576,7 @@ def test_sync_backend_internal_get_sync_existing_expired(
     mock_sync_session: MagicMock,
 ) -> None:
     """Test the internal _get_sync method for an expired session."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     mock_datetime = MockDateTime(now)
     monkeypatch.setattr("advanced_alchemy.extensions.litestar.session.datetime.datetime", mock_datetime)
 
@@ -627,7 +627,7 @@ def test_sync_backend_internal_set_sync_new(
     mock_sync_session: MagicMock,
 ) -> None:
     """Test the internal _set_sync method for a new session."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     mock_datetime = MockDateTime(now)
     monkeypatch.setattr("advanced_alchemy.extensions.litestar.session.datetime.datetime", mock_datetime)
 
@@ -670,7 +670,7 @@ def test_sync_backend_internal_set_sync_update(
     mock_sync_session: MagicMock,
 ) -> None:
     """Test the internal _set_sync method updating an existing session."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     mock_datetime = MockDateTime(now)
     monkeypatch.setattr("advanced_alchemy.extensions.litestar.session.datetime.datetime", mock_datetime)
 
@@ -786,7 +786,7 @@ def test_sync_backend_internal_delete_expired_sync(
 
     mock_sync_config.get_session.return_value = mock_sync_session
 
-    fixed_time = datetime.datetime.now(datetime.timezone.utc)
+    fixed_time = datetime.datetime.now(datetime.UTC)
     mock_datetime = MockDateTime(fixed_time)
     monkeypatch.setattr("advanced_alchemy.extensions.litestar.session.datetime.datetime", mock_datetime)
 
@@ -836,7 +836,7 @@ def test_is_expired_expression() -> None:
 
 def test_session_model_fields() -> None:
     """Test that all required fields are present."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     session = MockSessionModel(
         session_id="test_123",
         data=b"test_data",
@@ -939,7 +939,7 @@ async def test_async_concurrent_session_modification(
     mock_result1.one_or_none.return_value = MockSessionModel(
         session_id="test",
         data=b"data",
-        expires_at=datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1),
+        expires_at=datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1),
     )
 
     mock_result2 = MagicMock()
@@ -1105,7 +1105,7 @@ def test_select_session_obj_query_generation() -> None:
 def test_session_expiry_timezone_aware() -> None:
     """Test that session expiry is always timezone-aware."""
 
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     future = now + datetime.timedelta(hours=1)
     past = now - datetime.timedelta(hours=1)
 

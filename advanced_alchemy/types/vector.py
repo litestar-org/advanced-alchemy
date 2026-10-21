@@ -15,7 +15,7 @@ inside ``load_dialect_impl`` so ``from advanced_alchemy.types import Vector``
 never requires ``pgvector`` or ``oracledb`` to be installed.
 """
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Float, literal
 from sqlalchemy.engine import Dialect
@@ -74,7 +74,7 @@ class Vector(TypeDecorator[list[float]]):
             return dialect.type_descriptor(PgVector(self.dim))
         return dialect.type_descriptor(JSON())
 
-    def process_result_value(self, value: Any, dialect: Dialect) -> Optional[list[float]]:
+    def process_result_value(self, value: Any, dialect: Dialect) -> list[float] | None:
         if value is None:
             return None
         if hasattr(value, "tolist"):

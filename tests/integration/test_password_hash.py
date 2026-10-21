@@ -255,19 +255,17 @@ def test_password_hash_repr() -> None:
 
 
 def test_encrypted_string_repr() -> None:
-    """Test __repr__() method for EncryptedString with different backends."""
-    # Test FernetBackend (default)
+    """Test __repr__() method for EncryptedString with different backends without leaking keys."""
     enc_str_fernet = EncryptedString(key="test_key", backend=FernetBackend, length=100)
-    assert repr(enc_str_fernet) == "EncryptedString(key='test_key', backend=FernetBackend, length=100)"
+    assert repr(enc_str_fernet) == "EncryptedString(backend=FernetBackend, length=100)"
+    assert "test_key" not in repr(enc_str_fernet)
 
-    # Test PGCryptoBackend
     enc_str_pgcrypto = EncryptedString(key=b"test_bytes_key", backend=PGCryptoBackend, length=200)
-    assert repr(enc_str_pgcrypto) == "EncryptedString(key=b'test_bytes_key', backend=PGCryptoBackend, length=200)"
+    assert repr(enc_str_pgcrypto) == "EncryptedString(backend=PGCryptoBackend, length=200)"
+    assert "test_bytes_key" not in repr(enc_str_pgcrypto)
 
-    # Test with callable key
     def get_key() -> str:
         return "dynamic_key"
 
-    # The repr should include the callable object itself
     enc_str_callable = EncryptedString(key=get_key, backend=FernetBackend)
-    assert repr(enc_str_callable) == "EncryptedString(key=get_key, backend=FernetBackend, length=None)"
+    assert repr(enc_str_callable) == "EncryptedString(backend=FernetBackend, length=None)"

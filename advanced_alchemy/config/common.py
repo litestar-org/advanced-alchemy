@@ -1,9 +1,7 @@
 import copy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Generic, Optional, Union, cast
-
-from typing_extensions import TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar, cast
 
 from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config.engine import EngineConfig
@@ -11,6 +9,8 @@ from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.utils.dataclass import Empty, simple_asdict
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from sqlalchemy import Connection, Engine, MetaData
     from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker
     from sqlalchemy.orm import Mapper, Query, Session, sessionmaker
@@ -34,28 +34,28 @@ __all__ = (
 
 ALEMBIC_TEMPLATE_PATH = f"{Path(__file__).parent.parent}/alembic/templates"
 """Path to the Alembic templates."""
-ConnectionT = TypeVar("ConnectionT", bound="Union[Connection, AsyncConnection]")
+ConnectionT = TypeVar("ConnectionT", bound="Connection | AsyncConnection")
 """Type variable for SQLAlchemy connection types.
 
 .. seealso::
     :class:`sqlalchemy.Connection`
     :class:`sqlalchemy.ext.asyncio.AsyncConnection`
 """
-EngineT = TypeVar("EngineT", bound="Union[Engine, AsyncEngine]")
+EngineT = TypeVar("EngineT", bound="Engine | AsyncEngine")
 """Type variable for a SQLAlchemy engine.
 
 .. seealso::
     :class:`sqlalchemy.Engine`
     :class:`sqlalchemy.ext.asyncio.AsyncEngine`
 """
-SessionT = TypeVar("SessionT", bound="Union[Session, AsyncSession]")
+SessionT = TypeVar("SessionT", bound="Session | AsyncSession")
 """Type variable for a SQLAlchemy session.
 
 .. seealso::
     :class:`sqlalchemy.Session`
     :class:`sqlalchemy.ext.asyncio.AsyncSession`
 """
-SessionMakerT = TypeVar("SessionMakerT", bound="Union[sessionmaker[Session], async_sessionmaker[AsyncSession]]")
+SessionMakerT = TypeVar("SessionMakerT", bound="sessionmaker[Session] | async_sessionmaker[AsyncSession]")
 """Type variable for a SQLAlchemy sessionmaker.
 
 .. seealso::
@@ -74,39 +74,39 @@ class GenericSessionConfig(Generic[ConnectionT, EngineT, SessionT]):
         SessionT: :class:`sqlalchemy.Session` | :class:`sqlalchemy.ext.asyncio.AsyncSession`
     """
 
-    autobegin: "Union[bool, EmptyType]" = Empty
+    autobegin: "bool | EmptyType" = Empty
     """Automatically start transactions when database access is requested by an operation.
 
     Bool or :class:`Empty <advanced_alchemy.utils.dataclass.Empty>`
     """
-    autoflush: "Union[bool, EmptyType]" = Empty
+    autoflush: "bool | EmptyType" = Empty
     """When ``True``, all query operations will issue a flush call to this :class:`Session <sqlalchemy.orm.Session>`
     before proceeding"""
-    bind: "Optional[Union[EngineT, ConnectionT, EmptyType]]" = Empty
+    bind: "EngineT | ConnectionT | EmptyType | None" = Empty
     """The :class:`Engine <sqlalchemy.engine.Engine>` or :class:`Connection <sqlalchemy.engine.Connection>` that new
     :class:`Session <sqlalchemy.orm.Session>` objects will be bound to."""
-    binds: "Optional[Union[dict[Union[type[Any], Mapper[Any], TableClause, str], Union[EngineT, ConnectionT]], EmptyType]]" = Empty
+    binds: "dict[type[Any] | Mapper[Any] | TableClause | str, EngineT | ConnectionT] | EmptyType | None" = Empty
     """A dictionary which may specify any number of :class:`Engine <sqlalchemy.engine.Engine>` or :class:`Connection
     <sqlalchemy.engine.Connection>` objects as the source of connectivity for SQL operations on a per-entity basis. The
     keys of the dictionary consist of any series of mapped classes, arbitrary Python classes that are bases for mapped
     classes, :class:`Table <sqlalchemy.schema.Table>` objects and :class:`Mapper <sqlalchemy.orm.Mapper>` objects. The
     values of the dictionary are then instances of :class:`Engine <sqlalchemy.engine.Engine>` or less commonly
     :class:`Connection <sqlalchemy.engine.Connection>` objects."""
-    class_: "Union[type[SessionT], EmptyType]" = Empty
+    class_: "type[SessionT] | EmptyType" = Empty
     """Class to use in order to create new :class:`Session <sqlalchemy.orm.Session>` objects."""
-    expire_on_commit: "Union[bool, EmptyType]" = Empty
+    expire_on_commit: "bool | EmptyType" = Empty
     """If ``True``, all instances will be expired after each commit."""
-    info: "Optional[Union[dict[str, Any], EmptyType]]" = Empty
+    info: "dict[str, Any] | EmptyType | None" = Empty
     """Optional dictionary of information that will be available via the
     :attr:`Session.info <sqlalchemy.orm.Session.info>`"""
-    join_transaction_mode: "Union[JoinTransactionMode, EmptyType]" = Empty
+    join_transaction_mode: "JoinTransactionMode | EmptyType" = Empty
     """Describes the transactional behavior to take when a given bind is a Connection that has already begun a
     transaction outside the scope of this Session; in other words the
     :attr:`Connection.in_transaction() <sqlalchemy.Connection.in_transaction>` method returns True."""
-    query_cls: "Optional[Union[type[Query], EmptyType]]" = Empty  # pyright: ignore[reportMissingTypeArgument]
+    query_cls: "type[Query] | EmptyType | None" = Empty  # pyright: ignore[reportMissingTypeArgument]
     """Class which should be used to create new Query objects, as returned by the
     :attr:`Session.query() <sqlalchemy.orm.Session.query>` method."""
-    twophase: "Union[bool, EmptyType]" = Empty
+    twophase: "bool | EmptyType" = Empty
     """When ``True``, all transactions will be started as a "two phase" transaction, i.e. using the "two phase"
     semantics of the database in use along with an XID. During a :attr:`commit() <sqlalchemy.orm.Session.commit>`, after
     :attr:`flush() <sqlalchemy.orm.Session.flush>` has been issued for all attached databases, the
@@ -133,14 +133,14 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     """Configuration options for either the :class:`async_sessionmaker <sqlalchemy.ext.asyncio.async_sessionmaker>`
     or :class:`sessionmaker <sqlalchemy.orm.sessionmaker>`.
     """
-    session_maker_class: "type[Union[sessionmaker[Session], async_sessionmaker[AsyncSession]]]"
+    session_maker_class: "type[sessionmaker[Session] | async_sessionmaker[AsyncSession]]"
     """Sessionmaker class to use.
 
     .. seealso::
         :class:`sqlalchemy.orm.sessionmaker`
         :class:`sqlalchemy.ext.asyncio.async_sessionmaker`
     """
-    connection_string: "Optional[str]" = field(default=None)
+    connection_string: "str | None" = field(default=None)
     """Database connection string in one of the formats supported by SQLAlchemy.
 
     Notes:
@@ -153,12 +153,12 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
 
     The configuration options are documented in the SQLAlchemy documentation.
     """
-    session_maker: "Optional[Callable[[], SessionT]]" = None
+    session_maker: "Callable[[], SessionT] | None" = None
     """Callable that returns a session.
 
     If provided, the plugin will use this rather than instantiate a sessionmaker.
     """
-    engine_instance: "Optional[EngineT]" = None
+    engine_instance: "EngineT | None" = None
     """Optional engine to use.
 
     If set, the plugin will use the provided instance rather than instantiate an engine.
@@ -166,11 +166,11 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     create_all: bool = False
     """If true, all models are automatically created on engine creation."""
 
-    metadata: "Optional[MetaData]" = None
+    metadata: "MetaData | None" = None
     """Optional metadata to use.
 
       If set, the plugin will use the provided instance rather than the default metadata."""
-    bind_key: "Optional[str]" = None
+    bind_key: "str | None" = None
     """Bind key to register a metadata to a specific engine configuration."""
     enable_touch_updated_timestamp_listener: bool = True
     """Enable Created/Updated Timestamp event listener.
@@ -189,7 +189,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     - ``False``: Log warnings on file operation failures, don't raise exceptions
     - ``True`` (default): Raise exceptions on file operation failures
     """
-    cache_config: "Optional[CacheConfig]" = None
+    cache_config: "CacheConfig | None" = None
     """Optional :class:`CacheConfig <advanced_alchemy.cache.CacheConfig>` for dogpile.cache integration.
 
     When set, a :class:`CacheManager <advanced_alchemy.cache.CacheManager>` is instantiated during
@@ -202,7 +202,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     .. seealso::
         :doc:`/usage/caching`
     """
-    cache_manager: "Optional[CacheManager]" = None
+    cache_manager: "CacheManager | None" = None
     """Optional pre-built :class:`CacheManager <advanced_alchemy.cache.CacheManager>` instance.
 
     Takes precedence over :attr:`cache_config`. Useful when sharing a single cache manager across
@@ -334,16 +334,16 @@ class GenericAlembicConfig:
     """Configure the name of the table used to hold the applied alembic revisions.
     Defaults to ``alembic_versions``.
     """
-    version_table_schema: "Optional[str]" = None
+    version_table_schema: "str | None" = None
     """Configure the schema to use for the alembic revisions revisions.
     If unset, it defaults to connection's default schema."""
     script_location: str = "migrations"
     """A path to save generated migrations."""
-    toml_file: "Optional[str]" = None
+    toml_file: "str | None" = None
     """A path to the Alembic pyproject.toml configuration file.
     If left unset, the default configuration will be used.
     """
-    user_module_prefix: "Optional[str]" = "sa."
+    user_module_prefix: "str | None" = "sa."
     """User module prefix."""
     render_as_batch: bool = True
     """Render as batch."""

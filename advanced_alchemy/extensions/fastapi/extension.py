@@ -2,7 +2,6 @@ from collections.abc import Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
-    Optional,
     Union,
     overload,
 )
@@ -79,8 +78,8 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
 
     def __init__(
         self,
-        config: "Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig, Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]]",
-        app: "Optional[FastAPI]" = None,
+        config: "SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]",
+        app: "FastAPI | None" = None,
     ) -> None:
         super().__init__(config, app)
 
@@ -89,13 +88,13 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         self,
         service_class: type["AsyncServiceT_co"],  # pyright: ignore
         /,
-        key: "Optional[str]" = None,
-        statement: "Optional[Select[tuple[ModelT]]]" = None,
-        error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
-        load: "Optional[LoadSpec]" = None,
-        execution_options: "Optional[dict[str, Any]]" = None,
-        uniquify: Optional[bool] = None,
-        count_with_window_function: Optional[bool] = None,
+        key: "str | None" = None,
+        statement: "Select[tuple[ModelT]] | None" = None,
+        error_messages: "ErrorMessages | EmptyType | None" = Empty,
+        load: "LoadSpec | None" = None,
+        execution_options: "dict[str, Any] | None" = None,
+        uniquify: bool | None = None,
+        count_with_window_function: bool | None = None,
     ) -> "Callable[..., AsyncGenerator[AsyncServiceT_co, None]]": ...
 
     @overload
@@ -103,27 +102,27 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         self,
         service_class: type["SyncServiceT_co"],  # pyright: ignore
         /,
-        key: "Optional[str]" = None,
-        statement: "Optional[Select[tuple[ModelT]]]" = None,
-        error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
-        load: "Optional[LoadSpec]" = None,
-        execution_options: "Optional[dict[str, Any]]" = None,
-        uniquify: Optional[bool] = None,
-        count_with_window_function: Optional[bool] = None,
+        key: "str | None" = None,
+        statement: "Select[tuple[ModelT]] | None" = None,
+        error_messages: "ErrorMessages | EmptyType | None" = Empty,
+        load: "LoadSpec | None" = None,
+        execution_options: "dict[str, Any] | None" = None,
+        uniquify: bool | None = None,
+        count_with_window_function: bool | None = None,
     ) -> "Callable[..., Generator[SyncServiceT_co, None, None]]": ...
 
     def provide_service(  # pragma: no cover
         self,
         service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
         /,
-        key: "Optional[str]" = None,
-        statement: "Optional[Select[tuple[ModelT]]]" = None,
-        error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
-        load: "Optional[LoadSpec]" = None,
-        execution_options: "Optional[dict[str, Any]]" = None,
-        uniquify: Optional[bool] = None,
-        count_with_window_function: Optional[bool] = None,
-    ) -> "Callable[..., Union[AsyncGenerator[AsyncServiceT_co, None], Generator[SyncServiceT_co, None, None]]]":
+        key: "str | None" = None,
+        statement: "Select[tuple[ModelT]] | None" = None,
+        error_messages: "ErrorMessages | EmptyType | None" = Empty,
+        load: "LoadSpec | None" = None,
+        execution_options: "dict[str, Any] | None" = None,
+        uniquify: bool | None = None,
+        count_with_window_function: bool | None = None,
+    ) -> "Callable[..., AsyncGenerator[AsyncServiceT_co, None] | Generator[SyncServiceT_co, None, None]]":
         """Provides a service instance for dependency injection.
 
         Args:
@@ -157,7 +156,7 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
     def provide_filters(  # pragma: no cover
         config: "FilterConfig",
         /,
-        dep_defaults: "Optional[DependencyDefaults]" = None,
+        dep_defaults: "DependencyDefaults | None" = None,
     ) -> "Callable[..., list[filters.FilterTypes]]":
         """Provides filters for dependency injection.
 

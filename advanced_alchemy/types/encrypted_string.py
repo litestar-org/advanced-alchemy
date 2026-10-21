@@ -1,20 +1,31 @@
 import abc
 import base64
+import hashlib
 import os
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Final
 
 from sqlalchemy import String, Text, TypeDecorator
 from sqlalchemy import func as sql_func
 
-from advanced_alchemy.exceptions import IntegrityError, MissingDependencyError
+from advanced_alchemy.exceptions import ImproperConfigurationError, IntegrityError, MissingDependencyError
 from advanced_alchemy.typing import CRYPTOGRAPHY_INSTALLED
-from advanced_alchemy.utils.deprecation import warn_deprecation
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from sqlalchemy.engine import Dialect
 
 
-__all__ = ("EncryptedString", "EncryptedText", "EncryptionBackend", "FernetBackend", "PGCryptoBackend")
+__all__ = (
+    "DEFAULT_ENCRYPTION_KEY_ENV",
+    "EncryptedString",
+    "EncryptedText",
+    "EncryptionBackend",
+    "FernetBackend",
+    "PGCryptoBackend",
+    "get_default_encryption_key",
+    "set_default_encryption_key",
+)
 
 
 class EncryptionBackend(abc.ABC):
@@ -27,7 +38,7 @@ class EncryptionBackend(abc.ABC):
         passphrase (bytes): The encryption passphrase used by the backend.
     """
 
-    def mount_vault(self, key: "Union[str, bytes]") -> None:
+    def mount_vault(self, key: "str | bytes") -> None:
         """Mounts the vault with the provided encryption key.
 
         Args:
@@ -38,7 +49,7 @@ class EncryptionBackend(abc.ABC):
         self.init_engine(key)
 
     @abc.abstractmethod
-    def init_engine(self, key: "Union[bytes, str]") -> None:  # pragma: no cover
+    def init_engine(self, key: "bytes | str") -> None:  # pragma: no cover
         """Initializes the encryption engine with the provided key.
 
         Args:
@@ -76,7 +87,7 @@ class EncryptionBackend(abc.ABC):
             NotImplementedError: If the method is not implemented by the subclass.
         """
 
-    def bind_expression(self, bindvalue: Any) -> "Optional[Any]":
+    def bind_expression(self, bindvalue: Any) -> "Any | None":
         """Returns a SQL expression that encrypts the bound parameter server-side.
 
         Client-side backends (which encrypt in :meth:`encrypt`) return ``None`` so the
@@ -91,7 +102,7 @@ class EncryptionBackend(abc.ABC):
         """
         return None
 
-    def column_expression(self, column: Any) -> "Optional[Any]":
+    def column_expression(self, column: Any) -> "Any | None":
         """Returns a SQL expression that decrypts the column server-side.
 
         Client-side backends (which decrypt in :meth:`decrypt`) return ``None`` so the
@@ -119,7 +130,7 @@ class PGCryptoBackend(EncryptionBackend):
         passphrase (str): The base64-encoded passphrase used for encryption and decryption.
     """
 
-    def init_engine(self, key: "Union[bytes, str]") -> None:
+    def init_engine(self, key: "bytes | str") -> None:
         """Initializes the pgcrypto engine with the provided key.
 
         Args:
@@ -157,7 +168,7 @@ class PGCryptoBackend(EncryptionBackend):
             return str(value)
         return value
 
-    def bind_expression(self, bindvalue: Any) -> "Optional[Any]":
+    def bind_expression(self, bindvalue: Any) -> "Any | None":
         """Wraps the bound parameter in ``armor(pgp_sym_encrypt(...))``.
 
         Args:
@@ -168,7 +179,7 @@ class PGCryptoBackend(EncryptionBackend):
         """
         return sql_func.armor(sql_func.pgp_sym_encrypt(bindvalue, self.passphrase))
 
-    def column_expression(self, column: Any) -> "Optional[Any]":
+    def column_expression(self, column: Any) -> "Any | None":
         """Wraps the column in ``pgp_sym_decrypt(dearmor(...))``.
 
         Args:
@@ -202,7 +213,7 @@ class FernetBackend(EncryptionBackend):
         if not CRYPTOGRAPHY_INSTALLED:
             raise MissingDependencyError(package="cryptography")
 
-    def mount_vault(self, key: "Union[str, bytes]") -> None:
+    def mount_vault(self, key: "str | bytes") -> None:
         """Mounts the vault with the provided encryption key.
 
         This method hashes the key using SHA256 before initializing the engine.
@@ -210,17 +221,11 @@ class FernetBackend(EncryptionBackend):
         Args:
             key (str | bytes): The encryption key.
         """
-        from cryptography.hazmat.backends import default_backend
-        from cryptography.hazmat.primitives import hashes
-
-        if isinstance(key, str):
-            key = key.encode()
-        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
-        digest.update(key)
-        engine_key = digest.finalize()
+        key_bytes = key.encode("utf-8") if isinstance(key, str) else key
+        engine_key = hashlib.sha256(key_bytes).digest()
         self.init_engine(engine_key)
 
-    def init_engine(self, key: "Union[bytes, str]") -> None:
+    def init_engine(self, key: "bytes | str") -> None:
         """Initializes the Fernet engine with the provided key.
 
         Args:
@@ -259,13 +264,27 @@ class FernetBackend(EncryptionBackend):
         """
         if not isinstance(value, str):  # pragma: no cover
             value = str(value)
-        decrypted: Union[str, bytes] = self.fernet.decrypt(value.encode())
+        decrypted: str | bytes = self.fernet.decrypt(value.encode())
         if not isinstance(decrypted, str):
             decrypted = decrypted.decode("utf-8")  # pyright: ignore[reportAttributeAccessIssue]
         return decrypted
 
 
-DEFAULT_ENCRYPTION_KEY = os.urandom(32)
+DEFAULT_ENCRYPTION_KEY_ENV: Final[str] = "ADVANCED_ALCHEMY_ENCRYPTION_KEY"
+_default_encryption_key: "str | bytes | Callable[[], str | bytes] | None" = None
+
+
+def set_default_encryption_key(
+    key: "str | bytes | Callable[[], str | bytes] | None",
+) -> None:
+    """Set the process-wide default encryption key used when a column omits ``key``."""
+    global _default_encryption_key  # noqa: PLW0603
+    _default_encryption_key = key
+
+
+def get_default_encryption_key() -> "str | bytes | Callable[[], str | bytes] | None":
+    """Return the configured process-wide default encryption key, if any."""
+    return _default_encryption_key
 
 
 class EncryptedString(TypeDecorator[str]):
@@ -275,13 +294,15 @@ class EncryptedString(TypeDecorator[str]):
     It extends :class:`sqlalchemy.types.TypeDecorator` and implements String as its underlying type.
 
     Args:
-        key (str | bytes | Callable[[], str | bytes] | None): The encryption key. Can be a string, bytes, or callable returning either. Defaults to os.urandom(32).
+        key (str | bytes | Callable[[], str | bytes] | None): The encryption key. Can be a string, bytes, or callable returning either. When omitted, resolves lazily from :func:`get_default_encryption_key` or the environment variable named by ``key_env``.
         backend (Type[EncryptionBackend] | None): The encryption backend class to use. Defaults to FernetBackend.
         length (int | None): The length of the unencrypted string. This is used for documentation and validation purposes only, as encrypted strings will be longer.
+        key_env (str): Environment variable name checked when ``key`` and the default encryption key are unset. Defaults to :data:`DEFAULT_ENCRYPTION_KEY_ENV`.
         **kwargs (Any | None): Additional arguments passed to the underlying String type.
 
     Attributes:
-        key (str | bytes | Callable[[], str | bytes]): The encryption key.
+        key (str | bytes | Callable[[], str | bytes] | None): The encryption key.
+        key_env (str): Environment variable name used for fallback key resolution.
         backend (EncryptionBackend): The encryption backend instance.
         length (int | None): The unencrypted string length.
     """
@@ -291,42 +312,36 @@ class EncryptedString(TypeDecorator[str]):
 
     def __init__(
         self,
-        key: "Union[str, bytes, Callable[[], Union[str, bytes]]]" = DEFAULT_ENCRYPTION_KEY,
+        key: "str | bytes | Callable[[], str | bytes] | None" = None,
         backend: "type[EncryptionBackend]" = FernetBackend,
-        length: "Optional[int]" = None,
+        length: "int | None" = None,
+        key_env: str = DEFAULT_ENCRYPTION_KEY_ENV,
         **kwargs: Any,
     ) -> None:
         """Initializes the EncryptedString TypeDecorator.
 
         Args:
-            key (str | bytes | Callable[[], str | bytes] | None): The encryption key. Can be a string, bytes, or callable returning either. Defaults to os.urandom(32).
+            key (str | bytes | Callable[[], str | bytes] | None): The encryption key. Can be a string, bytes, or callable returning either.
             backend (Type[EncryptionBackend] | None): The encryption backend class to use. Defaults to FernetBackend.
             length (int | None): The length of the unencrypted string. This is used for documentation and validation purposes only.
+            key_env (str): Environment variable name checked when ``key`` and the default encryption key are unset.
             **kwargs (Any | None): Additional arguments passed to the underlying String type.
         """
         super().__init__()
-        if key is DEFAULT_ENCRYPTION_KEY:
-            warn_deprecation(
-                version="1.11.0",
-                deprecated_name="EncryptedString(key=<default>)",
-                kind="parameter",
-                removal_in="2.0.0",
-                alternative="an explicit key (str/bytes) or a callable returning one",
-                info="The random default key changes on every process restart, making previously written rows undecryptable. Provide a stable key.",
-            )
         self.key = key
+        self.key_env = key_env
         self.backend = backend()
         self.length = length
         self._vault_mounted = False
+        self._last_resolved_key: str | bytes | None = None
 
     def __repr__(self) -> str:
-        """Return a reconstructable representation of the type.
+        """Return a reconstructable representation of the type without leaking secret keys.
 
         Uses ``type(self).__name__`` so subclasses (e.g. :class:`EncryptedText`) render their
         own name; this keeps Alembic autogenerate from reconstructing the wrong column type.
         """
-        key_repr = self.key.__name__ if callable(self.key) else repr(self.key)
-        return f"{type(self).__name__}(key={key_repr}, backend={self.backend.__class__.__name__}, length={self.length})"
+        return f"{type(self).__name__}(backend={self.backend.__class__.__name__}, length={self.length})"
 
     @property
     def python_type(self) -> type[str]:
@@ -357,7 +372,7 @@ class EncryptedString(TypeDecorator[str]):
             return dialect.type_descriptor(String(length=4000))
         return dialect.type_descriptor(String())
 
-    def process_bind_param(self, value: Any, dialect: "Dialect") -> "Union[str, None]":
+    def process_bind_param(self, value: Any, dialect: "Dialect") -> "str | None":
         """Processes the value before binding it to the SQL statement.
 
         This method encrypts the value using the specified backend and validates length if specified.
@@ -383,7 +398,7 @@ class EncryptedString(TypeDecorator[str]):
         self.mount_vault()
         return self.backend.encrypt(value)
 
-    def process_result_value(self, value: Any, dialect: "Dialect") -> "Union[str, None]":
+    def process_result_value(self, value: Any, dialect: "Dialect") -> "str | None":
         """Processes the value after retrieving it from the database.
 
         This method decrypts the value using the specified backend.
@@ -400,19 +415,44 @@ class EncryptedString(TypeDecorator[str]):
         self.mount_vault()
         return self.backend.decrypt(value)
 
+    def _resolve_key(self) -> "str | bytes":
+        """Resolve the active encryption key from column, default config, or environment.
+
+        Raises:
+            ImproperConfigurationError: If no encryption key is configured.
+
+        Returns:
+            str | bytes: The resolved encryption key.
+        """
+        candidate = self.key if self.key is not None else get_default_encryption_key()
+        if candidate is not None:
+            resolved = candidate() if callable(candidate) else candidate
+            if resolved:
+                return resolved
+        env_key = os.environ.get(self.key_env)
+        if env_key:
+            return env_key
+        msg = (
+            f"{type(self).__name__} requires an encryption key. Pass `key=...`, configure "
+            f"`encryption_key=...` on `SQLAlchemyAsyncConfig`/`SQLAlchemySyncConfig`, or set the "
+            f"`{self.key_env}` environment variable."
+        )
+        raise ImproperConfigurationError(msg)
+
     def mount_vault(self) -> None:
         """Mounts the vault with the encryption key.
 
-        For a static key the cipher is derived once and reused. For a callable
-        key it is re-resolved on every call so rotated keys take effect.
+        The backend cipher is initialized on first use and only re-mounted when
+        the resolved key value changes.
         """
-        if self._vault_mounted and not callable(self.key):
+        key = self._resolve_key()
+        if self._vault_mounted and key == self._last_resolved_key:
             return
-        key = self.key() if callable(self.key) else self.key
         self.backend.mount_vault(key)
+        self._last_resolved_key = key
         self._vault_mounted = True
 
-    def bind_expression(self, bindparam: Any) -> "Optional[Any]":
+    def bind_expression(self, bindparam: Any) -> "Any | None":
         """Wraps the bound parameter with the backend's server-side encryption, if any.
 
         For client-side backends the parameter is returned unchanged so it compiles to a
@@ -428,7 +468,7 @@ class EncryptedString(TypeDecorator[str]):
         wrapped = self.backend.bind_expression(bindparam)
         return wrapped if wrapped is not None else bindparam
 
-    def column_expression(self, column: Any) -> "Optional[Any]":
+    def column_expression(self, column: Any) -> "Any | None":
         """Wraps the column read with the backend's server-side decryption, if any.
 
         For client-side backends the column is returned unchanged; server-side backends

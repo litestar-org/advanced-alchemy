@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from enum import Enum
 from functools import lru_cache, partial
 from pathlib import Path, PurePath
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast, overload
+from typing import TYPE_CHECKING, Any, Callable, cast, overload
 from uuid import UUID
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
@@ -55,8 +55,8 @@ DEFAULT_TYPE_DECODERS = [  # pyright: ignore[reportUnknownVariableType]
 
 def find_filter(
     filter_type: type[FilterTypeT],
-    filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter]]",
-) -> "Union[FilterTypeT, None]":
+    filters: "Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter]",
+) -> "FilterTypeT | None":
     """Get the filter specified by filter type from the filters.
 
     Args:
@@ -67,7 +67,7 @@ def find_filter(
         The match filter instance or None
     """
     return next(
-        (cast("Optional[FilterTypeT]", filter_) for filter_ in filters if isinstance(filter_, filter_type)),
+        (cast("FilterTypeT | None", filter_) for filter_ in filters if isinstance(filter_, filter_type)),
         None,
     )
 
@@ -80,7 +80,7 @@ def resolve_item_ids(
     id_attribute: Any = None,
 ) -> list[PrimaryKeyType]:
     """Resolve model instances in ``item_ids`` without copying id-only input."""
-    resolved_item_ids: Optional[list[PrimaryKeyType]] = None
+    resolved_item_ids: list[PrimaryKeyType] | None = None
     for index, item in enumerate(item_ids):
         if isinstance(item, model_type):
             if resolved_item_ids is None:
@@ -118,7 +118,7 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: "Union[ModelProtocol, RowMapping, Row[Any], dict[str, Any]]",
+        data: "ModelProtocol | RowMapping | Row[Any] | dict[str, Any]",
         *,
         schema_type: "type[ModelDTOT]",
     ) -> "ModelDTOT": ...
@@ -127,7 +127,7 @@ class ResultConverter:
     def to_schema(
         self,
         data: "ModelOrRowMappingT",
-        total: "Optional[int]" = None,
+        total: "int | None" = None,
         *,
         schema_type: None = None,
     ) -> "ModelOrRowMappingT": ...
@@ -135,8 +135,8 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: "Union[ModelProtocol, RowMapping, Row[Any], dict[str, Any]]",
-        total: "Optional[int]" = None,
+        data: "ModelProtocol | RowMapping | Row[Any] | dict[str, Any]",
+        total: "int | None" = None,
         *,
         schema_type: "type[ModelDTOT]",
     ) -> "ModelDTOT": ...
@@ -145,8 +145,8 @@ class ResultConverter:
     def to_schema(
         self,
         data: "ModelOrRowMappingT",
-        total: "Optional[int]" = None,
-        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
+        total: "int | None" = None,
+        filters: "Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None" = None,
         *,
         schema_type: None = None,
     ) -> "ModelOrRowMappingT": ...
@@ -154,9 +154,9 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: "Union[ModelProtocol, RowMapping, Row[Any], dict[str, Any]]",
-        total: "Optional[int]" = None,
-        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
+        data: "ModelProtocol | RowMapping | Row[Any] | dict[str, Any]",
+        total: "int | None" = None,
+        filters: "Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None" = None,
         *,
         schema_type: "type[ModelDTOT]",
     ) -> "ModelDTOT": ...
@@ -179,7 +179,7 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: "Union[Sequence[ModelProtocol], Sequence[RowMapping], Sequence[Row[Any]], Sequence[dict[str, Any]]]",
+        data: "Sequence[ModelProtocol] | Sequence[RowMapping] | Sequence[Row[Any]] | Sequence[dict[str, Any]]",
         *,
         schema_type: "type[ModelDTOT]",
     ) -> "OffsetPagination[ModelDTOT]": ...
@@ -188,8 +188,8 @@ class ResultConverter:
     def to_schema(
         self,
         data: "Sequence[ModelOrRowMappingT]",
-        total: "Optional[int]" = None,
-        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
+        total: "int | None" = None,
+        filters: "Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None" = None,
         *,
         schema_type: None = None,
     ) -> "OffsetPagination[ModelOrRowMappingT]": ...
@@ -197,21 +197,21 @@ class ResultConverter:
     @overload
     def to_schema(
         self,
-        data: "Union[Sequence[ModelProtocol], Sequence[RowMapping], Sequence[Row[Any]], Sequence[dict[str, Any]]]",
-        total: "Optional[int]" = None,
-        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
+        data: "Sequence[ModelProtocol] | Sequence[RowMapping] | Sequence[Row[Any]] | Sequence[dict[str, Any]]",
+        total: "int | None" = None,
+        filters: "Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None" = None,
         *,
         schema_type: "type[ModelDTOT]",
     ) -> "OffsetPagination[ModelDTOT]": ...
 
     def to_schema(
         self,
-        data: "Union[ModelOrRowMappingT, Sequence[ModelOrRowMappingT], ModelProtocol, Sequence[ModelProtocol], RowMapping, Sequence[RowMapping], Row[Any], Sequence[Row[Any]], dict[str, Any], Sequence[dict[str, Any]]]",
-        total: "Optional[int]" = None,
-        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
+        data: "ModelOrRowMappingT | Sequence[ModelOrRowMappingT] | ModelProtocol | Sequence[ModelProtocol] | RowMapping | Sequence[RowMapping] | Row[Any] | Sequence[Row[Any]] | dict[str, Any] | Sequence[dict[str, Any]]",
+        total: "int | None" = None,
+        filters: "Sequence[StatementFilter | ColumnElement[bool]] | Sequence[StatementFilter] | None" = None,
         *,
-        schema_type: "Optional[type[ModelDTOT]]" = None,
-    ) -> "Union[ModelOrRowMappingT, OffsetPagination[ModelOrRowMappingT], ModelDTOT, OffsetPagination[ModelDTOT]]":
+        schema_type: "type[ModelDTOT] | None" = None,
+    ) -> "ModelOrRowMappingT | OffsetPagination[ModelOrRowMappingT] | ModelDTOT | OffsetPagination[ModelDTOT]":
         """Convert the object to a response schema.
 
         When `schema_type` is None, the model is returned with no conversion.
@@ -297,7 +297,7 @@ class ResultConverter:
 def _default_msgspec_deserializer(
     target_type: Any,
     value: Any,
-    type_decoders: "Union[Sequence[tuple[Callable[[Any], bool], Callable[[Any, Any], Any]]], None]" = None,
+    type_decoders: "Sequence[tuple[Callable[[Any], bool], Callable[[Any, Any], Any]]] | None" = None,
 ) -> Any:  # pragma: no cover
     """Transform values non-natively supported by ``msgspec``
 
@@ -374,7 +374,7 @@ def _convert_attrs_item(item: Any, schema_type: "type[ModelDTOT]", field_names: 
     return schema_type(**filtered_dict)  # type: ignore[return-value]
 
 
-def _create_pagination(items: Any, filters: Any, total: "Optional[int]") -> "OffsetPagination[Any]":
+def _create_pagination(items: Any, filters: Any, total: "int | None") -> "OffsetPagination[Any]":
     """Create OffsetPagination with consistent limit_offset logic.
 
     Args:

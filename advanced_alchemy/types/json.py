@@ -1,5 +1,5 @@
 import functools
-from typing import Any, Optional, Union, cast
+from typing import Any, cast
 
 from sqlalchemy import text, util
 from sqlalchemy.dialects.oracle import BLOB as ORA_BLOB
@@ -51,10 +51,10 @@ class ORA_JSONB(TypeDecorator[dict[str, Any]], SchemaType):  # noqa: N801
             return dialect.type_descriptor(ora_json())
         return dialect.type_descriptor(ORA_BLOB())
 
-    def process_bind_param(self, value: Any, dialect: Dialect) -> Optional[Any]:
+    def process_bind_param(self, value: Any, dialect: Dialect) -> Any | None:
         return value if value is None else encode_json(value)
 
-    def process_result_value(self, value: Union[bytes, None], dialect: Dialect) -> Optional[Any]:
+    def process_result_value(self, value: bytes | None, dialect: Dialect) -> Any | None:
         oracledb_ver = cast("tuple[int, ...]", getattr(dialect, "oracledb_ver", (0, 0)))
         if oracledb_ver < (2,):
             return value if value is None else decode_json(value)
@@ -70,7 +70,7 @@ class ORA_JSONB(TypeDecorator[dict[str, Any]], SchemaType):  # noqa: N801
         sv = compiler.dialect.server_version_info
         return not (sv and sv[0] >= _ORACLE_NATIVE_JSON_MIN_VERSION)
 
-    def _variant_mapping_for_set_table(self, column: Any) -> Optional[dict[str, Any]]:
+    def _variant_mapping_for_set_table(self, column: Any) -> dict[str, Any] | None:
         if column.type._variant_mapping:  # noqa: SLF001
             variant_mapping = dict(column.type._variant_mapping)  # noqa: SLF001
             variant_mapping["_default"] = column.type

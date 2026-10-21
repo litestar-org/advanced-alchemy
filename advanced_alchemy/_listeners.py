@@ -4,21 +4,20 @@
 import asyncio
 import datetime
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from sqlalchemy import event
 from sqlalchemy.inspection import inspect
 
-from advanced_alchemy.utils.deprecation import warn_deprecation
-from advanced_alchemy.utils.sync_tools import is_async_context as _is_async_context_util
-
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_scoped_session
     from sqlalchemy.orm import Session, UOWTransaction, scoped_session
     from sqlalchemy.orm.state import InstanceState
 
     from advanced_alchemy.cache import CacheManager
-    from advanced_alchemy.types.file_object import FileObject, FileObjectSessionTracker, StorageRegistry
+    from advanced_alchemy.types.file_object import FileObject, FileObjectSessionTracker
 
 _active_file_operations: set[asyncio.Task[Any]] = set()
 """Stores active file operations to prevent them from being garbage collected."""
@@ -47,7 +46,7 @@ def get_file_tracker(
     """
     from advanced_alchemy.types.file_object import FileObjectSessionTracker
 
-    tracker: Optional[FileObjectSessionTracker] = session.info.get(_FILE_TRACKER_KEY)
+    tracker: FileObjectSessionTracker | None = session.info.get(_FILE_TRACKER_KEY)
     if tracker is None and create:
         raise_on_error = session.info.get("file_object_raise_on_error", True)
         tracker = FileObjectSessionTracker(raise_on_error=raise_on_error)
@@ -77,7 +76,7 @@ def _is_listener_enabled(session: "Session", key: str) -> bool:
     if key in session_info:
         return bool(session_info[key])
 
-    options_sources: list[Optional[Union[Callable[[], dict[str, Any]], dict[str, Any]]]] = []
+    options_sources: list[Callable[[], dict[str, Any]] | dict[str, Any] | None] = []
     if session.bind:
         options_sources.append(getattr(session.bind, "execution_options", None))
         sync_engine = getattr(session.bind, "sync_engine", None)
@@ -89,7 +88,7 @@ def _is_listener_enabled(session: "Session", key: str) -> bool:
         if options_source is None:
             continue
 
-        options: Optional[dict[str, Any]] = None
+        options: dict[str, Any] | None = None
         if callable(options_source):
             try:
                 result = options_source()
@@ -105,53 +104,6 @@ def _is_listener_enabled(session: "Session", key: str) -> bool:
             break
 
     return enable_listener
-
-
-def set_async_context(is_async: bool = True) -> None:  # noqa: ARG001
-    """Set the async context flag.
-
-    .. deprecated:: 1.9.0
-        This function is no longer needed as listeners are now explicitly sync or async.
-    """
-    warn_deprecation(
-        version="1.9.0",
-        deprecated_name="set_async_context",
-        kind="function",
-        removal_in="2.0.0",
-        info="Listeners are now explicitly sync or async, so this context flag is no longer needed.",
-    )
-
-
-def reset_async_context(token: Any) -> None:  # noqa: ARG001
-    """Reset the async context flag using the provided token.
-
-    .. deprecated:: 1.9.0
-        This function is no longer needed as listeners are now explicitly sync or async.
-    """
-    warn_deprecation(
-        version="1.9.0",
-        deprecated_name="reset_async_context",
-        kind="function",
-        removal_in="2.0.0",
-        info="Listeners are now explicitly sync or async, so this context flag is no longer needed.",
-    )
-
-
-def is_async_context() -> bool:
-    """Check if we're in an async context.
-
-    .. deprecated:: 1.9.0
-        This function is no longer needed as listeners are now explicitly sync or async.
-    """
-    warn_deprecation(
-        version="1.9.0",
-        deprecated_name="is_async_context",
-        kind="function",
-        removal_in="2.0.0",
-        alternative="advanced_alchemy.utils.sync_tools.is_async_context",
-        info="This function in `_listeners` is deprecated. Use the utility in `sync_tools` or relying on explicit listener classes.",
-    )
-    return _is_async_context_util()
 
 
 class FileObjectInspector:
@@ -189,8 +141,8 @@ class FileObjectInspector:
         """Handle inspection of a single FileObject attribute."""
 
         history = attr_state.history
-        current_value: Optional[FileObject] = history.added[0] if history.added else None
-        original_value: Optional[FileObject] = history.deleted[0] if history.deleted else None
+        current_value: FileObject | None = history.added[0] if history.added else None
+        original_value: FileObject | None = history.deleted[0] if history.deleted else None
 
         if current_value:
             pending_content = getattr(current_value, "_pending_source_content", None)
@@ -218,9 +170,9 @@ class FileObjectInspector:
         items_to_delete: set[FileObject] = set()
         items_to_save: dict[FileObject, Any] = {}
 
-        current_list_instance: Optional[MutableList[FileObject]] = getattr(instance, attr_name, None)
-        original_list_from_history: Optional[MutableList[FileObject]] = history.deleted[0] if history.deleted else None
-        current_list_from_history: Optional[MutableList[FileObject]] = history.added[0] if history.added else None
+        current_list_instance: MutableList[FileObject] | None = getattr(instance, attr_name, None)
+        original_list_from_history: MutableList[FileObject] | None = history.deleted[0] if history.deleted else None
+        current_list_from_history: MutableList[FileObject] | None = history.added[0] if history.added else None
 
         # 1. Deletions from Mutations (Primary source: _pending_removed set)
         if isinstance(current_list_instance, MutableList):
@@ -336,7 +288,7 @@ class BaseFileObjectListener:
         return _is_listener_enabled(session, "enable_file_object_listener")
 
     @classmethod
-    def before_flush(cls, session: "Session", flush_context: "UOWTransaction", instances: Optional[object]) -> None:
+    def before_flush(cls, session: "Session", flush_context: "UOWTransaction", instances: object | None) -> None:
         """Track FileObject changes before a flush."""
         from advanced_alchemy.types.file_object import StoredObject
 
@@ -430,63 +382,9 @@ class AsyncFileObjectListener(BaseFileObjectListener):
             finally:
                 session.info.pop(_FILE_TRACKER_KEY, None)
 
-        # Store the task reference, even if not awaited here
         t = asyncio.create_task(_do_async_rollback())
         _active_file_operations.add(t)
         t.add_done_callback(lambda _: _active_file_operations.remove(t))
-
-
-class FileObjectListener(SyncFileObjectListener, AsyncFileObjectListener):
-    """Legacy FileObject listener that handles both sync and async via runtime checks.
-
-    .. deprecated:: 1.9.0
-        Use :class:`SyncFileObjectListener` or :class:`AsyncFileObjectListener` instead.
-    """
-
-    @classmethod
-    def after_commit(cls, session: "Session") -> None:
-        if is_async_context():
-            AsyncFileObjectListener.after_commit(session)
-        else:
-            SyncFileObjectListener.after_commit(session)
-
-    @classmethod
-    def after_rollback(cls, session: "Session") -> None:
-        if is_async_context():
-            AsyncFileObjectListener.after_rollback(session)
-        else:
-            SyncFileObjectListener.after_rollback(session)
-
-
-def setup_file_object_listeners(registry: Optional["StorageRegistry"] = None) -> None:  # noqa: ARG001
-    """Registers the FileObject event listeners globally.
-
-    .. deprecated:: 1.9.0
-        This function registers listeners globally on the Session class.
-        Prefer using scoped listeners via SQLAlchemyConfig.
-    """
-    from sqlalchemy.event import contains
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from sqlalchemy.orm import Session
-
-    listeners = {
-        "before_flush": FileObjectListener.before_flush,
-        "after_commit": FileObjectListener.after_commit,
-        "after_rollback": FileObjectListener.after_rollback,
-    }
-
-    # Register for sync Session
-    for event_name, listener_func in listeners.items():
-        if not contains(Session, event_name, listener_func):  # type: ignore[arg-type]
-            event.listen(Session, event_name, listener_func)  # type: ignore[arg-type]
-
-    async_listeners_to_register = {
-        "after_commit": FileObjectListener.after_commit,
-        "after_rollback": FileObjectListener.after_rollback,
-    }
-    for event_name, listener_func in async_listeners_to_register.items():
-        if hasattr(AsyncSession, event_name) and not contains(AsyncSession, event_name, listener_func):
-            event.listen(AsyncSession, event_name, listener_func)
 
 
 class CacheInvalidationTracker:
@@ -505,10 +403,10 @@ class CacheInvalidationTracker:
 
     def __init__(self, cache_manager: "CacheManager") -> None:
         self._cache_manager = cache_manager
-        self._pending_invalidations: list[tuple[str, Any, Optional[str]]] = []
+        self._pending_invalidations: list[tuple[str, Any, str | None]] = []
         self._pending_model_bumps: set[str] = set()
 
-    def add_invalidation(self, model_name: str, entity_id: Any, bind_group: Optional[str] = None) -> None:
+    def add_invalidation(self, model_name: str, entity_id: Any, bind_group: str | None = None) -> None:
         """Queue an entity for cache invalidation.
 
         The actual invalidation and model version bump are deferred until
@@ -560,7 +458,7 @@ class CacheInvalidationTracker:
 
 
 def get_cache_tracker(
-    session: "Union[Session, AsyncSession, scoped_session[Session], async_scoped_session[AsyncSession]]",
+    session: "Session | AsyncSession | scoped_session[Session] | async_scoped_session[AsyncSession]",
     cache_manager: Optional["CacheManager"] = None,
     create: bool = True,
 ) -> Optional["CacheInvalidationTracker"]:
@@ -577,7 +475,7 @@ def get_cache_tracker(
     Returns:
         The cache tracker or None if not available.
     """
-    tracker: Optional[CacheInvalidationTracker] = session.info.get(_CACHE_TRACKER_KEY)
+    tracker: CacheInvalidationTracker | None = session.info.get(_CACHE_TRACKER_KEY)
     if tracker is None and create and cache_manager is not None:
         tracker = CacheInvalidationTracker(cache_manager)
         session.info[_CACHE_TRACKER_KEY] = tracker
@@ -721,13 +619,13 @@ def touch_updated_timestamp(session: "Session", *_: Any) -> None:
             continue
 
         if _has_persistent_column_changes(state, skip_keys={"updated_at"}):
-            instance.updated_at = datetime.datetime.now(datetime.timezone.utc)
+            instance.updated_at = datetime.datetime.now(datetime.UTC)
 
 
 def _has_persistent_column_changes(
     state: "InstanceState[Any]",
     *,
-    skip_keys: "Optional[set[str]]" = None,
+    skip_keys: "set[str] | None" = None,
 ) -> bool:
     """Check if any mapped column (excluding ``skip_keys``) has modifications pending flush."""
     if skip_keys is None:

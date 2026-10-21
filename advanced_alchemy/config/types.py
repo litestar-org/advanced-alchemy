@@ -1,9 +1,7 @@
 """Type aliases and constants used in the package config."""
 
-from collections.abc import Mapping, Sequence
-from typing import Any, Callable, Literal
-
-from typing_extensions import TypeAlias
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, Literal, TypeAlias
 
 TypeEncodersMap: TypeAlias = Mapping[Any, Callable[[Any], Any]]
 """Type alias for a mapping of type encoders.

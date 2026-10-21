@@ -4,13 +4,11 @@ import asyncio
 import importlib
 import inspect
 import sys
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast, overload
-
-from typing_extensions import ParamSpec
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast, overload
 
 if TYPE_CHECKING:
     from types import TracebackType

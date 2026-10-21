@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, Union, cast
+from typing import TYPE_CHECKING, Any, Union, assert_type, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,7 +12,6 @@ from sanic_testing.testing import SanicTestClient  # type: ignore[import-untyped
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import Session
-from typing_extensions import assert_type
 
 from advanced_alchemy.extensions.sanic import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.sanic.config import _make_unique_context_key
