@@ -149,6 +149,7 @@ hash (never reversibly encrypted) and returns a
 explicitly — each pulls a different optional dependency:
 
 - :class:`Argon2Hasher <advanced_alchemy.types.password_hash.argon2.Argon2Hasher>` (``advanced_alchemy[argon2]``)
+- :class:`BcryptHasher <advanced_alchemy.types.password_hash.bcrypt.BcryptHasher>` (``advanced_alchemy[bcrypt]``)
 - :class:`PasslibHasher <advanced_alchemy.types.password_hash.passlib.PasslibHasher>` (``advanced_alchemy[passlib]``)
 - :class:`PwdlibHasher <advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher>` (``advanced_alchemy[pwdlib]``)
 

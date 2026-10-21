@@ -12,6 +12,8 @@ types
 
 .. autoclass:: advanced_alchemy.types.password_hash.argon2.Argon2Hasher
 
+.. autoclass:: advanced_alchemy.types.password_hash.bcrypt.BcryptHasher
+
 .. autoclass:: advanced_alchemy.types.password_hash.passlib.PasslibHasher
 
 .. autoclass:: advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher
