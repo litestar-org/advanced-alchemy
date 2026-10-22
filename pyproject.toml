@@ -17,6 +17,7 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
   "Programming Language :: Python",
   "Topic :: Software Development",
   "Typing :: Typed",
@@ -46,7 +47,7 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "docs/PYPI_README.md"
 requires-python = ">=3.9"
-version = "1.11.0"
+version = "1.12.0"
 
 [project.urls]
 Changelog = "https://advanced-alchemy.litestar.dev/latest/changelog"
@@ -121,11 +122,18 @@ fastapi = ["fastapi[all]>=0.115.3", "starlette"]
 flask = ["flask-sqlalchemy>=3.1.1", "flask[async]"]
 fsspec = ["fsspec>=2024.10.0"]
 lint = [
+  # Mypy checks the project with Python 3.9 grammar even when it runs on a
+  # newer interpreter. Keep typed dependency sources parseable by that target.
+  "anyio>=4.13,<4.14; python_version >= '3.10'",
+  "click>=8.3,<8.4; python_version >= '3.10'",
+  "filelock==3.29.0; python_version >= '3.10'",
   "mypy>=1.13.0,<2.0.0",
+  "numpy<2.5",
   "pre-commit>=3.5.0",
   "pyright>=1.1.386",
   "ruff>=0.7.1",
   "slotscheck>=0.16.5",
+  "tracerite<2.4",
   "asyncpg-stubs",
   "types-Pillow",
   "types-PyMySQL",
@@ -182,7 +190,7 @@ test = [
 allow_dirty = true
 commit = false
 commit_args = "--no-verify"
-current_version = "1.11.0"
+current_version = "1.12.0"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"

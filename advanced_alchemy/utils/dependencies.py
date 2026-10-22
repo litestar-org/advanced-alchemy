@@ -11,17 +11,21 @@ from uuid import UUID
 
 from typing_extensions import NotRequired, TypeAlias, TypedDict, TypeGuard
 
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.utils.singleton import SingletonMeta
+from advanced_alchemy.utils.text import camelize
 
 __all__ = (
     "ChoiceField",
     "DependencyCache",
     "FieldNameType",
     "FilterConfig",
+    "filter_cache_key",
     "make_hashable",
     "normalize_choice_field_types",
     "normalize_field_name_types",
     "normalize_sort_field",
+    "resolve_filter_aliases",
 )
 
 HashableValue = Union[str, int, float, bool, None]
@@ -288,9 +292,6 @@ def normalize_sort_field(sort_field: SortField) -> str:
 
 def resolve_filter_aliases(config: FilterConfig) -> dict[str, str]:
     """Resolve public query names once, validating only opt-in custom naming."""
-    from advanced_alchemy.exceptions import ImproperConfigurationError
-    from advanced_alchemy.utils.text import camelize
-
     names: list[str] = []
     for key, parameters in (
         ("id_filter", ("ids",)),

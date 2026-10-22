@@ -1,5 +1,7 @@
 """Metadata for the Project."""
 
+# pyright: reportUnknownVariableType=false
+
 from importlib.metadata import PackageNotFoundError, metadata, version  # pragma: no cover
 
 __all__ = ("__project__", "__version__")  # pragma: no cover

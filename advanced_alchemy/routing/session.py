@@ -203,6 +203,9 @@ class RoutingAsyncSession(AsyncSession):
     ) -> None:
         """Initialize the async routing session.
 
+        Exposes ``bind`` as ``None`` so callers (such as repositories) fall back to
+        ``get_bind()`` for dialect resolution rather than raising ``AttributeError``.
+
         Args:
             routing_config: Configuration for routing behavior.
             selectors: Map of group names to async engine selectors.
@@ -212,10 +215,7 @@ class RoutingAsyncSession(AsyncSession):
         kwargs.pop("bind", None)
         kwargs.pop("binds", None)
 
-        # Convert async selectors to sync selectors for the wrapped session
         sync_selectors = {name: _SyncEngineSelectorWrapper(selector) for name, selector in selectors.items()}
-        # In SQLAlchemy this type is either Unbound or AsyncEngine | AsyncConnection.
-        # This type ignore guarantees that bind is going to be defined in any case.
         self.bind: Optional[Union[AsyncEngine, AsyncConnection]] = None  # type: ignore[assignment]
 
         super().__init__(

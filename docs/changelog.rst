@@ -3,6 +3,116 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.12.0
+    :date: 2026-10-19
+
+    .. change:: per-dialect optimal upsert_many (MERGE / ON CONFLICT / INSERT OR UPDATE)
+        :type: feature
+        :pr: 740
+
+        ``Repository.upsert_many`` and ``Service.upsert_many`` now dispatch to the
+        most efficient native upsert primitive supported by the active dialect when
+        ``match_fields`` maps to a primary key, unique constraint, or unique index:
+        ``INSERT … ON CONFLICT DO UPDATE`` on PostgreSQL / CockroachDB / SQLite /
+        DuckDB / MySQL / MariaDB, ``MERGE`` on Oracle / MSSQL, and
+        primary-key ``INSERT OR UPDATE … THEN RETURN`` on Spanner — compiled to
+        one statement per dialect-sized chunk.
+
+    .. change:: add nulls placement to OrderBy
+        :type: feature
+        :pr: 783
+
+        Adds an optional ``nulls`` parameter (``"first"`` or ``"last"``) to
+        ``OrderBy`` to control where ``NULL`` rows sort across dialects. Dialects
+        with native ``NULLS FIRST`` / ``NULLS LAST`` syntax emit the clause
+        directly, while MySQL, MariaDB, and SQL Server emulate non-default
+        placements with a leading ``CASE WHEN col IS NULL`` sort key. The
+        in-memory mock repository and Litestar/FastAPI filter providers (via
+        ``sort_nulls``) also support the option.
+
+    .. change:: escape LIKE wildcards in SearchFilter values
+        :type: bugfix
+        :pr: 781
+
+        Adds an opt-in ``escape_wildcards`` flag to ``SearchFilter`` and
+        ``NotInSearchFilter`` (along with public ``LIKE_ESCAPE_CHAR`` and
+        ``escape_like_value()`` helpers) so ``%`` and ``_`` in search strings
+        match literally when enabled. The in-memory mock repository and
+        Litestar/FastAPI filter providers (via ``search_escape_wildcards``)
+        honor the flag as well.
+
+    .. change:: unify filter provider naming and route isolation
+        :type: bugfix
+        :pr: 798
+
+        Isolates generated filter dependency aggregates and cache keys per
+        configuration across Litestar and FastAPI routes so one route's query
+        parameters or pagination defaults do not bleed into another. Both
+        integrations also now accept ``alias_generator`` naming presets
+        (``"snake_case"``, ``"camel_case"``) or a custom callable to customize
+        query parameter names.
+
+    .. change:: stop calling deprecated set_async_context internally
+        :type: bugfix
+        :pr: 816
+        :issue: 815
+
+        Removes internal calls to the deprecated ``set_async_context`` no-op from
+        core configs and the Litestar, Flask, Sanic, and Starlette integrations so
+        providing a session no longer emits a ``DeprecationWarning`` on every
+        request.
+
+    .. change:: propagate Alembic configuration options in CLI commands
+        :type: bugfix
+        :pr: 792
+
+        Propagates ``bind_key``, ``version_table_schema``, ``render_as_batch``,
+        ``compare_type``, and ``user_module_prefix`` from ``AlembicAsyncConfig``
+        and ``AlembicSyncConfig`` when constructing the Alembic ``Config`` in
+        ``AlembicCommands``.
+
+    .. change:: resolve dialect from routed session bindings
+        :type: bugfix
+        :pr: 794
+        :issue: 793
+
+        Updates repository initialization to fall back to
+        ``session.get_bind().dialect`` when ``session.bind`` is ``None``, fixing
+        ``AttributeError`` when using ``AsyncSession`` or ``Session`` instances
+        backed by routing session makers.
+
+    .. change:: support plain DeclarativeBase models in ModelProtocol
+        :type: bugfix
+        :pr: 769 796
+        :issue: 768
+
+        Declares ``__table__`` and ``__mapper__`` as ``ClassVar`` on
+        ``ModelProtocol``, ``BasicAttributes``, and ``SQLModelBaseLike`` while
+        omitting ``ClassVar`` from ``__name__``, allowing models built on plain
+        SQLAlchemy ``DeclarativeBase`` to satisfy ``ModelProtocol`` under both
+        mypy and pyright.
+
+    .. change:: remove unreachable protocol and base-type entries from default type_annotation_map
+        :type: bugfix
+        :pr: 771 775
+        :issue: 477 772
+
+        Removes the unreachable ``DataclassProtocol: JsonB`` and
+        ``msgspec.Struct: JsonB`` entries from the default ``type_annotation_map``
+        in ``create_registry()``, since SQLAlchemy resolves mapped annotations by
+        exact type identity rather than structural or supertype matching. Concrete
+        dataclasses and ``msgspec.Struct`` subclasses should be registered via
+        ``custom_annotation_map``.
+
+    .. change:: correct CLI configuration class and parameter names in docs
+        :type: misc
+        :pr: 776
+        :issue: 728
+
+        Updates the CLI usage documentation and global options table to reference
+        ``SQLAlchemySyncConfig`` / ``SQLAlchemyAsyncConfig`` and
+        ``connection_string``.
+
 .. changelog:: 1.11.0
     :date: 2026-05-30
 
@@ -166,6 +276,16 @@
         model needs caller-supplied primary keys instead of autogenerated
         identifiers, including string and integer primary-key examples.
 
+    .. change:: allow delete_many to accept model instances
+        :type: feature
+        :pr: 752
+        :issue: 654
+
+        Updates ``SQLAlchemyAsyncRepositoryService.delete_many`` and
+        ``SQLAlchemySyncRepositoryService.delete_many`` to accept model instances
+        in addition to raw primary-key values, extracting primary keys per item so
+        calls can pass model instances or a mix of instances and IDs.
+
     .. change:: document mixin column ordering
         :type: misc
         :pr: 753
@@ -174,7 +294,6 @@
         Adds documentation for the ``sort_order`` values used by Advanced
         Alchemy mixins so users can understand the physical column order
         produced for newly-created tables.
-
 
 .. changelog:: 1.10.0
     :date: 2026-05-23

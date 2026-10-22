@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
@@ -459,3 +461,38 @@ some_other_var = "not a config"
 
         finally:
             os.chdir(original_cwd)
+
+
+@pytest.mark.parametrize(
+    ("extension_module", "blocked_top_level"),
+    [
+        ("advanced_alchemy.extensions.fastapi", ("click", "rich_click", "rich")),
+        ("advanced_alchemy.extensions.sanic", ("click", "rich_click", "rich")),
+        ("advanced_alchemy.extensions.starlette", ("click", "rich_click", "rich")),
+        ("advanced_alchemy.extensions.flask", ("rich_click", "rich")),
+    ],
+)
+def test_framework_extensions_do_not_require_optional_cli_packages_on_import(
+    extension_module: str,
+    blocked_top_level: tuple[str, ...],
+) -> None:
+    """Framework extensions must import cleanly when optional CLI packages are absent."""
+    pytest.importorskip(extension_module.rsplit(".", 1)[-1])
+    script = (
+        "import builtins, importlib\n"
+        f"blocked = {set(blocked_top_level)!r}\n"
+        "real_import = builtins.__import__\n"
+        "def guarded_import(name, *args, **kwargs):\n"
+        "    if name.split('.', 1)[0] in blocked:\n"
+        "        raise ModuleNotFoundError(f'No module named {name!r}')\n"
+        "    return real_import(name, *args, **kwargs)\n"
+        "builtins.__import__ = guarded_import\n"
+        f"importlib.import_module({extension_module!r})\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
