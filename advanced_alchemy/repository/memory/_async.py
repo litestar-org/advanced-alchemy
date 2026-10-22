@@ -1,7 +1,4 @@
 import datetime
-import random
-import re
-import string
 from collections import abc
 from collections.abc import Iterable
 from typing import Any, List, Literal, Optional, Union, cast, overload
@@ -16,36 +13,31 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio.scoping import async_scoped_session
-from sqlalchemy.orm import InstrumentedAttribute, class_mapper
-from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
+from sqlalchemy.orm import InstrumentedAttribute, Load
 from sqlalchemy.sql.dml import ReturningUpdate
 from sqlalchemy.sql.selectable import ForUpdateParameter
 from typing_extensions import Self
 
-from advanced_alchemy.exceptions import ErrorMessages, IntegrityError, NotFoundError, RepositoryError
-from advanced_alchemy.filters import (
-    BeforeAfter,
-    CollectionFilter,
-    LimitOffset,
-    NotInCollectionFilter,
-    NotInSearchFilter,
-    OnBeforeAfter,
-    OrderBy,
-    SearchFilter,
-    StatementFilter,
+from advanced_alchemy.exceptions import (
+    ErrorMessages,
+    ImproperConfigurationError,
+    IntegrityError,
 )
-from advanced_alchemy.repository._async import SQLAlchemyAsyncRepositoryProtocol, SQLAlchemyAsyncSlugRepositoryProtocol
+from advanced_alchemy.filters import StatementFilter
+from advanced_alchemy.repository._async import (
+    SQLAlchemyAsyncRepositoryProtocol,
+    SQLAlchemyAsyncSlugRepositoryMixin,
+    SQLAlchemyAsyncSlugRepositoryProtocol,
+)
 from advanced_alchemy.repository._util import (
-    DEFAULT_ERROR_MESSAGE_TEMPLATES,
     LoadSpec,
+    ModelRepositoryMixin,
     compare_values,
-    extract_pk_value_from_instance,
-    is_composite_pk,
-    normalize_pk_to_tuple,
-    pk_values_present,
+    get_primary_key_info,
 )
 from advanced_alchemy.repository.memory.base import (
     AnyObject,
+    InMemoryFilterEvaluator,
     InMemoryStore,
     SQLAlchemyInMemoryStore,
     SQLAlchemyMultiStore,
@@ -53,10 +45,9 @@ from advanced_alchemy.repository.memory.base import (
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.deprecation import warn_deprecation
-from advanced_alchemy.utils.text import slugify
 
 
-class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
+class SQLAlchemyAsyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemyAsyncRepositoryProtocol[ModelT]):
     """In memory repository."""
 
     __database__: SQLAlchemyMultiStore[ModelT] = SQLAlchemyMultiStore(SQLAlchemyInMemoryStore)
@@ -93,6 +84,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         *,
         statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
         session: Union[AsyncSession, async_scoped_session[AsyncSession]],
+        model_type: Optional[type[ModelT]] = None,
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
@@ -104,6 +96,15 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         uniquify: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
+        if model_type is not None:
+            self.model_type = model_type
+        if getattr(self, "model_type", None) is None:
+            msg = (
+                "Repository 'model_type' is not configured. Specify the model via "
+                "generic type parameter (e.g. SQLAlchemyAsyncMockRepository[Model]), "
+                "class attribute 'model_type = Model', or keyword argument 'model_type=Model'."
+            )
+            raise ImproperConfigurationError(msg)
         self.session = session
         self.statement = create_autospec("Select[Tuple[ModelT]]", instance=True)
         self.auto_expunge = auto_expunge
@@ -122,75 +123,11 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         self._loader_options: Any = []
         self._loader_options_have_wildcards = False
         self.uniquify = bool(uniquify)
+        self._pk_columns, self._pk_attr_names = get_primary_key_info(self.model_type)
 
-    def __init_subclass__(cls) -> None:
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
         cls.__database_registry__[cls] = cls.__database__  # type: ignore[index]
-
-    @property
-    def _pk_columns(self) -> tuple[Any, ...]:
-        """Get primary key columns from the model mapper.
-
-        Returns:
-            Tuple of Column objects representing the primary key.
-        """
-        mapper = class_mapper(self.model_type)
-        return tuple(mapper.primary_key)
-
-    @property
-    def pk_attr_names(self) -> tuple[str, ...]:
-        """Get primary key attribute names from the model mapper.
-
-        Uses mapper.get_property_by_column() to get ORM attribute names,
-        which may differ from column names when using Column("sql_name").
-
-        Returns:
-            Tuple of ORM attribute names for primary key columns.
-        """
-        mapper = class_mapper(self.model_type)
-        return tuple(mapper.get_property_by_column(col).key for col in self._pk_columns)
-
-    @property
-    def has_composite_pk(self) -> bool:
-        """Check if model has a composite (multi-column) primary key.
-
-        Returns:
-            True if the model has 2 or more primary key columns, False otherwise.
-        """
-        return is_composite_pk(self._pk_columns)
-
-    def get_primary_key_value(self, instance: ModelT) -> PrimaryKeyType:
-        """Extract the primary key value(s) from a model instance.
-
-        Args:
-            instance: Model instance to extract primary key from.
-
-        Returns:
-            - For single PK: scalar value
-            - For composite PK: tuple of values in column order
-        """
-        return extract_pk_value_from_instance(instance, self.pk_attr_names)
-
-    def has_primary_key_values(self, instance: ModelT) -> bool:
-        """Check if all primary key values are set on an instance.
-
-        Args:
-            instance: Model instance to check.
-
-        Returns:
-            True if all PK values are non-None, False otherwise.
-        """
-        return pk_values_present(instance, self.pk_attr_names)
-
-    def _normalize_pk_to_tuple(self, pk_value: PrimaryKeyType) -> tuple[Any, ...]:
-        """Normalize a primary key value to a tuple for consistent storage key generation.
-
-        Args:
-            pk_value: Primary key value (scalar, tuple, or dict).
-
-        Returns:
-            Tuple representation of the primary key.
-        """
-        return normalize_pk_to_tuple(pk_value, self.pk_attr_names, self.model_type.__name__)
 
     def _get_store_key(self, pk_value: PrimaryKeyType) -> str:
         """Generate a store key from a primary key value.
@@ -218,22 +155,6 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         pk_value = self.get_primary_key_value(instance)
         return str(pk_value)
 
-    @staticmethod
-    def _get_error_messages(
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        default_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-    ) -> Optional[ErrorMessages]:
-        if error_messages == Empty:
-            error_messages = None
-        if default_messages == Empty:
-            default_messages = None
-        messages = cast("ErrorMessages", dict(DEFAULT_ERROR_MESSAGE_TEMPLATES))
-        if default_messages:
-            messages.update(cast("ErrorMessages", default_messages))  # type: ignore[unused-ignore,redundant-cast]
-        if error_messages:
-            messages.update(cast("ErrorMessages", error_messages))  # type: ignore[unused-ignore,redundant-cast]
-        return messages
-
     @classmethod
     def __database_add__(cls, identity: Any, data: ModelT) -> ModelT:
         return cast("ModelT", cls.__database__.add(identity, data))  # type: ignore[redundant-cast]
@@ -257,62 +178,12 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
             return self.__database__.store(identity)
         return self.__filtered_store__ or self.__database__.store(self.model_type)
 
-    @staticmethod
-    def check_not_found(item_or_none: Union[ModelT, None]) -> ModelT:
-        if item_or_none is None:
-            msg = "No item found when one was expected"
-            raise NotFoundError(msg)
-        return item_or_none
-
-    @classmethod
-    def get_id_attribute_value(
-        cls,
-        item: Union[ModelT, type[ModelT]],
-        id_attribute: Union[str, InstrumentedAttribute[Any], None] = None,
-    ) -> Any:
-        """Get value of attribute named as :attr:`id_attribute` on ``item``.
-
-        Args:
-            item: Anything that should have an attribute named as :attr:`id_attribute` value.
-            id_attribute: Allows customization of the unique identifier to use for model fetching.
-                Defaults to `None`, but can reference any surrogate or candidate key for the table.
-
-        Returns:
-            The value of attribute on ``item`` named as :attr:`id_attribute`.
-        """
-        if isinstance(id_attribute, InstrumentedAttribute):
-            id_attribute = id_attribute.key
-        return getattr(item, id_attribute if id_attribute is not None else cls.id_attribute)
-
-    @classmethod
-    def set_id_attribute_value(
-        cls,
-        item_id: Any,
-        item: ModelT,
-        id_attribute: Union[str, InstrumentedAttribute[Any], None] = None,
-    ) -> ModelT:
-        """Return the ``item`` after the ID is set to the appropriate attribute.
-
-        Args:
-            item_id: Value of ID to be set on instance
-            item: Anything that should have an attribute named as :attr:`id_attribute` value.
-            id_attribute: Allows customization of the unique identifier to use for model fetching.
-                Defaults to `None`, but can reference any surrogate or candidate key for the table.
-
-        Returns:
-            Item with ``item_id`` set to :attr:`id_attribute`
-        """
-        if isinstance(id_attribute, InstrumentedAttribute):
-            id_attribute = id_attribute.key
-        setattr(item, id_attribute if id_attribute is not None else cls.id_attribute, item_id)
-        return item
-
     def _exclude_unused_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         return {key: value for key, value in kwargs.items() if key not in self._exclude_kwargs}
 
     @staticmethod
     def _apply_limit_offset_pagination(result: List[ModelT], limit: int, offset: int) -> List[ModelT]:
-        return result[offset:limit]
+        return InMemoryFilterEvaluator.apply_limit_offset_pagination(result, limit, offset)
 
     def _extract_field_name(self, field: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]") -> str:
         """Extract string field name from various input types.
@@ -326,12 +197,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         Raises:
             RepositoryError: If a ColumnElement (func expression) is used with mock repository
         """
-        if isinstance(field, str):
-            return field
-        if isinstance(field, InstrumentedAttribute):
-            return field.key
-        msg = f"{type(field)} columns are not supported in mock repositories (in-memory filtering)"
-        raise RepositoryError(msg)
+        return InMemoryFilterEvaluator.extract_field_name(field)
 
     def _filter_in_collection(
         self,
@@ -339,8 +205,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         values: abc.Collection[Any],
     ) -> List[ModelT]:
-        field_str = self._extract_field_name(field_name)
-        return [item for item in result if getattr(item, field_str) in values]
+        return InMemoryFilterEvaluator.filter_in_collection(result, field_name, values)
 
     def _filter_not_in_collection(
         self,
@@ -348,10 +213,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         values: abc.Collection[Any],
     ) -> List[ModelT]:
-        if not values:
-            return result
-        field_str = self._extract_field_name(field_name)
-        return [item for item in result if getattr(item, field_str) not in values]
+        return InMemoryFilterEvaluator.filter_not_in_collection(result, field_name, values)
 
     def _filter_on_datetime_field(
         self,
@@ -362,19 +224,14 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         on_or_before: Optional[datetime.datetime] = None,
         on_or_after: Optional[datetime.datetime] = None,
     ) -> List[ModelT]:
-        field_str = self._extract_field_name(field_name)
-        result_: List[ModelT] = []
-        for item in result:
-            attr: datetime.datetime = getattr(item, field_str)
-            if before is not None and attr < before:
-                result_.append(item)
-            if after is not None and attr > after:
-                result_.append(item)
-            if on_or_before is not None and attr <= on_or_before:
-                result_.append(item)
-            if on_or_after is not None and attr >= on_or_after:
-                result_.append(item)
-        return result_
+        return InMemoryFilterEvaluator.filter_on_datetime_field(
+            result,
+            field_name,
+            before=before,
+            after=after,
+            on_or_before=on_or_before,
+            on_or_after=on_or_after,
+        )
 
     @staticmethod
     def _filter_by_like(
@@ -384,20 +241,13 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         ignore_case: bool,
         escape_wildcards: bool = False,
     ) -> List[ModelT]:
-        if escape_wildcards:
-            value = re.escape(value)
-        pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
-        fields = {field_name} if isinstance(field_name, str) else field_name
-        items: List[ModelT] = []
-        for field in fields:
-            items.extend(
-                [
-                    item
-                    for item in result
-                    if isinstance(getattr(item, field), str) and pattern.match(getattr(item, field))
-                ],
-            )
-        return list(set(items))
+        return InMemoryFilterEvaluator.filter_by_like(
+            result,
+            field_name,
+            value=value,
+            ignore_case=ignore_case,
+            escape_wildcards=escape_wildcards,
+        )
 
     @staticmethod
     def _filter_by_not_like(
@@ -407,20 +257,13 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         ignore_case: bool,
         escape_wildcards: bool = False,
     ) -> List[ModelT]:
-        if escape_wildcards:
-            value = re.escape(value)
-        pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
-        fields = {field_name} if isinstance(field_name, str) else field_name
-        items: List[ModelT] = []
-        for field in fields:
-            items.extend(
-                [
-                    item
-                    for item in result
-                    if isinstance(getattr(item, field), str) and pattern.match(getattr(item, field))
-                ],
-            )
-        return list(set(result).difference(set(items)))
+        return InMemoryFilterEvaluator.filter_by_not_like(
+            result,
+            field_name,
+            value=value,
+            ignore_case=ignore_case,
+            escape_wildcards=escape_wildcards,
+        )
 
     def _filter_result_by_kwargs(
         self,
@@ -430,10 +273,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
     ) -> List[ModelT]:
         kwargs_: dict[Any, Any] = kwargs if isinstance(kwargs, dict) else dict(*kwargs)  # pyright: ignore
         kwargs_ = self._exclude_unused_kwargs(kwargs_)  # pyright: ignore
-        try:
-            return [item for item in result if all(getattr(item, field) == value for field, value in kwargs_.items())]  # pyright: ignore
-        except AttributeError as error:
-            raise RepositoryError from error
+        return InMemoryFilterEvaluator.filter_by_kwargs(result, kwargs_)
 
     def _order_by(
         self,
@@ -442,16 +282,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         sort_desc: bool = False,
         nulls: Optional[Literal["first", "last"]] = None,
     ) -> List[ModelT]:
-        attribute = self._extract_field_name(field_name)
-        if nulls is None:
-            return sorted(result, key=lambda item: getattr(item, attribute), reverse=sort_desc)
-        missing = [item for item in result if getattr(item, attribute) is None]
-        present = sorted(
-            (item for item in result if getattr(item, attribute) is not None),
-            key=lambda item: getattr(item, attribute),
-            reverse=sort_desc,
-        )
-        return [*missing, *present] if nulls == "first" else [*present, *missing]
+        return InMemoryFilterEvaluator.order_by(result, field_name, sort_desc=sort_desc, nulls=nulls)
 
     def _apply_filters(
         self,
@@ -459,77 +290,20 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         *filters: Union[StatementFilter, ColumnElement[bool]],
         apply_pagination: bool = True,
     ) -> List[ModelT]:
-        for filter_ in filters:
-            if isinstance(filter_, LimitOffset):
-                if apply_pagination:
-                    result = self._apply_limit_offset_pagination(result, filter_.limit, filter_.offset)
-            elif isinstance(filter_, BeforeAfter):
-                result = self._filter_on_datetime_field(
-                    result,
-                    field_name=filter_.field_name,
-                    before=filter_.before,
-                    after=filter_.after,
-                )
-            elif isinstance(filter_, OnBeforeAfter):
-                result = self._filter_on_datetime_field(
-                    result,
-                    field_name=filter_.field_name,
-                    on_or_before=filter_.on_or_before,
-                    on_or_after=filter_.on_or_after,
-                )
+        return InMemoryFilterEvaluator.apply_filters(result, *filters, apply_pagination=apply_pagination)
 
-            elif isinstance(filter_, NotInCollectionFilter):
-                if filter_.values is not None:  # pyright: ignore
-                    result = self._filter_not_in_collection(result, filter_.field_name, filter_.values)  # pyright: ignore
-            elif isinstance(filter_, CollectionFilter):
-                if filter_.values is not None:  # pyright: ignore
-                    result = self._filter_in_collection(result, filter_.field_name, filter_.values)  # pyright: ignore
-            elif isinstance(filter_, OrderBy):
-                result = self._order_by(
-                    result,
-                    filter_.field_name,
-                    sort_desc=filter_.sort_order == "desc",
-                    nulls=filter_.nulls,
-                )
-            elif isinstance(filter_, NotInSearchFilter):
-                result = self._filter_by_not_like(
-                    result,
-                    filter_.field_name,
-                    value=filter_.value,
-                    ignore_case=bool(filter_.ignore_case),
-                    escape_wildcards=filter_.escape_wildcards,
-                )
-            elif isinstance(filter_, SearchFilter):
-                result = self._filter_by_like(
-                    result,
-                    filter_.field_name,
-                    value=filter_.value,
-                    ignore_case=bool(filter_.ignore_case),
-                    escape_wildcards=filter_.escape_wildcards,
-                )
-            elif not isinstance(filter_, ColumnElement):
-                msg = f"Unexpected filter: {filter_}"
-                raise RepositoryError(msg)
-        return result
-
-    def _get_match_fields(
-        self,
-        match_fields: Union[List[str], str, None],
-        id_attribute: Optional[str] = None,
-    ) -> Optional[List[str]]:
-        id_attribute = id_attribute or self.id_attribute
-        match_fields = match_fields or self.match_fields
-        if isinstance(match_fields, str):
-            match_fields = [match_fields]
-        return match_fields
+    def _get_collection_items(self) -> List[ModelT]:
+        return list(self.__collection__().get_all())
 
     async def _get_many_and_count_basic(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
-        result = await self.get_many(*filters, **kwargs)
-        return result, len(result)
+        filtered = self._filter_result_by_kwargs(self._get_collection_items(), kwargs)
+        filtered = self._apply_filters(filtered, *filters, apply_pagination=False)
+        total_count = len(filtered)
+        return InMemoryFilterEvaluator.paginate_items(filtered, *filters), total_count
 
     async def _get_many_and_count_window(
         self,
@@ -538,7 +312,10 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
     ) -> tuple[List[ModelT], int]:
         return await self._get_many_and_count_basic(*filters, **kwargs)
 
-    def _find_or_raise_not_found(self, id_: PrimaryKeyType) -> ModelT:
+    def _find_or_raise_not_found(
+        self,
+        id_: PrimaryKeyType,
+    ) -> ModelT:
         """Find an item by primary key or raise NotFoundError.
 
         Args:
@@ -551,7 +328,33 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
             NotFoundError: If no instance found with the given primary key.
         """
         store_key = self._get_store_key(id_)
-        return self.check_not_found(self.__collection__().get_or_none(store_key))
+        item = self.__collection__().get_or_none(store_key)
+        return self.check_not_found(item)
+
+    def _find_many_by_ids(
+        self,
+        item_ids: List[PrimaryKeyType],
+        *,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+    ) -> List[ModelT]:
+        resolved_attr = (
+            id_attribute.key if isinstance(id_attribute, InstrumentedAttribute) else (id_attribute or self.id_attribute)
+        )
+        matched: List[ModelT] = []
+        if self.has_composite_pk or resolved_attr == self.id_attribute:
+            for id_ in item_ids:
+                store_key = self._get_store_key(id_)
+                obj = self.__collection__().get_or_none(store_key)
+                if obj is None:
+                    continue
+                matched.append(obj)
+            return matched
+
+        target_values = list(item_ids)
+        matched.extend(
+            obj for obj in self._get_collection_items() if getattr(obj, str(resolved_attr), MISSING) in target_values
+        )
+        return matched
 
     @staticmethod
     def _find_one_or_raise_error(result: List[ModelT]) -> ModelT:
@@ -567,7 +370,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: Optional[List[_AbstractLoad]],
+        loader_options: Optional[List[Load]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]:
         return self.statement  # type: ignore[no-any-return] # pyright: ignore[reportReturnType]
@@ -605,7 +408,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> ModelT:
-        return self.check_not_found(await self.get_one_or_none(**kwargs))
+        return self.check_not_found(await self.get_one_or_none(*filters, **kwargs))
 
     async def get_one_or_none(
         self,
@@ -619,7 +422,8 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Union[ModelT, None]:
-        result = self._filter_result_by_kwargs(self.__collection__().get_all(), kwargs)
+        result = self._apply_filters(self._get_collection_items(), *filters)
+        result = self._filter_result_by_kwargs(result, kwargs)
         if len(result) > 1:
             msg = "Multiple objects when one was expected"
             raise IntegrityError(msg)
@@ -652,7 +456,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
             }
         else:
             match_filter = kwargs_
-        existing = await self.get_one_or_none(**match_filter)
+        existing = await self.get_one_or_none(*filters, **match_filter)
         if not existing:
             return (await self.add(self.model_type(**kwargs_)), True)
         if upsert:
@@ -689,7 +493,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
             }
         else:
             match_filter = kwargs_
-        existing = await self.get_one(**match_filter)
+        existing = await self.get_one(*filters, **match_filter)
         updated = False
         for field_name, new_field_value in kwargs_.items():
             field = getattr(existing, field_name, MISSING)
@@ -716,7 +520,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> int:
-        result = self._apply_filters(self.__collection__().get_all(), *filters)
+        result = self._apply_filters(self._get_collection_items(), *filters, apply_pagination=False)
         return len(self._filter_result_by_kwargs(result, kwargs))
 
     async def add(
@@ -797,10 +601,9 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         bind_group: Optional[str] = None,
     ) -> ModelT:
         store_key = self._get_store_key(item_id)
-        try:
-            return self._find_or_raise_not_found(item_id)
-        finally:
-            self.__collection__().remove(store_key)
+        item = self._find_or_raise_not_found(item_id)
+        self.__collection__().remove(store_key)
+        return item
 
     async def delete_many(
         self,
@@ -816,12 +619,13 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> List[ModelT]:
-        deleted: List[ModelT] = []
-        for id_ in item_ids:
-            store_key = self._get_store_key(id_)
-            if obj := self.__collection__().get_or_none(store_key):
-                deleted.append(obj)
-                self.__collection__().remove(store_key)
+        deleted = self._find_many_by_ids(
+            item_ids,
+            id_attribute=id_attribute,
+        )
+        for obj in deleted:
+            store_key = self._get_store_key_from_instance(obj)
+            self.__collection__().remove(store_key)
         return deleted
 
     async def delete_where(
@@ -837,7 +641,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> List[ModelT]:
-        result = self.__collection__().get_all()
+        result = self._get_collection_items()
         result = self._apply_filters(result, *filters)
         models = self._filter_result_by_kwargs(result, kwargs)
         item_ids: list[PrimaryKeyType] = [self.get_primary_key_value(model) for model in models]
@@ -936,9 +740,8 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> List[ModelT]:
-        result = self.__collection__().get_all()
-        result = self._apply_filters(result, *filters)
-        return self._filter_result_by_kwargs(result, kwargs)
+        result = self._filter_result_by_kwargs(self._get_collection_items(), kwargs)
+        return self._apply_filters(result, *filters)
 
     async def list(
         self,
@@ -965,47 +768,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
 
 class SQLAlchemyAsyncMockSlugRepository(
     SQLAlchemyAsyncMockRepository[ModelT],
+    SQLAlchemyAsyncSlugRepositoryMixin[ModelT],
     SQLAlchemyAsyncSlugRepositoryProtocol[ModelT],
 ):
-    async def get_by_slug(
-        self,
-        slug: str,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
-        **kwargs: Any,
-    ) -> Union[ModelT, None]:
-        return await self.get_one_or_none(slug=slug)
-
-    async def get_available_slug(
-        self,
-        value_to_slugify: str,
-        **kwargs: Any,
-    ) -> str:
-        """Get a unique slug for the supplied value.
-
-        If the value is found to exist, a random 4 digit character is appended to the end.
-
-        Override this method to change the default behavior
-
-        Args:
-            value_to_slugify (str): A string that should be converted to a unique slug.
-            **kwargs: stuff
-
-        Returns:
-            str: a unique slug for the supplied value.  This is safe for URLs and other unique identifiers.
-        """
-        slug = slugify(value_to_slugify)
-        if await self._is_slug_unique(slug):
-            return slug
-        random_string = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))  # noqa: S311
-        return f"{slug}-{random_string}"
-
-    async def _is_slug_unique(
-        self,
-        slug: str,
-        **kwargs: Any,
-    ) -> bool:
-        return await self.exists(slug=slug) is False
+    """In-memory repository supporting slug operations."""

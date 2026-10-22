@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import datetime
 import decimal
 from collections.abc import AsyncGenerator, Collection, Generator
@@ -14,37 +15,61 @@ import pytest
 from msgspec import Struct
 from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
-from sqlalchemy import Integer, String, column
+from sqlalchemy import ForeignKey, Integer, String, column, or_
 from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute, Mapped, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute, Mapped, Session, mapped_column, relationship
 from sqlalchemy.sql.selectable import ForUpdateArg
 from sqlalchemy.types import TypeEngine
 
 from advanced_alchemy import base
-from advanced_alchemy.exceptions import IntegrityError, RepositoryError, wrap_sqlalchemy_exception
+from advanced_alchemy.exceptions import (
+    ImproperConfigurationError,
+    IntegrityError,
+    RepositoryError,
+    wrap_sqlalchemy_exception,
+)
 from advanced_alchemy.filters import (
     BeforeAfter,
+    BooleanFilter,
     CollectionFilter,
+    ComparisonFilter,
+    ExistsFilter,
+    FilterGroup,
     LimitOffset,
+    MultiFilter,
+    NotExistsFilter,
     NotInCollectionFilter,
     NotInSearchFilter,
+    NotNullFilter,
+    NullFilter,
     OnBeforeAfter,
     OrderBy,
     SearchFilter,
 )
+from advanced_alchemy.mixins import SlugKey
 from advanced_alchemy.operations import UpsertStrategy
 from advanced_alchemy.repository import (
+    SQLAlchemyAsyncQueryRepository,
     SQLAlchemyAsyncRepository,
+    SQLAlchemySyncQueryRepository,
     SQLAlchemySyncRepository,
 )
 from advanced_alchemy.repository._util import (
+    DEFAULT_ERROR_MESSAGE_TEMPLATES,
     _build_cache_key,
     _normalize_cache_key_value,
     column_has_defaults,
     model_from_dict,
 )
-from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
+from advanced_alchemy.repository.memory import (
+    SQLAlchemyAsyncMockRepository,
+    SQLAlchemyAsyncMockSlugRepository,
+    SQLAlchemySyncMockRepository,
+    SQLAlchemySyncMockSlugRepository,
+)
+from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
+from advanced_alchemy.utils.dataclass import Empty
 from advanced_alchemy.utils.serialization import (
     is_msgspec_struct,
     is_pydantic_model,
@@ -2789,3 +2814,475 @@ def test_mock_repository_search_honors_escape_wildcards(filter_type: type[Search
     expected_literal = [1] if filter_type is SearchFilter else [2]
     assert [item.id for item in literal] == expected_literal
     assert sorted(item.id for item in pattern) == ([1, 2] if filter_type is SearchFilter else [])
+
+
+def test_build_cache_key_with_bind_group() -> None:
+    """Verify _build_cache_key includes bind_group to isolate routed sessions."""
+    key_primary = _build_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="get_many",
+        filters=[],
+        kwargs={},
+        order_by=None,
+        execution_options={},
+        uniquify=False,
+        bind_group="default",
+    )
+    key_replica = _build_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="get_many",
+        filters=[],
+        kwargs={},
+        order_by=None,
+        execution_options={},
+        uniquify=False,
+        bind_group="read",
+    )
+    key_none = _build_cache_key(
+        model_name="CacheModel",
+        version_token="v1",
+        method="get_many",
+        filters=[],
+        kwargs={},
+        order_by=None,
+        execution_options={},
+        uniquify=False,
+        bind_group=None,
+    )
+
+    assert key_primary is not None
+    assert key_replica is not None
+    assert key_none is not None
+    assert key_primary != key_replica
+    assert key_primary != key_none
+
+
+def test_normalize_cache_key_value_dataclass_no_deepcopy(monkeypatch: MonkeyPatch) -> None:
+    """Verify _normalize_cache_key_value normalizes dataclasses without copy.deepcopy."""
+
+    def fail_deepcopy(*args: Any, **kwargs: Any) -> Any:
+        msg = "deepcopy should not be called"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(copy, "deepcopy", fail_deepcopy)
+    filter_obj = CollectionFilter(field_name="id", values={3, 1, 2})
+    normalized = _normalize_cache_key_value(filter_obj)
+    assert normalized == {"field_name": "id", "values": [1, 2, 3]}
+
+
+def test_get_error_messages_default_fast_path() -> None:
+    """Verify _get_error_messages returns default_messages directly when no overrides are given."""
+    result_empty = SQLAlchemySyncRepository._get_error_messages(Empty, DEFAULT_ERROR_MESSAGE_TEMPLATES)
+    result_none = SQLAlchemySyncRepository._get_error_messages(None, DEFAULT_ERROR_MESSAGE_TEMPLATES)
+    assert result_empty is DEFAULT_ERROR_MESSAGE_TEMPLATES
+    assert result_none is DEFAULT_ERROR_MESSAGE_TEMPLATES
+
+    overridden = SQLAlchemySyncRepository._get_error_messages({"not_found": "custom"}, DEFAULT_ERROR_MESSAGE_TEMPLATES)
+    assert overridden is not None
+    assert overridden is not DEFAULT_ERROR_MESSAGE_TEMPLATES
+    assert overridden["not_found"] == "custom"
+
+
+def test_repository_apply_filters_passes_prefer_any(mocker: MockerFixture) -> None:
+    """Verify _apply_filters forwards prefer_any=self._prefer_any to CollectionFilter."""
+
+    class PreferAnyRepo(SQLAlchemySyncRepository[UUIDModel]):
+        model_type = UUIDModel
+
+    mock_bind = MagicMock()
+    mock_bind.dialect.name = "postgresql"
+    repo = PreferAnyRepo(session=MagicMock(spec=Session, bind=mock_bind))
+    assert repo._prefer_any is True
+    in_filter = CollectionFilter(field_name="id", values=[uuid4()])
+    not_in_filter = NotInCollectionFilter(field_name="id", values=[uuid4()])
+    spy_in = mocker.spy(in_filter, "append_to_statement")
+    spy_not_in = mocker.spy(not_in_filter, "append_to_statement")
+
+    repo._apply_filters(in_filter, not_in_filter, statement=repo.statement)
+
+    spy_in.assert_called_once_with(repo.statement, UUIDModel, prefer_any=True)
+    spy_not_in.assert_called_once_with(spy_in.spy_return, UUIDModel, prefer_any=True)
+
+
+async def test_query_repository_get_many_and_count_respects_window_function_flag(mocker: MockerFixture) -> None:
+    """Verify SQLAlchemyAsyncQueryRepository and SQLAlchemySyncQueryRepository honor count_with_window_function."""
+    sync_repo = SQLAlchemySyncQueryRepository(session=MagicMock(spec=Session, bind=MagicMock()))
+    sync_window = mocker.patch.object(sync_repo, "_get_many_and_count_window", return_value=([], 0))
+    sync_basic = mocker.patch.object(sync_repo, "_get_many_and_count_basic", return_value=([], 0))
+
+    statement = MagicMock()
+    sync_repo.get_many_and_count(statement)
+    sync_window.assert_called_once_with(statement=statement, bind_group=None)
+    sync_basic.assert_not_called()
+
+    sync_repo.get_many_and_count(statement, count_with_window_function=False)
+    sync_basic.assert_called_once_with(statement=statement, bind_group=None)
+
+    async_repo = SQLAlchemyAsyncQueryRepository(session=AsyncMock(spec=AsyncSession, bind=MagicMock()))
+    async_window = mocker.patch.object(async_repo, "_get_many_and_count_window", return_value=([], 0))
+    async_basic = mocker.patch.object(async_repo, "_get_many_and_count_basic", return_value=([], 0))
+
+    await async_repo.get_many_and_count(statement)
+    async_window.assert_called_once_with(statement=statement, bind_group=None)
+    async_basic.assert_not_called()
+
+    await async_repo.get_many_and_count(statement, count_with_window_function=False)
+    async_basic.assert_called_once_with(statement=statement, bind_group=None)
+
+
+def test_repository_generic_subclass_auto_binds_model_type() -> None:
+    """Subclassing Repository or MockRepository with a concrete ModelT binds model_type automatically."""
+
+    class AutoAsyncRepo(SQLAlchemyAsyncRepository[UUIDModel]):
+        pass
+
+    class AutoSyncRepo(SQLAlchemySyncRepository[BigIntModel]):
+        pass
+
+    class AutoAsyncMockRepo(SQLAlchemyAsyncMockRepository[UUIDModel]):
+        pass
+
+    class AutoSyncMockRepo(SQLAlchemySyncMockRepository[BigIntModel]):
+        pass
+
+    assert getattr(AutoAsyncRepo, "model_type", None) is UUIDModel
+    assert getattr(AutoSyncRepo, "model_type", None) is BigIntModel
+    assert getattr(AutoAsyncMockRepo, "model_type", None) is UUIDModel
+    assert getattr(AutoSyncMockRepo, "model_type", None) is BigIntModel
+
+
+def test_repository_direct_instantiation_with_model_type_kwarg() -> None:
+    """Repositories and MockRepositories can be instantiated directly using model_type=Model."""
+    async_session = AsyncMock(spec=AsyncSession, bind=MagicMock())
+    sync_session = MagicMock(spec=Session, bind=MagicMock())
+
+    async_repo: SQLAlchemyAsyncRepository[UUIDModel] = SQLAlchemyAsyncRepository(
+        session=async_session,
+        model_type=UUIDModel,
+    )
+    sync_repo: SQLAlchemySyncRepository[BigIntModel] = SQLAlchemySyncRepository(
+        session=sync_session,
+        model_type=BigIntModel,
+    )
+    async_mock_repo_inst: SQLAlchemyAsyncMockRepository[UUIDModel] = SQLAlchemyAsyncMockRepository(
+        session=async_session,
+        model_type=UUIDModel,
+    )
+    sync_mock_repo_inst: SQLAlchemySyncMockRepository[BigIntModel] = SQLAlchemySyncMockRepository(
+        session=sync_session,
+        model_type=BigIntModel,
+    )
+
+    assert async_repo.model_type is UUIDModel
+    assert async_repo.pk_attr_names == ("id",)
+    assert sync_repo.model_type is BigIntModel
+    assert sync_repo.pk_attr_names == ("id",)
+    assert async_mock_repo_inst.model_type is UUIDModel
+    assert sync_mock_repo_inst.model_type is BigIntModel
+
+    with pytest.raises(ImproperConfigurationError):
+        SQLAlchemyAsyncRepository(session=async_session)
+
+    with pytest.raises(ImproperConfigurationError):
+        SQLAlchemySyncRepository(session=sync_session)
+
+    with pytest.raises(ImproperConfigurationError):
+        SQLAlchemyAsyncMockRepository(session=async_session)
+
+    with pytest.raises(ImproperConfigurationError):
+        SQLAlchemySyncMockRepository(session=sync_session)
+
+
+async def test_repository_uniquify_per_call_does_not_mutate_instance_state() -> None:
+    """Per-call uniquify=True applies to that query only without mutating repo._uniquify."""
+    mock_result = MagicMock()
+    mock_result.unique.return_value = mock_result
+    mock_result.scalar_one_or_none.return_value = None
+
+    async_session = AsyncMock(spec=AsyncSession, bind=MagicMock())
+    async_session.execute = AsyncMock(return_value=mock_result)
+
+    repo: SQLAlchemyAsyncRepository[UUIDModel] = SQLAlchemyAsyncRepository(
+        session=async_session,
+        model_type=UUIDModel,
+        uniquify=False,
+    )
+    assert repo._uniquify is False
+
+    await repo.get_one_or_none(uniquify=True)
+    assert repo._uniquify is False
+    assert mock_result.unique.call_count == 1
+
+    await repo.get_one_or_none()
+    assert repo._uniquify is False
+    assert mock_result.unique.call_count == 1
+
+
+def test_repository_get_execution_options_resolves_default_bind_group() -> None:
+    """_get_execution_options resolves default _bind_group and per-call overrides without mutating defaults."""
+    sync_session = MagicMock(spec=Session, bind=MagicMock())
+    repo: SQLAlchemySyncRepository[UUIDModel] = SQLAlchemySyncRepository(
+        session=sync_session,
+        model_type=UUIDModel,
+        bind_group="writer_shard",
+        execution_options={"synchronize_session": False},
+    )
+
+    resolved_default = repo._get_execution_options(None, bind_group=None)
+    assert resolved_default == {"synchronize_session": False, "bind_group": "writer_shard"}
+    assert "bind_group" not in repo._default_execution_options
+
+    resolved_override = repo._get_execution_options({"timeout": 5}, bind_group="reader_shard")
+    assert resolved_override == {"timeout": 5, "bind_group": "reader_shard"}
+
+
+class InMemoryFilterTestModel(base.BigIntAuditBase):
+    """Model used to verify InMemoryFilterEvaluator and MockRepository parity."""
+
+    __tablename__ = "in_memory_filter_test_model"
+
+    name: Mapped[str] = mapped_column(String(100))
+    slug: Mapped[str] = mapped_column(String(100), default="")
+    category: Mapped[Union[str, None]] = mapped_column(String(50), nullable=True, default=None)
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(default=True)
+
+
+async def test_mock_repository_limit_offset_and_get_many_and_count_parity() -> None:
+    """MockRepository LimitOffset slices [offset : offset + limit] and get_many_and_count returns pre-pagination count."""
+
+    class ItemRepo(SQLAlchemyAsyncMockRepository[InMemoryFilterTestModel]):
+        pass
+
+    ItemRepo.__database_clear__()
+    repo = ItemRepo(session=AsyncMock(spec=AsyncSession, bind=MagicMock()))
+    base_time = datetime.datetime(2026, 1, 1, 12, 0, tzinfo=datetime.timezone.utc)
+    items = [
+        InMemoryFilterTestModel(
+            id=i,
+            name=f"Item {i:02d}",
+            slug=f"item-{i:02d}",
+            category="even" if i % 2 == 0 else "odd",
+            score=i * 10,
+            is_active=i <= 8,
+            created_at=base_time + datetime.timedelta(days=i),
+            updated_at=base_time + datetime.timedelta(days=i),
+        )
+        for i in range(1, 13)
+    ]
+    await repo.add_many(items)
+
+    page = await repo.get_many(OrderBy("id", "asc"), LimitOffset(limit=5, offset=5))
+    assert [item.id for item in page] == [6, 7, 8, 9, 10]
+
+    even_page, even_total = await repo.get_many_and_count(
+        OrderBy("id", "asc"),
+        LimitOffset(limit=2, offset=1),
+        category="even",
+    )
+    assert [item.id for item in even_page] == [4, 6]
+    assert even_total == 6
+
+
+async def test_mock_repository_datetime_and_extended_filters_parity() -> None:
+    """MockRepository evaluates conjunctive BeforeAfter, ComparisonFilter, BooleanFilter, Null/NotNull, FilterGroup, MultiFilter, ExistsFilter, and ColumnElement."""
+
+    class ItemRepo(SQLAlchemyAsyncMockRepository[InMemoryFilterTestModel]):
+        pass
+
+    ItemRepo.__database_clear__()
+    repo = ItemRepo(session=AsyncMock(spec=AsyncSession, bind=MagicMock()))
+    base_time = datetime.datetime(2026, 1, 1, 12, 0, tzinfo=datetime.timezone.utc)
+    await repo.add_many(
+        [
+            InMemoryFilterTestModel(
+                id=1,
+                name="Alpha",
+                slug="alpha",
+                category="tech",
+                score=10,
+                is_active=True,
+                created_at=base_time + datetime.timedelta(days=1),
+                updated_at=base_time + datetime.timedelta(days=1),
+            ),
+            InMemoryFilterTestModel(
+                id=2,
+                name="Beta",
+                slug="beta",
+                category=None,
+                score=20,
+                is_active=False,
+                created_at=base_time + datetime.timedelta(days=5),
+                updated_at=base_time + datetime.timedelta(days=5),
+            ),
+            InMemoryFilterTestModel(
+                id=3,
+                name="Gamma",
+                slug="gamma",
+                category="science",
+                score=30,
+                is_active=True,
+                created_at=base_time + datetime.timedelta(days=10),
+                updated_at=base_time + datetime.timedelta(days=10),
+            ),
+        ]
+    )
+
+    window_matches = await repo.get_many(
+        BeforeAfter(
+            field_name="created_at",
+            after=base_time + datetime.timedelta(days=2),
+            before=base_time + datetime.timedelta(days=8),
+        )
+    )
+    assert [m.id for m in window_matches] == [2]
+
+    empty_in = await repo.get_many(CollectionFilter(field_name="id", values=[]))
+    assert empty_in == []
+
+    gt_matches = await repo.get_many(ComparisonFilter(field_name="score", operator="ge", value=20))
+    assert sorted(m.id for m in gt_matches) == [2, 3]
+
+    bool_matches = await repo.get_many(BooleanFilter(field_name="is_active", value=False))
+    assert [m.id for m in bool_matches] == [2]
+
+    null_matches = await repo.get_many(NullFilter(field_name="category"))
+    assert [m.id for m in null_matches] == [2]
+
+    not_null_matches = await repo.get_many(NotNullFilter(field_name="category"))
+    assert sorted(m.id for m in not_null_matches) == [1, 3]
+
+    group_matches = await repo.get_many(
+        FilterGroup(
+            logical_operator=or_,
+            filters=[
+                ComparisonFilter(field_name="name", operator="eq", value="Alpha"),
+                ComparisonFilter(field_name="score", operator="eq", value=30),
+            ],
+        )
+    )
+    assert sorted(m.id for m in group_matches) == [1, 3]
+
+    multi_matches = await repo.get_many(
+        MultiFilter(
+            filters={
+                "and_": [
+                    {"field_name": "is_active", "value": True, "type": "boolean"},
+                    {"field_name": "score", "operator": "gt", "value": 15, "type": "comparison"},
+                ]
+            }
+        )
+    )
+    assert [m.id for m in multi_matches] == [3]
+
+    expr_matches = await repo.get_many(InMemoryFilterTestModel.score >= 20, InMemoryFilterTestModel.name != "Beta")
+    assert [m.id for m in expr_matches] == [3]
+
+    exists_matches = await repo.get_many(ExistsFilter(values=[InMemoryFilterTestModel.slug == "alpha"]))
+    assert [m.id for m in exists_matches] == [1]
+
+    not_exists_matches = await repo.get_many(NotExistsFilter(values=[InMemoryFilterTestModel.slug == "alpha"]))
+    assert sorted(m.id for m in not_exists_matches) == [2, 3]
+
+
+async def test_mock_repository_partial_update_and_slug_mixin() -> None:
+    """MockRepository preserves unmodified fields on partial Service.update and supports Slug mixin methods."""
+
+    class ItemSlugRepo(SQLAlchemyAsyncMockSlugRepository[InMemoryFilterTestModel]):
+        pass
+
+    class ItemService(SQLAlchemyAsyncRepositoryService[InMemoryFilterTestModel, ItemSlugRepo]):
+        pass
+
+    ItemSlugRepo.__database_clear__()
+    service = ItemService(session=AsyncMock(spec=AsyncSession, bind=MagicMock()))
+    created = await service.create(
+        InMemoryFilterTestModel(
+            id=100,
+            name="Original Name",
+            slug="original-name",
+            category="preserved",
+            score=42,
+            is_active=True,
+        )
+    )
+    assert created.category == "preserved"
+
+    updated = await service.update({"name": "Updated Name"}, item_id=100)
+    assert updated.id == 100
+    assert updated.name == "Updated Name"
+    assert updated.category == "preserved"
+    assert updated.score == 42
+
+    by_slug = await service.repository.get_by_slug("original-name")
+    assert by_slug is not None
+    assert by_slug.id == 100
+
+    next_slug = await service.repository.get_available_slug("Original Name")
+    assert next_slug != "original-name"
+
+
+class CascadeParentModel(base.BigIntAuditBase, SlugKey):
+    """Parent model with delete-orphan child relationship."""
+
+    __tablename__ = "cascade_parent_model"
+    name: Mapped[str] = mapped_column(String(length=100))
+    children: Mapped[list[CascadeChildModel]] = relationship(
+        "CascadeChildModel",
+        back_populates="parent",
+        cascade="all, delete-orphan",
+    )
+
+
+class CascadeChildModel(base.BigIntAuditBase):
+    """Child model linked to CascadeParentModel."""
+
+    __tablename__ = "cascade_child_model"
+    parent_id: Mapped[int] = mapped_column(ForeignKey("cascade_parent_model.id"))
+    title: Mapped[str] = mapped_column(String(length=100))
+    parent: Mapped[CascadeParentModel] = relationship("CascadeParentModel", back_populates="children")
+
+
+async def test_sql_repository_delete_many_routes_cascade_models_through_orm_delete() -> None:
+    """Models with delete-orphan cascade relationships route delete_many and delete_where through session.delete."""
+
+    class CascadeParentRepo(SQLAlchemyAsyncRepository[CascadeParentModel]):
+        pass
+
+    session = AsyncMock(spec=AsyncSession, bind=MagicMock())
+    repo = CascadeParentRepo(session=session)
+    assert repo._requires_orm_delete() is True
+
+    p1 = CascadeParentModel(id=1, name="P1", slug="p1", children=[])
+    p2 = CascadeParentModel(id=2, name="P2", slug="p2", children=[])
+    repo._fetch_many_by_ids = AsyncMock(return_value=[p1, p2])  # type: ignore[method-assign]
+
+    deleted = await repo.delete_many([1, 2])
+    assert deleted == [p1, p2]
+    assert session.delete.await_count == 2
+
+
+def test_sync_mock_repository_and_service_autobind_and_filter_parity() -> None:
+    """SQLAlchemySyncMockSlugRepository and SQLAlchemySyncRepositoryService support auto-binding and filters."""
+
+    class ItemSyncMockRepo(SQLAlchemySyncMockSlugRepository[InMemoryFilterTestModel]):
+        pass
+
+    class ItemSyncService(SQLAlchemySyncRepositoryService[InMemoryFilterTestModel, ItemSyncMockRepo]):
+        pass
+
+    assert getattr(ItemSyncMockRepo, "model_type", None) is InMemoryFilterTestModel
+    assert getattr(ItemSyncService, "repository_type", None) is ItemSyncMockRepo
+
+    ItemSyncMockRepo.__database_clear__()
+    service = ItemSyncService(session=MagicMock(spec=Session, bind=MagicMock()))
+
+    first = service.create(InMemoryFilterTestModel(id=1, name="Alpha", slug="alpha"))
+    second = service.create(InMemoryFilterTestModel(id=2, name="Beta", slug="beta"))
+    assert first.id == 1
+    assert second.id == 2
+
+    filtered = service.get_many(ComparisonFilter(field_name="name", operator="eq", value="Alpha"))
+    assert [item.id for item in filtered] == [1]

@@ -4,15 +4,21 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Optional, cast
 from unittest.mock import AsyncMock, MagicMock, Mock, PropertyMock, patch
 
 import pytest
 from sqlalchemy.orm import Session
 
+from advanced_alchemy._listeners import (
+    AsyncFileObjectListener,
+    FileObjectInspector,
+    flush_pending_async_listener_tasks,
+)
 from advanced_alchemy.types.file_object import FileObject
 from advanced_alchemy.types.file_object.base import StorageBackend
 from advanced_alchemy.types.file_object.session_tracker import FileObjectSessionTracker
+from advanced_alchemy.types.mutables import MutableList
 from advanced_alchemy.utils.serialization import PYDANTIC_INSTALLED, BaseModel
 
 if sys.version_info >= (3, 11):
@@ -1944,3 +1950,96 @@ async def test_async_file_object_listener_error_handling(caplog: pytest.LogCaptu
     while _active_file_operations:
         await asyncio.gather(*_active_file_operations)
     assert "An error occurred during async FileObject rollback" in caplog.text
+
+
+def test_file_object_init_size_from_bytes_content() -> None:
+    """Test FileObject initializes size from byte-like content when size is None."""
+    obj_bytes = FileObject(backend="mock", filename="bytes.bin", content=b"hello")
+    assert obj_bytes.size == 5
+
+    obj_bytearray = FileObject(backend="mock", filename="ba.bin", content=cast("Any", bytearray(b"world!")))
+    assert obj_bytearray.size == 6
+
+    obj_explicit = FileObject(backend="mock", filename="explicit.bin", content=b"hello", size=42)
+    assert obj_explicit.size == 42
+
+
+def test_mutable_list_finalize_pending_clears_append_and_removed() -> None:
+    """Test MutableList._finalize_pending clears both _pending_append and _pending_removed."""
+    mock_backend = MagicMock(spec=StorageBackend)
+    mock_backend.key = "mock"
+    obj1 = FileObject(backend=mock_backend, filename="file1.txt")
+    obj2 = FileObject(backend=mock_backend, filename="file2.txt")
+    mlist: MutableList[FileObject] = MutableList([obj1])
+    mlist.append(obj2)
+    mlist.remove(obj1)
+
+    assert obj2 in mlist._pending_append
+    assert obj1 in mlist._pending_removed
+
+    mlist._finalize_pending()
+
+    assert len(mlist._pending_append) == 0
+    assert len(mlist._pending_removed) == 0
+
+
+def test_handle_multiple_attribute_reads_pending_source_content_and_skips_unloaded() -> None:
+    """Test FileObjectInspector.handle_multiple_attribute handles real FileObjects and unloaded state."""
+    mock_backend = MagicMock(spec=StorageBackend)
+    mock_backend.key = "mock"
+    tracker = MagicMock(spec=FileObjectSessionTracker)
+    real_obj = FileObject(backend=mock_backend, filename="appended.txt", content=b"real-bytes")
+    mlist: MutableList[FileObject] = MutableList()
+    mlist.append(real_obj)
+
+    instance = MagicMock()
+    attr_state = MagicMock()
+    attr_state.history.deleted = []
+    attr_state.history.added = []
+
+    mock_state = MagicMock()
+    mock_state.dict = {"files": mlist}
+    with patch("advanced_alchemy._listeners.inspect", return_value=mock_state):
+        FileObjectInspector.handle_multiple_attribute(instance, "files", attr_state, tracker)
+
+    tracker.add_pending_save.assert_called_once_with(real_obj, b"real-bytes")
+    assert len(mlist._pending_append) == 0
+
+    tracker.reset_mock()
+
+    class UnloadedInstance:
+        @property
+        def files(self) -> None:
+            msg = "Lazy load triggered unexpectedly"
+            raise AssertionError(msg)
+
+    unloaded_instance = UnloadedInstance()
+    unloaded_state = MagicMock()
+    unloaded_state.dict = {}
+    with patch("advanced_alchemy._listeners.inspect", return_value=unloaded_state):
+        FileObjectInspector.handle_multiple_attribute(unloaded_instance, "files", attr_state, tracker)
+
+    tracker.add_pending_save.assert_not_called()
+    tracker.add_pending_delete.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_flush_pending_async_listener_tasks_awaits_session_tasks() -> None:
+    """Test flush_pending_async_listener_tasks awaits tasks spawned by AsyncFileObjectListener."""
+    session = MagicMock(spec=Session)
+    tracker = MagicMock(spec=FileObjectSessionTracker)
+    completed = False
+
+    async def slow_commit() -> None:
+        nonlocal completed
+        await asyncio.sleep(0.01)
+        completed = True
+
+    tracker.commit_async = AsyncMock(side_effect=slow_commit)
+    session.info = {"_aa_file_tracker": tracker}
+
+    AsyncFileObjectListener.after_commit(session)
+    await flush_pending_async_listener_tasks(session)
+
+    assert completed is True
+    tracker.commit_async.assert_awaited_once()

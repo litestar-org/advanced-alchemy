@@ -246,20 +246,14 @@ class ResultConverter:
                         obj=data,
                         type=schema_type,
                         from_attributes=True,
-                        dec_hook=partial(
-                            _default_msgspec_deserializer,
-                            type_decoders=DEFAULT_TYPE_DECODERS,
-                        ),
+                        dec_hook=_DEFAULT_MSGSPEC_DEC_HOOK,
                     ),
                 )
             converted_items = convert(
                 obj=data,
-                type=list[schema_type],  # type: ignore[valid-type]
+                type=_get_list_schema_type(schema_type),
                 from_attributes=True,
-                dec_hook=partial(
-                    _default_msgspec_deserializer,
-                    type_decoders=DEFAULT_TYPE_DECODERS,
-                ),
+                dec_hook=_DEFAULT_MSGSPEC_DEC_HOOK,
             )
             return cast("OffsetPagination[ModelDTOT]", _create_pagination(converted_items, filters, total))
 
@@ -269,7 +263,9 @@ class ResultConverter:
                     "ModelDTOT",
                     get_type_adapter(schema_type).validate_python(data, from_attributes=True),
                 )
-            validated_items = get_type_adapter(list[schema_type]).validate_python(data, from_attributes=True)  # type: ignore[valid-type] # pyright: ignore[reportUnknownArgumentType]
+            validated_items = get_type_adapter(_get_list_schema_type(schema_type)).validate_python(
+                data, from_attributes=True
+            )
             return cast("OffsetPagination[ModelDTOT]", _create_pagination(validated_items, filters, total))
         if CATTRS_INSTALLED and is_attrs_schema(schema_type):
             if not isinstance(data, Sequence):
@@ -335,6 +331,18 @@ def _default_msgspec_deserializer(
         raise TypeError(msg) from e
 
 
+_DEFAULT_MSGSPEC_DEC_HOOK = partial(
+    _default_msgspec_deserializer,
+    type_decoders=DEFAULT_TYPE_DECODERS,
+)
+
+
+@lru_cache(maxsize=256)
+def _get_list_schema_type(schema_type: "type[Any]") -> Any:
+    """Return and cache ``list[schema_type]`` generic alias."""
+    return list[schema_type]  # type: ignore[valid-type]
+
+
 @lru_cache(maxsize=128)
 def _get_attrs_field_names(schema_type: "type[Any]") -> "set[str]":
     """Get and cache the field names for a given attrs class.
@@ -382,5 +390,5 @@ def _create_pagination(items: Any, filters: Any, total: "Optional[int]") -> "Off
         items=items,
         limit=limit_offset.limit,
         offset=limit_offset.offset,
-        total=total or len(items),
+        total=total if total is not None else len(items),
     )

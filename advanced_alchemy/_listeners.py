@@ -2,12 +2,14 @@
 """Application ORM configuration."""
 
 import asyncio
+import contextlib
 import datetime
 import logging
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
 
 from sqlalchemy import event
 from sqlalchemy.inspection import inspect
+from sqlalchemy.util.concurrency import await_only, in_greenlet
 
 from advanced_alchemy.utils.deprecation import warn_deprecation
 from advanced_alchemy.utils.sync_tools import is_async_context as _is_async_context_util
@@ -27,6 +29,44 @@ _active_cache_operations: set[asyncio.Task[Any]] = set()
 
 _FILE_TRACKER_KEY = "_aa_file_tracker"
 _CACHE_TRACKER_KEY = "_aa_cache_tracker"
+_PENDING_ASYNC_TASKS_KEY = "_aa_pending_async_tasks"
+
+
+def _register_session_async_task(session: Any, task: "asyncio.Task[Any]") -> None:
+    """Register a background async listener task on ``session.info`` for synchronization."""
+    raw_info = getattr(session, "info", None)
+    if not isinstance(raw_info, dict):
+        return
+    session_info = cast("dict[str, Any]", raw_info)
+    raw_pending = session_info.get(_PENDING_ASYNC_TASKS_KEY)
+    if not isinstance(raw_pending, set):
+        pending: set[asyncio.Task[Any]] = set()
+        session_info[_PENDING_ASYNC_TASKS_KEY] = pending
+    else:
+        pending = cast("set[asyncio.Task[Any]]", raw_pending)
+    pending.add(task)
+    task.add_done_callback(pending.discard)
+
+
+async def flush_pending_async_listener_tasks(session: Any) -> None:
+    """Await any pending background async listener tasks attached to ``session``."""
+    raw_info = getattr(session, "info", None)
+    if not isinstance(raw_info, dict):
+        return
+    session_info = cast("dict[str, Any]", raw_info)
+    while True:
+        raw_pending = session_info.get(_PENDING_ASYNC_TASKS_KEY)
+        if not isinstance(raw_pending, set) or not raw_pending:
+            break
+        pending = cast("set[asyncio.Task[Any]]", raw_pending)
+        tasks: list[asyncio.Task[Any]] = list(pending)
+        pending.difference_update(tasks)
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+def flush_pending_sync_listener_tasks(session: Any) -> None:
+    """No-op counterpart for synchronous repository commits."""
+    _ = session
 
 
 def get_file_tracker(
@@ -218,11 +258,16 @@ class FileObjectInspector:
         items_to_delete: set[FileObject] = set()
         items_to_save: dict[FileObject, Any] = {}
 
-        current_list_instance: Optional[MutableList[FileObject]] = getattr(instance, attr_name, None)
+        state: Any = None
+        with contextlib.suppress(Exception):
+            state = inspect(instance, raiseerr=False)
+        if state is not None and isinstance(getattr(state, "dict", None), dict):
+            current_list_instance: Optional[MutableList[FileObject]] = state.dict.get(attr_name)
+        else:
+            current_list_instance = getattr(instance, attr_name, None)
         original_list_from_history: Optional[MutableList[FileObject]] = history.deleted[0] if history.deleted else None
         current_list_from_history: Optional[MutableList[FileObject]] = history.added[0] if history.added else None
 
-        # 1. Deletions from Mutations (Primary source: _pending_removed set)
         if isinstance(current_list_instance, MutableList):
             removed_items_internal: set[FileObject] = getattr(
                 current_list_instance,
@@ -237,8 +282,7 @@ class FileObjectInspector:
                 )
                 items_to_delete.update(valid_removed_internal)
 
-        # 2. Deletions from Replacements (Secondary source: history)
-        if original_list_from_history:  # Indicates list replacement
+        if original_list_from_history:
             logger.debug("[Multiple-Replacement] Processing list replacement via history.")
             original_items_set = {item for item in original_list_from_history if item.path}
             current_items_set = (
@@ -254,21 +298,18 @@ class FileObjectInspector:
                 )
                 items_to_delete.update(removed_due_to_replacement)
 
-        # 3. Determine items to save
-        # Saves from pending appends (Mutation or New)
         if isinstance(current_list_instance, MutableList):
             pending_append = getattr(current_list_instance, "_pending_append", [])
             if pending_append:
                 logger.debug("[Multiple-Mutation] Found %d items in _pending_append list.", len(pending_append))
                 for item in pending_append:
-                    pending_content = getattr(item, "_pending_content", None)
+                    pending_content = FileObjectInspector._get_pending_content(item)
                     pending_source_path = getattr(item, "_pending_source_path", None)
                     if pending_content is not None:
                         items_to_save[item] = pending_content
                     elif pending_source_path is not None:
                         items_to_save[item] = pending_source_path
 
-        # Saves from newly added list items (New Instance or Replacement)
         if current_list_from_history:
             log_prefix = "[Multiple-New]" if not original_list_from_history else "[Multiple-Replacement]"
             logger.debug(
@@ -277,7 +318,7 @@ class FileObjectInspector:
                 len(current_list_from_history),
             )
             for item in current_list_from_history:
-                pending_content = getattr(item, "_pending_source_content", None)
+                pending_content = FileObjectInspector._get_pending_content(item)
                 pending_source_path = getattr(item, "_pending_source_path", None)
                 if pending_content is not None and item not in items_to_save:
                     logger.debug("%s Found pending content for %r", log_prefix, item.filename)
@@ -286,14 +327,12 @@ class FileObjectInspector:
                     logger.debug("%s Found pending source path for %r", log_prefix, item.filename)
                     items_to_save[item] = pending_source_path
 
-        # 4. Finalize MutableList state (if applicable)
         if isinstance(current_list_instance, MutableList):
             finalize_method = getattr(current_list_instance, "_finalize_pending", None)
             if finalize_method:
                 logger.debug("[Multiple] Calling _finalize_pending on list instance.")
                 finalize_method()
 
-        # 5. Schedule all collected operations
         if items_to_delete:
             logger.debug("[Multiple] Scheduling %d items for deletion.", len(items_to_delete))
             for item_to_delete in items_to_delete:
@@ -326,6 +365,18 @@ class FileObjectInspector:
                 elif isinstance(original_value, (list, MutableList)):
                     for item in original_value:  # pyright: ignore
                         tracker.add_pending_delete(cast("FileObject", item))
+
+    @staticmethod
+    def _get_pending_content(item: Any) -> Any:
+        """Extract pending byte/stream content from a FileObject or mock double."""
+        if not hasattr(item, "__dict__"):
+            return getattr(item, "_pending_source_content", None)
+        item_dict = item.__dict__
+        if "_pending_source_content" in item_dict:
+            return item_dict["_pending_source_content"]
+        if "_pending_content" in item_dict:
+            return item_dict["_pending_content"]
+        return None
 
 
 class BaseFileObjectListener:
@@ -405,15 +456,16 @@ class AsyncFileObjectListener(BaseFileObjectListener):
             try:
                 await tracker.commit_async()
             except Exception as e:
-                # Using %s for cleaner logging of exception causes
                 logger.debug("An error occurred while committing a file object: %s", e.__cause__)
             finally:
                 session.info.pop(_FILE_TRACKER_KEY, None)
 
-        # Store the task reference, even if not awaited here
         t = asyncio.create_task(_do_async_commit())
         _active_file_operations.add(t)
-        t.add_done_callback(lambda _: _active_file_operations.remove(t))
+        t.add_done_callback(_active_file_operations.discard)
+        _register_session_async_task(session, t)
+        if in_greenlet():
+            await_only(t)
 
     @classmethod
     def after_rollback(cls, session: "Session") -> None:
@@ -430,10 +482,12 @@ class AsyncFileObjectListener(BaseFileObjectListener):
             finally:
                 session.info.pop(_FILE_TRACKER_KEY, None)
 
-        # Store the task reference, even if not awaited here
         t = asyncio.create_task(_do_async_rollback())
         _active_file_operations.add(t)
-        t.add_done_callback(lambda _: _active_file_operations.remove(t))
+        t.add_done_callback(_active_file_operations.discard)
+        _register_session_async_task(session, t)
+        if in_greenlet():
+            await_only(t)
 
 
 class FileObjectListener(SyncFileObjectListener, AsyncFileObjectListener):
@@ -630,6 +684,7 @@ class AsyncCacheListener(BaseCacheListener):
             task = asyncio.create_task(tracker.commit_async())
             _active_cache_operations.add(task)
             task.add_done_callback(_active_cache_operations.discard)
+            _register_session_async_task(session, task)
             session.info.pop(_CACHE_TRACKER_KEY, None)
 
     @classmethod
@@ -659,13 +714,12 @@ class CacheInvalidationListener(BaseCacheListener):
             try:
                 asyncio.get_running_loop()
             except RuntimeError:
-                # No running loop: sync usage, perform invalidation inline.
                 tracker.commit()
             else:
-                # Running loop: schedule async invalidation so commit doesn't block.
                 task = asyncio.create_task(tracker.commit_async())
                 _active_cache_operations.add(task)
                 task.add_done_callback(_active_cache_operations.discard)
+                _register_session_async_task(session, task)
             session.info.pop(_CACHE_TRACKER_KEY, None)
 
     @classmethod
