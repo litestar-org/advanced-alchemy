@@ -44,6 +44,7 @@ DateTime UTC
 - Requires timezone information for input values
 - Automatically converts stored values to UTC timezone
 - Returns timezone-aware datetime objects
+- Supports configurable fractional-second precision (``fsp`` / ``precision``)
 
 .. code-block:: python
 
@@ -57,7 +58,34 @@ DateTime UTC
     class AuditLogRecord(BigIntBase):
         __tablename__ = "audit_log"
 
-        created_at: Mapped[datetime] = mapped_column(DateTimeUTC)
+        created_at: Mapped[datetime] = mapped_column(DateTimeUTC(fsp=6))
+
+.. warning::
+
+    On MySQL/MariaDB and Oracle, SQLAlchemy's default ``DateTime(timezone=True)`` compiles to
+    whole-second types (``DATETIME`` on MySQL/MariaDB and ``DATE`` on Oracle), which truncate
+    fractional seconds. Compiling ``DateTimeUTC()`` on those dialects without an explicit ``fsp``
+    now emits a ``DeprecationWarning``.
+
+    Pass ``DateTimeUTC(fsp=6)`` to preserve microsecond precision (compiling to ``DATETIME(6)``
+    on MySQL/MariaDB and ``TIMESTAMP WITH TIME ZONE`` on Oracle), or pass ``DateTimeUTC(fsp=0)``
+    to explicitly keep legacy whole-second DDL without migration churn. In v2.0, ``fsp=6`` will
+    become the default.
+
+To apply ``DateTimeUTC(fsp=6)`` (or ``DateTimeUTC(fsp=0)``) across all ``Mapped[datetime]``
+columns on a custom declarative base without annotating each column individually, pass
+``custom_annotation_map`` to :func:`~advanced_alchemy.base.create_registry`:
+
+.. code-block:: python
+
+    from datetime import datetime
+
+    from advanced_alchemy.base import UUIDBase, create_registry
+    from advanced_alchemy.types import DateTimeUTC
+
+    class AppBase(UUIDBase):
+        __abstract__ = True
+        registry = create_registry(custom_annotation_map={datetime: DateTimeUTC(fsp=6)})
 
 
 Encrypted Types
