@@ -7,10 +7,13 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy import Engine
+from sqlalchemy import Engine, event
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from advanced_alchemy._listeners import touch_updated_timestamp
+from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
 from advanced_alchemy.config.routing import RoutingConfig, RoutingStrategy
+from advanced_alchemy.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.routing.maker import (
     RoutingAsyncSessionMaker,
     RoutingSyncSessionMaker,
@@ -533,3 +536,30 @@ async def test_dispose_session_maker_async_noop_for_non_routing_maker() -> None:
 async def test_dispose_session_maker_async_noop_for_none() -> None:
     """dispose_session_maker_async handles a None session maker without raising."""
     await dispose_session_maker_async(None)
+
+
+def test_sync_config_with_routing_attaches_and_removes_listeners() -> None:
+    """Verify SQLAlchemySyncConfig attaches before_flush listeners to RoutingSyncSessionMaker."""
+    routing = RoutingConfig(
+        primary_connection_string="sqlite:///:memory:",
+        read_replicas=["sqlite:///:memory:"],
+    )
+    config = SQLAlchemySyncConfig(routing_config=routing)
+    maker = config.create_session_maker()
+    assert isinstance(maker, RoutingSyncSessionMaker)
+    assert event.contains(maker.sync_session_maker, "before_flush", touch_updated_timestamp)
+
+
+@pytest.mark.asyncio
+async def test_async_config_with_routing_attaches_and_removes_listeners() -> None:
+    """Verify SQLAlchemyAsyncConfig attaches before_flush listeners to RoutingAsyncSessionMaker."""
+    routing = RoutingConfig(
+        primary_connection_string="sqlite+aiosqlite:///:memory:",
+        read_replicas=["sqlite+aiosqlite:///:memory:"],
+    )
+    config = SQLAlchemyAsyncConfig(routing_config=routing)
+    maker = config.create_session_maker()
+    assert isinstance(maker, RoutingAsyncSessionMaker)
+    sync_maker = maker._session_config["sync_session_class"]
+    assert event.contains(sync_maker, "before_flush", touch_updated_timestamp)
+    await maker.close_all()

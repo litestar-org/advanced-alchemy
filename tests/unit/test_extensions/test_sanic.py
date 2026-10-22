@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Union, cast
 from unittest.mock import MagicMock
 
@@ -10,15 +11,19 @@ from sanic import HTTPResponse, Request, Sanic
 from sanic_testing.testing import SanicTestClient  # type: ignore[import-untyped]
 from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.orm import Session
 from typing_extensions import assert_type
 
 from advanced_alchemy.extensions.sanic import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+from advanced_alchemy.extensions.sanic.config import _make_unique_context_key
 
 AnyConfig = Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]
 
 
 @pytest.fixture()
-def app() -> Sanic[Any, Any]:
+def app(monkeypatch: pytest.MonkeyPatch) -> Sanic[Any, Any]:
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1,localhost")
+    monkeypatch.setenv("no_proxy", "127.0.0.1,localhost")
     return Sanic("TestSanic")
 
 
@@ -77,6 +82,32 @@ def test_infer_types_from_config(async_config: SQLAlchemyAsyncConfig, sync_confi
 
         assert_type(sync_alchemy.get_sync_engine(), Engine)
         assert_type(async_alchemy.get_async_engine(), AsyncEngine)
+
+
+def test_make_unique_context_key_increments_linearly() -> None:
+    """Verify _make_unique_context_key increments counter by 1 on each collision."""
+    app_stub = SimpleNamespace(ctx=SimpleNamespace(db=True, db_0=True, db_0_1=True))
+    assert _make_unique_context_key(cast("Any", app_stub), "db") == "db_0_1_2"
+
+
+@pytest.mark.asyncio
+async def test_sync_config_startup_registers_dependencies(sync_config: SQLAlchemySyncConfig) -> None:
+    """Verify SQLAlchemySyncConfig.startup registers Engine and Session dependencies."""
+    mock_app = MagicMock()
+    mock_app.ctx = MagicMock()
+    listeners: list[Any] = []
+    mock_app.before_server_start.side_effect = listeners.append
+    sync_config._app = mock_app
+
+    mock_bootstrap = MagicMock()
+    sync_config.startup(mock_bootstrap)
+    assert len(listeners) == 1
+    await listeners[0](mock_app)
+
+    calls = mock_bootstrap.add_dependency.call_args_list
+    registered_types = [call.args[0] for call in calls]
+    assert Engine in registered_types
+    assert Session in registered_types
 
 
 def test_inject_engine(app: Sanic[Any, Any], alchemy: AdvancedAlchemy) -> None:
