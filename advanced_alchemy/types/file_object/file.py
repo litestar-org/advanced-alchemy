@@ -65,7 +65,7 @@ class FileObject:
             ValueError: If filename is not provided, size is negative, backend/protocol mismatch,
                         or both 'content' and 'source_path' are provided.
         """
-        self._size = size
+        self._size = len(content) if size is None and isinstance(content, (bytes, bytearray, memoryview)) else size
         self._last_modified = last_modified
         self._checksum = checksum
         self._etag = etag
@@ -202,7 +202,6 @@ class FileObject:
         Returns:
             dict[str, Any]: A dictionary representation of the file information.
         """
-        # Use dataclasses.asdict and filter out the backend
         return {
             "filename": self.path,
             "content_type": self.content_type,
@@ -341,8 +340,6 @@ class FileObject:
             msg = "No data provided and no pending content/path found to save."
             raise TypeError(msg)
 
-        # The backend's save method is expected to update the FileObject instance in-place
-        # and return the updated instance.
         updated_self = self.backend.save_object(
             file_object=self,
             data=data,
@@ -351,7 +348,6 @@ class FileObject:
             max_concurrency=max_concurrency,
         )
 
-        # Clear pending attributes after successful save
         self._pending_source_content = None
         self._pending_source_path = None
 
@@ -395,16 +391,14 @@ class FileObject:
             msg = "No data provided and no pending content/path found to save."
             raise TypeError(msg)
 
-        # Backend's async save method updates the FileObject instance
         updated_self = await self.backend.save_object_async(
             file_object=self,
-            data=data,  # Pass the determined data source
+            data=data,
             use_multipart=use_multipart,
             chunk_size=chunk_size,
             max_concurrency=max_concurrency,
         )
 
-        # Clear pending attributes after successful save
         self._pending_source_content = None
         self._pending_source_path = None
 
@@ -414,8 +408,8 @@ class FileObject:
     def __get_pydantic_core_schema__(
         cls,
         source_type: Any,
-        handler: "GetCoreSchemaHandler",  # Use imported GetCoreSchemaHandler
-    ) -> "core_schema.CoreSchema":  # Use imported core_schema
+        handler: "GetCoreSchemaHandler",
+    ) -> "core_schema.CoreSchema":
         """Get the Pydantic core schema for FileObject.
 
         This method defines how Pydantic should validate and serialize FileObject instances.
@@ -436,8 +430,6 @@ class FileObject:
             raise MissingDependencyError(package="pydantic")
 
         def validate_from_dict(data: dict[str, Any]) -> "FileObject":
-            # We expect a dictionary derived from to_dict()
-            # We need to resolve the backend string back to an instance if needed
             backend_input = data.get("backend")
             if backend_input is None:
                 msg = "backend is required"

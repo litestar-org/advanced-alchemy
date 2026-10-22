@@ -13,12 +13,12 @@ Async Repositories
     :show-inheritance:
 
 .. autoclass:: advanced_alchemy.repository.SQLAlchemyAsyncSlugRepository
-    :members: get_by_slug, get_available_slug
+    :members: get_by_slug
     :no-inherited-members:
     :show-inheritance:
 
 .. autoclass:: advanced_alchemy.repository.SQLAlchemyAsyncQueryRepository
-    :members: get_one, list, list_and_count
+    :members: get_one, list
     :no-inherited-members:
     :show-inheritance:
 
@@ -26,7 +26,7 @@ Sync Repositories
 -----------------
 
 .. autoclass:: advanced_alchemy.repository.SQLAlchemySyncRepository
-    :members: id_attribute, match_fields
+    :no-members:
     :no-inherited-members:
     :show-inheritance:
 
@@ -73,12 +73,19 @@ Protocols & Base Mixins
     :no-inherited-members:
     :show-inheritance:
 
+.. autoclass:: advanced_alchemy.repository.ModelRepositoryMixin
+    :no-members:
+    :no-inherited-members:
+    :show-inheritance:
+
 Helpers & Type Definitions
 --------------------------
 
 .. autofunction:: advanced_alchemy.repository.get_instrumented_attr
 
 .. autofunction:: advanced_alchemy.repository.model_from_dict
+
+.. autofunction:: advanced_alchemy.repository.resolve_generic_type_args
 
 .. py:data:: DEFAULT_ERROR_MESSAGE_TEMPLATES
     :type: ErrorMessages
