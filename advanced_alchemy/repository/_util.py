@@ -1,38 +1,31 @@
 # ruff: noqa: PLR0911
-import contextlib
 import dataclasses
-import datetime
-import decimal
 import hashlib
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Final, Literal, Optional, Protocol, Union, cast, overload
+from typing import Any, Generic, Literal, Optional, Protocol, Union, cast, get_args, get_origin, overload
 
 from sqlalchemy import (
     Column,
     Delete,
     Dialect,
     Select,
-    Table,
     UnaryExpression,
     Update,
     and_,
-    any_,
     inspect,
-    or_,
-    tuple_,
 )
 from sqlalchemy.exc import NoInspectionAvailable
 from sqlalchemy.orm import (
     InstrumentedAttribute,
+    Load,
+    Mapper,
     MapperProperty,
     RelationshipProperty,
     class_mapper,
     joinedload,
     lazyload,
+    object_session,
     selectinload,
-)
-from sqlalchemy.orm.strategy_options import (
-    _AbstractLoad,  # pyright: ignore[reportPrivateUsage]
 )
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 from sqlalchemy.sql.base import ExecutableOption
@@ -40,8 +33,8 @@ from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from sqlalchemy.sql.elements import Label
 from typing_extensions import TypeAlias
 
-from advanced_alchemy.base import ModelProtocol, model_to_dict
-from advanced_alchemy.exceptions import ErrorMessages, RepositoryError
+from advanced_alchemy.base import ModelProtocol
+from advanced_alchemy.exceptions import ErrorMessages, NotFoundError
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception as _wrap_sqlalchemy_exception
 from advanced_alchemy.filters import (
     InAnyFilter,
@@ -49,30 +42,47 @@ from advanced_alchemy.filters import (
     StatementFilter,
     StatementTypeT,
 )
-from advanced_alchemy.operations import UpsertStrategy, resolve_column_default
-from advanced_alchemy.repository._typing import arrays_equal, is_numpy_array
-from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType
-from advanced_alchemy.types.file_object import StoredObject
+from advanced_alchemy.repository._upsert import (
+    DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS,
+    DEFAULT_SAFE_TYPES,
+    _UpsertPlanningMixin,  # pyright: ignore[reportPrivateUsage]
+    compare_values,
+    has_upsert_update_intent,
+    was_attribute_set,
+)
+from advanced_alchemy.repository.typing import ModelT, OrderingPair, PrimaryKeyType
+from advanced_alchemy.types.file_object.data_type import StoredObject
+from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.serialization import encode_complex_type, encode_json
 
-DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS: Final = 950
-
-DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
-    int,
-    float,
-    str,
-    bool,
-    bytes,
-    decimal.Decimal,
-    datetime.date,
-    datetime.datetime,
-    datetime.time,
-    datetime.timedelta,
-}
+__all__ = (
+    "DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS",
+    "DEFAULT_SAFE_TYPES",
+    "ExecutableOptions",
+    "FilterableRepository",
+    "FilterableRepositoryProtocol",
+    "LoadCollection",
+    "LoadSpec",
+    "ModelRepositoryMixin",
+    "SingleLoad",
+    "WhereClauseT",
+    "_UpsertPlanningMixin",
+    "_build_cache_key",
+    "column_has_defaults",
+    "compare_values",
+    "get_abstract_loader_options",
+    "get_instrumented_attr",
+    "get_primary_key_info",
+    "has_upsert_update_intent",
+    "model_from_dict",
+    "resolve_generic_type_args",
+    "snapshot_and_detach_relationships",
+    "was_attribute_set",
+)
 
 WhereClauseT = ColumnExpressionArgument[bool]
 SingleLoad: TypeAlias = Union[
-    _AbstractLoad,
+    Load,
     Literal["*"],
     InstrumentedAttribute[Any],
     RelationshipProperty[Any],
@@ -121,11 +131,12 @@ def _normalize_cache_key_value(value: Any) -> Any:
             normalized_dict[str(k)] = _normalize_cache_key_value(v)
         return normalized_dict
     if dataclasses.is_dataclass(value) and not isinstance(value, type):  # pyright: ignore[reportUnknownArgumentType]
-        return _normalize_cache_key_value(dataclasses.asdict(value))
+        return {
+            field.name: _normalize_cache_key_value(getattr(value, field.name)) for field in dataclasses.fields(value)
+        }
     if isinstance(value, InstrumentedAttribute):
         return {"__attr__": value.key}
     if isinstance(value, ColumnElement):
-        # Safe fallback for non-dataclass expressions in ordering/kwargs.
         value_expr = cast("ColumnElement[Any]", value)  # type: ignore[redundant-cast]
         return {"__sql__": str(value_expr)}
 
@@ -156,6 +167,7 @@ def _build_cache_key(  # pyright: ignore[reportUnusedFunction]
     execution_options: dict[str, Any],
     uniquify: bool,
     count_with_window_function: Optional[bool] = None,
+    bind_group: Optional[str] = None,
 ) -> Optional[str]:
     """Build a stable cache key for list/list_and_count operations.
 
@@ -191,6 +203,8 @@ def _build_cache_key(  # pyright: ignore[reportUnusedFunction]
     }
     if count_with_window_function is not None:
         payload["count_with_window_function"] = bool(count_with_window_function)
+    if bind_group is not None:
+        payload["bind_group"] = bind_group
 
     try:
         encoded = encode_json(_canonicalize_cache_key_value(payload)).encode("utf-8")
@@ -574,56 +588,56 @@ def model_from_dict(model: type[ModelT], /, **kwargs: Any) -> ModelT:
 
 def get_abstract_loader_options(
     loader_options: Union[LoadSpec, None],
-    default_loader_options: Union[list[_AbstractLoad], None] = None,
+    default_loader_options: Union[list[Load], None] = None,
     default_options_have_wildcards: bool = False,
     merge_with_default: bool = True,
     inherit_lazy_relationships: bool = True,
     cycle_count: int = 0,
-) -> tuple[list[_AbstractLoad], bool]:
+) -> tuple[list[Load], bool]:
     """Generate SQLAlchemy loader options for eager loading relationships.
 
     Args:
         loader_options :class:`~advanced_alchemy.repository.typing.LoadSpec`|:class:`None`  Specification for how to load relationships. Can be:
             - None: Use defaults
-            - :class:`sqlalchemy.orm.strategy_options._AbstractLoad`: Direct SQLAlchemy loader option
+            - :class:`sqlalchemy.orm.Load`: Direct SQLAlchemy loader option
             - :class:`sqlalchemy.orm.InstrumentedAttribute`: Model relationship attribute
             - :class:`sqlalchemy.orm.RelationshipProperty`: SQLAlchemy relationship
             - str: "*" for wildcard loading
             - :class:`typing.Sequence` of the above
-        default_loader_options: :class:`typing.Sequence` of :class:`sqlalchemy.orm.strategy_options._AbstractLoad` loader options to start with.
+        default_loader_options: :class:`typing.Sequence` of :class:`sqlalchemy.orm.Load` loader options to start with.
         default_options_have_wildcards: Whether the default options contain wildcards.
         merge_with_default: Whether to merge the default options with the loader options.
         inherit_lazy_relationships: Whether to inherit the ``lazy`` configuration from the model's relationships.
         cycle_count: Number of times this function has been called recursively.
 
     Returns:
-        tuple[:class:`list`[:class:`sqlalchemy.orm.strategy_options._AbstractLoad`], bool]: A tuple containing:
-            - :class:`list` of :class:`sqlalchemy.orm.strategy_options._AbstractLoad` SQLAlchemy loader option objects
+        tuple[:class:`list`[:class:`sqlalchemy.orm.Load`], bool]: A tuple containing:
+            - :class:`list` of :class:`sqlalchemy.orm.Load` SQLAlchemy loader option objects
             - Boolean indicating if any wildcard loaders are present
     """
-    loads: list[_AbstractLoad] = []
+    loads: list[Load] = []
     if cycle_count == 0 and not inherit_lazy_relationships:
-        loads.append(lazyload("*"))
+        loads.append(cast("Load", lazyload("*")))
     if cycle_count == 0 and merge_with_default and default_loader_options is not None:
         loads.extend(default_loader_options)
     options_have_wildcards = default_options_have_wildcards
     if loader_options is None:
         return (loads, options_have_wildcards)
-    if isinstance(loader_options, _AbstractLoad):
+    if isinstance(loader_options, Load):
         return ([loader_options], options_have_wildcards)
     if isinstance(loader_options, InstrumentedAttribute):
         loader_options = [loader_options.property]
     if isinstance(loader_options, RelationshipProperty):
         class_ = loader_options.class_attribute
         return (
-            [selectinload(class_)]
+            [cast("Load", selectinload(class_))]
             if loader_options.uselist
-            else [joinedload(class_, innerjoin=loader_options.innerjoin)],
+            else [cast("Load", joinedload(class_, innerjoin=loader_options.innerjoin))],
             options_have_wildcards if loader_options.uselist else True,
         )
     if isinstance(loader_options, str) and loader_options == "*":
         options_have_wildcards = True
-        return ([joinedload("*")], options_have_wildcards)
+        return ([cast("Load", joinedload("*"))], options_have_wildcards)
     if isinstance(loader_options, (list, tuple)):
         for attribute in loader_options:  # pyright: ignore[reportUnknownVariableType]
             if isinstance(attribute, (list, tuple)):
@@ -650,6 +664,26 @@ def get_abstract_loader_options(
     return (loads, options_have_wildcards)
 
 
+def resolve_generic_type_args(cls: type[Any], target_origin: type[Any]) -> tuple[Any, ...]:
+    """Extract concrete generic type arguments for ``target_origin`` from ``cls.__mro__``.
+
+    Args:
+        cls: The subclass being inspected.
+        target_origin: The generic base class or protocol to match.
+
+    Returns:
+        Tuple of type arguments from the first matching generic base with concrete arguments.
+    """
+    for current_cls in cls.__mro__:
+        for base in getattr(current_cls, "__orig_bases__", ()):
+            origin = get_origin(base)
+            if origin is not None and isinstance(origin, type) and issubclass(origin, target_origin):
+                args = get_args(base)
+                if args and any(isinstance(arg, type) or isinstance(get_origin(arg), type) for arg in args):
+                    return args
+    return ()
+
+
 class FilterableRepositoryProtocol(Protocol[ModelT]):
     """Protocol defining the interface for filterable repositories.
 
@@ -661,7 +695,268 @@ class FilterableRepositoryProtocol(Protocol[ModelT]):
     """The SQLAlchemy model class this repository manages."""
 
 
-class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
+class ModelRepositoryMixin(FilterableRepositoryProtocol[ModelT], Generic[ModelT]):
+    """Shared model metadata, primary-key introspection, and attribute helpers for repositories."""
+
+    model_type: type[ModelT]
+    """The SQLAlchemy model class this repository manages."""
+    id_attribute: Any = "id"
+    """Name of the unique identifier for the model."""
+    match_fields: Optional[Union[list[str], str]] = None
+    """Default fields used for matching existing instances during upsert operations."""
+    error_messages: Optional[ErrorMessages] = None
+    """Default error messages for the repository."""
+    wrap_exceptions: bool = True
+    """Wrap SQLAlchemy exceptions in a ``RepositoryError``."""
+    _pk_columns: tuple[Column[Any], ...] = ()
+    _pk_attr_names: tuple[str, ...] = ()
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if "model_type" not in cls.__dict__:
+            args = resolve_generic_type_args(cls, ModelRepositoryMixin)
+            if args and isinstance(args[0], type):
+                cls.model_type = cast("type[ModelT]", args[0])
+
+    def _requires_orm_delete(self) -> bool:
+        """Return ``True`` if ``self.model_type`` requires ORM ``session.delete()`` instead of bulk ``DELETE``."""
+        model_cls = getattr(self, "model_type", None)
+        if not isinstance(model_cls, type):
+            return False
+        try:
+            mapper: Mapper[Any] = class_mapper(model_cls)
+        except (NoInspectionAvailable, ValueError, TypeError):
+            return False
+        if len(mapper.tables) > 1:
+            return True
+        if any(isinstance(col.type, StoredObject) for col in mapper.columns):
+            return True
+        if any("delete" in rel.cascade and not rel.passive_deletes for rel in mapper.relationships):
+            return True
+        dispatch_obj: Any = mapper.dispatch
+        before_delete_listeners: Iterable[Any] = getattr(dispatch_obj, "before_delete", ())
+        after_delete_listeners: Iterable[Any] = getattr(dispatch_obj, "after_delete", ())
+        custom_listeners: list[Any] = [
+            fn
+            for fn in (*before_delete_listeners, *after_delete_listeners)
+            if not getattr(fn, "__module__", "").startswith("advanced_alchemy.")
+        ]
+        return bool(custom_listeners)
+
+    def _ensure_pk_info(self) -> tuple[tuple[Column[Any], ...], tuple[str, ...]]:
+        """Ensure primary key column and attribute tuples are initialized for ``self.model_type``."""
+        pk_columns = self.__dict__.get("_pk_columns")
+        pk_attr_names = self.__dict__.get("_pk_attr_names")
+        if pk_columns is None or pk_attr_names is None:
+            model_cls = getattr(self, "model_type", None)
+            if model_cls is not None:
+                pk_columns, pk_attr_names = get_primary_key_info(model_cls)
+            else:
+                pk_columns, pk_attr_names = (), ()
+            self._pk_columns = pk_columns
+            self._pk_attr_names = pk_attr_names
+        return pk_columns, pk_attr_names
+
+    @property
+    def pk_attr_names(self) -> tuple[str, ...]:
+        """Get primary key attribute names.
+
+        Returns:
+            Tuple of ORM attribute names for primary key columns.
+        """
+        return self._ensure_pk_info()[1]
+
+    @property
+    def has_composite_pk(self) -> bool:
+        """Check if model has a composite (multi-column) primary key.
+
+        Returns:
+            True if the model has 2 or more primary key columns, False otherwise.
+        """
+        return is_composite_pk(self._ensure_pk_info()[0])
+
+    def get_primary_key_value(self, instance: ModelT) -> PrimaryKeyType:
+        """Extract the primary key value(s) from a model instance.
+
+        Args:
+            instance: Model instance to extract primary key from.
+
+        Returns:
+            Scalar value for single PK, or tuple of values in column order for composite PK.
+        """
+        return extract_pk_value_from_instance(instance, self.pk_attr_names)
+
+    def has_primary_key_values(self, instance: ModelT) -> bool:
+        """Check if all primary key values are set on an instance.
+
+        Args:
+            instance: Model instance to check.
+
+        Returns:
+            True if all PK values are non-None, False otherwise.
+        """
+        return pk_values_present(instance, self.pk_attr_names)
+
+    def set_primary_key_value(self, instance: ModelT, pk_value: PrimaryKeyType) -> ModelT:
+        """Set the primary key value(s) on a model instance.
+
+        Args:
+            instance: Model instance to update.
+            pk_value: Scalar PK value, or tuple/dict for composite PKs.
+
+        Returns:
+            The updated model instance.
+        """
+        pk_attr_names = self.pk_attr_names
+        if self.has_composite_pk:
+            pk_tuple = validate_composite_pk_value(pk_value, pk_attr_names, self.model_type.__name__)
+            for attr_name, val in zip(pk_attr_names, pk_tuple):
+                setattr(instance, attr_name, val)
+            return instance
+        if pk_attr_names:
+            setattr(instance, pk_attr_names[0], pk_value)
+            return instance
+        return self.set_id_attribute_value(pk_value, instance)
+
+    def _normalize_pk_to_tuple(self, pk_value: PrimaryKeyType) -> tuple[Any, ...]:
+        """Normalize a primary key value to a tuple for consistent storage key generation."""
+        return normalize_pk_to_tuple(pk_value, self.pk_attr_names, self.model_type.__name__)
+
+    def _normalize_pk_values_to_tuples(self, item_ids: list[PrimaryKeyType]) -> list[tuple[Any, ...]]:
+        """Normalize a list of composite primary key values to tuples."""
+        pk_attr_names = self.pk_attr_names
+        model_name = self.model_type.__name__
+        return [validate_composite_pk_value(pk_value, pk_attr_names, model_name) for pk_value in item_ids]
+
+    def _build_pk_filter(self, pk_value: PrimaryKeyType) -> ColumnElement[bool]:
+        """Build a WHERE clause for primary key lookup."""
+        pk_columns, pk_attr_names = self._ensure_pk_info()
+        if len(pk_columns) == 0:
+            id_attr = get_instrumented_attr(self.model_type, self.id_attribute)
+            result: ColumnElement[bool] = id_attr == pk_value
+            return result
+        if len(pk_columns) == 1:
+            if isinstance(pk_value, tuple):
+                msg = (
+                    f"Model {self.model_type.__name__} has a single primary key column '{pk_attr_names[0]}'. "
+                    f"Expected a scalar value, got tuple: {pk_value!r}"
+                )
+                raise ValueError(msg)
+            if isinstance(pk_value, dict):
+                msg = (
+                    f"Model {self.model_type.__name__} has a single primary key column '{pk_attr_names[0]}'. "
+                    f"Expected a scalar value, got dict: {pk_value!r}"
+                )
+                raise ValueError(msg)
+            single_pk_result: ColumnElement[bool] = pk_columns[0] == pk_value
+            return single_pk_result
+        pk_tuple = validate_composite_pk_value(pk_value, pk_attr_names, self.model_type.__name__)
+        return and_(*[col == val for col, val in zip(pk_columns, pk_tuple)])
+
+    def _get_object_ids(self, existing_objs: Sequence[ModelT]) -> list[PrimaryKeyType]:
+        """Extract primary key values from a sequence of model instances."""
+        return [self.get_primary_key_value(datum) for datum in existing_objs if self.has_primary_key_values(datum)]
+
+    def _get_match_fields(
+        self,
+        match_fields: Optional[Union[list[str], str]] = None,
+        id_attribute: Optional[str] = None,
+    ) -> Optional[list[str]]:
+        """Resolve match_fields from method argument or repository default."""
+        id_attribute = id_attribute or self.id_attribute
+        match_fields = match_fields or self.match_fields
+        if isinstance(match_fields, str):
+            match_fields = [match_fields]
+        return match_fields
+
+    @staticmethod
+    def _get_error_messages(
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        default_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+    ) -> Optional[ErrorMessages]:
+        """Merge default and per-call error message templates."""
+        if error_messages is Empty or error_messages is None:
+            if isinstance(default_messages, dict) and all(
+                key in default_messages for key in DEFAULT_ERROR_MESSAGE_TEMPLATES
+            ):
+                return default_messages
+            error_messages = None
+        if default_messages == Empty:
+            default_messages = None
+        messages = cast("ErrorMessages", dict(DEFAULT_ERROR_MESSAGE_TEMPLATES))
+        if default_messages and isinstance(default_messages, dict):
+            messages.update(default_messages)
+        if error_messages:
+            messages.update(cast("ErrorMessages", error_messages))  # type: ignore[unused-ignore,redundant-cast]
+        return messages
+
+    @classmethod
+    def get_id_attribute_value(
+        cls,
+        item: Union[ModelT, type[ModelT]],
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+    ) -> Any:
+        """Get value of attribute named as :attr:`id_attribute` on ``item``.
+
+        Args:
+            item: Anything that should have an attribute named as :attr:`id_attribute` value.
+            id_attribute: Allows customization of the unique identifier to use for model fetching.
+                Defaults to `None`, but can reference any surrogate or candidate key for the table.
+
+        Returns:
+            The value of attribute on ``item`` named as :attr:`id_attribute`.
+        """
+        if isinstance(id_attribute, InstrumentedAttribute):
+            id_attribute = id_attribute.key
+        return getattr(item, id_attribute if id_attribute is not None else cls.id_attribute)
+
+    @classmethod
+    def set_id_attribute_value(
+        cls,
+        item_id: Any,
+        item: ModelT,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+    ) -> ModelT:
+        """Return the ``item`` after the ID is set to the appropriate attribute.
+
+        Args:
+            item_id: Value of ID to be set on instance
+            item: Anything that should have an attribute named as :attr:`id_attribute` value.
+            id_attribute: Allows customization of the unique identifier to use for model fetching.
+                Defaults to `None`, but can reference any surrogate or candidate key for the table.
+
+        Returns:
+            Item with ``item_id`` set to :attr:`id_attribute`
+        """
+        if isinstance(id_attribute, InstrumentedAttribute):
+            id_attribute = id_attribute.key
+        setattr(item, id_attribute if id_attribute is not None else cls.id_attribute, item_id)
+        return item
+
+    @staticmethod
+    def check_not_found(item_or_none: Optional[ModelT]) -> ModelT:
+        """Raise :exc:`advanced_alchemy.exceptions.NotFoundError` if ``item_or_none`` is ``None``.
+
+        Args:
+            item_or_none: Item (:class:`T <T>`) to be tested for existence.
+
+        Raises:
+            NotFoundError: If ``item_or_none`` is ``None``
+
+        Returns:
+            The item, if it exists.
+        """
+        if item_or_none is None:
+            msg = "No item found when one was expected"
+            raise NotFoundError(msg)
+        return item_or_none
+
+
+class FilterableRepository(
+    ModelRepositoryMixin[ModelT],
+    _UpsertPlanningMixin[ModelT],
+    FilterableRepositoryProtocol[ModelT],
+):
     """Default implementation of a filterable repository.
 
     Provides core filtering, ordering and pagination functionality for
@@ -732,7 +1027,7 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
                 if apply_pagination:
                     statement = filter_.append_to_statement(statement, self.model_type)
             elif isinstance(filter_, (InAnyFilter,)):
-                statement = filter_.append_to_statement(statement, self.model_type)
+                statement = filter_.append_to_statement(statement, self.model_type, prefer_any=self._prefer_any)
             elif isinstance(filter_, ColumnElement):
                 statement = cast("StatementTypeT", statement.where(filter_))
             else:
@@ -754,9 +1049,14 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
         Returns:
             StatementTypeT: The filtered SQL statement.
         """
-        for key, val in dict(kwargs).items():
-            field = get_instrumented_attr(self.model_type, key)
-            statement = cast("StatementTypeT", statement.where(field == val))
+        if isinstance(kwargs, dict):
+            for key, val in kwargs.items():  # pyright: ignore[reportUnknownVariableType]
+                field = get_instrumented_attr(self.model_type, key)  # pyright: ignore[reportArgumentType]
+                statement = cast("StatementTypeT", statement.where(field == val))  # pyright: ignore[reportUnknownArgumentType]
+        else:
+            for key, val in kwargs:
+                field = get_instrumented_attr(self.model_type, key)
+                statement = cast("StatementTypeT", statement.where(field == val))
         return statement
 
     def _apply_order_by(
@@ -808,340 +1108,6 @@ class FilterableRepository(FilterableRepositoryProtocol[ModelT]):
             statement = cast("StatementTypeT", statement.order_by(field.desc() if is_desc else field.asc()))
         return statement
 
-    def _type_must_use_in_instead_of_any(self, matched_values: Sequence[Any], field_type: Any = None) -> bool:
-        """Determine if ``field.in_()`` should be used instead of ``any_()`` for compatibility.
-
-        Uses SQLAlchemy's type introspection to detect types that may have DBAPI
-        serialization issues with the ``ANY()`` operator. Checks if actual values match
-        the column's expected ``python_type``; mismatches indicate complex types that
-        need the safer ``IN()`` operator. Falls back to Python type checking when
-        SQLAlchemy type information is unavailable.
-
-        Args:
-            matched_values: Values to be used in the filter.
-            field_type: Optional SQLAlchemy TypeEngine from the column.
-
-        Returns:
-            bool: True if ``field.in_()`` should be used instead of ``any_()``.
-        """
-        if not matched_values:
-            return False
-
-        if field_type is not None:
-            try:
-                expected_python_type = getattr(field_type, "python_type", None)
-                if expected_python_type is not None:
-                    for value in matched_values:
-                        if value is not None and not isinstance(value, expected_python_type):
-                            return True
-            except (AttributeError, NotImplementedError):
-                return True
-
-        return any(value is not None and type(value) not in DEFAULT_SAFE_TYPES for value in matched_values)
-
-    def _get_insertmanyvalues_max_parameters(self, chunk_size: Optional[int] = None) -> int:
-        if chunk_size is not None:
-            if chunk_size < 1:
-                msg = "chunk_size must be greater than zero"
-                raise ValueError(msg)
-            return chunk_size
-        dialect_limit = getattr(self._dialect, "insertmanyvalues_max_parameters", None)
-        if isinstance(dialect_limit, int) and not isinstance(dialect_limit, bool) and dialect_limit > 0:
-            return dialect_limit
-        return DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS
-
-    def _get_upsert_chunk_size(self, column_count: int, chunk_size: Optional[int]) -> int:
-        """Calculate native-upsert rows per chunk using dialect parameter and page limits."""
-        parameter_limited_rows = max(1, self._get_insertmanyvalues_max_parameters(chunk_size) // max(1, column_count))
-        dialect_page_size = getattr(self._dialect, "insertmanyvalues_page_size", None)
-        if isinstance(dialect_page_size, int) and not isinstance(dialect_page_size, bool) and dialect_page_size > 0:
-            return min(parameter_limited_rows, dialect_page_size)
-        return parameter_limited_rows
-
-    def _build_upsert_match_filter(
-        self, row_chunk: Sequence[dict[str, Any]], match_fields: Sequence[str]
-    ) -> ColumnElement[bool]:
-        """Build the smallest exact-key predicate supported by the dialect."""
-        match_columns = [get_instrumented_attr(self.model_type, field_name) for field_name in match_fields]
-        if len(match_columns) == 1:
-            match_values = [row[match_fields[0]] for row in row_chunk]
-            use_in = not self._prefer_any or self._type_must_use_in_instead_of_any(match_values, match_columns[0].type)
-            return match_columns[0].in_(match_values) if use_in else any_(match_values) == match_columns[0]  # type: ignore[arg-type]
-        if self._dialect.name != "mssql":
-            match_values = [tuple(row[field_name] for field_name in match_fields) for row in row_chunk]
-            return tuple_(*match_columns).in_(match_values)
-        return or_(
-            *[
-                and_(*[column == row[field_name] for column, field_name in zip(match_columns, match_fields)])
-                for row in row_chunk
-            ]
-        )
-
-    @staticmethod
-    def _has_duplicate_match_keys(data: Sequence[ModelT], match_fields: Sequence[str]) -> bool:
-        """Detect duplicate source keys, which dialects treat differently.
-
-        A single native statement containing two rows with the same conflict key
-        raises on some backends (postgresql: "cannot affect row a second time")
-        and silently last-writer-wins on others. The ORM fallback merges such
-        rows deterministically, so duplicated keys route the batch there.
-        """
-        hashable_match_keys: set[tuple[Any, ...]] = set()
-        unhashable_match_keys: list[tuple[Any, ...]] = []
-        for datum in data:
-            match_key = tuple(getattr(datum, field_name, MISSING) for field_name in match_fields)
-            if any(value is MISSING or value is None for value in match_key):
-                continue
-            try:
-                is_duplicate = match_key in hashable_match_keys
-            except TypeError:
-                is_duplicate = any(
-                    len(existing_key) == len(match_key)
-                    and all(
-                        compare_values(existing_value, key_value)
-                        for existing_value, key_value in zip(existing_key, match_key)
-                    )
-                    for existing_key in unhashable_match_keys
-                )
-                if not is_duplicate:
-                    unhashable_match_keys.append(match_key)
-            else:
-                if not is_duplicate:
-                    hashable_match_keys.add(match_key)
-            if is_duplicate:
-                return True
-        return False
-
-    def _requires_orm_upsert(self, data: Sequence[ModelT]) -> bool:
-        """Detect batches whose semantics depend on the ORM unit of work.
-
-        Native Core DML never runs mapper-level events, relationship
-        save-update cascades, or the FileObject flush listeners. Models and
-        instances relying on any of those take the ORM fallback so their
-        behavior matches ``add_many`` and ``update_many``.
-        """
-        mapper = self.model_type.__mapper__
-        if len(mapper.tables) > 1:
-            return True
-        if any(
-            ancestor.dispatch.before_insert
-            or ancestor.dispatch.after_insert
-            or ancestor.dispatch.before_update
-            or ancestor.dispatch.after_update
-            for ancestor in mapper.iterate_to_root()
-        ):
-            return True
-        if any(isinstance(column.type, StoredObject) for column in mapper.columns):
-            return True
-        relationship_keys = [relationship.key for relationship in mapper.relationships]
-        if not relationship_keys:
-            return False
-        return any(datum.__dict__.get(key) for datum in data for key in relationship_keys)
-
-    def _resolve_upsert_update_columns(
-        self,
-        data: Sequence[ModelT],
-        strategy: UpsertStrategy,
-    ) -> Optional[list[str]]:
-        """Resolve columns that have uniform update intent across the batch.
-
-        Native DML bypasses ORM default/onupdate handling. Only explicitly set
-        attributes and Python ``onupdate`` columns should be copied into an
-        existing row; insert-only defaults such as ``created_at`` must not be
-        overwritten. Rows with different update shapes use the ORM fallback so
-        an omitted value in one row cannot be replaced by another row's default.
-        """
-        if not data:
-            return []
-        table = cast("Table", self.model_type.__table__)
-        if any(
-            col.onupdate is not None and hasattr(getattr(col.onupdate, "arg", None), "_compiler_dispatch")
-            for col in table.columns
-        ):
-            return None
-        protected_columns = set(strategy.conflict_columns)
-        protected_columns.update(column.key for column in table.primary_key.columns)
-        update_column_sets: list[set[str]] = []
-        for datum in data:
-            instance_state = inspect(datum)
-            update_column_sets.append(
-                {
-                    column.key
-                    for column in table.columns
-                    if column.key not in protected_columns
-                    and (has_upsert_update_intent(datum, instance_state, column.key) or column.onupdate is not None)
-                }
-            )
-        first_update_column_set = update_column_sets[0]
-        if any(update_column_set != first_update_column_set for update_column_set in update_column_sets[1:]):
-            return None
-        return [column.key for column in table.columns if column.key in first_update_column_set]
-
-    def _rows_require_fallback_upsert(
-        self,
-        input_rows: Sequence[dict[str, Any]],
-        strategy: UpsertStrategy,
-        match_fields: Sequence[str],
-    ) -> bool:
-        """Detect row shapes whose portable semantics require the ORM fallback.
-
-        ``MERGE`` (oracle/mssql) and ``INSERT OR UPDATE`` (spanner) do not
-        transparently invoke server-side ``Sequence`` / ``Identity`` defaults
-        the way ``INSERT ... ON CONFLICT`` does on postgresql: a hand-built
-        statement that omits an autoincrement PK column will produce a NULL
-        violation. When the resolved strategy is one of those kinds and any
-        row is missing a PK column, fall back to the ORM-managed
-        SELECT+partition path so the sequence/identity machinery runs
-        normally.
-        """
-        if not input_rows:
-            return False
-        first_row_columns = set(input_rows[0])
-        if any(set(row) != first_row_columns for row in input_rows[1:]):
-            return True
-        if any(field not in row or row[field] is None for row in input_rows for field in match_fields):
-            return True
-        if strategy.kind not in {"merge", "insert_or_update"}:
-            return False
-        table = cast("Table", self.model_type.__table__)
-        primary_key_columns = {column.key for column in table.primary_key.columns}
-        if any(not primary_key_columns.issubset(row.keys()) for row in input_rows):
-            return True
-        sql_default_columns = {
-            column.key
-            for column in table.columns
-            if column.default is not None and hasattr(getattr(column.default, "arg", None), "_compiler_dispatch")
-        }
-        return any(not sql_default_columns.issubset(row.keys()) for row in input_rows)
-
-    def _extract_upsert_row(self, instance: ModelT) -> dict[str, Any]:
-        """Convert a model instance to a row dict suitable for native upsert execution.
-
-        Invokes Python-side callable defaults for columns missing from the
-        instance (UUID factories on PK columns, ``default=datetime.utcnow``
-        audit timestamps, etc.) because the native dispatch path bypasses
-        SQLAlchemy's ORM flush where these defaults normally fire.
-
-        Columns whose default is server-managed (``Sequence``, ``Identity``,
-        ``server_default``) are omitted from the row when their value is
-        ``None`` so the database supplies them.
-        """
-        model_values = model_to_dict(instance)
-        table = cast("Table", self.model_type.__table__)
-        prepared_row = dict(model_values)
-        instance_state = inspect(instance)
-        for column in table.columns:
-            has_update_intent = has_upsert_update_intent(instance, instance_state, column.key)
-            if column.onupdate is not None and not has_update_intent:
-                onupdate_value = getattr(column.onupdate, "arg", None)
-                if callable(onupdate_value):
-                    prepared_row[column.key] = resolve_column_default(onupdate_value)
-                    continue
-                if onupdate_value is not None:
-                    prepared_row[column.key] = onupdate_value
-                    continue
-            if has_update_intent:
-                prepared_row[column.key] = getattr(instance, column.key)
-                continue
-            if prepared_row.get(column.key) is not None:
-                continue
-            value_default = column.onupdate if column.onupdate is not None else column.default
-            default_value = getattr(value_default, "arg", None) if value_default is not None else None
-            if hasattr(default_value, "_compiler_dispatch"):
-                prepared_row.pop(column.key, None)
-                continue
-            if callable(default_value):
-                prepared_row[column.key] = resolve_column_default(default_value)
-                continue
-            if value_default is not None and default_value is not None:
-                prepared_row[column.key] = default_value
-                continue
-            if column.primary_key or value_default is not None or column.server_default is not None:
-                prepared_row.pop(column.key, None)
-        return prepared_row
-
-    @staticmethod
-    def _normalize_match_value(value: Any) -> Any:
-        """Fold the common collation-insensitive comparisons databases apply to text keys."""
-        if isinstance(value, str):
-            return value.casefold().rstrip()
-        return value
-
-    @classmethod
-    def _order_upsert_results(
-        cls,
-        instances: Sequence[ModelT],
-        input_rows: Sequence[dict[str, Any]],
-        match_fields: Sequence[str],
-    ) -> list[ModelT]:
-        """Restore input ordering because RETURNING/OUTPUT order is undefined.
-
-        Pairs by exact match-key equality first. Rows the database matched
-        under a collation-insensitive comparison (``'foo'`` upserted onto a
-        stored ``'FOO'``) get a second, normalized pass; a pairing that is
-        still ambiguous raises instead of returning a misaligned list.
-        """
-        instances_by_match_key: dict[tuple[Any, ...], ModelT] = {}
-        unhashable_instances: list[tuple[tuple[Any, ...], ModelT]] = []
-        for instance in instances:
-            match_key = tuple(getattr(instance, field_name) for field_name in match_fields)
-            try:
-                instances_by_match_key[match_key] = instance
-            except TypeError:
-                unhashable_instances.append((match_key, instance))
-
-        ordered_instances: list[Optional[ModelT]] = []
-        matched_instance_ids: set[int] = set()
-        for row in input_rows:
-            match_key = tuple(row[field_name] for field_name in match_fields)
-            try:
-                matched_instance: Optional[ModelT] = instances_by_match_key.get(match_key)
-            except TypeError:
-                matched_instance = next(
-                    (
-                        candidate_instance
-                        for candidate_key, candidate_instance in unhashable_instances
-                        if len(candidate_key) == len(match_key)
-                        and all(
-                            compare_values(candidate_value, key_value)
-                            for candidate_value, key_value in zip(candidate_key, match_key)
-                        )
-                    ),
-                    None,
-                )
-            if matched_instance is not None:
-                matched_instance_ids.add(id(matched_instance))
-            ordered_instances.append(matched_instance)
-
-        unmatched_positions = [position for position, instance in enumerate(ordered_instances) if instance is None]
-        leftover_instances = [instance for instance in instances if id(instance) not in matched_instance_ids]
-        if not unmatched_positions and not leftover_instances:
-            return cast("list[ModelT]", ordered_instances)
-        ambiguity_msg = (
-            "upsert_many could not unambiguously pair hydrated rows with input rows; "
-            "verify that the batch keys are unique under the database's comparison rules"
-        )
-        if len(unmatched_positions) != len(leftover_instances):
-            raise RepositoryError(ambiguity_msg)
-        leftovers_by_normalized_key: dict[tuple[Any, ...], list[ModelT]] = {}
-        for instance in leftover_instances:
-            normalized_key = tuple(
-                cls._normalize_match_value(getattr(instance, field_name)) for field_name in match_fields
-            )
-            with contextlib.suppress(TypeError):
-                leftovers_by_normalized_key.setdefault(normalized_key, []).append(instance)
-        for position in unmatched_positions:
-            row = input_rows[position]
-            normalized_key = tuple(cls._normalize_match_value(row[field_name]) for field_name in match_fields)
-            try:
-                candidates = leftovers_by_normalized_key.get(normalized_key, [])
-            except TypeError:
-                candidates = []
-            if len(candidates) != 1:
-                raise RepositoryError(ambiguity_msg)
-            ordered_instances[position] = candidates.pop()
-        return cast("list[ModelT]", ordered_instances)
-
 
 def column_has_defaults(column: Any) -> bool:
     """Check if a column has any type of default value or update handler.
@@ -1158,11 +1124,8 @@ def column_has_defaults(column: Any) -> bool:
     Returns:
         bool: True if the column has any type of default or update handler
     """
-    # Label objects (from column_property) don't have default/onupdate attributes
-    # Return False for these as they represent computed values, not defaulted columns
     if isinstance(column, Label):
         return False
-    # Use defensive attribute checking for safety with other column-like objects
     return (
         getattr(column, "default", None) is not None
         or getattr(column, "server_default", None) is not None
@@ -1171,93 +1134,69 @@ def column_has_defaults(column: Any) -> bool:
     )
 
 
-def was_attribute_set(instance: Any, mapper: Any, attr_name: str) -> bool:
-    """Check if an attribute was explicitly set on a model instance.
+def snapshot_and_detach_relationships(instance: Any, mapper: Any) -> dict[str, Any]:
+    """Capture explicitly-set relationship values on ``instance`` and undo any
+    backref pollution those assignments caused on already-persistent related objects.
 
-    This function distinguishes between attributes that were explicitly set
-    (even to None) versus attributes that are simply uninitialized and defaulting
-    to None. This is crucial for partial updates where only modified fields
-    should be copied.
+    A common ``to_model_on_update`` pattern builds a transient instance and assigns
+    already-persistent related objects (or a collection of them) to one of its
+    relationships, purely so the caller can copy that value onto the real,
+    session-attached instance afterwards. Because ``back_populates``/``backref``
+    synchronization is a Python-side event that fires regardless of session state,
+    the transient instance still gets appended into the related object's own
+    collection - even though it is never added to the session. The next autoflush
+    then tries to write that pairing, fails because the transient side has no
+    identity, and emits ``SAWarning: ... not in session ...`` for it.
 
-    Args:
-        instance: The model instance to check.
-        mapper: The SQLAlchemy mapper/inspector for the instance.
-        attr_name: The name of the attribute to check.
-
-    Returns:
-        bool: True if the attribute was explicitly set, False if uninitialized.
-    """
-    try:
-        # Get the attribute state
-        attr_state = mapper.attrs.get(attr_name)
-        if attr_state is None:
-            return False
-
-        # Check if the attribute has history (was modified)
-        # For a new transient instance, modified attributes will have history
-        history = attr_state.history
-        if history.has_changes():
-            return True
-
-        # For attributes with no history, check if they're in the instance dict
-        # This handles the case where an attribute was set during __init__
-        return hasattr(instance, "__dict__") and attr_name in instance.__dict__
-    except (AttributeError, KeyError):  # pragma: no cover
-        # If we can't determine, assume it was set to be safe
-        return True
-
-
-def has_upsert_update_intent(instance: Any, instance_state: Any, attribute_name: str) -> bool:
-    """Check whether an attribute on an instance should be included in an upsert update.
-
-    Distinguishes constructor input on transient instances from unmodified
-    attributes on persistent instances.
+    This snapshots each explicitly-set relationship value before removing
+    ``instance`` from the corresponding back-populated collection/attribute on
+    every already-persistent related object, so the stale pairing never reaches a
+    flush. Only relationships declared with ``back_populates`` on a transient
+    ``instance`` are touched; persistent instances and one-directional
+    relationships are left untouched.
 
     Args:
-        instance: The model instance to inspect.
-        instance_state: The SQLAlchemy inspection state for the instance.
-        attribute_name: The attribute name to check.
+        instance: The (possibly transient) instance to inspect.
+        mapper: The SQLAlchemy instance-state/mapper for ``instance``.
 
     Returns:
-        bool: True if the attribute has update intent, False otherwise.
+        A mapping of relationship name to the value that was explicitly set on
+        ``instance``, captured before any backref cleanup.
     """
-    if instance_state.transient:
-        return was_attribute_set(instance, instance_state, attribute_name)
-    attribute_state = instance_state.attrs.get(attribute_name)
-    return bool(attribute_state is not None and attribute_state.history.has_changes())
+    values: dict[str, Any] = {}
+    is_transient = object_session(instance) is None
+    for relationship in mapper.mapper.relationships:
+        if not was_attribute_set(instance, mapper, relationship.key):
+            continue
+        raw_value: Any = instance.__dict__.get(relationship.key)
+        related_items: list[Any]
+        if isinstance(raw_value, Mapping):
+            mapping = cast("dict[Any, Any]", raw_value)
+            values[relationship.key] = dict(mapping)
+            related_items = list(mapping.values())
+        elif isinstance(raw_value, (list, set)):
+            items = cast("Iterable[Any]", raw_value)
+            values[relationship.key] = list(items)
+            related_items = list(items)
+        else:
+            values[relationship.key] = raw_value
+            related_items = [raw_value]
 
-
-def compare_values(existing_value: Any, new_value: Any) -> bool:
-    """Safely compare two values, handling numpy arrays and other special types.
-
-    This function handles the comparison of values that may include numpy arrays
-    (such as pgvector's Vector type) which cannot be directly compared using
-    standard equality operators due to their element-wise comparison behavior.
-
-    Args:
-        existing_value: The current value to compare.
-        new_value: The new value to compare against.
-
-    Returns:
-        bool: True if values are equal, False otherwise.
-    """
-    # Handle None comparisons
-    if existing_value is None and new_value is None:
-        return True
-    if existing_value is None or new_value is None:
-        return False
-
-    # Handle numpy arrays or array-like objects
-    if is_numpy_array(existing_value) or is_numpy_array(new_value):
-        # Both values must be arrays for them to be considered equal
-        if not (is_numpy_array(existing_value) and is_numpy_array(new_value)):
-            return False
-        return arrays_equal(existing_value, new_value)
-
-    # Standard equality comparison for all other types
-    try:
-        return bool(existing_value == new_value)
-    except (ValueError, TypeError):
-        # If comparison fails for any reason, consider them different
-        # This is a safe fallback that will trigger updates when unsure
-        return False
+        back_attr = relationship.back_populates
+        if not is_transient or not back_attr or raw_value is None:
+            continue
+        for related in related_items:
+            related_state: Any = inspect(related, raiseerr=False)  # pyright: ignore[reportUnknownVariableType]
+            if related is None or related_state is None:
+                continue
+            back_value: Any = related.__dict__.get(back_attr)
+            if isinstance(back_value, (list, set)) and instance in back_value:
+                cast("Any", back_value).remove(instance)
+            elif back_value is instance:
+                setattr(related, back_attr, None)
+            else:
+                pending: Any = getattr(related_state, "_pending_mutations", None)  # pyright: ignore[reportUnknownArgumentType]
+                added_items: Any = getattr(pending.get(back_attr), "added_items", None) if pending else None
+                if added_items is not None and instance in added_items:
+                    added_items.discard(instance)
+    return values

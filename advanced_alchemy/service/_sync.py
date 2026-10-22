@@ -9,10 +9,9 @@ should be a SQLAlchemy model.
 from collections.abc import Generator, Iterable, Sequence
 from contextlib import contextmanager
 from functools import cached_property
-from typing import Any, ClassVar, Generic, List, Optional, Union, cast
+from typing import Any, ClassVar, Generic, List, Optional, Union, cast, get_args, get_origin
 
 from sqlalchemy import Select
-from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import InstrumentedAttribute, Session
 from sqlalchemy.orm.scoping import scoped_session
 from sqlalchemy.sql import ColumnElement
@@ -23,9 +22,9 @@ from advanced_alchemy.base import ModelProtocol, model_to_dict
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.exceptions import AdvancedAlchemyError, ErrorMessages, ImproperConfigurationError, RepositoryError
 from advanced_alchemy.filters import StatementFilter
-from advanced_alchemy.repository import SQLAlchemySyncQueryRepository
-from advanced_alchemy.repository._util import LoadSpec, model_from_dict
-from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, SQLAlchemySyncRepositoryT
+from advanced_alchemy.repository import SQLAlchemySyncQueryRepository, SQLAlchemySyncRepository
+from advanced_alchemy.repository._util import LoadSpec, model_from_dict, resolve_generic_type_args
+from advanced_alchemy.repository.typing import ModelT, OrderingPair, PrimaryKeyType, SQLAlchemySyncRepositoryT
 from advanced_alchemy.service._util import ResultConverter, resolve_item_ids
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
 from advanced_alchemy.utils.deprecation import warn_deprecation
@@ -108,13 +107,65 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     """Use an analytical window function to count results.  This allows the count to be performed in a single query."""
     schema_dump_config: ClassVar[SchemaDumpConfig] = SchemaDumpConfig()
     """Default dump behavior when schema-like input is converted into a model."""
+    _model_type: ClassVar[Optional[type[Any]]] = None
     _repository_instance: SQLAlchemySyncRepositoryT
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        args = resolve_generic_type_args(cls, SQLAlchemySyncRepositoryReadService)
+        model_cls: Optional[type[Any]] = None
+        repo_cls: Optional[type[Any]] = None
+
+        if len(args) >= 1 and isinstance(args[0], type):
+            model_cls = args[0]
+            if "_model_type" not in cls.__dict__:
+                cls._model_type = model_cls
+        elif getattr(cls, "_model_type", None) is not None:
+            model_cls = cls._model_type
+
+        if len(args) > 1:
+            raw_repo = args[1]
+            origin_repo = get_origin(raw_repo)
+            if origin_repo is not None and isinstance(origin_repo, type):
+                repo_cls = origin_repo
+                repo_args = get_args(raw_repo)
+                if model_cls is None and repo_args and isinstance(repo_args[0], type):
+                    model_cls = repo_args[0]
+                    if "_model_type" not in cls.__dict__:
+                        cls._model_type = model_cls
+            elif isinstance(raw_repo, type):
+                repo_cls = raw_repo
+
+        if "repository_type" not in cls.__dict__:
+            if repo_cls is not None:
+                if getattr(repo_cls, "model_type", None) is not None or model_cls is None:
+                    cls.repository_type = repo_cls
+                else:
+                    cls.repository_type = cast(
+                        "Any",
+                        type(
+                            f"{model_cls.__name__}{repo_cls.__name__}",
+                            (repo_cls,),
+                            {"model_type": model_cls},
+                        ),
+                    )
+            elif getattr(cls, "repository_type", None) is None and model_cls is not None:
+                cls.repository_type = cast(
+                    "Any",
+                    type(
+                        f"{model_cls.__name__}Repository",
+                        (SQLAlchemySyncRepository,),
+                        {"model_type": model_cls},
+                    ),
+                )
 
     def __init__(
         self,
         session: Union[Session, scoped_session[Session]],
         *,
         statement: Optional[Select[Any]] = None,
+        model_type: Optional[type[ModelT]] = None,
+        repository_type: Optional[type[SQLAlchemySyncRepositoryT]] = None,
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
@@ -132,6 +183,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         Args:
             session: Session managing the unit-of-work for the operation.
             statement: To facilitate customization of the underlying select query.
+            model_type: Optional SQLAlchemy model type when instantiating directly without subclassing.
+            repository_type: Optional repository class override when instantiating directly.
             auto_expunge: Remove object from session before returning.
             auto_refresh: Refresh object from session before returning.
             auto_commit: Commit objects before returning.
@@ -149,7 +202,22 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         count_with_window_function = (
             count_with_window_function if count_with_window_function is not None else self.count_with_window_function
         )
-        self._repository_instance: SQLAlchemySyncRepositoryT = self.repository_type(  # type: ignore[assignment]
+        resolved_repo_type = repository_type if repository_type is not None else getattr(self, "repository_type", None)
+        resolved_model_type = model_type if model_type is not None else getattr(self, "_model_type", None)
+        if resolved_repo_type is None:
+            if resolved_model_type is not None:
+                resolved_repo_type = cast("Any", SQLAlchemySyncRepository)
+            else:
+                msg = (
+                    "Service 'repository_type' or 'model_type' is not configured. Specify the model via "
+                    "generic type parameter (e.g. SQLAlchemyAsyncRepositoryService[Model]), "
+                    "class attribute 'repository_type = Repo', or keyword argument 'model_type=Model'."
+                )
+                raise ImproperConfigurationError(msg)
+        if resolved_model_type is not None and getattr(resolved_repo_type, "model_type", None) is None:
+            repo_kwargs.setdefault("model_type", resolved_model_type)
+        self.repository_type = resolved_repo_type
+        self._repository_instance: SQLAlchemySyncRepositoryT = resolved_repo_type(  # type: ignore[assignment]
             session=session,
             statement=statement,
             auto_expunge=auto_expunge,
@@ -476,14 +544,14 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             Representation of created instances.
         """
         dump_config = schema_dump_config if schema_dump_config is not None else self.schema_dump_config
-        operation_map = {
-            "create": self.to_model_on_create,
-            "update": self.to_model_on_update,
-            "delete": self.to_model_on_delete,
-            "upsert": self.to_model_on_upsert,
-        }
-        if operation and (op := operation_map.get(operation)):
-            data = op(data)
+        if operation == "create":
+            data = self.to_model_on_create(data)
+        elif operation == "update":
+            data = self.to_model_on_update(data)
+        elif operation == "delete":
+            data = self.to_model_on_delete(data)
+        elif operation == "upsert":
+            data = self.to_model_on_upsert(data)
         if isinstance(data, self.model_type):
             return data
         if is_dict(data):
@@ -610,6 +678,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         session: Optional[Union[Session, scoped_session[Session]]] = None,
         statement: Optional[Select[tuple[ModelT]]] = None,
         config: Optional[SQLAlchemySyncConfig] = None,
+        model_type: Optional[type[ModelT]] = None,
+        repository_type: Optional[type[SQLAlchemySyncRepositoryT]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -633,6 +703,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             yield cls(
                 statement=statement,
                 session=session,
+                model_type=model_type,
+                repository_type=repository_type,
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
@@ -644,6 +716,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 yield cls(
                     statement=statement,
                     session=db_session,
+                    model_type=model_type,
+                    repository_type=repository_type,
                     error_messages=error_messages,
                     load=load,
                     execution_options=execution_options,
@@ -875,36 +949,18 @@ class SQLAlchemySyncRepositoryService(
         Returns:
             Updated representation.
         """
-        # ALWAYS convert data through to_model first to ensure operation hooks are called
-        # This ensures custom to_model() implementations receive the operation="update" parameter
-        # and that to_model_on_update() is properly invoked via the operation_map
         data = self.to_model(data, "update", schema_dump_config=schema_dump_config)
 
         if item_id is not None:
-            # When item_id is provided, update existing instance rather than replacing it
-            # This preserves relationships and database-managed fields
-            existing_instance: ModelT = self.repository.get(
-                item_id,
-                id_attribute=id_attribute,
-                load=load,
-                execution_options=execution_options,
-                with_for_update=with_for_update,
-                bind_group=bind_group,
-            )
-
-            # Extract attributes from converted model to update existing instance
-            # Only copy attributes that were explicitly set (present in instance state)
-            instance_state = sa_inspect(data)  # pyright: ignore[reportOptionalMemberAccess]
-            for attr in instance_state.mapper.attrs:  # type: ignore[union-attr]  # pyright: ignore[reportOptionalMemberAccess]
-                # Check if attribute was explicitly set in the instance
-                if attr.key in instance_state.dict:  # type: ignore[union-attr]  # pyright: ignore[reportOptionalMemberAccess]
-                    value = getattr(data, attr.key, MISSING)
-                    if value is not MISSING and hasattr(existing_instance, attr.key):
-                        setattr(existing_instance, attr.key, value)
-
-            data = existing_instance
+            if id_attribute is None and self.repository.has_composite_pk:
+                self.repository.set_primary_key_value(data, item_id)
+            else:
+                self.repository.set_id_attribute_value(  # pyright: ignore[reportUnknownMemberType]
+                    item_id,
+                    data,
+                    id_attribute=id_attribute,
+                )
         elif id_attribute is None and self.repository.has_composite_pk:
-            # For composite PKs, check if all PK values are present
             if not self.repository.has_primary_key_values(data):
                 pk_names = ", ".join(self.repository.pk_attr_names)
                 msg = f"Could not identify composite PK values. Required attributes: {pk_names}"
@@ -916,7 +972,6 @@ class SQLAlchemySyncRepositoryService(
             )
             is None
         ):
-            # No item_id provided and no ID on model - error
             msg = (
                 "Could not identify ID attribute value.  One of the following is required: "
                 f"``item_id`` or ``data.{id_attribute or self.repository.id_attribute}``"
