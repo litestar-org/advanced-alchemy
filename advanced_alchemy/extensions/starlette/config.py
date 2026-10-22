@@ -66,7 +66,7 @@ def _make_unique_state_key(app: "Starlette", key: str) -> str:  # pragma: no cov
         if not hasattr(app.state, key):
             return key
         key = f"{key}_{i}"
-        i += i
+        i += 1
 
 
 class SessionMiddleware:

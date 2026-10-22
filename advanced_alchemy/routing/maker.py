@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.orm import sessionmaker
 
 from advanced_alchemy.config.routing import RoutingConfig, RoutingStrategy
 from advanced_alchemy.exceptions import ImproperConfigurationError
@@ -51,6 +52,7 @@ class RoutingSyncSessionMaker:
         "_routing_config",
         "_selectors",
         "_session_config",
+        "_session_maker",
     )
 
     def __init__(
@@ -71,11 +73,11 @@ class RoutingSyncSessionMaker:
         self._routing_config = routing_config
         self._engine_config = engine_config or {}
         self._session_config = session_config or {}
+        self._session_maker: sessionmaker[RoutingSyncSession] = sessionmaker(class_=RoutingSyncSession)
 
         self._engines: dict[str, list[Engine]] = {}
         self._selectors: dict[str, EngineSelector[Engine]] = {}
 
-        # Initialize engines and selectors for all groups
         for group in routing_config.engines:
             engines_for_group: list[Engine] = []
             for config in routing_config.get_engine_configs(group):
@@ -89,13 +91,10 @@ class RoutingSyncSessionMaker:
                     routing_config.routing_strategy,
                 )
 
-        # Set default engine (required)
         default_group = routing_config.default_group
         if (
             default_group not in self._engines or not self._engines[default_group]
         ) and not routing_config.primary_connection_string:
-            # Only raise if strict legacy check fails too?
-            # Actually, post_init maps primary_connection_string to engines, so we just check engines.
             msg = (
                 f"Default group '{default_group}' has no engines configured. "
                 "Ensure 'engines' contains this group or 'primary_connection_string' is set."
@@ -155,12 +154,29 @@ class RoutingSyncSessionMaker:
         """
         session_config = self._session_config.copy()
         session_config.pop("bind", None)
-        return RoutingSyncSession(
+        return self._session_maker(
             routing_config=self._routing_config,
             selectors=self._selectors,
             default_engine=self._default_engine,
             **session_config,
         )
+
+    def configure(self, **kwargs: Any) -> None:
+        """Update session configuration options in place.
+
+        Args:
+            **kwargs: Session configuration options to merge into the maker.
+        """
+        self._session_config.update(kwargs)
+
+    @property
+    def sync_session_maker(self) -> sessionmaker[RoutingSyncSession]:
+        """Get the underlying SQLAlchemy sync sessionmaker used for event registration.
+
+        Returns:
+            The underlying :class:`sqlalchemy.orm.sessionmaker` instance.
+        """
+        return self._session_maker
 
     @property
     def primary_engine(self) -> Engine:
@@ -326,6 +342,14 @@ class RoutingAsyncSessionMaker:
             default_engine=self._default_engine,
             **session_config,
         )
+
+    def configure(self, **kwargs: Any) -> None:
+        """Update session configuration options in place.
+
+        Args:
+            **kwargs: Session configuration options to merge into the maker.
+        """
+        self._session_config.update(kwargs)
 
     @property
     def primary_engine(self) -> AsyncEngine:
