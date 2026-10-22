@@ -105,6 +105,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     """Optionally apply the ``unique()`` method to results before returning."""
     count_with_window_function: ClassVar[bool] = True
     """Use an analytical window function to count results.  This allows the count to be performed in a single query."""
+    include_deleted: ClassVar[bool] = False
+    """Default behavior for whether to include soft-deleted records in read queries."""
     schema_dump_config: ClassVar[SchemaDumpConfig] = SchemaDumpConfig()
     """Default dump behavior when schema-like input is converted into a model."""
     _model_type: ClassVar[Optional[type[Any]]] = None
@@ -176,6 +178,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         **repo_kwargs: Any,
     ) -> None:
         """Configure the service object.
@@ -195,6 +198,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
+            include_deleted: Whether to include soft-deleted records by default.
             **repo_kwargs: passed as keyword args to repo instantiation.
         """
         load = load if load is not None else self.loader_options
@@ -202,6 +206,9 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         count_with_window_function = (
             count_with_window_function if count_with_window_function is not None else self.count_with_window_function
         )
+        resolved_include_deleted = include_deleted if include_deleted is not None else self.include_deleted
+        if include_deleted is not None or self.include_deleted:
+            repo_kwargs.setdefault("include_deleted", resolved_include_deleted)
         resolved_repo_type = repository_type if repository_type is not None else getattr(self, "repository_type", None)
         resolved_model_type = model_type if model_type is not None else getattr(self, "_model_type", None)
         if resolved_repo_type is None:
@@ -264,6 +271,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> int:
@@ -277,12 +285,15 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: The bind group to use for the operation.
             **kwargs: key value pairs of filter types.
 
         Returns:
            A count of the collection, filtered, but ignoring pagination.
         """
+        if include_deleted is not None:
+            kwargs["include_deleted"] = include_deleted
         return self.repository.count(
             *filters,
             statement=statement,
@@ -301,6 +312,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> bool:
@@ -313,12 +325,15 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: The bind group to use for the operation.
             **kwargs: Keyword arguments for attribute based filtering.
 
         Returns:
             Representation of instance with identifier `item_id`.
         """
+        if include_deleted is not None:
+            kwargs["include_deleted"] = include_deleted
         return self.repository.exists(
             *filters,
             error_messages=error_messages,
@@ -340,6 +355,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> ModelT:
         """Wrap repository scalar operation.
@@ -359,6 +375,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: The bind group to use for the operation.
 
         Returns:
@@ -374,6 +391,9 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             # Composite primary key (dict format)
             >>> assignment = await service.get({"user_id": 1, "role_id": 5})
         """
+        extra_kwargs: dict[str, Any] = {}
+        if include_deleted is not None:
+            extra_kwargs["include_deleted"] = include_deleted
         return cast(
             "ModelT",
             self.repository.get(
@@ -386,6 +406,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
                 bind_group=bind_group,
+                **extra_kwargs,
             ),
         )
 
@@ -399,6 +420,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> ModelT:
@@ -414,12 +436,15 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: The bind group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
             Representation of instance with identifier `item_id`.
         """
+        if include_deleted is not None:
+            kwargs["include_deleted"] = include_deleted
         return cast(
             "ModelT",
             self.repository.get_one(
@@ -446,6 +471,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Optional[ModelT]:
@@ -461,12 +487,15 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: The bind group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
         Returns:
             Representation of instance with identifier `item_id`.
         """
+        if include_deleted is not None:
+            kwargs["include_deleted"] = include_deleted
         return cast(
             "Optional[ModelT]",
             self.repository.get_one_or_none(
@@ -588,6 +617,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[Sequence[ModelT], int]:
@@ -605,12 +635,15 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             use_cache: Whether to use the repository cache for this query.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
             List of instances and count of total collection, ignoring pagination.
         """
+        if include_deleted is not None:
+            kwargs["include_deleted"] = include_deleted
         return cast(
             "tuple[Sequence[ModelT], int]",
             self.repository.get_many_and_count(
@@ -641,6 +674,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[Sequence[ModelT], int]:
@@ -667,6 +701,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             execution_options=execution_options,
             uniquify=uniquify,
             use_cache=use_cache,
+            include_deleted=include_deleted,
             bind_group=bind_group,
             **kwargs,
         )
@@ -685,6 +720,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
     ) -> Generator[Self, None, None]:
         """Context manager that returns instance of service object.
 
@@ -710,6 +746,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                 execution_options=execution_options,
                 uniquify=uniquify,
                 count_with_window_function=count_with_window_function,
+                include_deleted=include_deleted,
             )
         elif config:
             with config.get_session() as db_session:
@@ -723,6 +760,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
                     execution_options=execution_options,
                     uniquify=uniquify,
                     count_with_window_function=count_with_window_function,
+                    include_deleted=include_deleted,
                 )
 
     def get_many(
@@ -736,6 +774,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
@@ -752,12 +791,15 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             use_cache: Whether to use the repository cache for this query.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
             The list of instances retrieved from the repository.
         """
+        if include_deleted is not None:
+            kwargs["include_deleted"] = include_deleted
         return cast(
             "Sequence[ModelT]",
             self.repository.get_many(
@@ -786,6 +828,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
@@ -811,6 +854,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             execution_options=execution_options,
             uniquify=uniquify,
             use_cache=use_cache,
+            include_deleted=include_deleted,
             bind_group=bind_group,
             **kwargs,
         )
@@ -1331,6 +1375,7 @@ class SQLAlchemySyncRepositoryService(
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: bool = True,
         bind_group: Optional[str] = None,
     ) -> ModelT:
         """Wrap repository delete operation.
@@ -1350,6 +1395,7 @@ class SQLAlchemySyncRepositoryService(
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            include_deleted: Whether to include soft-deleted records when hard-deleting.
             bind_group: Optional routing group to use for the operation.
 
         Returns:
@@ -1365,6 +1411,9 @@ class SQLAlchemySyncRepositoryService(
             # Composite primary key (dict format)
             >>> deleted = await service.delete({"user_id": 1, "role_id": 5})
         """
+        extra_kwargs: dict[str, Any] = {}
+        if not include_deleted:
+            extra_kwargs["include_deleted"] = False
         return cast(
             "ModelT",
             self.repository.delete(
@@ -1377,6 +1426,7 @@ class SQLAlchemySyncRepositoryService(
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
                 bind_group=bind_group,
+                **extra_kwargs,
             ),
         )
 
@@ -1392,6 +1442,7 @@ class SQLAlchemySyncRepositoryService(
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: bool = True,
         bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance deletion.
@@ -1415,6 +1466,7 @@ class SQLAlchemySyncRepositoryService(
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            include_deleted: Whether to include soft-deleted records when hard-deleting.
             bind_group: Optional routing group to use for the operation.
 
         Returns:
@@ -1440,6 +1492,9 @@ class SQLAlchemySyncRepositoryService(
             ...     ]
             ... )
         """
+        extra_kwargs: dict[str, Any] = {}
+        if not include_deleted:
+            extra_kwargs["include_deleted"] = False
         return cast(
             "Sequence[ModelT]",
             self.repository.delete_many(
@@ -1458,6 +1513,7 @@ class SQLAlchemySyncRepositoryService(
                 execution_options=execution_options,
                 uniquify=self._get_uniquify(uniquify),
                 bind_group=bind_group,
+                **extra_kwargs,
             ),
         )
 
@@ -1471,6 +1527,7 @@ class SQLAlchemySyncRepositoryService(
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
@@ -1486,12 +1543,15 @@ class SQLAlchemySyncRepositoryService(
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            include_deleted: Whether to include soft-deleted records when hard-deleting.
             bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
             The list of instances deleted from the repository.
         """
+        if not include_deleted:
+            kwargs["include_deleted"] = False
         return cast(
             "Sequence[ModelT]",
             self.repository.delete_where(
@@ -1505,5 +1565,135 @@ class SQLAlchemySyncRepositoryService(
                 uniquify=self._get_uniquify(uniquify),
                 bind_group=bind_group,
                 **kwargs,
+            ),
+        )
+
+    def soft_delete(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        auto_refresh: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
+    ) -> ModelT:
+        """Soft-delete a single instance by identifier."""
+        return cast(
+            "ModelT",
+            self.repository.soft_delete(
+                item_id=item_id,
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                auto_refresh=auto_refresh,
+                id_attribute=id_attribute,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
+            ),
+        )
+
+    def soft_delete_many(
+        self,
+        item_ids: List[PrimaryKeyType],
+        *,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
+    ) -> Sequence[ModelT]:
+        """Soft-delete multiple instances by identifiers or model instances."""
+        return cast(
+            "Sequence[ModelT]",
+            self.repository.soft_delete_many(
+                item_ids=resolve_item_ids(
+                    item_ids,
+                    model_type=self.model_type,
+                    repository=self.repository,
+                    id_attribute=id_attribute,
+                ),
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                id_attribute=id_attribute,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
+            ),
+        )
+
+    def restore(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        auto_refresh: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
+    ) -> ModelT:
+        """Restore a soft-deleted instance by identifier."""
+        return cast(
+            "ModelT",
+            self.repository.restore(
+                item_id=item_id,
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                auto_refresh=auto_refresh,
+                id_attribute=id_attribute,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
+            ),
+        )
+
+    def restore_many(
+        self,
+        item_ids: List[PrimaryKeyType],
+        *,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
+    ) -> Sequence[ModelT]:
+        """Restore multiple soft-deleted instances by identifiers or model instances."""
+        return cast(
+            "Sequence[ModelT]",
+            self.repository.restore_many(
+                item_ids=resolve_item_ids(
+                    item_ids,
+                    model_type=self.model_type,
+                    repository=self.repository,
+                    id_attribute=id_attribute,
+                ),
+                auto_commit=auto_commit,
+                auto_expunge=auto_expunge,
+                id_attribute=id_attribute,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                uniquify=self._get_uniquify(uniquify),
+                bind_group=bind_group,
             ),
         )

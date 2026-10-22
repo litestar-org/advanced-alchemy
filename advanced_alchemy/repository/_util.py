@@ -1,5 +1,6 @@
 # ruff: noqa: PLR0911
 import dataclasses
+import datetime
 import hashlib
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Generic, Literal, Optional, Protocol, Union, cast, get_args, get_origin, overload
@@ -34,7 +35,7 @@ from sqlalchemy.sql.elements import Label
 from typing_extensions import TypeAlias
 
 from advanced_alchemy.base import ModelProtocol
-from advanced_alchemy.exceptions import ErrorMessages, NotFoundError
+from advanced_alchemy.exceptions import ErrorMessages, ImproperConfigurationError, NotFoundError
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception as _wrap_sqlalchemy_exception
 from advanced_alchemy.filters import (
     InAnyFilter,
@@ -42,6 +43,7 @@ from advanced_alchemy.filters import (
     StatementFilter,
     StatementTypeT,
 )
+from advanced_alchemy.mixins.softdelete import SoftDeleteMixin
 from advanced_alchemy.repository._upsert import (
     DEFAULT_INSERTMANYVALUES_MAX_PARAMETERS,
     DEFAULT_SAFE_TYPES,
@@ -168,6 +170,7 @@ def _build_cache_key(  # pyright: ignore[reportUnusedFunction]
     uniquify: bool,
     count_with_window_function: Optional[bool] = None,
     bind_group: Optional[str] = None,
+    include_deleted: bool = False,
 ) -> Optional[str]:
     """Build a stable cache key for list/list_and_count operations.
 
@@ -200,6 +203,7 @@ def _build_cache_key(  # pyright: ignore[reportUnusedFunction]
         "order_by": normalized_order_by,
         "execution_options": _normalize_cache_key_value(execution_options),
         "uniquify": uniquify,
+        "include_deleted": bool(include_deleted),
     }
     if count_with_window_function is not None:
         payload["count_with_window_function"] = bool(count_with_window_function)
@@ -708,6 +712,8 @@ class ModelRepositoryMixin(FilterableRepositoryProtocol[ModelT], Generic[ModelT]
     """Default error messages for the repository."""
     wrap_exceptions: bool = True
     """Wrap SQLAlchemy exceptions in a ``RepositoryError``."""
+    include_deleted: bool = False
+    """Include soft-deleted records (`SoftDeleteMixin`) in read queries by default."""
     _pk_columns: tuple[Column[Any], ...] = ()
     _pk_attr_names: tuple[str, ...] = ()
 
@@ -717,6 +723,28 @@ class ModelRepositoryMixin(FilterableRepositoryProtocol[ModelT], Generic[ModelT]
             args = resolve_generic_type_args(cls, ModelRepositoryMixin)
             if args and isinstance(args[0], type):
                 cls.model_type = cast("type[ModelT]", args[0])
+
+    @property
+    def _has_soft_delete(self) -> bool:
+        """Return ``True`` when ``self.model_type`` subclasses :class:`SoftDeleteMixin`."""
+        model_cls = getattr(self, "model_type", None)
+        return isinstance(model_cls, type) and issubclass(model_cls, SoftDeleteMixin)
+
+    def _resolve_include_deleted(self, include_deleted: Optional[bool] = None) -> bool:
+        """Resolve the ``include_deleted`` flag, preferring the method parameter over instance default."""
+        return bool(self.include_deleted if include_deleted is None else include_deleted)
+
+    def _should_filter_soft_deleted(self, include_deleted: Optional[bool] = None) -> bool:
+        """Return ``True`` when soft-deleted rows should be excluded from a query."""
+        return self._has_soft_delete and not self._resolve_include_deleted(include_deleted)
+
+    def _require_soft_delete(self, operation: Optional[str] = None) -> None:
+        """Raise :exc:`ImproperConfigurationError` if ``self.model_type`` does not inherit :class:`SoftDeleteMixin`."""
+        _ = operation
+        if not self._has_soft_delete:
+            model_name = getattr(getattr(self, "model_type", None), "__name__", str(getattr(self, "model_type", None)))
+            msg = f"Model {model_name} does not inherit from SoftDeleteMixin"
+            raise ImproperConfigurationError(msg)
 
     def _requires_orm_delete(self) -> bool:
         """Return ``True`` if ``self.model_type`` requires ORM ``session.delete()`` instead of bulk ``DELETE``."""
@@ -742,6 +770,97 @@ class ModelRepositoryMixin(FilterableRepositoryProtocol[ModelT], Generic[ModelT]
             if not getattr(fn, "__module__", "").startswith("advanced_alchemy.")
         ]
         return bool(custom_listeners)
+
+    @classmethod
+    def _iter_cascaded_soft_delete_children(cls, instance: Any) -> list[Any]:
+        """Return loaded :class:`SoftDeleteMixin` child instances on cascade-configured relationships."""
+        try:
+            state = inspect(instance)
+        except NoInspectionAvailable:
+            return []
+        if state is None:
+            return []
+        children: list[Any] = []
+        for rel in state.mapper.relationships:
+            if not ("delete" in rel.cascade or rel.info.get("soft_delete_cascade") is True):
+                continue
+            target_cls = rel.mapper.class_
+            if not (isinstance(target_cls, type) and issubclass(target_cls, SoftDeleteMixin)):
+                continue
+            if rel.key not in state.dict:
+                continue
+            rel_value = state.dict.get(rel.key)
+            if rel_value is None:
+                continue
+            if isinstance(rel_value, (list, tuple, set)):
+                children.extend(
+                    child for child in cast("Iterable[Any]", rel_value) if isinstance(child, SoftDeleteMixin)
+                )
+            elif isinstance(rel_value, SoftDeleteMixin):
+                children.append(rel_value)
+        return children
+
+    @classmethod
+    def _apply_soft_delete_to_instance(
+        cls,
+        instance: Any,
+        deleted_at: Optional[datetime.datetime] = None,
+        *,
+        cascade: bool = True,
+        visited: Optional[set[int]] = None,
+    ) -> None:
+        """Mark ``instance`` (and active cascaded :class:`SoftDeleteMixin` children when ``cascade=True``) deleted."""
+        if visited is None:
+            visited = set()
+        obj_id = id(instance)
+        if obj_id in visited:
+            return
+        visited.add(obj_id)
+        effective_deleted_at = deleted_at or datetime.datetime.now(datetime.timezone.utc)
+        if isinstance(instance, SoftDeleteMixin) and instance.deleted_at is None:
+            instance.mark_deleted(effective_deleted_at)
+        if cascade:
+            for child in cls._iter_cascaded_soft_delete_children(instance):
+                cls._apply_soft_delete_to_instance(
+                    child,
+                    deleted_at=effective_deleted_at,
+                    cascade=cascade,
+                    visited=visited,
+                )
+
+    @classmethod
+    def _apply_restore_to_instance(
+        cls,
+        instance: Any,
+        *,
+        parent_deleted_at: Optional[datetime.datetime] = None,
+        cascade: bool = True,
+        visited: Optional[set[int]] = None,
+    ) -> None:
+        """Restore ``instance`` (and cascaded :class:`SoftDeleteMixin` children deleted at or after ``parent_deleted_at``)."""
+        if visited is None:
+            visited = set()
+        obj_id = id(instance)
+        if obj_id in visited:
+            return
+        visited.add(obj_id)
+        effective_parent_ts = parent_deleted_at
+        if isinstance(instance, SoftDeleteMixin):
+            if effective_parent_ts is None:
+                effective_parent_ts = instance.deleted_at
+            instance.restore()
+        if cascade:
+            for child in cls._iter_cascaded_soft_delete_children(instance):
+                child_deleted_at = getattr(child, "deleted_at", None)
+                if child_deleted_at is not None and (
+                    effective_parent_ts is None or child_deleted_at >= effective_parent_ts
+                ):
+                    cls._apply_restore_to_instance(
+                        child,
+                        parent_deleted_at=effective_parent_ts,
+                        cascade=cascade,
+                        visited=visited,
+                    )
 
     def _ensure_pk_info(self) -> tuple[tuple[Column[Any], ...], tuple[str, ...]]:
         """Ensure primary key column and attribute tuples are initialized for ``self.model_type``."""

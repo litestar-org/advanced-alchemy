@@ -15,7 +15,7 @@ import pytest
 from msgspec import Struct
 from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
-from sqlalchemy import ForeignKey, Integer, String, column, or_
+from sqlalchemy import ForeignKey, Integer, String, column, delete, or_, select
 from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute, Mapped, Session, mapped_column, relationship
@@ -26,6 +26,7 @@ from advanced_alchemy import base
 from advanced_alchemy.exceptions import (
     ImproperConfigurationError,
     IntegrityError,
+    NotFoundError,
     RepositoryError,
     wrap_sqlalchemy_exception,
 )
@@ -47,11 +48,12 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
-from advanced_alchemy.mixins import SlugKey
+from advanced_alchemy.mixins import SlugKey, SoftDeleteMixin
 from advanced_alchemy.operations import UpsertStrategy
 from advanced_alchemy.repository import (
     SQLAlchemyAsyncQueryRepository,
     SQLAlchemyAsyncRepository,
+    SQLAlchemyAsyncSlugRepository,
     SQLAlchemySyncQueryRepository,
     SQLAlchemySyncRepository,
 )
@@ -3286,3 +3288,263 @@ def test_sync_mock_repository_and_service_autobind_and_filter_parity() -> None:
 
     filtered = service.get_many(ComparisonFilter(field_name="name", operator="eq", value="Alpha"))
     assert [item.id for item in filtered] == [1]
+
+
+class SoftDeleteParentModel(base.BigIntAuditBase, SoftDeleteMixin, SlugKey):
+    """Soft-deletable parent model with slug and child relationship."""
+
+    __tablename__ = "soft_delete_parent_model"
+    name: Mapped[str] = mapped_column(String(length=100))
+    children: Mapped[list[SoftDeleteChildModel]] = relationship(
+        "SoftDeleteChildModel",
+        back_populates="parent",
+        cascade="all, delete-orphan",
+    )
+
+
+class SoftDeleteChildModel(base.BigIntAuditBase, SoftDeleteMixin):
+    """Soft-deletable child model linked to SoftDeleteParentModel."""
+
+    __tablename__ = "soft_delete_child_model"
+    parent_id: Mapped[int] = mapped_column(ForeignKey("soft_delete_parent_model.id"))
+    title: Mapped[str] = mapped_column(String(length=100))
+    parent: Mapped[SoftDeleteParentModel] = relationship("SoftDeleteParentModel", back_populates="children")
+
+
+def test_soft_delete_mixin_helpers_and_hybrid_property() -> None:
+    """SoftDeleteMixin provides deleted_at, is_deleted hybrid property, mark_deleted, and restore."""
+    item = SoftDeleteParentModel(id=1, name="Alpha", slug="alpha")
+    assert item.deleted_at is None
+    assert item.is_deleted is False
+
+    custom_ts = datetime.datetime(2026, 6, 1, 12, 0, tzinfo=datetime.timezone.utc)
+    item.mark_deleted(custom_ts)
+    assert item.deleted_at == custom_ts
+    assert bool(item.is_deleted) is True
+
+    item.restore()
+    assert item.deleted_at is None
+    assert bool(item.is_deleted) is False
+
+    sql_expr = str(select(SoftDeleteParentModel).where(SoftDeleteParentModel.is_deleted.is_(False)))
+    assert "deleted_at IS NOT NULL" in sql_expr
+
+
+def test_sql_repository_base_stmt_and_cache_key_for_soft_delete() -> None:
+    """SQLAlchemyAsyncRepository._get_base_stmt applies with_loader_criteria when include_deleted is False."""
+
+    class SoftParentRepo(SQLAlchemyAsyncRepository[SoftDeleteParentModel]):
+        pass
+
+    session = AsyncMock(spec=AsyncSession, bind=MagicMock())
+    repo = SoftParentRepo(session=session)
+    assert repo._has_soft_delete is True
+
+    filtered_stmt = repo._get_base_stmt(
+        statement=select(SoftDeleteParentModel),
+        loader_options=None,
+        execution_options=None,
+        include_deleted=False,
+    )
+    assert len(filtered_stmt._with_options) == 1
+
+    unfiltered_stmt = repo._get_base_stmt(
+        statement=select(SoftDeleteParentModel),
+        loader_options=None,
+        execution_options=None,
+        include_deleted=True,
+    )
+    assert len(unfiltered_stmt._with_options) == 0
+
+    delete_stmt = repo._get_base_stmt(
+        statement=delete(SoftDeleteParentModel),
+        loader_options=None,
+        execution_options=None,
+        include_deleted=False,
+    )
+    assert len(delete_stmt._with_options) == 1
+
+    key_default = _build_cache_key(
+        model_name="soft_delete_parent_model",
+        version_token="v1",
+        method="get_many",
+        filters=(),
+        kwargs={},
+        order_by=[],
+        execution_options={},
+        uniquify=False,
+        include_deleted=False,
+    )
+    key_included = _build_cache_key(
+        model_name="soft_delete_parent_model",
+        version_token="v1",
+        method="get_many",
+        filters=(),
+        kwargs={},
+        order_by=[],
+        execution_options={},
+        uniquify=False,
+        include_deleted=True,
+    )
+    assert key_default is not None
+    assert key_included is not None
+    assert key_default != key_included
+
+
+async def test_sql_repository_soft_delete_and_restore_lifecycle() -> None:
+    """SQLAlchemyAsyncRepository soft_delete, soft_delete_many, restore, and restore_many update deleted_at and cascade."""
+
+    class SoftParentSlugRepo(SQLAlchemyAsyncSlugRepository[SoftDeleteParentModel]):
+        pass
+
+    session = AsyncMock(spec=AsyncSession, bind=MagicMock())
+    repo = SoftParentSlugRepo(session=session)
+
+    child: Any = SoftDeleteChildModel(id=10, parent_id=1, title="Child 1")
+    parent: Any = SoftDeleteParentModel(id=1, name="Parent", slug="parent", children=[child])
+
+    mock_get_delete = AsyncMock(return_value=parent)
+    repo.get = mock_get_delete  # type: ignore[method-assign]
+    repo._attach_to_session = AsyncMock(side_effect=lambda model, **_: model)  # type: ignore[method-assign]
+
+    deleted_parent = await repo.soft_delete(1)
+    assert bool(deleted_parent.is_deleted) is True
+    assert bool(child.is_deleted) is True
+    mock_get_delete.assert_awaited_once()
+    assert mock_get_delete.call_args.kwargs["include_deleted"] is False
+
+    mock_get_restore = AsyncMock(return_value=deleted_parent)
+    repo.get = mock_get_restore  # type: ignore[method-assign]
+    restored_parent = await repo.restore(1)
+    assert bool(restored_parent.is_deleted) is False
+    assert bool(child.is_deleted) is False
+    mock_get_restore.assert_awaited_once()
+    assert mock_get_restore.call_args.kwargs["include_deleted"] is True
+
+    second_parent = SoftDeleteParentModel(id=2, name="Second", slug="second", children=[])
+    repo._fetch_many_by_ids = AsyncMock(return_value=[restored_parent, second_parent])  # type: ignore[method-assign]
+    batch_deleted = await repo.soft_delete_many([1, 2])
+    assert len(batch_deleted) == 2
+    assert all(item.is_deleted for item in batch_deleted)
+    assert repo._fetch_many_by_ids.call_args.kwargs["include_deleted"] is False
+
+    repo._fetch_many_by_ids = AsyncMock(return_value=batch_deleted)  # type: ignore[method-assign]
+    batch_restored = await repo.restore_many([1, 2])
+    assert len(batch_restored) == 2
+    assert all(not item.is_deleted for item in batch_restored)
+    assert repo._fetch_many_by_ids.call_args.kwargs["include_deleted"] is True
+
+    repo.exists = AsyncMock(return_value=False)  # type: ignore[method-assign]
+    await repo._is_slug_unique("parent")
+    assert repo.exists.call_args.kwargs["include_deleted"] is True
+
+
+async def test_sql_repository_soft_delete_raises_on_non_soft_delete_model() -> None:
+    """Calling soft_delete or restore on a model without SoftDeleteMixin raises ImproperConfigurationError."""
+
+    class BigIntRepo(SQLAlchemyAsyncRepository[BigIntModel]):
+        pass
+
+    session = AsyncMock(spec=AsyncSession, bind=MagicMock())
+    repo = BigIntRepo(session=session)
+
+    with pytest.raises(ImproperConfigurationError, match="SoftDeleteMixin"):
+        await repo.soft_delete(1)
+
+    with pytest.raises(ImproperConfigurationError, match="SoftDeleteMixin"):
+        await repo.restore(1)
+
+
+async def test_mock_repository_and_service_soft_delete_parity() -> None:
+    """SQLAlchemyAsyncMockRepository and SQLAlchemyAsyncRepositoryService filter and restore soft-deleted items."""
+
+    class SoftParentMockRepo(SQLAlchemyAsyncMockSlugRepository[SoftDeleteParentModel]):
+        pass
+
+    class SoftParentService(SQLAlchemyAsyncRepositoryService[SoftDeleteParentModel, SoftParentMockRepo]):
+        pass
+
+    SoftParentMockRepo.__database_clear__()
+    service = SoftParentService(session=AsyncMock(spec=AsyncSession, bind=MagicMock()))
+
+    first = await service.create(SoftDeleteParentModel(id=1, name="First", slug="first", children=[]))
+    second = await service.create(SoftDeleteParentModel(id=2, name="Second", slug="second", children=[]))
+    assert first.id == 1
+    assert second.id == 2
+    assert await service.count() == 2
+
+    soft_deleted = await service.soft_delete(1)
+    assert soft_deleted.is_deleted is True
+
+    assert await service.count() == 1
+    assert await service.count(include_deleted=True) == 2
+    assert await service.exists(id=1) is False
+    assert await service.exists(id=1, include_deleted=True) is True
+    assert await service.get_one_or_none(id=1) is None
+    assert await service.get_one_or_none(id=1, include_deleted=True) is not None
+
+    with pytest.raises(NotFoundError):
+        await service.get(1)
+
+    with pytest.raises(NotFoundError):
+        await service.soft_delete(1)
+
+    fetched_deleted = await service.get(1, include_deleted=True)
+    assert fetched_deleted.id == 1
+
+    active_items, active_count = await service.get_many_and_count()
+    assert [item.id for item in active_items] == [2]
+    assert active_count == 1
+
+    all_items, all_count = await service.get_many_and_count(include_deleted=True)
+    assert sorted(item.id for item in all_items) == [1, 2]
+    assert all_count == 2
+
+    available_slug = await service.repository.get_available_slug("First")
+    assert available_slug != "first"
+
+    restored = await service.restore(1)
+    assert restored.is_deleted is False
+    assert await service.count() == 2
+
+    batch_deleted = await service.soft_delete_many([first, second])  # type: ignore[list-item]
+    assert len(batch_deleted) == 2
+    assert await service.count() == 0
+    assert await service.count(include_deleted=True) == 2
+
+    batch_restored = await service.restore_many([1, 2])
+    assert len(batch_restored) == 2
+    assert await service.count() == 2
+
+
+def test_sync_mock_repository_and_service_soft_delete_and_autobind_parity() -> None:
+    """SQLAlchemySyncMockSlugRepository and SQLAlchemySyncRepositoryService support auto-binding, filters, and soft-delete."""
+
+    class SoftParentSyncMockRepo(SQLAlchemySyncMockSlugRepository[SoftDeleteParentModel]):
+        pass
+
+    class SoftParentSyncService(SQLAlchemySyncRepositoryService[SoftDeleteParentModel, SoftParentSyncMockRepo]):
+        pass
+
+    assert getattr(SoftParentSyncMockRepo, "model_type", None) is SoftDeleteParentModel
+    assert getattr(SoftParentSyncService, "repository_type", None) is SoftParentSyncMockRepo
+
+    SoftParentSyncMockRepo.__database_clear__()
+    service = SoftParentSyncService(session=MagicMock(spec=Session, bind=MagicMock()))
+
+    first = service.create(SoftDeleteParentModel(id=1, name="Alpha", slug="alpha", children=[]))
+    second = service.create(SoftDeleteParentModel(id=2, name="Beta", slug="beta", children=[]))
+    assert first.id == 1
+    assert second.id == 2
+
+    filtered = service.get_many(ComparisonFilter(field_name="name", operator="eq", value="Alpha"))
+    assert [item.id for item in filtered] == [1]
+
+    soft_deleted = service.soft_delete(1)
+    assert bool(soft_deleted.is_deleted) is True
+    assert service.count() == 1
+    assert service.count(include_deleted=True) == 2
+
+    restored = service.restore(1)
+    assert bool(restored.is_deleted) is False
+    assert service.count() == 2
