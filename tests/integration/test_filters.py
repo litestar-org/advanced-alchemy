@@ -1,13 +1,18 @@
 from collections.abc import AsyncGenerator, Generator
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Literal, Optional
 
 import pytest
 from pytest import FixtureRequest
-from sqlalchemy import Boolean, Engine, String, func, select
-from sqlalchemy.dialects import oracle
+from sqlalchemy import Boolean, Engine, ForeignKey, String, create_engine, func, select
+from sqlalchemy.dialects import mssql, mysql, oracle, postgresql, sqlite
 from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, joinedload, mapped_column, relationship
+
+try:
+    from google.cloud.sqlalchemy_spanner.sqlalchemy_spanner import SpannerDialect
+except ImportError:  # pragma: no cover
+    SpannerDialect = None  # type: ignore[assignment,misc]
 
 from advanced_alchemy.base import BigIntBase, UUIDAuditBase
 from advanced_alchemy.filters import (
@@ -22,6 +27,7 @@ from advanced_alchemy.filters import (
     MultiFilter,
     NotExistsFilter,
     NotInCollectionFilter,
+    NotInSearchFilter,
     NotNullFilter,
     NullFilter,
     OnBeforeAfter,
@@ -594,6 +600,199 @@ def test_order_by_with_instrumented_attribute(session: Session, movie_model_sync
     assert results[0].title == "Shawshank Redemption"
 
 
+def test_order_by_nulls_placement(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """ "The Hangover" has a NULL director, and the databases disagree about where NULLs sort.
+
+    `nulls` pins it: without it, a descending sort puts the NULL row first on PostgreSQL and last on
+    SQLite, so the same query pages differently per backend.
+    """
+    Movie = movie_model_sync
+
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    session.execute(Movie.__table__.delete())
+    session.commit()
+    setup_movie_data(session, Movie)
+
+    for sort_order in ("asc", "desc"):
+        nulls_last_filter = OrderBy(field_name="director", sort_order=sort_order, nulls="last")
+        results = session.execute(nulls_last_filter.append_to_statement(select(Movie), Movie)).scalars().all()
+        assert results[-1].director is None, f"{sort_order} with nulls='last' must end with the NULL row"
+
+        nulls_first_filter = OrderBy(field_name="director", sort_order=sort_order, nulls="first")
+        results = session.execute(nulls_first_filter.append_to_statement(select(Movie), Movie)).scalars().all()
+        assert results[0].director is None, f"{sort_order} with nulls='first' must start with the NULL row"
+
+
+class OrderByBase(DeclarativeBase):
+    pass
+
+
+class OrderByMovie(OrderByBase):
+    __tablename__ = "order_by_nulls_movie"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    director: Mapped[str] = mapped_column(String(length=50), nullable=True)
+    credits: Mapped[list["OrderByCredit"]] = relationship()
+
+
+class OrderByCredit(OrderByBase):
+    __tablename__ = "order_by_nulls_credit"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    movie_id: Mapped[int] = mapped_column(ForeignKey(OrderByMovie.id))
+
+
+@pytest.fixture
+def order_by_session() -> Generator[Session, None, None]:
+    engine = create_engine("sqlite://")
+    try:
+        OrderByBase.metadata.create_all(engine)
+        with Session(engine) as session:
+            session.add_all(
+                OrderByMovie(id=index, director=director, credits=[OrderByCredit(), OrderByCredit()])
+                for index, director in enumerate((None, "z", "a"), start=1)
+            )
+            session.commit()
+            yield session
+    finally:
+        engine.dispose()
+
+
+NULLS_NATIVE_DIALECTS = [
+    postgresql.dialect(),  # type: ignore[no-untyped-call,unused-ignore]
+    sqlite.dialect(),  # type: ignore[no-untyped-call,unused-ignore]
+    oracle.dialect(),  # type: ignore[no-untyped-call,unused-ignore]
+]
+NULLS_EMULATED_DIALECTS = [
+    mysql.dialect(),  # type: ignore[no-untyped-call,unused-ignore]
+    mssql.dialect(),  # type: ignore[no-untyped-call,unused-ignore]
+]
+
+NULLS_NATIVE = pytest.mark.parametrize("dialect", NULLS_NATIVE_DIALECTS)
+NULLS_EMULATED = pytest.mark.parametrize("dialect", NULLS_EMULATED_DIALECTS)
+
+
+def _compile_order_by_nulls(dialect: Any, **kwargs: Any) -> str:
+    statement = OrderBy(field_name="director", **kwargs).append_to_statement(select(OrderByMovie), OrderByMovie)
+    return str(statement.compile(dialect=dialect))
+
+
+@NULLS_NATIVE
+@pytest.mark.parametrize(("nulls", "clause"), [("first", "NULLS FIRST"), ("last", "NULLS LAST")])
+@pytest.mark.unit
+def test_dialects_with_the_syntax_get_the_native_clause(dialect: Any, nulls: str, clause: str) -> None:
+    """Keeping the native clause is what lets an index on the column still satisfy the ordering."""
+    assert clause in _compile_order_by_nulls(dialect, sort_order="desc", nulls=nulls)
+
+
+@NULLS_EMULATED
+@pytest.mark.parametrize(("sort_order", "nulls"), [("asc", "last"), ("desc", "first")])
+@pytest.mark.unit
+def test_dialects_without_the_syntax_get_a_nullity_key(dialect: Any, sort_order: str, nulls: str) -> None:
+    """MySQL and SQL Server reject `NULLS FIRST`/`NULLS LAST` outright, so it must not be emitted."""
+    compiled = _compile_order_by_nulls(dialect, sort_order=sort_order, nulls=nulls)
+
+    assert "NULLS" not in compiled
+    assert "CASE WHEN" in compiled
+    assert compiled.rstrip().endswith(sort_order.upper())
+
+
+@NULLS_EMULATED
+@pytest.mark.parametrize(("sort_order", "nulls"), [("asc", "first"), ("desc", "last")])
+@pytest.mark.unit
+def test_placements_native_to_null_lowest_backends_stay_plain(dialect: Any, sort_order: str, nulls: str) -> None:
+    """These backends sort NULL lowest, so the plain term already places it and an index can satisfy the sort."""
+    compiled = _compile_order_by_nulls(dialect, sort_order=sort_order, nulls=nulls)
+
+    assert "NULLS" not in compiled
+    assert "CASE" not in compiled
+    assert compiled.rstrip().endswith(f"director {sort_order.upper()}")
+
+
+@NULLS_EMULATED
+@pytest.mark.parametrize(
+    ("sort_order", "nulls", "when_null"), [("asc", "last", "THEN 1 ELSE 0"), ("desc", "first", "THEN 0 ELSE 1")]
+)
+@pytest.mark.unit
+def test_the_nullity_key_sorts_the_right_way(dialect: Any, sort_order: str, nulls: str, when_null: str) -> None:
+    """The key ascends, so NULLs need the higher value to land last and the lower one to land first."""
+    assert when_null in _compile_order_by_nulls(dialect, sort_order=sort_order, nulls=nulls)
+
+
+@pytest.mark.parametrize("dialect", NULLS_NATIVE_DIALECTS + NULLS_EMULATED_DIALECTS)
+@pytest.mark.unit
+def test_the_default_is_untouched(dialect: Any) -> None:
+    """Without `nulls` no NULLS clause and no CASE key are emitted."""
+    compiled = _compile_order_by_nulls(dialect, sort_order="desc")
+
+    assert "NULLS" not in compiled
+    assert "CASE" not in compiled
+
+
+@pytest.mark.parametrize("sort_order", ["asc", "desc"])
+@pytest.mark.parametrize("nulls", ["first", "last"])
+@pytest.mark.unit
+def test_nulls_placement_with_paginated_eager_loading(
+    order_by_session: Session, sort_order: Literal["asc", "desc"], nulls: Literal["first", "last"]
+) -> None:
+    statement = OrderBy("director", sort_order, nulls).append_to_statement(
+        select(OrderByMovie).options(joinedload(OrderByMovie.credits)).limit(2).offset(1), OrderByMovie
+    )
+    movies = order_by_session.scalars(statement).unique().all()
+
+    expected = [3, 2] if sort_order == "asc" else [2, 3]
+    expected = [1, *expected] if nulls == "first" else [*expected, 1]
+    assert [movie.id for movie in movies] == expected[1:]
+    assert all(len(movie.credits) == 2 for movie in movies)
+
+
+@NULLS_EMULATED
+@pytest.mark.unit
+def test_emulated_null_ordering_expands_labels_inside_case(dialect: Any) -> None:
+    director = func.lower(OrderByMovie.director).label("normalized_director")
+    statement = OrderBy(director, nulls="last").append_to_statement(select(director), OrderByMovie)
+
+    compiled = str(statement.compile(dialect=dialect))
+
+    assert compiled.endswith(
+        "ORDER BY CASE WHEN (lower(order_by_nulls_movie.director) IS NULL) THEN 1 ELSE 0 END, normalized_director ASC"
+    )
+
+
+@NULLS_EMULATED
+@pytest.mark.unit
+def test_emulated_eager_loading_adapts_the_ordering_column(dialect: Any) -> None:
+    statement = OrderBy("director", nulls="last").append_to_statement(
+        select(OrderByMovie).options(joinedload(OrderByMovie.credits)).limit(2), OrderByMovie
+    )
+    compiled = str(statement.compile(dialect=dialect))
+
+    assert "ASC AS" not in compiled
+    assert compiled.endswith("ORDER BY CASE WHEN (anon_1.director IS NULL) THEN 1 ELSE 0 END, anon_1.director ASC")
+
+
+@pytest.mark.unit
+def test_nulls_placement_reuses_distinct_compiled_statements(order_by_session: Session) -> None:
+    cache: dict[Any, Any] = {}
+    for _ in range(2):
+        for field in ("director", "id"):
+            for sort_order in ("asc", "desc"):
+                for nulls in ("first", "last"):
+                    statement = OrderBy(field, sort_order, nulls).append_to_statement(
+                        select(OrderByMovie.id), OrderByMovie
+                    )
+                    result = order_by_session.scalars(statement, execution_options={"compiled_cache": cache}).all()
+                    if field == "id":
+                        expected = [1, 2, 3] if sort_order == "asc" else [3, 2, 1]
+                    else:
+                        expected = [3, 2] if sort_order == "asc" else [2, 3]
+                        expected = [1, *expected] if nulls == "first" else [*expected, 1]
+                    assert result == expected
+        assert len(cache) == 8
+
+
 def test_search_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
     Movie = movie_model_sync
 
@@ -610,6 +809,122 @@ def test_search_filter(session: Session, movie_model_sync: type[DeclarativeBase]
     statement = search_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert len(results) == 1
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "dialect",
+    [
+        sqlite.dialect(),  # type: ignore[no-untyped-call]
+        postgresql.dialect(),  # type: ignore[no-untyped-call]
+        mysql.dialect(),  # type: ignore[no-untyped-call]
+        oracle.dialect(),  # type: ignore[no-untyped-call]
+        mssql.dialect(),  # type: ignore[no-untyped-call]
+        pytest.param(
+            SpannerDialect() if SpannerDialect is not None else None,
+            marks=pytest.mark.skipif(SpannerDialect is None, reason="sqlalchemy-spanner not installed"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    ("filter_type", "ignore_case", "operator"),
+    [
+        (SearchFilter, False, "like"),
+        (SearchFilter, True, "ilike"),
+        (NotInSearchFilter, False, "not_like"),
+        (NotInSearchFilter, True, "not_ilike"),
+    ],
+)
+@pytest.mark.parametrize("value", ["plain", "50%_/"])
+def test_search_filter_preserves_default_sql(
+    dialect: Any, filter_type: type[SearchFilter], ignore_case: bool, operator: str, value: str
+) -> None:
+    Movie = get_movie_model_for_engine("sqlite", "search_compile")
+    expected = select(Movie).where(getattr(Movie.title, operator)(f"%{value}%")).compile(dialect=dialect)
+    for search_filter in (
+        filter_type("title", value, ignore_case=ignore_case),
+        filter_type("title", value, ignore_case=ignore_case, escape_wildcards=False),
+    ):
+        compiled = search_filter.append_to_statement(select(Movie), Movie).compile(dialect=dialect)
+        assert str(compiled) == str(expected)
+        assert compiled.params == expected.params
+
+
+def test_search_filter_escapes_wildcards(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """Wildcard escaping is opt-in; without it `%` and `_` in the value stay SQL wildcards.
+
+    "The_" is not a substring of any title, but `_` is a single-character wildcard in LIKE, so
+    without escaping it would match both "The Matrix" and "The Hangover".
+    """
+    Movie = movie_model_sync
+
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    session.execute(Movie.__table__.delete())
+    session.commit()
+    setup_movie_data(session, Movie)
+
+    escaped = SearchFilter(field_name="title", value="The_", escape_wildcards=True)
+    results = session.execute(escaped.append_to_statement(select(Movie), Movie)).scalars().all()
+    assert len(results) == 0
+
+    unescaped = SearchFilter(field_name="title", value="The_")
+    results = session.execute(unescaped.append_to_statement(select(Movie), Movie)).scalars().all()
+    assert {movie.title for movie in results} == {"The Matrix", "The Hangover"}
+
+
+def test_not_in_search_filter_escapes_wildcards(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
+    """`NotInSearchFilter` inherits the escaping, so a literal "The_" excludes nothing."""
+    Movie = movie_model_sync
+
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    session.execute(Movie.__table__.delete())
+    session.commit()
+    setup_movie_data(session, Movie)
+
+    escaped = NotInSearchFilter(field_name="title", value="The_", escape_wildcards=True)
+    results = session.execute(escaped.append_to_statement(select(Movie), Movie)).scalars().all()
+    assert len(results) == 3
+
+    unescaped = NotInSearchFilter(field_name="title", value="The_")
+    results = session.execute(unescaped.append_to_statement(select(Movie), Movie)).scalars().all()
+    assert {movie.title for movie in results} == {"Shawshank Redemption"}
+
+
+@pytest.mark.parametrize("value", ["The_", "50%", "path/", "path/%_"])
+@pytest.mark.parametrize("ignore_case", [False, True])
+@pytest.mark.parametrize("filter_type", [SearchFilter, NotInSearchFilter])
+def test_search_filter_matches_literal_characters(
+    session: Session,
+    movie_model_sync: type[DeclarativeBase],
+    value: str,
+    ignore_case: bool,
+    filter_type: type[SearchFilter],
+) -> None:
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+    Movie = movie_model_sync
+    session.execute(Movie.__table__.delete())
+    literal_title = f"prefix {value} suffix"
+    other_title = "unrelated title"
+    session.add_all(
+        Movie(title=title, release_date=datetime(2020, 1, 1, tzinfo=timezone.utc), genre="Drama")
+        for title in (literal_title, other_title)
+    )
+    session.flush()
+
+    search_filter = filter_type(
+        field_name="title",
+        value=value.upper() if ignore_case else value,
+        ignore_case=ignore_case,
+        escape_wildcards=True,
+    )
+    results = session.execute(search_filter.append_to_statement(select(Movie), Movie)).scalars().all()
+    expected = literal_title if filter_type is SearchFilter else other_title
+    assert [movie.title for movie in results] == [expected]
 
 
 def test_filter_group_logical_operators(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:

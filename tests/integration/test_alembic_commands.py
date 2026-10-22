@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Generator
+from io import StringIO
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
 
 import pytest
@@ -10,13 +12,15 @@ from _pytest.monkeypatch import MonkeyPatch
 from alembic.util.exc import CommandError
 from pytest import CaptureFixture, FixtureRequest
 from pytest_lazy_fixtures import lf
-from sqlalchemy import Engine, ForeignKey, String
+from sqlalchemy import Engine, ForeignKey, String, event
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column, relationship, sessionmaker
 
 from advanced_alchemy import base
 from advanced_alchemy.alembic import commands
 from advanced_alchemy.alembic.utils import drop_all, dump_tables
+from advanced_alchemy.config.asyncio import AlembicAsyncConfig
+from advanced_alchemy.config.sync import AlembicSyncConfig
 from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from tests.fixtures.uuid import models as models_uuid
 from tests.helpers import maybe_async
@@ -220,6 +224,81 @@ def tmp_project_dir(monkeypatch: MonkeyPatch, tmp_path: Path) -> Generator[Path,
     path.mkdir(exist_ok=True)
     monkeypatch.chdir(path)
     yield path
+
+
+@pytest.mark.unit
+def test_alembic_command_config_propagates_alembic_options() -> None:
+    sqlalchemy_config = SQLAlchemySyncConfig(
+        connection_string="sqlite://",
+        bind_key="analytics",
+        alembic_config=AlembicSyncConfig(
+            version_table_name="custom_alembic_versions",
+            version_table_schema="custom_schema",
+            render_as_batch=False,
+            compare_type=True,
+            user_module_prefix="sqlalchemy.",
+        ),
+    )
+
+    command_config = commands.AlembicCommands(sqlalchemy_config).config
+
+    assert command_config.bind_key == "analytics"
+    assert command_config.version_table_name == "custom_alembic_versions"
+    assert command_config.version_table_schema == "custom_schema"
+    assert command_config.render_as_batch is False
+    assert command_config.compare_type is True
+    assert command_config.user_module_prefix == "sqlalchemy."
+
+
+@pytest.mark.parametrize("async_mode", [False, True], ids=["sync", "async"])
+@pytest.mark.parametrize("offline", [False, True], ids=["online", "offline"])
+@pytest.mark.parametrize("schema", [None, "custom_schema"], ids=["default_schema", "custom_schema"])
+def test_alembic_version_table_schema(
+    tmp_project_dir: Path, async_mode: bool, offline: bool, schema: str | None
+) -> None:
+    database = tmp_project_dir / "main.db"
+    schema_database = tmp_project_dir / "custom.db"
+    sqlalchemy_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig
+    if async_mode:
+        sqlalchemy_config = SQLAlchemyAsyncConfig(
+            connection_string=f"sqlite+aiosqlite:///{database}",
+            alembic_config=AlembicAsyncConfig(version_table_schema=schema),
+        )
+    else:
+        sqlalchemy_config = SQLAlchemySyncConfig(
+            connection_string=f"sqlite:///{database}",
+            alembic_config=AlembicSyncConfig(version_table_schema=schema),
+        )
+    engine = sqlalchemy_config.get_engine()
+    if schema is not None:
+        sync_engine = engine.sync_engine if isinstance(engine, AsyncEngine) else engine
+
+        @event.listens_for(sync_engine, "connect")
+        def attach_schema(dbapi_connection: Any, connection_record: Any) -> None:
+            cursor = dbapi_connection.cursor()
+            cursor.execute("ATTACH DATABASE ? AS custom_schema", (str(schema_database),))
+            cursor.close()
+
+    migration_commands = commands.AlembicCommands(sqlalchemy_config)
+    migration_commands.init(directory="migrations")
+    migration_commands.revision(message="version table schema", rev_id="schema_test")
+    output = StringIO()
+    migration_commands.config.output_buffer = output
+    migration_commands.upgrade(sql=offline)
+
+    if offline:
+        table = "custom_schema.alembic_versions" if schema else "alembic_versions"
+        assert f"CREATE TABLE {table}" in output.getvalue()
+        assert f"INSERT INTO {table}" in output.getvalue()
+    else:
+        with sqlite3.connect(schema_database if schema else database) as connection:
+            assert connection.execute("SELECT version_num FROM alembic_versions").fetchall() == [("schema_test",)]
+        if schema is not None:
+            with sqlite3.connect(database) as connection:
+                assert (
+                    connection.execute("SELECT name FROM sqlite_master WHERE name = 'alembic_versions'").fetchall()
+                    == []
+                )
 
 
 async def test_alembic_init(alembic_commands: commands.AlembicCommands, tmp_project_dir: Path) -> None:

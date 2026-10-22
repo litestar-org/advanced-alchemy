@@ -6,14 +6,19 @@ import sys
 import types
 import uuid as uuid_module
 import warnings
+from dataclasses import dataclass
 from typing import cast
 
 import pytest
 from sqlalchemy import Table, create_engine
 from sqlalchemy.dialects import mssql, oracle, postgresql
-from sqlalchemy.orm import declarative_mixin
+from sqlalchemy.orm import DeclarativeBase, Mapped, declarative_mixin, mapped_column
 from sqlalchemy.schema import CreateTable
 
+from advanced_alchemy._typing import MSGSPEC_INSTALLED
+from advanced_alchemy.base import ModelProtocol, UUIDBase, create_registry, orm_registry
+from advanced_alchemy.repository import SQLAlchemySyncRepository
+from advanced_alchemy.types import JsonB
 from tests.helpers import purge_module
 
 _MISSING = object()
@@ -293,8 +298,6 @@ def test_registry_type_annotation_map_has_no_protocol_keys() -> None:
     a class that structurally satisfies it, so a Protocol key can never match and
     is misleading dead configuration. Guard against reintroducing one.
     """
-    from advanced_alchemy.base import orm_registry
-
     protocol_keys = [key for key in orm_registry.type_annotation_map if getattr(key, "_is_protocol", False)]
     assert protocol_keys == []
 
@@ -306,10 +309,6 @@ def test_dataclass_column_resolves_via_custom_annotation_map() -> None:
     users map their own concrete dataclass type, which lands in the registry as an
     exact key and therefore resolves.
     """
-    from dataclasses import dataclass
-
-    from advanced_alchemy.base import create_registry
-    from advanced_alchemy.types import JsonB
 
     @dataclass
     class ExtraData:
@@ -332,9 +331,6 @@ def test_registry_type_annotation_map_has_no_msgspec_struct_key() -> None:
     subclass -- the realistic case. Like the removed ``DataclassProtocol`` entry, it
     was misleading dead configuration. Guard against reintroducing it.
     """
-    from advanced_alchemy._typing import MSGSPEC_INSTALLED
-    from advanced_alchemy.base import orm_registry
-
     if not MSGSPEC_INSTALLED:
         pytest.skip("msgspec not installed")
 
@@ -350,15 +346,10 @@ def test_struct_column_resolves_via_custom_annotation_map() -> None:
     their own concrete struct type, which lands in the registry as an exact key and
     therefore resolves.
     """
-    from advanced_alchemy._typing import MSGSPEC_INSTALLED
-
     if not MSGSPEC_INSTALLED:
         pytest.skip("msgspec not installed")
 
     from msgspec import Struct
-
-    from advanced_alchemy.base import create_registry
-    from advanced_alchemy.types import JsonB
 
     class MyStruct(Struct):
         a: int
@@ -367,3 +358,43 @@ def test_struct_column_resolves_via_custom_annotation_map() -> None:
 
     resolved = registry._resolve_type(MyStruct)  # pyright: ignore[reportPrivateUsage]
     assert resolved is not None
+
+
+class PlainDeclarativeBase(DeclarativeBase):
+    """A declarative base with no Advanced Alchemy mixins."""
+
+
+class PlainModel(PlainDeclarativeBase):
+    """A model built directly on ``sqlalchemy.orm.DeclarativeBase``."""
+
+    __tablename__ = "test_model_protocol_plain"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+
+class AAModel(UUIDBase):
+    """A model built on Advanced Alchemy's own base."""
+
+    __tablename__ = "test_model_protocol_aa"
+
+
+class PlainModelRepository(SQLAlchemySyncRepository[PlainModel]):
+    """The ``ModelT`` bound must accept plain declarative models."""
+
+    model_type = PlainModel
+
+
+class AAModelRepository(SQLAlchemySyncRepository[AAModel]):
+    """The ``ModelT`` bound must accept Advanced Alchemy models."""
+
+    model_type = AAModel
+
+
+def test_plain_declarative_model_satisfies_protocol_statically() -> None:
+    instance: ModelProtocol = PlainModel(id=1)
+    assert isinstance(instance, ModelProtocol)
+
+
+def test_advanced_alchemy_model_satisfies_protocol_statically() -> None:
+    instance: ModelProtocol = AAModel()
+    assert isinstance(instance, ModelProtocol)

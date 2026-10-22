@@ -42,20 +42,25 @@ from sqlalchemy import (
     ColumnElement,
     Date,
     Delete,
+    Integer,
     Select,
     Update,
     and_,
     any_,
+    case,
     exists,
     false,
+    literal_column,
     not_,
     or_,
     select,
     text,
     true,
 )
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import operators as op
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
+from sqlalchemy.sql.elements import UnaryExpression
 from typing_extensions import TypeAlias, TypedDict, TypeVar
 
 from advanced_alchemy.base import ModelProtocol
@@ -70,6 +75,7 @@ else:
     InstrumentedField: TypeAlias = Any
 
 __all__ = (
+    "LIKE_ESCAPE_CHAR",
     "BeforeAfter",
     "BooleanFilter",
     "ChoicesFilter",
@@ -95,6 +101,7 @@ __all__ = (
     "StatementFilter",
     "StatementFilterT",
     "StatementTypeT",
+    "escape_like_value",
 )
 
 T = TypeVar("T")
@@ -583,16 +590,34 @@ class OrderBy(StatementFilter):
         This filter only modifies SELECT statements. For other statement types,
         the statement is returned unchanged.
 
+    Note:
+        ``nulls`` controls where NULLs land. Left as ``None`` the database decides, and the
+        databases disagree: PostgreSQL and Oracle sort NULLs last ascending and first descending,
+        while MySQL and SQLite do the opposite. Set it explicitly for a stable order across
+        backends — ``nulls="last"`` is usually what a user reading a descending list expects, since
+        rows with no value otherwise fill the first page.
+
+        MySQL, MariaDB and SQL Server have no ``NULLS FIRST``/``NULLS LAST`` syntax. They sort
+        NULL as the lowest value, so ``asc`` with ``nulls="first"`` and ``desc`` with
+        ``nulls="last"`` compile to the plain ordering term. The other two placements are emulated
+        with a leading ``CASE WHEN ... IS NULL`` sort key. SQL Server requires every ORDER BY term
+        to appear in the select list under ``SELECT DISTINCT``, so combine ``nulls`` with a
+        ``DISTINCT`` statement there only for those two native placements.
+
     See Also:
         - :meth:`sqlalchemy.sql.expression.Select.order_by`: SQLAlchemy ORDER BY clause
         - :meth:`sqlalchemy.sql.expression.ColumnElement.asc`: Ascending order
         - :meth:`sqlalchemy.sql.expression.ColumnElement.desc`: Descending order
+        - :func:`sqlalchemy.sql.expression.nulls_first`: NULLS FIRST
+        - :func:`sqlalchemy.sql.expression.nulls_last`: NULLS LAST
     """
 
     field_name: FilterFieldName
     """Field name, model attribute, or func expression (e.g., ``func.random()``)."""
     sort_order: Literal["asc", "desc"] = "asc"
     """Sort direction ("asc" or "desc")."""
+    nulls: Optional[Literal["first", "last"]] = None
+    """Where NULLs sort. ``None`` leaves the placement to the database."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         """Append an ORDER BY clause to the statement.
@@ -612,11 +637,38 @@ class OrderBy(StatementFilter):
         """
         if isinstance(statement, Select):
             field = self._get_instrumented_attr(model, self.field_name)
-            if self.sort_order == "desc":
-                statement = cast("StatementTypeT", statement.order_by(field.desc()))
-            else:
-                statement = cast("StatementTypeT", statement.order_by(field.asc()))
+            ordering: ColumnElement[Any] = field.desc() if self.sort_order == "desc" else field.asc()
+            if self.nulls is not None:
+                ordering = _NullsPlacement(
+                    ordering, modifier=op.nulls_first_op if self.nulls == "first" else op.nulls_last_op
+                )
+            statement = cast("StatementTypeT", statement.order_by(ordering))
         return statement
+
+
+LIKE_ESCAPE_CHAR = "/"
+"""Escape character used when :class:`SearchFilter` escapes LIKE wildcards.
+
+Not a backslash: SQLAlchemy renders one into the ``ESCAPE`` clause as ``'\\\\'``, which DuckDB reads
+as two characters and rejects with "Escape string must be empty or one character". ``/`` needs no
+such doubling on dialects that support an explicit ``ESCAPE`` clause.
+"""
+
+
+def escape_like_value(value: str, escape_char: str = LIKE_ESCAPE_CHAR) -> str:
+    """Escape the LIKE wildcards ``%`` and ``_`` so they match literally.
+
+    The escape character itself is escaped first, otherwise it would consume the
+    escape characters added for the wildcards.
+
+    Args:
+        value: The raw search term.
+        escape_char: The character to escape with.
+
+    Returns:
+        str: ``value`` with ``escape_char``, ``%`` and ``_`` escaped.
+    """
+    return value.replace(escape_char, escape_char * 2).replace("%", f"{escape_char}%").replace("_", f"{escape_char}_")
 
 
 @dataclass
@@ -630,6 +682,12 @@ class SearchFilter(StatementFilter):
         The search pattern automatically adds wildcards before and after the search
         value, equivalent to SQL pattern '%value%'.
 
+    Note:
+        ``%`` and ``_`` in ``value`` remain SQL wildcards by default. Set
+        ``escape_wildcards=True`` to match them literally on databases supporting
+        the SQL ``ESCAPE`` clause. Spanner has no ``ESCAPE`` clause, so
+        ``escape_wildcards`` must stay ``False`` there.
+
     See Also:
         - :class:`.NotInSearchFilter`: Opposite filter using NOT LIKE/ILIKE
         - :meth:`sqlalchemy.sql.expression.ColumnOperators.like`: Case-sensitive LIKE
@@ -642,6 +700,8 @@ class SearchFilter(StatementFilter):
     """Text to match within the field(s)."""
     ignore_case: Optional[bool] = False
     """Whether to use case-insensitive matching."""
+    escape_wildcards: bool = False
+    """Whether to treat ``%`` and ``_`` in :attr:`value` as literal characters."""
 
     @property
     def _operator(self) -> Callable[..., ColumnElement[bool]]:
@@ -656,7 +716,7 @@ class SearchFilter(StatementFilter):
         return or_
 
     @property
-    def _func(self) -> "attrgetter[Callable[[str], BinaryExpression[bool]]]":
+    def _func(self) -> "attrgetter[Callable[..., BinaryExpression[bool]]]":
         """Return the appropriate LIKE or ILIKE operator as a function.
 
         Returns:
@@ -690,11 +750,13 @@ class SearchFilter(StatementFilter):
             :class:`sqlalchemy.sql.expression.BinaryExpression`: SQLAlchemy expression
         """
         search_clause: list[BinaryExpression[bool]] = []
+        escape_char = LIKE_ESCAPE_CHAR if self.escape_wildcards else None
+        value = escape_like_value(self.value) if self.escape_wildcards else self.value
         for field_name in self.normalized_field_names:
             try:
                 field = self._get_instrumented_attr(model, field_name)
-                search_text = f"%{self.value}%"
-                search_clause.append(self._func(field)(search_text))
+                search_text = f"%{value}%"
+                search_clause.append(self._func(field)(search_text, escape=escape_char))
             except AttributeError:
                 msg = f"Skipping search for field {field_name}.  It is not found in model {model.__name__}"
                 logger.debug(msg)
@@ -803,6 +865,8 @@ class NotInSearchFilter(SearchFilter):
         field_name: Name or set of names of model attributes to search on
         value: Text to exclude from the field(s)
         ignore_case: If True, uses NOT ILIKE for case-insensitive matching
+        escape_wildcards: If True, matches wildcard characters literally using
+            SQL ESCAPE. Defaults to False; not supported by Spanner when enabled.
 
     Note:
         Uses AND for multiple fields, meaning records matching any field will be excluded.
@@ -826,7 +890,7 @@ class NotInSearchFilter(SearchFilter):
         return and_
 
     @property
-    def _func(self) -> "attrgetter[Callable[[str], BinaryExpression[bool]]]":
+    def _func(self) -> "attrgetter[Callable[..., BinaryExpression[bool]]]":
         """Return the appropriate NOT LIKE or NOT ILIKE operator as a function.
 
         Returns:
@@ -1289,3 +1353,43 @@ FilterTypes: TypeAlias = Union[
     FilterGroup,
 ]
 """Aggregate type alias of the types supported for collection filtering."""
+
+
+class _NullsPlacement(UnaryExpression[Any]):
+    """An ORDER BY term that pins where NULLs sort.
+
+    MySQL, MariaDB and SQL Server have no ``NULLS FIRST``/``NULLS LAST`` syntax. Those backends
+    sort NULL as the lowest value, so ascending-first and descending-last are already native
+    and compile to the plain ordering term; the other two placements are emulated with a leading
+    nullity key. Every other backend gets the native clause, which an index on the column can
+    still satisfy.
+
+    UnaryExpression preserves ordering traversal for ORM eager loading and includes
+    the column, direction and NULL placement in SQL compilation cache keys.
+    """
+
+    inherit_cache = True
+
+
+@compiles(_NullsPlacement, "mysql")
+@compiles(_NullsPlacement, "mariadb")
+@compiles(_NullsPlacement, "mssql")
+def _compile_nulls_placement_emulated(  # pyright: ignore[reportUnusedFunction]
+    element: _NullsPlacement, compiler: Any, **kw: Any
+) -> str:
+    """Compile emulated NULLS placement for MySQL, MariaDB, and SQL Server.
+
+    Uses literal integer columns instead of bound parameters because parameter placeholders inside
+    ``ORDER BY`` are ambiguous on these dialects, and disables label rendering inside ``CASE``
+    because SQL Server rejects ``SELECT`` aliases inside ``CASE`` expressions.
+    """
+    ordering = cast("UnaryExpression[Any]", element.element)
+    nulls_go_last = element.modifier is op.nulls_last_op
+    if nulls_go_last is (ordering.modifier is op.desc_op):
+        return cast("str", compiler.process(ordering, **kw))
+    key = case(
+        (ordering.element.is_(None), literal_column("1" if nulls_go_last else "0", Integer)),
+        else_=literal_column("0" if nulls_go_last else "1", Integer),
+    )
+    key_kw = {**kw, "render_label_as_label": None}
+    return f"{compiler.process(key, **key_kw)}, {compiler.process(ordering, **kw)}"

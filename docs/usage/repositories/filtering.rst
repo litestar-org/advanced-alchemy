@@ -70,6 +70,22 @@ Provides basic string search capabilities.
         repository = FilteringPostRepository(session=db_session)
         return await repository.get_many(SearchFilter(field_name="title", value=query, ignore_case=True))
 
+``SearchFilter`` and ``NotInSearchFilter`` preserve SQL wildcard matching by
+default: ``%`` matches any sequence of characters and ``_`` matches one character.
+To match those characters literally in accounting codes or titles, opt in with
+``escape_wildcards=True``:
+
+.. code-block:: python
+
+    literal_search = SearchFilter(field_name="title", value="50% off", escape_wildcards=True)
+
+This option escapes ``%``, ``_``, and the escape character ``/`` while retaining
+the surrounding substring wildcards. Dialect-specific pattern syntax, such as
+SQL Server's bracket expressions (``[abc]``), is unchanged. It requires SQL
+``ESCAPE`` support. Spanner has no ``ESCAPE`` clause, so ``escape_wildcards``
+must stay ``False`` there. The Litestar and FastAPI filter providers enable it
+through the ``search_escape_wildcards`` key of ``FilterConfig``.
+
 Null and Not Null Filters
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -117,3 +133,36 @@ All read and count operations support an optional ``bind_group`` parameter for e
     async def get_posts_from_analytics_replica(db_session: AsyncSession) -> list[FilteringPost]:
         repository = FilteringPostRepository(session=db_session)
         return await repository.get_many(bind_group="analytics")
+
+Generated query parameter names
+-------------------------------
+
+The Litestar ``create_filter_dependencies()`` and FastAPI ``provide_filters()`` helpers
+accept the same optional ``alias_generator`` configuration. Existing names such as
+``pageSize``, ``searchString``, and ``orderBy`` remain the default. To expose snake_case
+query parameters in either integration:
+
+.. code-block:: python
+
+    from advanced_alchemy.utils.dependencies import FilterConfig
+
+    config: FilterConfig = {
+        "pagination_type": "limit_offset",
+        "search": "name",
+        "sort_field": "created_at",
+        "alias_generator": "snake_case",
+    }
+
+This configuration accepts ``?page_size=10&search_string=alice&order_by=created_at``.
+Use ``"camel_case"`` to explicitly select camelCase, or supply a callable for custom
+conventions. An explicit preset follows the same collision validation as a callable.
+The generator receives canonical snake_case parameter names, including field-specific
+names such as ``account_id_in``. Custom generators must return nonempty, distinct
+strings. Names are resolved when dependencies are constructed and used consistently
+for requests and OpenAPI; the generator does not run during requests.
+
+This option controls query parameter names. It does not translate sort-field values
+or change the internal dependency names configured through ``DependencyDefaults``.
+Dependencies with equivalent configuration, defaults, and resolved query names reuse
+the same cached provider. Different pagination defaults or dependency names remain
+isolated.

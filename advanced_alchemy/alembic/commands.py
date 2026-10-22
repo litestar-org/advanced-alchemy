@@ -383,7 +383,12 @@ class AlembicCommands:
         kwargs.update(
             {
                 "engine": self.sqlalchemy_config.get_engine(),
+                "bind_key": self.sqlalchemy_config.bind_key,
                 "version_table_name": self.sqlalchemy_config.alembic_config.version_table_name,
+                "version_table_schema": self.sqlalchemy_config.alembic_config.version_table_schema,
+                "render_as_batch": self.sqlalchemy_config.alembic_config.render_as_batch,
+                "compare_type": self.sqlalchemy_config.alembic_config.compare_type,
+                "user_module_prefix": self.sqlalchemy_config.alembic_config.user_module_prefix,
             },
         )
         self.config = AlembicCommandConfig(**kwargs)

@@ -10,6 +10,7 @@ import datetime
 import inspect
 import logging
 from collections.abc import AsyncGenerator, Generator
+from functools import partial
 from typing import (
     TYPE_CHECKING,
     Annotated,
@@ -55,12 +56,12 @@ from advanced_alchemy.utils.dependencies import (
     DependencyCache,
     FieldNameType,
     FilterConfig,
-    make_hashable,
+    filter_cache_key,
     normalize_choice_field_types,
     normalize_field_name_types,
     normalize_sort_field,
+    resolve_filter_aliases,
 )
-from advanced_alchemy.utils.text import camelize
 
 logger = logging.getLogger("advanced_alchemy.extensions.fastapi")
 
@@ -364,15 +365,15 @@ def provide_filters(
     if not has_filters:
         return list
 
-    # Calculate cache key using hashable version of config
-    cache_key = hash((_CACHE_NAMESPACE, make_hashable(config)))
+    aliases = resolve_filter_aliases(config)
+    cache_key = filter_cache_key(_CACHE_NAMESPACE, config, dep_defaults, aliases)
 
     # Check cache first
     cached_dep = cast("Optional[Callable[..., list[FilterTypes]]]", dep_cache.get_dependencies(cache_key))
     if cached_dep is not None:
         return cached_dep
 
-    dep = _create_filter_aggregate_function_fastapi(config, dep_defaults)
+    dep = _create_filter_aggregate_function_fastapi(config, dep_defaults, aliases=aliases)
     dep_cache.add_dependencies(cache_key, dep)
     return dep
 
@@ -380,14 +381,21 @@ def provide_filters(
 def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
     config: FilterConfig,
     dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
+    *,
+    aliases: Optional[dict[str, str]] = None,
 ) -> Callable[..., list[FilterTypes]]:
     """Create a FastAPI dependency provider function that aggregates multiple filter dependencies.
+
+    Returns a fresh ``partial(_aggregate_filter_function)`` per configuration so assigning
+    ``__signature__`` and ``__annotations__`` does not mutate previously constructed
+    dependencies.
 
     Returns:
         A FastAPI dependency provider function that aggregates multiple filter dependencies.
     """
     params: list[inspect.Parameter] = []
     annotations: dict[str, Any] = {}
+    alias_for = (resolve_filter_aliases(config) if aliases is None else aliases).__getitem__
 
     # Add id filter providers
     if (id_filter := config.get("id_filter", False)) is not False:
@@ -396,7 +404,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             ids: Annotated[  # type: ignore
                 Optional[list[id_filter]],  # pyright: ignore
                 Query(
-                    alias="ids",
+                    alias=alias_for("ids"),
                     required=False,
                     description="IDs to filter by.",
                 ),
@@ -417,20 +425,22 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 
     # Add created_at filter providers
     if config.get("created_at", False):
+        created_before_alias = alias_for("created_before")
+        created_after_alias = alias_for("created_after")
 
         def provide_created_at_filter(
-            before: Annotated[
+            created_at_before: Annotated[
                 Optional[str],
                 Query(
-                    alias="createdBefore",
+                    alias=created_before_alias,
                     description="Filter by created date before this timestamp.",
                     json_schema_extra={"format": "date-time"},
                 ),
             ] = None,
-            after: Annotated[
+            created_at_after: Annotated[
                 Optional[str],
                 Query(
-                    alias="createdAfter",
+                    alias=created_after_alias,
                     description="Filter by created date after this timestamp.",
                     json_schema_extra={"format": "date-time"},
                 ),
@@ -440,20 +450,20 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             after_dt = None
 
             # Validate both parameters regardless of endpoint path
-            if before is not None:
+            if created_at_before is not None:
                 try:
-                    before_dt = datetime.datetime.fromisoformat(before.replace("Z", "+00:00"))
+                    before_dt = datetime.datetime.fromisoformat(created_at_before.replace("Z", "+00:00"))
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
-                        errors=[{"loc": ["query", "createdBefore"], "msg": "Invalid date format"}]
+                        errors=[{"loc": ["query", created_before_alias], "msg": "Invalid date format"}]
                     ) from e
 
-            if after is not None:
+            if created_at_after is not None:
                 try:
-                    after_dt = datetime.datetime.fromisoformat(after.replace("Z", "+00:00"))
+                    after_dt = datetime.datetime.fromisoformat(created_at_after.replace("Z", "+00:00"))
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
-                        errors=[{"loc": ["query", "createdAfter"], "msg": "Invalid date format"}]
+                        errors=[{"loc": ["query", created_after_alias], "msg": "Invalid date format"}]
                     ) from e
 
             return (
@@ -474,20 +484,22 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 
     # Add updated_at filter providers
     if config.get("updated_at", False):
+        updated_before_alias = alias_for("updated_before")
+        updated_after_alias = alias_for("updated_after")
 
         def provide_updated_at_filter(
-            before: Annotated[
+            updated_at_before: Annotated[
                 Optional[str],
                 Query(
-                    alias="updatedBefore",
+                    alias=updated_before_alias,
                     description="Filter by updated date before this timestamp.",
                     json_schema_extra={"format": "date-time"},
                 ),
             ] = None,
-            after: Annotated[
+            updated_at_after: Annotated[
                 Optional[str],
                 Query(
-                    alias="updatedAfter",
+                    alias=updated_after_alias,
                     description="Filter by updated date after this timestamp.",
                     json_schema_extra={"format": "date-time"},
                 ),
@@ -497,20 +509,20 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             after_dt = None
 
             # Validate both parameters regardless of endpoint path
-            if before is not None:
+            if updated_at_before is not None:
                 try:
-                    before_dt = datetime.datetime.fromisoformat(before.replace("Z", "+00:00"))
+                    before_dt = datetime.datetime.fromisoformat(updated_at_before.replace("Z", "+00:00"))
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
-                        errors=[{"loc": ["query", "updatedBefore"], "msg": "Invalid date format"}]
+                        errors=[{"loc": ["query", updated_before_alias], "msg": "Invalid date format"}]
                     ) from e
 
-            if after is not None:
+            if updated_at_after is not None:
                 try:
-                    after_dt = datetime.datetime.fromisoformat(after.replace("Z", "+00:00"))
+                    after_dt = datetime.datetime.fromisoformat(updated_at_after.replace("Z", "+00:00"))
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
-                        errors=[{"loc": ["query", "updatedAfter"], "msg": "Invalid date format"}]
+                        errors=[{"loc": ["query", updated_after_alias], "msg": "Invalid date format"}]
                     ) from e
 
             return (
@@ -537,7 +549,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 int,
                 Query(
                     ge=1,
-                    alias="currentPage",
+                    alias=alias_for("current_page"),
                     description="Page number for pagination.",
                 ),
             ] = 1,
@@ -545,7 +557,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 int,
                 Query(
                     ge=1,
-                    alias="pageSize",
+                    alias=alias_for("page_size"),
                     description="Number of items per page.",
                 ),
             ] = config.get("pagination_size", dep_defaults.DEFAULT_PAGINATION_SIZE),
@@ -570,7 +582,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 Optional[str],
                 Query(
                     required=False,
-                    alias="searchString",
+                    alias=alias_for("search_string"),
                     description="Search term.",
                 ),
             ] = None,
@@ -578,7 +590,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 Optional[bool],
                 Query(
                     required=False,
-                    alias="searchIgnoreCase",
+                    alias=alias_for("search_ignore_case"),
                     description="Whether search should be case-insensitive.",
                 ),
             ] = config.get("search_ignore_case", False),
@@ -589,6 +601,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 field_name=field_names,
                 value=search_string,  # type: ignore[arg-type]
                 ignore_case=ignore_case or False,
+                escape_wildcards=config.get("search_escape_wildcards", False),
             )
 
         param_name = dep_defaults.SEARCH_FILTER_DEPENDENCY_KEY
@@ -605,12 +618,13 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
     if sort_field := config.get("sort_field"):
         sort_field_default = normalize_sort_field(sort_field)
         sort_order_default = config.get("sort_order", "desc")
+        sort_nulls_default = config.get("sort_nulls")
 
         def provide_order_by(
             field_name: Annotated[
                 str,
                 Query(
-                    alias="orderBy",
+                    alias=alias_for("order_by"),
                     description="Field to order by.",
                     required=False,
                 ),
@@ -618,13 +632,13 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             sort_order: Annotated[
                 Optional[SortOrder],
                 Query(
-                    alias="sortOrder",
+                    alias=alias_for("sort_order"),
                     description="Sort order ('asc' or 'desc').",
                     required=False,
                 ),
             ] = sort_order_default,
         ) -> OrderBy:
-            return OrderBy(field_name=field_name, sort_order=sort_order or sort_order_default)
+            return OrderBy(field_name=field_name, sort_order=sort_order or sort_order_default, nulls=sort_nulls_default)
 
         param_name = dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY
         params.append(
@@ -648,7 +662,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     values: Annotated[  # type: ignore
                         Optional[set[field_name.type_hint]],  # pyright: ignore
                         Query(
-                            alias=camelize(f"{field_name.name}_not_in"),
+                            alias=alias_for(f"{field_name.name}_not_in"),
                             description=f"Filter {field_name.name} not in values",
                         ),
                     ] = None,
@@ -680,7 +694,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     values: Annotated[  # type: ignore
                         Optional[set[field_name.type_hint]],  # pyright: ignore
                         Query(
-                            alias=camelize(f"{field_name.name}_in"),
+                            alias=alias_for(f"{field_name.name}_in"),
                             description=f"Filter {field_name.name} in values",
                         ),
                     ] = None,
@@ -710,7 +724,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     value: Annotated[
                         Optional[bool],
                         Query(
-                            alias=camelize(field_name.name),
+                            alias=alias_for(field_name.name),
                             description=f"Filter {field_name.name} by boolean value",
                         ),
                     ] = None,
@@ -740,7 +754,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     values: Annotated[  # type: ignore
                         Optional[list[field_name.type_hint]],  # pyright: ignore
                         Query(
-                            alias=camelize(field_name.name),
+                            alias=alias_for(field_name.name),
                             description=f"Filter {field_name.name} by allowed choices",
                         ),
                     ] = None,
@@ -760,12 +774,15 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             )
             annotations[param_name] = Annotated[Optional[ChoicesFilter[Any]], Depends(choices_provider)]
 
-    _aggregate_filter_function.__signature__ = inspect.Signature(  # type: ignore
+    aggregate_filters = partial(_aggregate_filter_function)
+
+    aggregate_filters.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
         parameters=params,
-        return_annotation=Annotated[list[FilterTypes], Depends(_aggregate_filter_function)],
+        return_annotation=list[FilterTypes],
     )
 
-    return _aggregate_filter_function
+    aggregate_filters.__annotations__ = {**annotations, "return": list[FilterTypes]}
+    return aggregate_filters
 
 
 def _aggregate_filter_function(**kwargs: Any) -> list[FilterTypes]:

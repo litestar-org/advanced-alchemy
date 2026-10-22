@@ -6,6 +6,7 @@ import inspect
 import sys
 import unittest.mock
 import uuid
+from dataclasses import asdict
 from datetime import datetime, timedelta
 from enum import Enum, IntEnum
 from typing import TYPE_CHECKING, Any, cast
@@ -351,7 +352,7 @@ def test_create_filter_dependencies_cache_miss() -> None:
                 mock_get.assert_called_once()
 
                 # Verify _create_statement_filters was called
-                mock_create.assert_called_once_with(config, DEPENDENCY_DEFAULTS)
+                mock_create.assert_called_once()
 
                 # Verify cache was updated
                 mock_add.assert_called_once()
@@ -389,7 +390,7 @@ def test_created_at_filter() -> None:
     provider_func = deps["created_filter"].dependency
     before = datetime.now()
     later = datetime.now() + timedelta(days=1)
-    f = provider_func(before=before, after=later)
+    f = provider_func(created_at_before=before, created_at_after=later)
     assert isinstance(f, BeforeAfter)
     assert f.field_name == "created_at"
     assert f.before == before
@@ -406,9 +407,25 @@ def test_updated_at_filter() -> None:
 
     # Test the provider function
     provider_func = deps["updated_filter"].dependency
-    f = provider_func(before=datetime.now(), after=datetime.now())
+    f = provider_func(updated_at_before=datetime.now(), updated_at_after=datetime.now())
     assert isinstance(f, BeforeAfter)
     assert f.field_name == "updated_at"
+
+
+def test_date_filter_providers_have_distinct_python_parameter_names() -> None:
+    """The created/updated filter providers must not share `before`/`after` parameter names.
+
+    Tools that recursively inspect a route dependency graph key on Python parameter names, so
+    each provider needs distinct names even though the public query aliases
+    (`createdBefore`/`createdAfter`/`updatedBefore`/`updatedAfter`) already differ.
+    """
+    deps = _create_statement_filters(cast(FilterConfig, {"created_at": True, "updated_at": True}))
+
+    created_sig = inspect.signature(deps["created_filter"].dependency)
+    updated_sig = inspect.signature(deps["updated_filter"].dependency)
+
+    assert list(created_sig.parameters) == ["created_at_before", "created_at_after"]
+    assert list(updated_sig.parameters) == ["updated_at_before", "updated_at_after"]
 
 
 def test_search_filter() -> None:
@@ -426,6 +443,17 @@ def test_search_filter() -> None:
     assert f.field_name == "name" or f.field_name == {"name"}
     assert f.value == "test"
     assert f.ignore_case is True
+    assert f.escape_wildcards is False
+
+
+def test_search_filter_applies_configured_wildcard_escaping() -> None:
+    """The `search_escape_wildcards` config key makes every generated SearchFilter match literally."""
+    deps = _create_statement_filters({"search": "name", "search_escape_wildcards": True})
+
+    f = deps["search_filter"].dependency(search_string="50%")
+
+    assert isinstance(f, SearchFilter)
+    assert f.escape_wildcards is True
 
 
 def test_limit_offset_filter() -> None:
@@ -458,6 +486,18 @@ def test_order_by_filter() -> None:
     assert isinstance(f, OrderBy)
     assert f.field_name == "name"
     assert f.sort_order == "desc"
+
+
+def test_order_by_filter_applies_configured_nulls_placement() -> None:
+    """The `sort_nulls` config key pins NULL placement on every generated OrderBy."""
+    deps = _create_statement_filters({"sort_field": "name", "sort_nulls": "last"})
+
+    provider_func = deps["order_by_filter"].dependency
+    f = provider_func(field_name="name", sort_order="asc")
+
+    assert isinstance(f, OrderBy)
+    assert f.nulls == "last"
+    assert _create_statement_filters({"sort_field": "name"})["order_by_filter"].dependency().nulls is None
 
 
 def test_order_by_filter_uses_scalar_default_from_list_sort_field() -> None:
@@ -708,6 +748,82 @@ def test_litestar_not_in_filter_values_are_isolated() -> None:
     payload = response.json()
     assert payload["first_name"] == ["Sezer"]
     assert payload["last_name"] == ["Tasan"]
+
+
+def test_filter_cache_separates_page_size_defaults() -> None:
+    class BigPages(DependencyDefaults):
+        DEFAULT_PAGINATION_SIZE = 100
+
+    config: FilterConfig = {"pagination_type": "limit_offset"}
+    default = create_filter_dependencies(config)
+    big = create_filter_dependencies(config, BigPages())
+    assert default is not big
+    key = DEPENDENCY_DEFAULTS.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY
+    assert default[key].dependency().limit == 20
+    assert big[key].dependency().limit == 100
+
+
+def test_filter_cache_shares_equal_defaults() -> None:
+    config: FilterConfig = {"pagination_type": "limit_offset"}
+    assert create_filter_dependencies(config, DependencyDefaults()) is create_filter_dependencies(
+        config, DependencyDefaults()
+    )
+
+
+def test_custom_dependency_defaults_are_resolved_in_requests() -> None:
+    class CustomDefaults(DependencyDefaults):
+        FILTERS_DEPENDENCY_KEY = "custom_filters"
+        ID_FILTER_DEPENDENCY_KEY = "custom_ids"
+        CREATED_FILTER_DEPENDENCY_KEY = "custom_created"
+        UPDATED_FILTER_DEPENDENCY_KEY = "custom_updated"
+        LIMIT_OFFSET_FILTER_DEPENDENCY_KEY = "custom_page"
+        SEARCH_FILTER_DEPENDENCY_KEY = "custom_search"
+        ORDER_BY_FILTER_DEPENDENCY_KEY = "custom_order"
+        DEFAULT_PAGINATION_SIZE = 100
+
+    config: FilterConfig = {
+        "id_filter": str,
+        "created_at": True,
+        "updated_at": True,
+        "pagination_type": "limit_offset",
+        "search": "name",
+        "sort_field": "name",
+    }
+    default_dependencies = create_filter_dependencies(config)
+    custom_dependencies = create_filter_dependencies(config, CustomDefaults())
+    assert default_dependencies is not custom_dependencies
+
+    @get("/default", dependencies=default_dependencies, sync_to_thread=False)
+    def default_handler(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> list[int]:
+        return [filter_.limit for filter_ in filters if isinstance(filter_, LimitOffset)]
+
+    @get("/custom", dependencies=custom_dependencies, sync_to_thread=False)
+    def custom_handler(custom_filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> dict[str, Any]:
+        return {
+            "types": [type(filter_).__name__ for filter_ in custom_filters],
+            "fields": [str(filter_.field_name) for filter_ in custom_filters if isinstance(filter_, BeforeAfter)],
+            "pages": [
+                [filter_.limit, filter_.offset] for filter_ in custom_filters if isinstance(filter_, LimitOffset)
+            ],
+            "ids": [list(filter_.values or []) for filter_ in custom_filters if isinstance(filter_, CollectionFilter)],
+            "search": [filter_.value for filter_ in custom_filters if isinstance(filter_, SearchFilter)],
+            "sort": [filter_.field_name for filter_ in custom_filters if isinstance(filter_, OrderBy)],
+        }
+
+    with TestClient(Litestar([default_handler, custom_handler])) as client:
+        response = client.get("/default")
+        assert response.status_code == 200
+        assert response.json() == [20]
+        response = client.get("/custom", params={"ids": "42", "searchString": "needle", "currentPage": 2})
+        assert response.status_code == 200
+        assert response.json() == {
+            "types": ["CollectionFilter", "BeforeAfter", "LimitOffset", "BeforeAfter", "SearchFilter", "OrderBy"],
+            "fields": ["created_at", "updated_at"],
+            "pages": [[100, 100]],
+            "ids": [["42"]],
+            "search": ["needle"],
+            "sort": ["name"],
+        }
 
 
 def test_custom_dependency_defaults() -> None:
@@ -1122,3 +1238,51 @@ def test_litestar_openapi_schema(mock_create_filters: unittest.mock.MagicMock) -
         if schema.get("type") == "array"
     )
     assert state_array_schema["items"]["type"] == "string"
+
+
+def test_custom_query_aliases_match_requests_and_openapi() -> None:
+    config: FilterConfig = {
+        "pagination_type": "limit_offset",
+        "search": "name",
+        "sort_field": "created_at",
+        "in_fields": ["account_id"],
+        "boolean_fields": ["is_active"],
+        "alias_generator": "snake_case",
+    }
+
+    @get("/aliased")
+    def handler(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> dict[str, Any]:
+        return {type(item).__name__: asdict(item) for item in filters}
+
+    app = Litestar(route_handlers=[handler], dependencies=create_filter_dependencies(config))
+    with TestClient(app) as client:
+        response = client.get(
+            "/aliased",
+            params={
+                "page_size": 7,
+                "current_page": 3,
+                "search_string": "needle",
+                "order_by": "other_field",
+                "account_id_in": "abc",
+                "is_active": "false",
+            },
+        )
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["LimitOffset"] == {"limit": 7, "offset": 14}
+        assert data["SearchFilter"]["value"] == "needle"
+        assert data["OrderBy"]["field_name"] == "other_field"
+        assert data["CollectionFilter"]["values"] == ["abc"]
+        assert data["BooleanFilter"]["value"] is False
+        schema = client.get("/schema/openapi.json").json()
+    names = {item["name"] for item in schema["paths"]["/aliased"]["get"]["parameters"]}
+    assert names == {
+        "page_size",
+        "current_page",
+        "search_string",
+        "search_ignore_case",
+        "order_by",
+        "sort_order",
+        "account_id_in",
+        "is_active",
+    }

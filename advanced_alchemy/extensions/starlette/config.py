@@ -7,7 +7,6 @@ including both synchronous and asynchronous database configurations.
 import contextlib
 import logging
 from dataclasses import dataclass, field
-from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
 
 from sqlalchemy.exc import OperationalError
@@ -34,20 +33,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger("advanced_alchemy.extensions.starlette")
 
 
-FASTAPI_CLI_INSTALLED = bool(find_spec("fastapi_cli"))
-
-
 def _echo(message: str) -> None:  # pragma: no cover
-    """Echo a message using either rich toolkit or click echo."""
-    if FASTAPI_CLI_INSTALLED:
+    """Echo a message using rich toolkit, click echo, or logger fallback."""
+    try:
         from fastapi_cli.utils.cli import get_rich_toolkit
-
+    except ImportError:
+        try:
+            from click import echo
+        except ImportError:
+            logger.info(message)
+        else:
+            echo(message)
+    else:
         with get_rich_toolkit() as toolkit:
             toolkit.print(message, tag="INFO")
-    else:
-        from click import echo
-
-        echo(message)
 
 
 def _make_unique_state_key(app: "Starlette", key: str) -> str:  # pragma: no cover

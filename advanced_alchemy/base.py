@@ -150,13 +150,11 @@ class ModelProtocol(Protocol):
     Attributes:
         __table__ (:class:`sqlalchemy.sql.FromClause`): The table associated with the model.
         __mapper__ (:class:`sqlalchemy.orm.Mapper`): The mapper for the model.
-        __name__ (str): The name of the model.
     """
 
     if TYPE_CHECKING:
         __table__: ClassVar[FromClause]
         __mapper__: ClassVar[Mapper[Any]]
-        __name__: ClassVar[str]
 
 
 def model_to_dict(instance: "ModelProtocol", exclude: Optional[set[str]] = None) -> dict[str, Any]:
@@ -201,7 +199,6 @@ class BasicAttributes:
     """
 
     if TYPE_CHECKING:
-        __name__: ClassVar[str]
         __table__: ClassVar[FromClause]
         __mapper__: ClassVar[Mapper[Any]]
 

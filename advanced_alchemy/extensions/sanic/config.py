@@ -10,7 +10,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, cast
 
-from click import echo
 from sanic import HTTPResponse, Request, Sanic
 from sqlalchemy.exc import OperationalError
 
@@ -28,7 +27,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker
 from typing_extensions import Literal
 
-from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.base import metadata_registry
 from advanced_alchemy.config import EngineConfig as _EngineConfig
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig as _SQLAlchemyAsyncConfig
@@ -37,6 +35,16 @@ from advanced_alchemy.routing.maker import dispose_session_maker_async, dispose_
 from advanced_alchemy.utils.serialization import decode_json, encode_json, schema_dump
 
 logger = logging.getLogger("advanced_alchemy.extensions.sanic")
+
+
+def _echo(message: str) -> None:  # pragma: no cover
+    """Output a status message using Click when installed, falling back to logging."""
+    try:
+        from click import echo
+    except ImportError:
+        logger.info(message)
+    else:
+        echo(message)
 
 
 def _make_unique_context_key(app: "Sanic[Any, Any]", key: str) -> str:  # pragma: no cover
@@ -125,9 +133,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 )
                 await conn.commit()
             except OperationalError as exc:
-                echo(f" * Could not create target metadata. Reason: {exc}")
+                _echo(f" * Could not create target metadata. Reason: {exc}")
             else:
-                echo(" * Created target metadata.")
+                _echo(" * Created target metadata.")
 
     @property
     def app(self) -> "Sanic[Any, Any]":
@@ -198,7 +206,6 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             session = cast("Optional[AsyncSession]", getattr(request.ctx, self.session_key, None))
             if session is None:
                 setattr(request.ctx, self.session_key, self.get_session())
-                set_async_context(True)
 
         @self.app.middleware("response")  # type: ignore[misc,untyped-decorator]
         async def on_response(request: Request, response: HTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
@@ -358,7 +365,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                     None, metadata_registry.get(None if self.bind_key == "default" else self.bind_key).create_all, conn
                 )
             except OperationalError as exc:
-                echo(f" * Could not create target metadata. Reason: {exc}")
+                _echo(f" * Could not create target metadata. Reason: {exc}")
 
     def init_app(self, app: "Sanic[Any, Any]", bootstrap: "Extend") -> None:  # pyright: ignore[reportUnknownParameterType,reportInvalidTypeForm]
         """Initialize the Sanic application with this configuration.
@@ -411,7 +418,6 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             session = cast("Optional[Session]", getattr(request.ctx, self.session_key, None))
             if session is None:
                 setattr(request.ctx, self.session_key, self.get_session())
-                set_async_context(False)
 
         @self.app.middleware("response")  # type: ignore[misc,untyped-decorator]
         async def on_response(request: Request, response: HTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]

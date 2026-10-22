@@ -4,24 +4,28 @@ These primitives are framework-agnostic and reused by framework
 ``advanced_alchemy.extensions`` provider modules.
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal, NamedTuple, Optional, Union, cast
 from uuid import UUID
 
 from typing_extensions import NotRequired, TypeAlias, TypedDict, TypeGuard
 
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.utils.singleton import SingletonMeta
+from advanced_alchemy.utils.text import camelize
 
 __all__ = (
     "ChoiceField",
     "DependencyCache",
     "FieldNameType",
     "FilterConfig",
+    "filter_cache_key",
     "make_hashable",
     "normalize_choice_field_types",
     "normalize_field_name_types",
     "normalize_sort_field",
+    "resolve_filter_aliases",
 )
 
 HashableValue = Union[str, int, float, bool, None]
@@ -79,6 +83,8 @@ class FilterConfig(TypedDict):
     """Default field or fields to use for sorting."""
     sort_order: NotRequired[SortOrder]
     """Default sort order."""
+    sort_nulls: NotRequired[Optional[Literal["first", "last"]]]
+    """Where NULLs sort in the order-by filter. ``None`` leaves the placement to the database."""
     pagination_type: NotRequired[Literal["limit_offset"]]
     """Pagination mode to enable."""
     pagination_size: NotRequired[int]
@@ -87,6 +93,8 @@ class FilterConfig(TypedDict):
     """Fields to enable search on."""
     search_ignore_case: NotRequired[bool]
     """Whether search should be case-insensitive."""
+    search_escape_wildcards: NotRequired[bool]
+    """Whether ``%`` and ``_`` in the search string match literally. Requires SQL ``ESCAPE`` support."""
     created_at: NotRequired[bool]
     """Enable created-at range filtering."""
     updated_at: NotRequired[bool]
@@ -99,6 +107,20 @@ class FilterConfig(TypedDict):
     """Fields that support boolean filters."""
     choice_fields: NotRequired[ChoiceFieldConfig]
     """Fields that support choices filters."""
+    alias_generator: NotRequired[Union[Literal["snake_case", "camel_case"], Callable[[str], str]]]
+    """Maps a parameter's snake_case name to its public query parameter.
+
+    Supported by both Litestar and FastAPI.
+
+    Receives ``created_before``, ``page_size``, ``sort_order``, or a model field name for the
+    per-field filters. Defaults to :func:`~advanced_alchemy.utils.text.camelize`, which produces the
+    names this has always generated (``createdBefore``, ``pageSize``, ``sortOrder``). Pass
+    ``"snake_case"`` to keep snake_case instead, or ``"camel_case"`` for explicit camelCase.
+    A callable supports application-specific naming conventions.
+
+    An explicit generator must give every parameter a distinct name; one shared between two filters is rejected when the
+    dependency is built, because the framework would bind the single value to both.
+    """
 
 
 class DependencyCache(metaclass=SingletonMeta):
@@ -266,3 +288,51 @@ def normalize_sort_field(sort_field: SortField) -> str:
     if isinstance(sort_field, list):
         return sort_field[0]
     return sorted(sort_field)[0]
+
+
+def resolve_filter_aliases(config: FilterConfig) -> dict[str, str]:
+    """Resolve public query names once, validating only opt-in custom naming."""
+    names: list[str] = []
+    for key, parameters in (
+        ("id_filter", ("ids",)),
+        ("created_at", ("created_before", "created_after")),
+        ("updated_at", ("updated_before", "updated_after")),
+        ("pagination_type", ("current_page", "page_size")),
+        ("search", ("search_string", "search_ignore_case")),
+        ("sort_field", ("order_by", "sort_order")),
+    ):
+        if config.get(key):
+            names.extend(parameters)
+    for key, suffix in (("not_in_fields", "_not_in"), ("in_fields", "_in"), ("boolean_fields", "")):
+        if fields := config.get(key):
+            names.extend(field.name + suffix for field in normalize_field_name_types(cast("FieldNameConfig", fields)))
+    if choices := config.get("choice_fields"):
+        names.extend(field.name for field in normalize_choice_field_types(choices))
+    generator = config.get("alias_generator")
+    if isinstance(generator, str) and generator not in {"snake_case", "camel_case"}:
+        msg = f"Unknown filter alias preset {generator!r}; expected snake_case or camel_case"
+        raise ImproperConfigurationError(msg)
+    resolved: dict[str, str] = {}
+    claimed: set[str] = set()
+    for name in names:
+        alias: Any
+        if isinstance(generator, str):
+            alias = name if generator == "snake_case" else camelize(name)
+        else:
+            alias = camelize(name) if generator is None else generator(name)
+        if generator is not None and (not isinstance(alias, str) or not alias or alias in claimed):
+            msg = f"Filter parameter {name!r} has an invalid or duplicate query parameter {alias!r}"
+            raise ImproperConfigurationError(msg)
+        claimed.add(alias)
+        resolved[name] = alias
+    return resolved
+
+
+def filter_cache_key(namespace: str, config: FilterConfig, defaults: Any, aliases: dict[str, str]) -> tuple[Any, ...]:
+    """Cache effective configuration and names, retaining complete values for equality."""
+    values = {key: value for key, value in config.items() if key != "alias_generator"}
+    default_values = tuple(
+        (name, getattr(defaults, name))
+        for name in sorted({name for cls in type(defaults).__mro__ for name in getattr(cls, "__annotations__", {})})
+    )
+    return namespace, make_hashable(values), make_hashable(default_values), make_hashable(aliases)

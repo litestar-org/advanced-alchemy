@@ -4,7 +4,7 @@ import re
 import string
 from collections import abc
 from collections.abc import Iterable
-from typing import Any, List, Optional, Union, cast, overload
+from typing import Any, List, Literal, Optional, Union, cast, overload
 from unittest.mock import create_autospec
 
 from sqlalchemy import (
@@ -382,7 +382,10 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         field_name: Union[str, set[str]],
         value: str,
         ignore_case: bool,
+        escape_wildcards: bool = False,
     ) -> List[ModelT]:
+        if escape_wildcards:
+            value = re.escape(value)
         pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
         fields = {field_name} if isinstance(field_name, str) else field_name
         items: List[ModelT] = []
@@ -402,7 +405,10 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         field_name: Union[str, set[str]],
         value: str,
         ignore_case: bool,
+        escape_wildcards: bool = False,
     ) -> List[ModelT]:
+        if escape_wildcards:
+            value = re.escape(value)
         pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
         fields = {field_name} if isinstance(field_name, str) else field_name
         items: List[ModelT] = []
@@ -434,8 +440,18 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         result: List[ModelT],
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         sort_desc: bool = False,
+        nulls: Optional[Literal["first", "last"]] = None,
     ) -> List[ModelT]:
-        return sorted(result, key=lambda item: getattr(item, self._extract_field_name(field_name)), reverse=sort_desc)
+        attribute = self._extract_field_name(field_name)
+        if nulls is None:
+            return sorted(result, key=lambda item: getattr(item, attribute), reverse=sort_desc)
+        missing = [item for item in result if getattr(item, attribute) is None]
+        present = sorted(
+            (item for item in result if getattr(item, attribute) is not None),
+            key=lambda item: getattr(item, attribute),
+            reverse=sort_desc,
+        )
+        return [*missing, *present] if nulls == "first" else [*present, *missing]
 
     def _apply_filters(
         self,
@@ -473,6 +489,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
                     result,
                     filter_.field_name,
                     sort_desc=filter_.sort_order == "desc",
+                    nulls=filter_.nulls,
                 )
             elif isinstance(filter_, NotInSearchFilter):
                 result = self._filter_by_not_like(
@@ -480,6 +497,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
                     filter_.field_name,
                     value=filter_.value,
                     ignore_case=bool(filter_.ignore_case),
+                    escape_wildcards=filter_.escape_wildcards,
                 )
             elif isinstance(filter_, SearchFilter):
                 result = self._filter_by_like(
@@ -487,6 +505,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
                     filter_.field_name,
                     value=filter_.value,
                     ignore_case=bool(filter_.ignore_case),
+                    escape_wildcards=filter_.escape_wildcards,
                 )
             elif not isinstance(filter_, ColumnElement):
                 msg = f"Unexpected filter: {filter_}"
@@ -858,7 +877,9 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
+        chunk_size: Optional[int] = None,
     ) -> List[ModelT]:
+        _ = chunk_size
         return [await self.upsert(item) for item in data]
 
     async def get_many_and_count(
