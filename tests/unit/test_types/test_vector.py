@@ -50,10 +50,12 @@ def test_vector_constructor_records_dim_and_storage_format() -> None:
     vec = Vector(1536)
     assert vec.dim == 1536
     assert vec.storage_format == "FLOAT32"
+    assert repr(vec) == "Vector(dim=1536, storage_format='FLOAT32')"
 
     vec64 = Vector(8, storage_format="FLOAT64")
     assert vec64.dim == 8
     assert vec64.storage_format == "FLOAT64"
+    assert repr(vec64) == "Vector(dim=8, storage_format='FLOAT64')"
 
 
 def test_vector_default_impl_is_json() -> None:
