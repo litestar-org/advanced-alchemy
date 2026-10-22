@@ -394,20 +394,20 @@ def _create_statement_filters(  # noqa: C901, PLR0915
     if config.get("created_at", False):
 
         def provide_created_filter(
-            before: Annotated[DTorNone, QueryParameter(name=alias_for("created_before"))] = None,
-            after: Annotated[DTorNone, QueryParameter(name=alias_for("created_after"))] = None,
+            created_at_before: Annotated[DTorNone, QueryParameter(name=alias_for("created_before"))] = None,
+            created_at_after: Annotated[DTorNone, QueryParameter(name=alias_for("created_after"))] = None,
         ) -> BeforeAfter:
-            return BeforeAfter("created_at", before, after)
+            return BeforeAfter("created_at", created_at_before, created_at_after)
 
         filters[dep_defaults.CREATED_FILTER_DEPENDENCY_KEY] = Provide(provide_created_filter, sync_to_thread=False)
 
     if config.get("updated_at", False):
 
         def provide_updated_filter(
-            before: Annotated[DTorNone, QueryParameter(name=alias_for("updated_before"))] = None,
-            after: Annotated[DTorNone, QueryParameter(name=alias_for("updated_after"))] = None,
+            updated_at_before: Annotated[DTorNone, QueryParameter(name=alias_for("updated_before"))] = None,
+            updated_at_after: Annotated[DTorNone, QueryParameter(name=alias_for("updated_after"))] = None,
         ) -> BeforeAfter:
-            return BeforeAfter("updated_at", before, after)
+            return BeforeAfter("updated_at", updated_at_before, updated_at_after)
 
         filters[dep_defaults.UPDATED_FILTER_DEPENDENCY_KEY] = Provide(provide_updated_filter, sync_to_thread=False)
 
@@ -663,11 +663,13 @@ def _create_filter_aggregate_function(
     dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
     providers: Optional[dict[str, Provide]] = None,
 ) -> Callable[..., list[FilterTypes]]:
-    """Build aggregate metadata from the registered dependencies themselves."""
+    """Build aggregate metadata from the registered dependencies themselves.
+
+    Preserves historical filter output order by placing pagination before ``updated_at``.
+    """
     if providers is None:
         providers = _create_statement_filters(config, dep_defaults, include_aggregate=False)
     keys = list(providers)
-    # Preserve the historical output order, including pagination before updated-at.
     pagination = dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY
     updated = dep_defaults.UPDATED_FILTER_DEPENDENCY_KEY
     if pagination in keys and updated in keys:

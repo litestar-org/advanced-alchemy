@@ -390,7 +390,7 @@ def test_created_at_filter() -> None:
     provider_func = deps["created_filter"].dependency
     before = datetime.now()
     later = datetime.now() + timedelta(days=1)
-    f = provider_func(before=before, after=later)
+    f = provider_func(created_at_before=before, created_at_after=later)
     assert isinstance(f, BeforeAfter)
     assert f.field_name == "created_at"
     assert f.before == before
@@ -407,9 +407,25 @@ def test_updated_at_filter() -> None:
 
     # Test the provider function
     provider_func = deps["updated_filter"].dependency
-    f = provider_func(before=datetime.now(), after=datetime.now())
+    f = provider_func(updated_at_before=datetime.now(), updated_at_after=datetime.now())
     assert isinstance(f, BeforeAfter)
     assert f.field_name == "updated_at"
+
+
+def test_date_filter_providers_have_distinct_python_parameter_names() -> None:
+    """The created/updated filter providers must not share `before`/`after` parameter names.
+
+    Tools that recursively inspect a route dependency graph key on Python parameter names, so
+    each provider needs distinct names even though the public query aliases
+    (`createdBefore`/`createdAfter`/`updatedBefore`/`updatedAfter`) already differ.
+    """
+    deps = _create_statement_filters(cast(FilterConfig, {"created_at": True, "updated_at": True}))
+
+    created_sig = inspect.signature(deps["created_filter"].dependency)
+    updated_sig = inspect.signature(deps["updated_filter"].dependency)
+
+    assert list(created_sig.parameters) == ["created_at_before", "created_at_after"]
+    assert list(updated_sig.parameters) == ["updated_at_before", "updated_at_after"]
 
 
 def test_search_filter() -> None:

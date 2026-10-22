@@ -4,6 +4,7 @@ import inspect
 import sys
 import typing
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, IntEnum
 from typing import Annotated, Any, Optional, Union, cast
@@ -11,15 +12,13 @@ from unittest.mock import patch
 from uuid import UUID
 
 import pytest
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Request, params
 from fastapi.testclient import TestClient
 from sqlalchemy import String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from advanced_alchemy.base import UUIDBase
-
-# Assuming necessary classes are importable from the new provider module
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig
 from advanced_alchemy.extensions.fastapi.providers import (
@@ -45,6 +44,7 @@ from advanced_alchemy.filters import (
 )
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
+from advanced_alchemy.utils.dependencies import filter_cache_key, resolve_filter_aliases
 from advanced_alchemy.utils.singleton import SingletonMeta
 
 if sys.version_info >= (3, 11):
@@ -116,8 +116,6 @@ def test_create_filter_dependencies_cache_hit() -> None:
 def test_create_filter_dependencies_cache_miss() -> None:
     """Test create_filter_dependencies with cache miss."""
     config = cast(FilterConfig, {"created_at": True})
-    from advanced_alchemy.utils.dependencies import filter_cache_key, resolve_filter_aliases
-
     cache_key = filter_cache_key(
         "advanced_alchemy.extensions.fastapi.providers", config, DEPENDENCY_DEFAULTS, resolve_filter_aliases(config)
     )
@@ -239,6 +237,28 @@ def test_create_filter_aggregate_function_fastapi() -> None:
     assert mock_created_filter not in result_some_none
     assert mock_search_filter not in result_some_none
     assert mock_order_by not in result_some_none
+
+
+def test_date_filter_dependencies_have_distinct_python_parameter_names() -> None:
+    """The created/updated sub-dependencies must not share `before`/`after` parameter names.
+
+    Tools that recursively inspect a route dependency graph key on Python parameter names, so
+    each provider needs distinct names even though the public query aliases
+    (`createdBefore`/`createdAfter`/`updatedBefore`/`updatedAfter`) already differ.
+    """
+    dependency = provide_filters({"created_at": True, "updated_at": True})
+
+    for key, expected in (
+        ("created_filter", ["created_at_before", "created_at_after"]),
+        ("updated_filter", ["updated_at_before", "updated_at_after"]),
+    ):
+        depends = next(
+            metadata
+            for metadata in typing.get_args(dependency.__annotations__[key])
+            if isinstance(metadata, params.Depends)
+        )
+        assert depends.dependency is not None
+        assert list(inspect.signature(depends.dependency).parameters) == expected
 
 
 # --- Main create_filter_dependencies Tests --- #
@@ -1023,8 +1043,6 @@ def test_custom_date_alias_validation_location(field: str, bound: str) -> None:
 
 
 def test_unhashable_falsy_generators_keep_distinct_cached_aliases() -> None:
-    from dataclasses import dataclass
-
     @dataclass
     class Generator:
         prefix: str

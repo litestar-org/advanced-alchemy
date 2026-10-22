@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Optional, cast
 from sqlalchemy import Connection, Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from advanced_alchemy._listeners import set_async_context
 from advanced_alchemy.config.common import GenericAlembicConfig, GenericSessionConfig, GenericSQLAlchemyConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
@@ -174,6 +173,5 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
             ...     session.execute(...)
         """
         session_maker = self.create_session_maker()
-        set_async_context(False)
         with session_maker() as session:
             yield session

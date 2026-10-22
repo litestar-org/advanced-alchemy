@@ -253,9 +253,6 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Returns:
             A session instance.
         """
-        # Import locally to avoid potential circular dependency issues at module level
-        from advanced_alchemy._listeners import set_async_context
-
         session = cast("Optional[Session]", get_aa_scope_state(scope, self.session_scope_key))
         if session is None:
             # Reset routing context for request-scoped isolation when creating a new session
@@ -264,7 +261,6 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             session = session_maker()
             set_aa_scope_state(scope, self.session_scope_key, session)
 
-        set_async_context(False)  # Set context before yielding
         return session
 
     @property

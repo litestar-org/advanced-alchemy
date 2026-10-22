@@ -1,7 +1,7 @@
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Optional, Union, cast
 
 if TYPE_CHECKING:
     from alembic.migration import MigrationContext
@@ -11,6 +11,20 @@ if TYPE_CHECKING:
     from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 
 __all__ = ("add_migration_commands", "get_alchemy_group")
+
+
+class _ConsoleProxy:
+    """Lazy Rich console proxy so registering CLI groups does not import ``rich``."""
+
+    def rule(self, *args: Any, **kwargs: Any) -> None:
+        from rich import get_console
+
+        get_console().rule(*args, **kwargs)
+
+    def print(self, *args: Any, **kwargs: Any) -> None:
+        from rich import get_console
+
+        get_console().print(*args, **kwargs)
 
 
 def get_alchemy_group() -> "Group":
@@ -81,11 +95,9 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     Returns:
         The database group with the migration commands added.
     """
-    from rich import get_console
-
     from advanced_alchemy.utils.cli_tools import click
 
-    console = get_console()
+    console = _ConsoleProxy()
 
     if database_group is None:
         database_group = get_alchemy_group()
