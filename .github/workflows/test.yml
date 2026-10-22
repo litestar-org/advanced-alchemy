@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Install Microsoft ODBC Drivers
-        run: sudo apt-get update && sudo ACCEPT_EULA=Y apt-get install msodbcsql18 -y
+        run: sudo apt-get update && sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
 
       - name: Free additional space
         run: |

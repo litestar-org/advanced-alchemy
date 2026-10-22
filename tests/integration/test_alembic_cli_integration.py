@@ -31,7 +31,6 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.xdist_group("alembic_cli_integration"),
 ]
 
 
@@ -43,6 +42,7 @@ pytestmark = [
             marks=[
                 pytest.mark.sqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -74,6 +74,7 @@ def sync_test_config(request: FixtureRequest) -> Generator[SQLAlchemySyncConfig,
             marks=[
                 pytest.mark.aiosqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(

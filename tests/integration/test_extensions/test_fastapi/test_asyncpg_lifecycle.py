@@ -15,6 +15,11 @@ from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemyAsync
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.xdist_group("postgres"),
+]
+
 
 class LifecycleWidget(UUIDBase):
     """Model for asyncpg lifecycle tests."""

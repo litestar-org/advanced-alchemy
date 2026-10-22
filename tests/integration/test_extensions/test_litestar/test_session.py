@@ -36,7 +36,6 @@ from tests.integration.helpers import cleanup_database, cleanup_database_async
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.xdist_group("litestar_session"),  # Isolate session tests to prevent interference
 ]
 
 
