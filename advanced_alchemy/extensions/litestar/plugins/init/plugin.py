@@ -87,7 +87,7 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPlugin, _slots_base.SlotsBase)
         config: Union[
             "SQLAlchemyAsyncConfig",
             "SQLAlchemySyncConfig",
-            "Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]",
+            "Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]",
         ],
     ) -> None:
         """Initialize ``SQLAlchemyPlugin``.
@@ -98,7 +98,7 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPlugin, _slots_base.SlotsBase)
         self._config = config
 
     @property
-    def config(self) -> "Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]":
+    def config(self) -> "Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]":
         return self._config if isinstance(self._config, Sequence) else [self._config]
 
     def on_cli_init(self, cli: "Group") -> None:

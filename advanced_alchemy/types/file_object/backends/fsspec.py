@@ -6,7 +6,7 @@ import datetime
 import os
 from collections.abc import AsyncIterable, AsyncIterator, Iterable, Sequence
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Any, Optional, Union, cast
+from typing import IO, TYPE_CHECKING, Any, cast
 
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.file_object._utils import get_mtime_equivalent, get_or_generate_etag
@@ -43,13 +43,13 @@ class FSSpecBackend(StorageBackend):
 
     driver = "fsspec"  # Changed backend identifier to driver
     default_expires_in = 3600
-    prefix: Optional[str]
+    prefix: str | None
 
     def __init__(
         self,
         key: str,
-        fs: "Union[AbstractFileSystem, AsyncFileSystem, str]",
-        prefix: Optional[str] = None,
+        fs: "AbstractFileSystem | AsyncFileSystem | str",
+        prefix: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize FSSpecBackend.
@@ -63,7 +63,7 @@ class FSSpecBackend(StorageBackend):
         self.fs = fsspec.filesystem(fs, **kwargs) if isinstance(fs, str) else fs  # pyright: ignore
         self.is_async = isinstance(self.fs, AsyncFileSystem)
         protocol = getattr(self.fs, "protocol", None)
-        protocol = cast("Optional[str]", protocol[0] if isinstance(protocol, (list, tuple)) else protocol)
+        protocol = cast("str | None", protocol[0] if isinstance(protocol, (list, tuple)) else protocol)
         self.protocol = protocol or "file"
         self.key = key
         self.prefix = prefix
@@ -75,7 +75,7 @@ class FSSpecBackend(StorageBackend):
             return _join_path(self.prefix, path_str)
         return path_str
 
-    def get_content(self, path: PathLike, *, options: Optional[dict[str, Any]] = None) -> bytes:
+    def get_content(self, path: PathLike, *, options: dict[str, Any] | None = None) -> bytes:
         """Return the bytes stored at the specified location.
 
         Args:
@@ -87,7 +87,7 @@ class FSSpecBackend(StorageBackend):
             return content.encode("utf-8")
         return cast("bytes", content)
 
-    async def get_content_async(self, path: PathLike, *, options: Optional[dict[str, Any]] = None) -> bytes:
+    async def get_content_async(self, path: PathLike, *, options: dict[str, Any] | None = None) -> bytes:
         """Return the bytes stored at the specified location asynchronously.
 
         Args:
@@ -107,9 +107,9 @@ class FSSpecBackend(StorageBackend):
     def save_object(
         self,
         file_object: FileObject,
-        data: Union[bytes, IO[bytes], Path, Iterable[bytes]],
+        data: bytes | IO[bytes] | Path | Iterable[bytes],
         *,
-        use_multipart: Optional[bool] = None,
+        use_multipart: bool | None = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
     ) -> FileObject:
@@ -138,7 +138,7 @@ class FSSpecBackend(StorageBackend):
             info.update(fs_info)  # pyright: ignore
         file_object.size = cast("int", info.get("size", file_object.size))  # pyright: ignore
         file_object.last_modified = (
-            get_mtime_equivalent(info) or datetime.datetime.now(tz=datetime.timezone.utc).timestamp()  # pyright: ignore
+            get_mtime_equivalent(info) or datetime.datetime.now(tz=datetime.UTC).timestamp()  # pyright: ignore
         )
         file_object.etag = get_or_generate_etag(file_object, info, file_object.last_modified)  # pyright: ignore
         # Merge backend metadata if available and different
@@ -151,9 +151,9 @@ class FSSpecBackend(StorageBackend):
     async def save_object_async(
         self,
         file_object: FileObject,
-        data: Union[bytes, IO[bytes], Path, Iterable[bytes], AsyncIterable[bytes]],
+        data: bytes | IO[bytes] | Path | Iterable[bytes] | AsyncIterable[bytes],
         *,
-        use_multipart: Optional[bool] = None,
+        use_multipart: bool | None = None,
         chunk_size: int = 5 * 1024 * 1024,
         max_concurrency: int = 12,
     ) -> FileObject:
@@ -192,7 +192,7 @@ class FSSpecBackend(StorageBackend):
             info.update(fs_info)  # pyright: ignore
         file_object.size = cast("int", info.get("size", file_object.size))  # pyright: ignore
         file_object.last_modified = (
-            get_mtime_equivalent(info) or datetime.datetime.now(tz=datetime.timezone.utc).timestamp()  # pyright: ignore
+            get_mtime_equivalent(info) or datetime.datetime.now(tz=datetime.UTC).timestamp()  # pyright: ignore
         )
         file_object.etag = get_or_generate_etag(file_object, info, file_object.last_modified)  # pyright: ignore
         # Merge backend metadata if available and different
@@ -202,7 +202,7 @@ class FSSpecBackend(StorageBackend):
 
         return file_object
 
-    def delete_object(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
+    def delete_object(self, paths: PathLike | Sequence[PathLike]) -> None:
         """Delete the object(s) at the specified location(s).
 
         Args:
@@ -215,7 +215,7 @@ class FSSpecBackend(StorageBackend):
 
         self.fs.rm(path_list, recursive=False)  # pyright: ignore
 
-    async def delete_object_async(self, paths: Union[PathLike, Sequence[PathLike]]) -> None:
+    async def delete_object_async(self, paths: PathLike | Sequence[PathLike]) -> None:
         """Delete the object(s) at the specified location(s) asynchronously.
 
         Args:
@@ -235,11 +235,11 @@ class FSSpecBackend(StorageBackend):
 
     def sign(
         self,
-        paths: Union[PathLike, Sequence[PathLike]],
+        paths: PathLike | Sequence[PathLike],
         *,
-        expires_in: Optional[int] = None,
+        expires_in: int | None = None,
         for_upload: bool = False,  # Often not directly supported by generic fsspec sign
-    ) -> Union[str, list[str]]:
+    ) -> str | list[str]:
         """Create signed URLs for accessing files.
 
         Note: Upload URL generation (`for_upload=True`) is generally not supported
@@ -280,11 +280,11 @@ class FSSpecBackend(StorageBackend):
 
     async def sign_async(
         self,
-        paths: Union[PathLike, Sequence[PathLike]],
+        paths: PathLike | Sequence[PathLike],
         *,
-        expires_in: Optional[int] = None,
+        expires_in: int | None = None,
         for_upload: bool = False,
-    ) -> Union[str, list[str]]:
+    ) -> str | list[str]:
         """Create signed URLs for accessing files asynchronously.
 
         Note: Upload URL generation (`for_upload=True`) is generally not supported

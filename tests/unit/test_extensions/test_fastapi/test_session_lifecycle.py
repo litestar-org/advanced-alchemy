@@ -4,7 +4,6 @@ This module tests the fix for GitHub issue #647 where asyncpg connections
 were not properly returned to the pool when using provide_service().
 """
 
-import sys
 from typing import Annotated, Literal
 from unittest.mock import AsyncMock, Mock
 
@@ -21,14 +20,6 @@ from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemyAsync
 from advanced_alchemy.extensions.fastapi.providers import _should_commit_for_status
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
-
-pytestmark = pytest.mark.xfail(
-    condition=sys.version_info < (3, 9),
-    reason=(
-        "Certain versions of Starlette and FastAPI are stated to still support 3.8, "
-        "but there are documented incompatibilities."
-    ),
-)
 
 CommitMode = Literal["manual", "autocommit", "autocommit_include_redirect"]
 

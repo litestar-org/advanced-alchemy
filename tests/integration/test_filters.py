@@ -1,5 +1,5 @@
 from collections.abc import AsyncGenerator, Generator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal, Optional
 
 import pytest
@@ -161,19 +161,19 @@ def setup_movie_data(session: Session, movie_model: type[DeclarativeBase]) -> No
             type(
                 "Movie",
                 (),
-                {"title": "The Matrix", "release_date": datetime(1999, 3, 31, tzinfo=timezone.utc), "genre": "Action"},
+                {"title": "The Matrix", "release_date": datetime(1999, 3, 31, tzinfo=UTC), "genre": "Action"},
             ),
             type(
                 "Movie",
                 (),
-                {"title": "The Hangover", "release_date": datetime(2009, 6, 1, tzinfo=timezone.utc), "genre": "Comedy"},
+                {"title": "The Hangover", "release_date": datetime(2009, 6, 1, tzinfo=UTC), "genre": "Comedy"},
             ),
             type(
                 "Movie",
                 (),
                 {
                     "title": "Shawshank Redemption",
-                    "release_date": datetime(1994, 10, 14, tzinfo=timezone.utc),
+                    "release_date": datetime(1994, 10, 14, tzinfo=UTC),
                     "genre": "Drama",
                 },
             ),
@@ -188,21 +188,21 @@ def setup_movie_data(session: Session, movie_model: type[DeclarativeBase]) -> No
     movie_data = [
         {
             "title": "The Matrix",
-            "release_date": datetime(1999, 3, 31, tzinfo=timezone.utc),
+            "release_date": datetime(1999, 3, 31, tzinfo=UTC),
             "genre": "Action",
             "director": "Wachowskis",
             "is_featured": True,
         },
         {
             "title": "The Hangover",
-            "release_date": datetime(2009, 6, 1, tzinfo=timezone.utc),
+            "release_date": datetime(2009, 6, 1, tzinfo=UTC),
             "genre": "Comedy",
             "director": None,  # NULL director for testing NullFilter
             "is_featured": False,
         },
         {
             "title": "Shawshank Redemption",
-            "release_date": datetime(1994, 10, 14, tzinfo=timezone.utc),
+            "release_date": datetime(1994, 10, 14, tzinfo=UTC),
             "genre": "Drama",
             "director": "Frank Darabont",
             "is_featured": True,
@@ -237,9 +237,7 @@ def test_before_after_filter(session: Session, movie_model_sync: type[Declarativ
         session.commit()
     setup_movie_data(session, Movie)
 
-    before_after_filter = BeforeAfter(
-        field_name="release_date", before=datetime(1999, 3, 31, tzinfo=timezone.utc), after=None
-    )
+    before_after_filter = BeforeAfter(field_name="release_date", before=datetime(1999, 3, 31, tzinfo=UTC), after=None)
     statement = before_after_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert len(results) == 1
@@ -259,7 +257,7 @@ def test_on_before_after_filter(session: Session, movie_model_sync: type[Declara
     setup_movie_data(session, Movie)
 
     on_before_after_filter = OnBeforeAfter(
-        field_name="release_date", on_or_before=None, on_or_after=datetime(1999, 3, 31, tzinfo=timezone.utc)
+        field_name="release_date", on_or_before=None, on_or_after=datetime(1999, 3, 31, tzinfo=UTC)
     )
     statement = on_before_after_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
@@ -911,7 +909,7 @@ def test_search_filter_matches_literal_characters(
     literal_title = f"prefix {value} suffix"
     other_title = "unrelated title"
     session.add_all(
-        Movie(title=title, release_date=datetime(2020, 1, 1, tzinfo=timezone.utc), genre="Drama")
+        Movie(title=title, release_date=datetime(2020, 1, 1, tzinfo=UTC), genre="Drama")
         for title in (literal_title, other_title)
     )
     session.flush()
@@ -940,7 +938,7 @@ def test_filter_group_logical_operators(session: Session, movie_model_sync: type
         session.commit()
     setup_movie_data(session, Movie)
     # Test AND operator
-    before_2000 = BeforeAfter(field_name="release_date", before=datetime(2000, 1, 1, tzinfo=timezone.utc), after=None)
+    before_2000 = BeforeAfter(field_name="release_date", before=datetime(2000, 1, 1, tzinfo=UTC), after=None)
     has_the_in_title = SearchFilter(field_name="title", value="The", ignore_case=True)
 
     # Should match only "The Matrix" (before 2000 AND has "The" in title)
@@ -988,7 +986,7 @@ def test_multi_filter_basic(session: Session, movie_model_sync: type[Declarative
                 {
                     "type": "before_after",
                     "field_name": "release_date",
-                    "before": datetime(2000, 1, 1, tzinfo=timezone.utc),
+                    "before": datetime(2000, 1, 1, tzinfo=UTC),
                     "after": None,
                 },
                 {"type": "search", "field_name": "title", "value": "The", "ignore_case": True},
@@ -1008,7 +1006,7 @@ def test_multi_filter_basic(session: Session, movie_model_sync: type[Declarative
                 {
                     "type": "before_after",
                     "field_name": "release_date",
-                    "before": datetime(2000, 1, 1, tzinfo=timezone.utc),
+                    "before": datetime(2000, 1, 1, tzinfo=UTC),
                     "after": None,
                 },
                 {"type": "search", "field_name": "genre", "value": "Drama", "ignore_case": True},
@@ -1046,7 +1044,7 @@ def test_multi_filter_nested(session: Session, movie_model_sync: type[Declarativ
                         {
                             "type": "before_after",
                             "field_name": "release_date",
-                            "before": datetime(2000, 1, 1, tzinfo=timezone.utc),
+                            "before": datetime(2000, 1, 1, tzinfo=UTC),
                             "after": None,
                         },
                         {"type": "search", "field_name": "title", "value": "The", "ignore_case": True},
@@ -1235,7 +1233,7 @@ def test_multi_filter_complex_nested(session: Session, movie_model_sync: type[De
                 {
                     "type": "before_after",
                     "field_name": "release_date",
-                    "before": datetime(2000, 1, 1, tzinfo=timezone.utc),
+                    "before": datetime(2000, 1, 1, tzinfo=UTC),
                     "after": None,
                 },
                 # Second condition: Nested OR group
@@ -1283,14 +1281,14 @@ def test_multi_filter_all_filter_types(session: Session, movie_model_sync: type[
                 {
                     "type": "before_after",
                     "field_name": "release_date",
-                    "before": datetime(2000, 1, 1, tzinfo=timezone.utc),
+                    "before": datetime(2000, 1, 1, tzinfo=UTC),
                     "after": None,
                 },
                 # OnBeforeAfter filter
                 {
                     "type": "on_before_after",
                     "field_name": "release_date",
-                    "on_or_before": datetime(2009, 6, 1, tzinfo=timezone.utc),
+                    "on_or_before": datetime(2009, 6, 1, tzinfo=UTC),
                     "on_or_after": None,
                 },
                 # CollectionFilter
@@ -1389,36 +1387,28 @@ def test_comparison_filter(session: Session, movie_model_sync: type[DeclarativeB
     assert {r.title for r in results} == {"The Hangover", "Shawshank Redemption"}
 
     # Test greater than operator
-    gt_filter = ComparisonFilter(
-        field_name="release_date", operator="gt", value=datetime(2000, 1, 1, tzinfo=timezone.utc)
-    )
+    gt_filter = ComparisonFilter(field_name="release_date", operator="gt", value=datetime(2000, 1, 1, tzinfo=UTC))
     statement = gt_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert len(results) == 1
     assert results[0].title == "The Hangover"
 
     # Test less than operator
-    lt_filter = ComparisonFilter(
-        field_name="release_date", operator="lt", value=datetime(2000, 1, 1, tzinfo=timezone.utc)
-    )
+    lt_filter = ComparisonFilter(field_name="release_date", operator="lt", value=datetime(2000, 1, 1, tzinfo=UTC))
     statement = lt_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert len(results) == 2
     assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
     # Test greater than or equal operator
-    ge_filter = ComparisonFilter(
-        field_name="release_date", operator="ge", value=datetime(1999, 3, 31, tzinfo=timezone.utc)
-    )
+    ge_filter = ComparisonFilter(field_name="release_date", operator="ge", value=datetime(1999, 3, 31, tzinfo=UTC))
     statement = ge_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert len(results) == 2
     assert {r.title for r in results} == {"The Matrix", "The Hangover"}
 
     # Test less than or equal operator
-    le_filter = ComparisonFilter(
-        field_name="release_date", operator="le", value=datetime(1999, 3, 31, tzinfo=timezone.utc)
-    )
+    le_filter = ComparisonFilter(field_name="release_date", operator="le", value=datetime(1999, 3, 31, tzinfo=UTC))
     statement = le_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert len(results) == 2

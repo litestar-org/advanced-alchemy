@@ -22,7 +22,7 @@ if TYPE_CHECKING:
         NanoIDBase,
         NanoIDBaseT,
         SQLQuery,
-        TableArgsType,
+        TableArgsType,  # pyright: ignore[reportPrivateUsage]
         UUIDAuditBase,
         UUIDBase,
         UUIDBaseT,

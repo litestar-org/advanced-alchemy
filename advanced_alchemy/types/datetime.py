@@ -1,5 +1,5 @@
 import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import DateTime
 from sqlalchemy.dialects import mysql, oracle
@@ -18,7 +18,7 @@ class DateTimeUTC(TypeDecorator[datetime.datetime]):
     impl = DateTime(timezone=True)
     cache_ok = True
 
-    def __init__(self, *args: Any, timezone: bool = True, fsp: int = 6, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, timezone: bool = True, fsp: int | None = None, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.timezone = timezone
         self.fsp = fsp
@@ -28,23 +28,24 @@ class DateTimeUTC(TypeDecorator[datetime.datetime]):
         return datetime.datetime
 
     def load_dialect_impl(self, dialect: Dialect) -> TypeEngine[Any]:
-        if dialect.name in {"mysql", "mariadb"}:
-            return dialect.type_descriptor(mysql.DATETIME(timezone=self.timezone, fsp=self.fsp))
-        if dialect.name == "oracle":
-            return dialect.type_descriptor(oracle.TIMESTAMP(timezone=self.timezone))
+        if self.fsp is not None:
+            if dialect.name in {"mysql", "mariadb"}:
+                return dialect.type_descriptor(mysql.DATETIME(timezone=self.timezone, fsp=self.fsp))
+            if dialect.name == "oracle":
+                return dialect.type_descriptor(oracle.TIMESTAMP(timezone=self.timezone))
         return dialect.type_descriptor(DateTime(timezone=self.timezone))
 
-    def process_bind_param(self, value: Optional[datetime.datetime], dialect: Dialect) -> Optional[datetime.datetime]:
+    def process_bind_param(self, value: datetime.datetime | None, dialect: Dialect) -> datetime.datetime | None:
         if value is None:
             return value
         if not value.tzinfo:
             msg = "tzinfo is required"
             raise TypeError(msg)
-        return value.astimezone(datetime.timezone.utc)
+        return value.astimezone(datetime.UTC)
 
-    def process_result_value(self, value: Optional[datetime.datetime], dialect: Dialect) -> Optional[datetime.datetime]:
+    def process_result_value(self, value: datetime.datetime | None, dialect: Dialect) -> datetime.datetime | None:
         if value is None:
             return value
         if value.tzinfo is None:
-            return value.replace(tzinfo=datetime.timezone.utc)
+            return value.replace(tzinfo=datetime.UTC)
         return value

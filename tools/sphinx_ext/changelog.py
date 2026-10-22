@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from functools import partial
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
 from docutils import nodes
 from docutils.parsers.rst import directives
@@ -28,7 +28,7 @@ class ChangeDirective(SphinxDirective):
     required_arguments = 1
     has_content = True
     final_argument_whitespace = True
-    option_spec: ClassVar[Optional[dict[str, Callable[[str], Any]]]] = {
+    option_spec: ClassVar[dict[str, Callable[[str], Any]] | None] = {
         "type": partial(directives.choice, values=("feature", "bugfix", "misc")),
         "breaking": directives.flag,
         "issue": directives.unchanged,
@@ -171,7 +171,7 @@ class ChangelogDirective(SphinxDirective):
         return [section_target, changelog_node]
 
 
-def setup(app: Sphinx) -> dict[str, Union[str, bool]]:
+def setup(app: Sphinx) -> dict[str, str | bool]:
     app.add_directive("changelog", ChangelogDirective)
     app.add_directive("change", ChangeDirective)
 

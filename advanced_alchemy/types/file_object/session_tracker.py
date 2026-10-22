@@ -3,13 +3,7 @@
 
 import asyncio
 import logging
-import sys
-from typing import TYPE_CHECKING, Any, Union
-
-if sys.version_info >= (3, 11):
-    from builtins import ExceptionGroup
-else:
-    from exceptiongroup import ExceptionGroup  # type: ignore[import-not-found,unused-ignore]
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -38,14 +32,14 @@ class FileObjectSessionTracker:
         self.raise_on_error = raise_on_error
         # Stores objects that have pending data to be saved on commit.
         # Maps FileObject -> data source (bytes or Path)
-        self.pending_saves: "dict[FileObject, Union[bytes, Path]]" = {}
+        self.pending_saves: "dict[FileObject, bytes | Path]" = {}
         # Stores objects that should be deleted from storage on commit.
         self.pending_deletes: "set[FileObject]" = set()
         # Stores objects that were successfully saved within this transaction,
         # needed for rollback cleanup.
         self._saved_in_transaction: "set[FileObject]" = set()
 
-    def add_pending_save(self, obj: "FileObject", data: "Union[bytes, Path]") -> None:
+    def add_pending_save(self, obj: "FileObject", data: "bytes | Path") -> None:
         """Mark a FileObject for saving."""
         self.pending_saves[obj] = data
         # If this object was previously marked for deletion, unmark it.
@@ -87,7 +81,7 @@ class FileObjectSessionTracker:
     async def commit_async(self) -> None:
         """Process pending saves and deletes after a successful commit."""
 
-        save_items: "list[tuple[FileObject, Union[bytes, Path]]]" = list(self.pending_saves.items())
+        save_items: "list[tuple[FileObject, bytes | Path]]" = list(self.pending_saves.items())
         delete_items: "list[FileObject]" = list(self.pending_deletes)
 
         save_results: "list[Any]" = await asyncio.gather(
@@ -101,7 +95,7 @@ class FileObjectSessionTracker:
 
         errors: list[Exception] = []
 
-        for (obj, _data), result in zip(save_items, save_results):
+        for (obj, _data), result in zip(save_items, save_results, strict=False):
             if isinstance(result, BaseException):
                 if isinstance(result, Exception):
                     if self.raise_on_error:
@@ -111,7 +105,6 @@ class FileObjectSessionTracker:
                             exc_info=(type(result), result, result.__traceback__),
                         )
                     else:
-                        # Legacy behavior: warning level
                         logger.warning(
                             "error saving file for object %s",
                             obj,
@@ -119,12 +112,11 @@ class FileObjectSessionTracker:
                         )
                     errors.append(result)
                 else:
-                    # BaseException (e.g., CancelledError) - always raise
                     raise result
             else:
                 self._saved_in_transaction.add(obj)
 
-        for obj_to_delete, result in zip(delete_items, delete_results):
+        for obj_to_delete, result in zip(delete_items, delete_results, strict=False):
             if isinstance(result, FileNotFoundError):
                 continue
             if isinstance(result, BaseException):
@@ -160,7 +152,6 @@ class FileObjectSessionTracker:
                 try:
                     obj.delete()
                 except FileNotFoundError:
-                    # Ignore if the file is already gone (shouldn't happen often here)
                     pass
                 except Exception:
                     logger.exception("error deleting file during rollback %s", obj.path or obj)
@@ -180,7 +171,7 @@ class FileObjectSessionTracker:
         )
 
         errors: list[Exception] = []
-        for obj, result in zip(objects_to_delete, delete_results):
+        for obj, result in zip(objects_to_delete, delete_results, strict=False):
             if isinstance(result, FileNotFoundError):
                 continue
             if isinstance(result, BaseException):

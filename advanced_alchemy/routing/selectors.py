@@ -8,7 +8,7 @@ import secrets
 import threading
 from abc import ABC, abstractmethod
 from itertools import cycle
-from typing import TYPE_CHECKING, Generic, TypeVar, Union
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -24,7 +24,7 @@ __all__ = (
 )
 
 
-EngineT = TypeVar("EngineT", bound="Union[Engine, AsyncEngine]")
+EngineT = TypeVar("EngineT", bound="Engine | AsyncEngine")
 
 
 class EngineSelector(ABC, Generic[EngineT]):

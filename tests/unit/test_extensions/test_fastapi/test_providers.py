@@ -1,12 +1,12 @@
 """Tests for the FastAPI DI module."""
 
 import inspect
-import sys
+import types
 import typing
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum, IntEnum
+from enum import IntEnum, StrEnum
 from typing import Annotated, Any, Optional, Union, cast
 from unittest.mock import patch
 from uuid import UUID
@@ -46,13 +46,6 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.utils.dependencies import filter_cache_key, resolve_filter_aliases
 from advanced_alchemy.utils.singleton import SingletonMeta
-
-if sys.version_info >= (3, 11):
-    from enum import StrEnum
-else:
-
-    class StrEnum(str, Enum):  # type: ignore[no-redef]
-        """Compatibility shim for testing string enum behavior on Python < 3.11."""
 
 
 class StatusChoice(StrEnum):
@@ -175,27 +168,21 @@ def test_create_filter_aggregate_function_fastapi() -> None:
     assert sig.return_annotation == list[FilterTypes]
 
     for param_name, param in sig.parameters.items():
-        # Check annotation (Optional[...] for filters that can return None)
         if param_name in (
             DEPENDENCY_DEFAULTS.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY,
             DEPENDENCY_DEFAULTS.ORDER_BY_FILTER_DEPENDENCY_KEY,
         ):
-            # These parameters should not be Optional
             assert param.annotation is not None
             assert typing.get_origin(param.annotation) is Annotated
             inner_type = param.annotation.__args__[0]
             assert not (
-                hasattr(inner_type, "__origin__")
-                and inner_type.__origin__ is Union
-                and type(None) in inner_type.__args__
+                typing.get_origin(inner_type) in (Union, types.UnionType) and type(None) in typing.get_args(inner_type)
             )
         else:
-            # Other parameters should be Optional (Union[..., None])
             assert typing.get_origin(param.annotation) is Annotated
             inner_type = param.annotation.__args__[0]
-            assert hasattr(inner_type, "__origin__")
-            assert inner_type.__origin__ is Union
-            assert type(None) in inner_type.__args__
+            assert typing.get_origin(inner_type) in (Union, types.UnionType)
+            assert type(None) in typing.get_args(inner_type)
 
     # Directly call the aggregate function with mock filter objects
     mock_id_filter = CollectionFilter(field_name="id", values=["1"])
@@ -851,7 +838,6 @@ class SimpleDishkaService(SQLAlchemyAsyncRepositoryService[SimpleDishkaTable]):
     repository_type = Repo
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="Dishka integration requires Python 3.10+")
 async def test_provide_filters_with_dishka_integration(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test provide_filters integration with FastAPI and Dishka."""
     from dishka import (  # type: ignore # pyright: ignore

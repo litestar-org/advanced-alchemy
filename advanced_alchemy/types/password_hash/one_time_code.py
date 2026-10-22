@@ -11,8 +11,8 @@ caller commits it.
 
 import secrets
 import string
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Optional, Union
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.types import TypeDecorator
 
@@ -26,7 +26,7 @@ __all__ = ("HashedOneTimeCode", "OneTimeCode", "generate_one_time_code")
 
 
 def _now() -> float:
-    return datetime.now(timezone.utc).timestamp()
+    return datetime.now(UTC).timestamp()
 
 
 def generate_one_time_code(length: int = 6, *, digits_only: bool = True) -> str:
@@ -58,10 +58,10 @@ class HashedOneTimeCode:
         hash_string: str,
         backend: "HashingBackend",
         *,
-        expires_at: "Optional[float]" = None,
-        used_at: "Optional[float]" = None,
+        expires_at: "float | None" = None,
+        used_at: "float | None" = None,
         attempts: int = 0,
-        max_attempts: "Optional[int]" = None,
+        max_attempts: "int | None" = None,
     ) -> None:
         """Initialize the wrapper.
 
@@ -100,7 +100,7 @@ class HashedOneTimeCode:
         """True if the code can still be redeemed (not expired, used, or locked)."""
         return not (self.is_expired or self.is_used or self.is_locked)
 
-    def verify(self, code: "Union[str, bytes]") -> bool:
+    def verify(self, code: "str | bytes") -> bool:
         """Return True only if ``code`` matches and the code is still redeemable.
 
         This does not mutate state. Use :meth:`redeem` to also produce the updated value to
@@ -116,7 +116,7 @@ class HashedOneTimeCode:
             return False
         return self._backend.verify(code, self.hash_string)
 
-    def redeem(self, code: "Union[str, bytes]") -> "tuple[bool, HashedOneTimeCode]":
+    def redeem(self, code: "str | bytes") -> "tuple[bool, HashedOneTimeCode]":
         """Verify ``code`` and return the updated state to persist.
 
         On success the returned value is marked used (single-use); on a redeemable failure the
@@ -173,8 +173,8 @@ class OneTimeCode(TypeDecorator[Any]):
     def __init__(
         self,
         backend: "HashingBackend",
-        ttl_seconds: "Optional[int]" = None,
-        max_attempts: "Optional[int]" = 3,
+        ttl_seconds: "int | None" = None,
+        max_attempts: "int | None" = 3,
         **kwargs: Any,
     ) -> None:
         """Initialize the OneTimeCode type.
@@ -206,7 +206,7 @@ class OneTimeCode(TypeDecorator[Any]):
         """Returns the Python type for this type decorator."""
         return dict
 
-    def process_bind_param(self, value: Any, dialect: Any) -> "Optional[dict[str, Any]]":
+    def process_bind_param(self, value: Any, dialect: Any) -> "dict[str, Any] | None":
         """Hash a new code or serialize an updated wrapper to the stored JSON shape.
 
         Args:
@@ -233,7 +233,7 @@ class OneTimeCode(TypeDecorator[Any]):
             "attempts": 0,
         }
 
-    def process_result_value(self, value: Any, dialect: Any) -> "Optional[HashedOneTimeCode]":
+    def process_result_value(self, value: Any, dialect: Any) -> "HashedOneTimeCode | None":
         """Wrap the stored JSON state in a :class:`HashedOneTimeCode`.
 
         Args:

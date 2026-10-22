@@ -1,7 +1,7 @@
 """Utility functions for file object types."""
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 from zlib import adler32
 
 if TYPE_CHECKING:
@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.types.file_object.file import FileObject
 
 
-def get_mtime_equivalent(info: dict[str, Any]) -> Optional[float]:
+def get_mtime_equivalent(info: dict[str, Any]) -> float | None:
     """Return standardized mtime from different implementations.
 
     Args:
@@ -36,13 +36,13 @@ def get_mtime_equivalent(info: dict[str, Any]) -> Optional[float]:
         return mtime.timestamp()
     if isinstance(mtime, str):
         try:
-            return datetime.fromisoformat(mtime.replace("Z", "+00:00")).timestamp()
+            return datetime.fromisoformat(mtime).timestamp()
         except ValueError:
             pass
     return None
 
 
-def get_or_generate_etag(file_object: "FileObject", info: dict[str, Any], modified_time: Optional[float] = None) -> str:
+def get_or_generate_etag(file_object: "FileObject", info: dict[str, Any], modified_time: float | None = None) -> str:
     """Return standardized etag from different implementations.
 
     Args:
@@ -67,7 +67,7 @@ def get_or_generate_etag(file_object: "FileObject", info: dict[str, Any], modifi
     return create_etag_for_file(file_object.path, modified_time, info.get("size", file_object.size))  # type: ignore[arg-type]
 
 
-def create_etag_for_file(path: "PathLike", modified_time: Optional[float], file_size: int) -> str:
+def create_etag_for_file(path: "PathLike", modified_time: float | None, file_size: int) -> str:
     """Create an etag.
 
     Notes:

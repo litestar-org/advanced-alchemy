@@ -7,7 +7,7 @@ write operations to the primary database.
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Optional, Union
+from typing import Union
 
 __all__ = (
     "ReplicaConfig",
@@ -66,17 +66,17 @@ class RoutingConfig:
     to different engine groups (e.g., writer, reader, analytics).
     """
 
-    primary_connection_string: Optional[str] = None
+    primary_connection_string: str | None = None
     """Legacy: Connection string for the primary (write) database.
     Mapped to ``engines[default_group]``.
     """
 
-    read_replicas: list[Union[str, EngineConfig]] = field(default_factory=_default_read_replicas)
+    read_replicas: list[str | EngineConfig] = field(default_factory=_default_read_replicas)
     """Legacy: Read replica connection strings or configs.
     Mapped to ``engines[read_group]``.
     """
 
-    engines: dict[str, list[Union[str, EngineConfig]]] = field(default_factory=_default_engines)
+    engines: dict[str, list[str | EngineConfig]] = field(default_factory=_default_engines)
     """Dictionary mapping group names to lists of engine configs.
 
     Example:

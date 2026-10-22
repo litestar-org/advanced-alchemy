@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import Identity, Sequence
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
@@ -6,7 +6,7 @@ from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 from advanced_alchemy.types import BigIntIdentity
 
 
-def _get_schema(cls: "BigIntPrimaryKey") -> Optional[str]:  # pragma: nocover
+def _get_schema(cls: "BigIntPrimaryKey") -> str | None:  # pragma: nocover
     """Get the schema for the class if set via __table_args__, __table__, or __table_kwargs__."""
     table_args = getattr(cls, "__table_args__", None)
     if isinstance(table_args, dict) and "schema" in table_args:

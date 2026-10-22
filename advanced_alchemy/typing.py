@@ -1,12 +1,9 @@
-# pyright: reportUnsupportedDunderAll=false
 """Public type shims for optional dependencies.
 
 Re-exports foundational stub types so that internal and external code
 can ``from advanced_alchemy.typing import SQLModelBase`` (or any other
 shim) without reaching into private modules.
 """
-
-from typing import Any
 
 from advanced_alchemy._typing import (
     ARGON2_INSTALLED,
@@ -48,7 +45,7 @@ from advanced_alchemy._typing import (
     convert,
 )
 
-__all__ = (  # noqa: F822
+__all__ = (
     "ARGON2_INSTALLED",
     "ATTRS_INSTALLED",
     "CATTRS_INSTALLED",
@@ -70,7 +67,6 @@ __all__ = (  # noqa: F822
     "DTOData",
     "DTODataLike",
     "DataclassProtocol",
-    "DictProtocol",
     "FailFast",
     "SQLModelBase",
     "SQLModelBaseLike",
@@ -88,21 +84,3 @@ __all__ = (  # noqa: F822
     "cattrs_unstructure",
     "convert",
 )
-
-
-def __getattr__(name: str) -> Any:
-    if name != "DictProtocol":
-        msg = f"module {__name__!r} has no attribute {name!r}"
-        raise AttributeError(msg)
-
-    from advanced_alchemy._typing import DictProtocol
-    from advanced_alchemy.utils.deprecation import warn_deprecation
-
-    warn_deprecation(
-        version="1.11.0",
-        removal_in="2.0.0",
-        deprecated_name=f"{__name__}.DictProtocol",
-        kind="import",
-        alternative="advanced_alchemy.utils.serialization.has_dict_attribute",
-    )
-    return DictProtocol

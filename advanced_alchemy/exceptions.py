@@ -1,7 +1,7 @@
 import re
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from typing import Any, Callable, Final, Optional, TypedDict, Union, cast
+from typing import Any, Final, TypedDict, cast
 
 from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
 from sqlalchemy.exc import InvalidRequestError as SQLAlchemyInvalidRequestError
@@ -222,7 +222,7 @@ CHECK_CONSTRAINT_REGEXES: Final[dict[str, list[re.Pattern[str]]]] = {
 _MSSQL_CONSTRAINT_VIOLATION_CODE: Final[int] = 547
 
 
-def _get_driver_code(orig: BaseException, dialect_name: Optional[str]) -> Optional[str]:
+def _get_driver_code(orig: BaseException, dialect_name: str | None) -> str | None:
     """Classify driver-specific integer or string error codes."""
     if not orig.args:
         return None
@@ -248,7 +248,7 @@ def _get_driver_code(orig: BaseException, dialect_name: Optional[str]) -> Option
     return None
 
 
-def _get_error_key_by_code(orig: Optional[BaseException], dialect_name: Optional[str] = None) -> Optional[str]:
+def _get_error_key_by_code(orig: BaseException | None, dialect_name: str | None = None) -> str | None:
     """Classify a DBAPI integrity error by driver error code.
 
     Args:
@@ -309,7 +309,7 @@ class MissingDependencyError(AdvancedAlchemyError, ImportError):
         install_package: Optional alternative package name to install.
     """
 
-    def __init__(self, package: str, install_package: Optional[str] = None) -> None:
+    def __init__(self, package: str, install_package: str | None = None) -> None:
         super().__init__(
             f"Package {package!r} is not installed but required. You can install it by running "
             f"'pip install advanced_alchemy[{install_package or package}]' to install advanced_alchemy with the required extra "
@@ -409,19 +409,19 @@ class InvalidRequestError(RepositoryError):
 
 
 class ErrorMessages(TypedDict, total=False):
-    duplicate_key: Union[str, Callable[[Exception], str]]
-    integrity: Union[str, Callable[[Exception], str]]
-    foreign_key: Union[str, Callable[[Exception], str]]
-    multiple_rows: Union[str, Callable[[Exception], str]]
-    check_constraint: Union[str, Callable[[Exception], str]]
-    other: Union[str, Callable[[Exception], str]]
-    not_found: Union[str, Callable[[Exception], str]]
+    duplicate_key: str | Callable[[Exception], str]
+    integrity: str | Callable[[Exception], str]
+    foreign_key: str | Callable[[Exception], str]
+    multiple_rows: str | Callable[[Exception], str]
+    check_constraint: str | Callable[[Exception], str]
+    other: str | Callable[[Exception], str]
+    not_found: str | Callable[[Exception], str]
 
 
-def _get_error_message(error_messages: Optional[ErrorMessages], key: str, exc: Exception) -> str:
+def _get_error_message(error_messages: ErrorMessages | None, key: str, exc: Exception) -> str:
     if error_messages is None:
         return f"{key} error: {exc}"
-    template: Union[str, Callable[[Exception], str]] = error_messages.get(key, f"{key} error: {exc}")  # type: ignore[assignment]
+    template: str | Callable[[Exception], str] = error_messages.get(key, f"{key} error: {exc}")  # type: ignore[assignment]
     if callable(template):  # pyright: ignore[reportUnknownArgumentType]
         template = template(exc)  # pyright: ignore[reportUnknownVariableType]
     return template  # pyright: ignore[reportUnknownVariableType]
@@ -429,8 +429,8 @@ def _get_error_message(error_messages: Optional[ErrorMessages], key: str, exc: E
 
 @contextmanager
 def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
-    error_messages: Optional[ErrorMessages] = None,
-    dialect_name: Optional[str] = None,
+    error_messages: ErrorMessages | None = None,
+    dialect_name: str | None = None,
     wrap_exceptions: bool = True,
 ) -> Generator[None, None, None]:
     """Do something within context to raise a ``RepositoryError`` chained

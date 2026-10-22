@@ -69,13 +69,13 @@ if TYPE_CHECKING:
     from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
     from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
 
-DTorNone = Optional[datetime.datetime]
-StringOrNone = Optional[str]
-UuidOrNone = Optional[UUID]
-IntOrNone = Optional[int]
-BooleanOrNone = Optional[bool]
+DTorNone = datetime.datetime | None
+StringOrNone = str | None
+UuidOrNone = UUID | None
+IntOrNone = int | None
+BooleanOrNone = bool | None
 SortOrder = Literal["asc", "desc"]
-SortOrderOrNone = Optional[SortOrder]
+SortOrderOrNone = SortOrder | None
 AsyncServiceT_co = TypeVar("AsyncServiceT_co", bound=SQLAlchemyAsyncRepositoryService[Any, Any], covariant=True)
 SyncServiceT_co = TypeVar("SyncServiceT_co", bound=SQLAlchemySyncRepositoryService[Any, Any], covariant=True)
 
@@ -125,13 +125,13 @@ dep_cache = DependencyCache()
 def create_service_provider(
     service_class: type["AsyncServiceT_co"],
     /,
-    statement: "Optional[Select[tuple[ModelT]]]" = None,
-    config: "Optional[SQLAlchemyAsyncConfig]" = None,
-    error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
-    load: "Optional[LoadSpec]" = None,
-    execution_options: "Optional[dict[str, Any]]" = None,
-    uniquify: Optional[bool] = None,
-    count_with_window_function: Optional[bool] = None,
+    statement: "Select[tuple[ModelT]] | None" = None,
+    config: "SQLAlchemyAsyncConfig | None" = None,
+    error_messages: "ErrorMessages | EmptyType | None" = Empty,
+    load: "LoadSpec | None" = None,
+    execution_options: "dict[str, Any] | None" = None,
+    uniquify: bool | None = None,
+    count_with_window_function: bool | None = None,
 ) -> Callable[..., AsyncGenerator[AsyncServiceT_co, None]]: ...
 
 
@@ -139,26 +139,26 @@ def create_service_provider(
 def create_service_provider(
     service_class: type["SyncServiceT_co"],
     /,
-    statement: "Optional[Select[tuple[ModelT]]]" = None,
-    config: "Optional[SQLAlchemySyncConfig]" = None,
-    error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
-    load: "Optional[LoadSpec]" = None,
-    execution_options: "Optional[dict[str, Any]]" = None,
-    uniquify: Optional[bool] = None,
-    count_with_window_function: Optional[bool] = None,
+    statement: "Select[tuple[ModelT]] | None" = None,
+    config: "SQLAlchemySyncConfig | None" = None,
+    error_messages: "ErrorMessages | EmptyType | None" = Empty,
+    load: "LoadSpec | None" = None,
+    execution_options: "dict[str, Any] | None" = None,
+    uniquify: bool | None = None,
+    count_with_window_function: bool | None = None,
 ) -> Callable[..., Generator[SyncServiceT_co, None, None]]: ...
 
 
 def create_service_provider(
     service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
     /,
-    statement: "Optional[Select[tuple[ModelT]]]" = None,
-    config: "Optional[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]" = None,
-    error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
-    load: "Optional[LoadSpec]" = None,
-    execution_options: "Optional[dict[str, Any]]" = None,
-    uniquify: Optional[bool] = None,
-    count_with_window_function: Optional[bool] = None,
+    statement: "Select[tuple[ModelT]] | None" = None,
+    config: "SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | None" = None,
+    error_messages: "ErrorMessages | EmptyType | None" = Empty,
+    load: "LoadSpec | None" = None,
+    execution_options: "dict[str, Any] | None" = None,
+    uniquify: bool | None = None,
+    count_with_window_function: bool | None = None,
 ) -> Callable[..., Union["AsyncGenerator[AsyncServiceT_co, None]", "Generator[SyncServiceT_co,None, None]"]]:
     """Create a dependency provider for a service with a configurable session key.
 
@@ -183,11 +183,11 @@ def create_service_provider(
         return_type_annotation = AsyncGenerator[service_class, None]  # type: ignore[valid-type]
 
         async def provide_service_async(*args: Any, **kwargs: Any) -> "AsyncGenerator[AsyncServiceT_co, None]":
-            db_session = cast("Optional[AsyncSession]", args[0] if args else kwargs.get(session_dependency_key))
+            db_session = cast("AsyncSession | None", args[0] if args else kwargs.get(session_dependency_key))
             async with service_class.new(  # type: ignore[union-attr]
                 session=db_session,  # type: ignore[arg-type]
                 statement=statement,
-                config=cast("Optional[SQLAlchemyAsyncConfig]", config),  # type: ignore[arg-type]
+                config=cast("SQLAlchemyAsyncConfig | None", config),  # type: ignore[arg-type]
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
@@ -217,11 +217,11 @@ def create_service_provider(
     return_type_annotation = Generator[service_class, None, None]  # type: ignore[misc,assignment,valid-type]
 
     def provide_service_sync(*args: Any, **kwargs: Any) -> "Generator[SyncServiceT_co, None, None]":
-        db_session = cast("Optional[Session]", args[0] if args else kwargs.get(session_dependency_key))
+        db_session = cast("Session | None", args[0] if args else kwargs.get(session_dependency_key))
         with service_class.new(
             session=db_session,
             statement=statement,
-            config=cast("Optional[SQLAlchemySyncConfig]", config),
+            config=cast("SQLAlchemySyncConfig | None", config),
             error_messages=error_messages,
             load=load,
             execution_options=execution_options,
@@ -252,14 +252,14 @@ def create_service_dependencies(
     service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
     /,
     key: str,
-    statement: "Optional[Select[tuple[ModelT]]]" = None,
-    config: "Optional[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]" = None,
-    error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
-    load: "Optional[LoadSpec]" = None,
-    execution_options: "Optional[dict[str, Any]]" = None,
-    filters: "Optional[FilterConfig]" = None,
-    uniquify: Optional[bool] = None,
-    count_with_window_function: Optional[bool] = None,
+    statement: "Select[tuple[ModelT]] | None" = None,
+    config: "SQLAlchemyAsyncConfig | SQLAlchemySyncConfig | None" = None,
+    error_messages: "ErrorMessages | EmptyType | None" = Empty,
+    load: "LoadSpec | None" = None,
+    execution_options: "dict[str, Any] | None" = None,
+    filters: "FilterConfig | None" = None,
+    uniquify: bool | None = None,
+    count_with_window_function: bool | None = None,
     dep_defaults: "DependencyDefaults" = DEPENDENCY_DEFAULTS,
 ) -> dict[str, Provide]:
     """Create a dependency provider for the combined filter function.
@@ -285,7 +285,7 @@ def create_service_dependencies(
         svc = create_service_provider(  # type: ignore[type-var,misc,unused-ignore]
             service_class,
             statement,
-            cast("Optional[SQLAlchemyAsyncConfig]", config),
+            cast("SQLAlchemyAsyncConfig | None", config),
             error_messages,
             load,
             execution_options,
@@ -297,7 +297,7 @@ def create_service_dependencies(
         svc = create_service_provider(  # type: ignore[assignment]
             service_class,
             statement,
-            cast("Optional[SQLAlchemySyncConfig]", config),
+            cast("SQLAlchemySyncConfig | None", config),
             error_messages,
             load,
             execution_options,
@@ -324,7 +324,7 @@ def create_filter_dependencies(
     """
     aliases = resolve_filter_aliases(config)
     cache_key = filter_cache_key(_CACHE_NAMESPACE, config, dep_defaults, aliases)
-    deps = cast("Optional[dict[str, Provide]]", dep_cache.get_dependencies(cache_key))
+    deps = cast("dict[str, Provide] | None", dep_cache.get_dependencies(cache_key))
     if deps is not None:
         return deps
     deps = _create_statement_filters(config, dep_defaults, aliases=aliases)
@@ -333,10 +333,10 @@ def create_filter_dependencies(
 
 
 def _create_order_by_filter_provider(
-    sort_field: Union[str, set[str], list[str]],
+    sort_field: str | set[str] | list[str],
     sort_order_default: SortOrder = "desc",
     alias_for: Callable[[str], str] = camelize,
-    nulls_default: Optional[Literal["first", "last"]] = None,
+    nulls_default: Literal["first", "last"] | None = None,
 ) -> Callable[..., OrderBy]:
     sort_field_default = normalize_sort_field(sort_field)
 
@@ -366,7 +366,7 @@ def _create_statement_filters(  # noqa: C901, PLR0915
     dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
     *,
     include_aggregate: bool = True,
-    aliases: Optional[dict[str, str]] = None,
+    aliases: dict[str, str] | None = None,
 ) -> dict[str, Provide]:
     """Create filter dependencies based on configuration.
 
@@ -385,7 +385,7 @@ def _create_statement_filters(  # noqa: C901, PLR0915
     if config.get("id_filter", False):
 
         def provide_id_filter(  # pyright: ignore[reportUnknownParameterType]
-            ids: Annotated[Optional[list[str]], QueryParameter(name=alias_for("ids"))] = None,
+            ids: Annotated[list[str] | None, QueryParameter(name=alias_for("ids"))] = None,
         ) -> CollectionFilter:  # pyright: ignore[reportMissingTypeArgument]
             return CollectionFilter(field_name=config.get("id_field", "id"), values=ids)
 
@@ -477,12 +477,12 @@ def _create_statement_filters(  # noqa: C901, PLR0915
             # Without default parameter, all closures would reference the loop variable's final value
             def create_not_in_filter_provider(  # pyright: ignore
                 field_name: FieldNameType = field_def,  # type: ignore[assignment]
-            ) -> Callable[..., Optional[NotInCollectionFilter[Any]]]:
+            ) -> Callable[..., NotInCollectionFilter[Any] | None]:
                 param_name = f"{field_name.name}_not_in"
 
                 def provide_not_in_filter(  # pyright: ignore
                     **kwargs: Any,
-                ) -> Optional[NotInCollectionFilter[field_name.type_hint]]:  # type: ignore
+                ) -> NotInCollectionFilter[field_name.type_hint] | None:  # type: ignore
                     values = kwargs.get(param_name)
                     return (
                         NotInCollectionFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore
@@ -491,7 +491,7 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                     )
 
                 annotation = Annotated[
-                    Optional[list[field_name.type_hint]],  # type: ignore
+                    list[field_name.type_hint] | None,  # type: ignore
                     QueryParameter(name=alias_for(param_name)),
                 ]
                 provide_not_in_filter.__name__ = f"provide_not_in_filter_{field_name.name}"
@@ -504,11 +504,11 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                             annotation=annotation,
                         )
                     ],
-                    return_annotation=Optional[NotInCollectionFilter[field_name.type_hint]],  # type: ignore
+                    return_annotation=NotInCollectionFilter[field_name.type_hint] | None,  # type: ignore
                 )
                 provide_not_in_filter.__annotations__ = {
                     param_name: annotation,
-                    "return": Optional[NotInCollectionFilter[field_name.type_hint]],  # type: ignore
+                    "return": NotInCollectionFilter[field_name.type_hint] | None,  # type: ignore
                 }
                 return provide_not_in_filter  # pyright: ignore
 
@@ -527,12 +527,12 @@ def _create_statement_filters(  # noqa: C901, PLR0915
             # Without default parameter, all closures would reference the loop variable's final value
             def create_in_filter_provider(  # pyright: ignore
                 field_name: FieldNameType = field_def,  # type: ignore[assignment]
-            ) -> Callable[..., Optional[CollectionFilter[Any]]]:
+            ) -> Callable[..., CollectionFilter[Any] | None]:
                 param_name = f"{field_name.name}_in"
 
                 def provide_in_filter(  # pyright: ignore
                     **kwargs: Any,
-                ) -> Optional[CollectionFilter[field_name.type_hint]]:  # type: ignore # pyright: ignore
+                ) -> CollectionFilter[field_name.type_hint] | None:  # type: ignore # pyright: ignore
                     values = kwargs.get(param_name)
                     return (
                         CollectionFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore  # pyright: ignore
@@ -542,7 +542,7 @@ def _create_statement_filters(  # noqa: C901, PLR0915
 
                 provide_in_filter.__name__ = f"provide_in_filter_{field_name.name}"
                 annotation = Annotated[
-                    Optional[list[field_name.type_hint]],  # type: ignore
+                    list[field_name.type_hint] | None,  # type: ignore
                     QueryParameter(
                         name=alias_for(param_name),
                     ),
@@ -556,11 +556,11 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                             annotation=annotation,
                         )
                     ],
-                    return_annotation=Optional[CollectionFilter[field_name.type_hint]],  # type: ignore
+                    return_annotation=CollectionFilter[field_name.type_hint] | None,  # type: ignore
                 )
                 provide_in_filter.__annotations__ = {
                     param_name: annotation,
-                    "return": Optional[CollectionFilter[field_name.type_hint]],  # type: ignore
+                    "return": CollectionFilter[field_name.type_hint] | None,  # type: ignore
                 }
                 return provide_in_filter  # pyright: ignore
 
@@ -572,10 +572,10 @@ def _create_statement_filters(  # noqa: C901, PLR0915
 
             def create_boolean_filter_provider(
                 field_name: FieldNameType = boolean_field_def,
-            ) -> Callable[..., Optional[BooleanFilter]]:
+            ) -> Callable[..., BooleanFilter | None]:
                 param_name = f"{field_name.name}_boolean"
 
-                def provide_boolean_filter(**kwargs: Any) -> Optional[BooleanFilter]:
+                def provide_boolean_filter(**kwargs: Any) -> BooleanFilter | None:
                     value = kwargs.get(param_name)
                     return BooleanFilter(field_name=field_name.name, value=value) if value is not None else None
 
@@ -593,11 +593,11 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                             annotation=annotation,
                         )
                     ],
-                    return_annotation=Optional[BooleanFilter],
+                    return_annotation=BooleanFilter | None,
                 )
                 provide_boolean_filter.__annotations__ = {
                     param_name: annotation,
-                    "return": Optional[BooleanFilter],
+                    "return": BooleanFilter | None,
                 }
                 return provide_boolean_filter
 
@@ -609,10 +609,10 @@ def _create_statement_filters(  # noqa: C901, PLR0915
 
             def create_choices_filter_provider(
                 field_name: FieldNameType = choice_field_def,
-            ) -> Callable[..., Optional[ChoicesFilter[Any]]]:
+            ) -> Callable[..., ChoicesFilter[Any] | None]:
                 param_name = f"{field_name.name}_choices"
 
-                def provide_choices_filter(**kwargs: Any) -> Optional[ChoicesFilter[Any]]:
+                def provide_choices_filter(**kwargs: Any) -> ChoicesFilter[Any] | None:
                     values = kwargs.get(param_name)
                     return (
                         ChoicesFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore
@@ -621,7 +621,7 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                     )
 
                 annotation = Annotated[
-                    Optional[list[field_name.type_hint]],  # type: ignore
+                    list[field_name.type_hint] | None,  # type: ignore
                     QueryParameter(name=alias_for(field_name.name)),
                 ]
                 provide_choices_filter.__name__ = f"provide_choices_filter_{field_name.name}"
@@ -634,11 +634,11 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                             annotation=annotation,
                         )
                     ],
-                    return_annotation=Optional[ChoicesFilter[Any]],
+                    return_annotation=ChoicesFilter[Any] | None,
                 )
                 provide_choices_filter.__annotations__ = {
                     param_name: annotation,
-                    "return": Optional[ChoicesFilter[Any]],
+                    "return": ChoicesFilter[Any] | None,
                 }
                 return provide_choices_filter
 
@@ -659,7 +659,7 @@ def _create_statement_filters(  # noqa: C901, PLR0915
 def _create_filter_aggregate_function(
     config: FilterConfig,
     dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
-    providers: Optional[dict[str, Provide]] = None,
+    providers: dict[str, Provide] | None = None,
 ) -> Callable[..., list[FilterTypes]]:
     """Build aggregate metadata from the registered dependencies themselves.
 

@@ -9,7 +9,8 @@ from typing import (
     ClassVar,
     Generic,
     Literal,
-    Optional,
+    TypeAlias,
+    TypeVar,
     Union,
 )
 
@@ -40,7 +41,6 @@ from sqlalchemy.orm import (
     WriteOnlyMapped,
 )
 from sqlalchemy.sql.expression import ColumnClause, Label
-from typing_extensions import TypeAlias, TypeVar
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
@@ -48,7 +48,7 @@ __all__ = ("SQLAlchemyDTO",)
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T", bound="Union[DeclarativeBase, Collection[DeclarativeBase]]")
+T = TypeVar("T", bound="DeclarativeBase | Collection[DeclarativeBase]")
 
 ElementType: TypeAlias = Union[
     "Column[Any]", "RelationshipProperty[Any]", "CompositeProperty[Any]", "ColumnClause[Any]", "Label[Any]"
@@ -61,7 +61,7 @@ SQLA_NS = {**vars(orm), **vars(sql)}
 class SQLAlchemyDTOConfig(DTOConfig):
     """Additional controls for the generated SQLAlchemy DTO."""
 
-    exclude: AbstractSet[Union[str, InstrumentedAttribute[Any]]] = field(default_factory=set)  # type: ignore[assignment] # pyright: ignore[reportIncompatibleVariableOverride]
+    exclude: AbstractSet[str | InstrumentedAttribute[Any]] = field(default_factory=set)  # type: ignore[assignment] # pyright: ignore[reportIncompatibleVariableOverride]
     """Explicitly exclude fields from the generated DTO.
 
     If exclude is specified, all fields not specified in exclude will be included by default.
@@ -72,7 +72,7 @@ class SQLAlchemyDTOConfig(DTOConfig):
         - 'exclude' mutually exclusive with 'include' - specifying both values will raise an
             ``ImproperlyConfiguredException``.
     """
-    include: AbstractSet[Union[str, InstrumentedAttribute[Any]]] = field(default_factory=set)  # type: ignore[assignment] # pyright: ignore[reportIncompatibleVariableOverride]
+    include: AbstractSet[str | InstrumentedAttribute[Any]] = field(default_factory=set)  # type: ignore[assignment] # pyright: ignore[reportIncompatibleVariableOverride]
     """Explicitly include fields in the generated DTO.
 
     If include is specified, all fields not specified in include will be excluded by default.
@@ -83,10 +83,10 @@ class SQLAlchemyDTOConfig(DTOConfig):
         - 'include' mutually exclusive with 'exclude' - specifying both values will raise an
             ``ImproperlyConfiguredException``.
     """
-    rename_fields: dict[Union[str, InstrumentedAttribute[Any]], str] = field(default_factory=dict)  # type: ignore[assignment] # pyright: ignore[reportIncompatibleVariableOverride]
+    rename_fields: dict[str | InstrumentedAttribute[Any], str] = field(default_factory=dict)  # type: ignore[assignment] # pyright: ignore[reportIncompatibleVariableOverride]
     """Mapping of field names, to new name."""
 
-    include_implicit_fields: Union[bool, Literal["hybrid-only"]] = True
+    include_implicit_fields: bool | Literal["hybrid-only"] = True
     """Fields that are implicitly mapped are included.
 
     Turning this off will lead to exclude all fields not using ``Mapped`` annotation,
@@ -116,7 +116,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
     config: ClassVar[SQLAlchemyDTOConfig]
 
     @staticmethod
-    def _ensure_sqla_dto_config(config: Union[DTOConfig, SQLAlchemyDTOConfig]) -> SQLAlchemyDTOConfig:
+    def _ensure_sqla_dto_config(config: DTOConfig | SQLAlchemyDTOConfig) -> SQLAlchemyDTOConfig:
         if not isinstance(config, SQLAlchemyDTOConfig):
             return SQLAlchemyDTOConfig(**asdict(config))
 
@@ -131,7 +131,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
     @classmethod
     def handle_orm_descriptor(
         cls,
-        extension_type: Union[NotExtension, AssociationProxyExtensionType, HybridExtensionType],
+        extension_type: NotExtension | AssociationProxyExtensionType | HybridExtensionType,
         orm_descriptor: InspectionAttr,
         key: str,
         model_type_hints: dict[str, FieldDefinition],
@@ -297,7 +297,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         cls,
         model_type: "type[DeclarativeBase]",
         processed_fields: set[str],
-        namespace: Optional[dict[str, Any]] = None,
+        namespace: dict[str, Any] | None = None,
     ) -> "dict[str, FieldDefinition]":
         """Get fields defined as @property or @cached_property on the model.
 
@@ -407,7 +407,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                 seen_hybrid_descriptors.add(orm_descriptor)  # pyright: ignore[reportUnknownMemberType]
 
             should_skip_descriptor = False
-            dto_field: Optional[DTOField] = None
+            dto_field: DTOField | None = None
             if hasattr(orm_descriptor, "property"):  # pyright: ignore[reportUnknownArgumentType]
                 prop = getattr(orm_descriptor, "property", None)  # pyright: ignore[reportUnknownArgumentType]
                 if prop and hasattr(prop, "info"):
@@ -508,7 +508,7 @@ def parse_type_from_element(elem: ElementType, orm_descriptor: InspectionAttr) -
 
     if isinstance(elem, Column):
         if elem.nullable:
-            return FieldDefinition.from_annotation(Optional[elem.type.python_type])
+            return FieldDefinition.from_annotation(elem.type.python_type | None)
         return FieldDefinition.from_annotation(elem.type.python_type)
 
     if isinstance(elem, RelationshipProperty):
@@ -520,7 +520,7 @@ def parse_type_from_element(elem: ElementType, orm_descriptor: InspectionAttr) -
             return FieldDefinition.from_annotation(collection_type.safe_generic_origin[elem.mapper.class_])
 
         if detect_nullable_relationship(elem):
-            return FieldDefinition.from_annotation(Optional[elem.mapper.class_])
+            return FieldDefinition.from_annotation(elem.mapper.class_ | None)
 
         return FieldDefinition.from_annotation(elem.mapper.class_)
 

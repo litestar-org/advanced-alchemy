@@ -15,9 +15,12 @@ from advanced_alchemy.types import GUID, DateTimeUTC
 
 
 def test_datetime_utc_mysql_mariadb_uses_fsp() -> None:
-    """DateTimeUTC emits mysql.DATETIME(fsp=6) on MySQL and MariaDB."""
+    """DateTimeUTC emits generic DateTime by default and mysql.DATETIME(fsp=...) when fsp is specified."""
     mysql_dialect = mysql.dialect()
-    impl = DateTimeUTC().load_dialect_impl(mysql_dialect)
+    default_impl = DateTimeUTC().load_dialect_impl(mysql_dialect)
+    assert isinstance(default_impl, DateTime)
+
+    impl = DateTimeUTC(fsp=6).load_dialect_impl(mysql_dialect)
     assert isinstance(impl, MYSQL_DATETIME)
     assert impl.fsp == 6
     assert impl.timezone is True
@@ -32,9 +35,12 @@ def test_datetime_utc_mysql_mariadb_uses_fsp() -> None:
 
 
 def test_datetime_utc_oracle_uses_timestamp_with_timezone() -> None:
-    """DateTimeUTC emits oracle.TIMESTAMP(timezone=...) on Oracle instead of DATE."""
+    """DateTimeUTC emits oracle.TIMESTAMP(timezone=...) on Oracle when fsp is specified."""
     oracle_dialect = oracle.dialect()  # type: ignore[no-untyped-call]
-    impl = DateTimeUTC().load_dialect_impl(oracle_dialect)
+    default_impl = DateTimeUTC().load_dialect_impl(oracle_dialect)
+    assert isinstance(default_impl, DateTime)
+
+    impl = DateTimeUTC(fsp=6).load_dialect_impl(oracle_dialect)
     assert isinstance(impl, TIMESTAMP)
     assert impl.timezone is True
 

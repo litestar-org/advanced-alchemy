@@ -6,10 +6,8 @@ These primitives are framework-agnostic and reused by framework
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Literal, NamedTuple, Optional, Union, cast
+from typing import Any, Literal, NamedTuple, NotRequired, TypeAlias, TypedDict, TypeGuard, cast
 from uuid import UUID
-
-from typing_extensions import NotRequired, TypeAlias, TypedDict, TypeGuard
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.utils.singleton import SingletonMeta
@@ -28,10 +26,10 @@ __all__ = (
     "resolve_filter_aliases",
 )
 
-HashableValue = Union[str, int, float, bool, None]
-HashableType = Union[HashableValue, tuple[Any, ...], tuple[tuple[str, Any], ...], tuple[HashableValue, ...]]
+HashableValue = str | int | float | bool | None
+HashableType = HashableValue | tuple[Any, ...] | tuple[tuple[str, Any], ...] | tuple[HashableValue, ...]
 SortOrder = Literal["asc", "desc"]
-SortField = Union[str, set[str], list[str]]
+SortField = str | set[str] | list[str]
 FIELD_TUPLE_LENGTH = 2
 
 
@@ -62,20 +60,20 @@ class ChoiceField:
         object.__setattr__(self, "choices", tuple(choices))
 
 
-FieldDefinition: TypeAlias = Union[str, FieldNameType]
-FieldNameConfig: TypeAlias = Union[FieldDefinition, set[FieldDefinition], list[FieldDefinition]]
+FieldDefinition: TypeAlias = str | FieldNameType
+FieldNameConfig: TypeAlias = FieldDefinition | set[FieldDefinition] | list[FieldDefinition]
 ChoiceFieldTuple: TypeAlias = tuple[str, Iterable[Any]]
 FieldNameTypeTuple: TypeAlias = tuple[str, Any]
-ChoiceFieldDefinition: TypeAlias = Union[str, FieldNameType, ChoiceField, FieldNameTypeTuple]
-ChoiceFieldConfig: TypeAlias = Union[
-    ChoiceFieldDefinition, set[ChoiceFieldDefinition], list[ChoiceFieldDefinition], tuple[ChoiceFieldDefinition, ...]
-]
+ChoiceFieldDefinition: TypeAlias = str | FieldNameType | ChoiceField | FieldNameTypeTuple
+ChoiceFieldConfig: TypeAlias = (
+    ChoiceFieldDefinition | set[ChoiceFieldDefinition] | list[ChoiceFieldDefinition] | tuple[ChoiceFieldDefinition, ...]
+)
 
 
 class FilterConfig(TypedDict):
     """Configuration for generating dynamic filters."""
 
-    id_filter: NotRequired[type[Union[UUID, int, str]]]
+    id_filter: NotRequired[type[UUID | int | str]]
     """Enable an id filter using the supplied type."""
     id_field: NotRequired[str]
     """Model field storing the primary key or identifier."""
@@ -83,13 +81,13 @@ class FilterConfig(TypedDict):
     """Default field or fields to use for sorting."""
     sort_order: NotRequired[SortOrder]
     """Default sort order."""
-    sort_nulls: NotRequired[Optional[Literal["first", "last"]]]
+    sort_nulls: NotRequired[Literal["first", "last"] | None]
     """Where NULLs sort in the order-by filter. ``None`` leaves the placement to the database."""
     pagination_type: NotRequired[Literal["limit_offset"]]
     """Pagination mode to enable."""
     pagination_size: NotRequired[int]
     """Default pagination size."""
-    search: NotRequired[Union[str, set[str], list[str]]]
+    search: NotRequired[str | set[str] | list[str]]
     """Fields to enable search on."""
     search_ignore_case: NotRequired[bool]
     """Whether search should be case-insensitive."""
@@ -107,7 +105,7 @@ class FilterConfig(TypedDict):
     """Fields that support boolean filters."""
     choice_fields: NotRequired[ChoiceFieldConfig]
     """Fields that support choices filters."""
-    alias_generator: NotRequired[Union[Literal["snake_case", "camel_case"], Callable[[str], str]]]
+    alias_generator: NotRequired[Literal["snake_case", "camel_case"] | Callable[[str], str]]
     """Maps a parameter's snake_case name to its public query parameter.
 
     Supported by both Litestar and FastAPI.
@@ -138,7 +136,7 @@ class DependencyCache(metaclass=SingletonMeta):
         """
         self.dependencies[key] = dependencies
 
-    def get_dependencies(self, key: HashableType) -> Optional[Any]:
+    def get_dependencies(self, key: HashableType) -> Any | None:
         """Retrieve dependency providers by a precomputed key.
 
         Args:
@@ -158,7 +156,7 @@ class DependencyCache(metaclass=SingletonMeta):
         """
         self.dependencies[make_hashable(config)] = dependencies
 
-    def get(self, config: FilterConfig) -> Optional[Any]:
+    def get(self, config: FilterConfig) -> Any | None:
         """Retrieve dependency providers by filter config.
 
         Args:

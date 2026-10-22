@@ -2,15 +2,13 @@ import builtins
 import contextlib
 from collections import defaultdict
 from inspect import isclass, signature
-from typing import TYPE_CHECKING, Any, Generic, List, Union, cast, overload
+from typing import TYPE_CHECKING, Any, Generic, List, TypeVar, cast, overload
 
 from sqlalchemy import ColumnElement, inspect
 from sqlalchemy.orm import RelationshipProperty, Session, class_mapper, object_mapper
-from typing_extensions import TypeVar
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.repository.typing import _MISSING, MISSING, ModelT  # pyright: ignore[reportPrivateUsage]
-from advanced_alchemy.utils.deprecation import warn_deprecation
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -66,11 +64,9 @@ class InMemoryStore(Generic[T]):
     def get(self, key: Any, default: type[_NotSet] = _NotSet) -> T: ...
 
     @overload
-    def get(self, key: Any, default: AnyObject) -> "Union[T, AnyObject]": ...
+    def get(self, key: Any, default: AnyObject) -> "T | AnyObject": ...
 
-    def get(
-        self, key: Any, default: "Union[AnyObject, type[_NotSet]]" = _NotSet
-    ) -> "Union[T, AnyObject]":  # pragma: no cover
+    def get(self, key: Any, default: "AnyObject | type[_NotSet]" = _NotSet) -> "T | AnyObject":  # pragma: no cover
         """Get the object identified by `key`, or return `default` if set or raise a `KeyError` otherwise
 
         Args:
@@ -91,7 +87,7 @@ class InMemoryStore(Generic[T]):
             raise KeyError from error
         return self._store[key]
 
-    def get_or_none(self, key: Any, default: Any = _NotSet) -> "Union[T, None]":
+    def get_or_none(self, key: Any, default: Any = _NotSet) -> "T | None":
         return self.get(key) if default is _NotSet else self.get(key, default)
 
     def remove(self, key: Any) -> T:
@@ -99,19 +95,6 @@ class InMemoryStore(Generic[T]):
 
     def get_all(self) -> List[T]:
         return list(self._store.values())
-
-    def list(self) -> List[T]:
-        """.. deprecated:: 1.10.0
-        Use :meth:`get_all` instead.
-        """
-        warn_deprecation(
-            version="1.10.0",
-            deprecated_name="list",
-            kind="method",
-            removal_in="2.0.0",
-            alternative="get_all",
-        )
-        return self.get_all()
 
     def remove_all(self) -> None:
         self._store = {}

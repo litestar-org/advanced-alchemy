@@ -1,6 +1,6 @@
 """Pwdlib Hashing Backend."""
 
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.password_hash.base import HashingBackend
@@ -29,7 +29,7 @@ class PwdlibHasher(HashingBackend):
             raise MissingDependencyError(package="pwdlib")
         self.hasher = hasher
 
-    def hash(self, value: "Union[str, bytes]") -> str:
+    def hash(self, value: "str | bytes") -> str:
         """Hash the given value using the Pwdlib context.
 
         Args:
@@ -40,7 +40,7 @@ class PwdlibHasher(HashingBackend):
         """
         return self.hasher.hash(self._ensure_bytes(value))
 
-    def verify(self, plain: "Union[str, bytes]", hashed: str) -> bool:
+    def verify(self, plain: "str | bytes", hashed: str) -> bool:
         """Verify a plain text value against a hash using the Pwdlib context.
 
         Args:

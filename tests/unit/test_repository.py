@@ -49,6 +49,7 @@ from advanced_alchemy.repository._util import (
     model_from_dict,
 )
 from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
+from advanced_alchemy.repository.memory.base import InMemoryStore
 from advanced_alchemy.utils.dataclass import Empty
 from advanced_alchemy.utils.serialization import (
     is_msgspec_struct,
@@ -2406,7 +2407,7 @@ def test_was_attribute_set_with_modified_attributes() -> None:
     instance.id = uuid4()  # Explicitly set id
 
     # Also test setting a datetime attribute
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     instance.created_at = now  # Explicitly modify created_at
 
     # Get the mapper/inspector
@@ -2717,11 +2718,7 @@ def test_convert_relationship_value_helper() -> None:
 
 
 def test_repository_and_service_annotations_are_accessible() -> None:
-    """Regression test for Python 3.14 lazy annotation evaluation shadowing.
-
-    On Python 3.14, bare ``list[...]`` in a class that defines a ``list()`` method
-    resolves to the method instead of the builtin type. Using ``typing.List`` avoids this.
-    """
+    """Regression test for repository and store method annotation evaluation."""
     import typing
 
     from advanced_alchemy.repository._async import SQLAlchemyAsyncRepository
@@ -2730,16 +2727,18 @@ def test_repository_and_service_annotations_are_accessible() -> None:
     from advanced_alchemy.repository.memory._sync import SQLAlchemySyncMockRepository
     from advanced_alchemy.repository.memory.base import InMemoryStore
 
-    targets = [
+    repo_targets = [
         SQLAlchemyAsyncRepository,
         SQLAlchemySyncRepository,
         SQLAlchemyAsyncMockRepository,
         SQLAlchemySyncMockRepository,
-        InMemoryStore,
     ]
-    for cls in targets:
-        annotations = typing.get_type_hints(cls.list)
-        assert isinstance(annotations, dict), f"{cls.__name__}.list annotations should be a dict"
+    for cls in repo_targets:
+        annotations = typing.get_type_hints(cls.get_many)
+        assert isinstance(annotations, dict), f"{cls.__name__}.get_many annotations should be a dict"
+
+    store_annotations = typing.get_type_hints(InMemoryStore.get_all)
+    assert isinstance(store_annotations, dict), "InMemoryStore.get_all annotations should be a dict"
 
 
 class NullableOrderModel(base.BigIntBase):
@@ -2765,7 +2764,7 @@ def test_mock_repository_order_by_honors_nulls_placement(sort_order: str, nulls:
         ]
     )
 
-    results = repo.list(OrderBy("director", sort_order, nulls))  # type: ignore[arg-type]
+    results = repo.get_many(OrderBy("director", sort_order, nulls))  # type: ignore[arg-type]
 
     expected = [3, 2] if sort_order == "asc" else [2, 3]
     expected = [1, *expected] if nulls == "first" else [*expected, 1]
@@ -2788,8 +2787,8 @@ def test_mock_repository_search_honors_escape_wildcards(filter_type: type[Search
     repo = Repo(session=MagicMock(spec=Session, bind=MagicMock()))
     repo.add_many([SearchableTitleModel(id=1, title="a 50% b"), SearchableTitleModel(id=2, title="a 50X b")])
 
-    literal = repo.list(filter_type("title", "50%", escape_wildcards=True))
-    pattern = repo.list(filter_type("title", "50."))
+    literal = repo.get_many(filter_type("title", "50%", escape_wildcards=True))
+    pattern = repo.get_many(filter_type("title", "50."))
 
     expected_literal = [1] if filter_type is SearchFilter else [2]
     assert [item.id for item in literal] == expected_literal
@@ -2927,3 +2926,11 @@ async def test_query_repository_get_many_and_count_respects_window_function_flag
 
     await async_repo.get_many_and_count(statement, count_with_window_function=False)
     async_basic.assert_called_once_with(statement=statement, bind_group=None)
+
+
+def test_in_memory_store_get_all_returns_values() -> None:
+    """Verify InMemoryStore.get_all returns all stored values."""
+    store: InMemoryStore[str] = InMemoryStore()
+    store._store["a"] = "hello"
+    store._store["b"] = "world"
+    assert store.get_all() == ["hello", "world"]

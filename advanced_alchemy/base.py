@@ -4,7 +4,18 @@ import contextlib
 import datetime
 import re
 from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, Any, ClassVar, Final, Optional, Protocol, Union, cast, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Final,
+    Optional,
+    Protocol,
+    Self,
+    TypeVar,
+    cast,
+    runtime_checkable,
+)
 from uuid import UUID
 
 from sqlalchemy import Date, MetaData, String
@@ -23,7 +34,6 @@ from sqlalchemy.orm.decl_base import (
     _TableArgsType as TableArgsType,  # pyright: ignore[reportPrivateUsage]
 )
 from sqlalchemy.types import TypeEngine
-from typing_extensions import Self, TypeVar
 
 from advanced_alchemy.mixins import (
     AuditColumns,
@@ -104,7 +114,7 @@ table_name_regexp = re.compile(r"((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
 """Regular expression for table name"""
 
 
-def merge_table_arguments(cls: type[DeclarativeBase], table_args: Optional[TableArgsType] = None) -> TableArgsType:
+def merge_table_arguments(cls: type[DeclarativeBase], table_args: TableArgsType | None = None) -> TableArgsType:
     """Merge Table Arguments.
 
     This function helps merge table arguments when using mixins that include their own table args,
@@ -161,7 +171,7 @@ class ModelProtocol(Protocol):
 _DEFAULT_EXCLUDED_FIELDS: Final[frozenset[str]] = frozenset({"sa_orm_sentinel", "_sentinel"})
 
 
-def model_to_dict(instance: "ModelProtocol", exclude: Optional[set[str]] = None) -> dict[str, Any]:
+def model_to_dict(instance: "ModelProtocol", exclude: set[str] | None = None) -> dict[str, Any]:
     """Convert a mapped model instance to a dictionary.
 
     Works with any SQLAlchemy-mapped model, including:
@@ -203,7 +213,7 @@ class BasicAttributes:
         __table__: ClassVar[FromClause]
         __mapper__: ClassVar[Mapper[Any]]
 
-    def to_dict(self, exclude: Optional[set[str]] = None) -> dict[str, Any]:
+    def to_dict(self, exclude: set[str] | None = None) -> dict[str, Any]:
         """Convert model to dictionary.
 
         Returns:
@@ -282,12 +292,12 @@ class CommonTableAttributes(BasicAttributes):
         super().__init_subclass__(**kwargs)
 
     if TYPE_CHECKING:
-        __tablename__: Optional[str]
+        __tablename__: str | None
     else:
 
         @declared_attr.directive
         @classmethod
-        def __tablename__(cls) -> Optional[str]:
+        def __tablename__(cls) -> str | None:
             """Generate table name automatically for base models.
 
             This is called for models that do not have an explicit ``__tablename__``.
@@ -366,7 +376,7 @@ class CommonTableAttributes(BasicAttributes):
             """
             cls_dict = cast("Mapping[str, Any]", cls.__dict__)
             if "__tablename__" in cls_dict:
-                return cast("Optional[str]", cls_dict["__tablename__"])
+                return cast("str | None", cls_dict["__tablename__"])
 
             mapper_args = getattr(cls, "__mapper_args__", {})
             mapper_args_dict = cast("dict[str, Any]", mapper_args) if isinstance(mapper_args, dict) else {}
@@ -382,7 +392,7 @@ class CommonTableAttributes(BasicAttributes):
 
 
 def create_registry(
-    custom_annotation_map: Optional[dict[Any, Union[type[TypeEngine[Any]], TypeEngine[Any]]]] = None,
+    custom_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] | None = None,
 ) -> SQLAlchemyRegistry:
     """Create a new SQLAlchemy registry.
 
@@ -395,7 +405,7 @@ def create_registry(
     import uuid as core_uuid
 
     meta = MetaData(naming_convention=convention)
-    type_annotation_map: dict[Any, Union[type[TypeEngine[Any]], TypeEngine[Any]]] = {
+    type_annotation_map: dict[Any, type[TypeEngine[Any]] | TypeEngine[Any]] = {
         UUID: GUID,
         core_uuid.UUID: GUID,
         datetime.datetime: DateTimeUTC,
@@ -439,14 +449,14 @@ class MetadataRegistry:
     """
 
     _instance: Optional["MetadataRegistry"] = None
-    _registry: dict[Union[str, None], MetaData] = {None: orm_registry.metadata}
+    _registry: dict[str | None, MetaData] = {None: orm_registry.metadata}
 
     def __new__(cls) -> Self:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cast("Self", cls._instance)
 
-    def get(self, bind_key: Optional[str] = None) -> MetaData:
+    def get(self, bind_key: str | None = None) -> MetaData:
         """Get the metadata for the given bind key.
 
         Args:
@@ -457,7 +467,7 @@ class MetadataRegistry:
         """
         return self._registry.setdefault(bind_key, MetaData(naming_convention=convention))
 
-    def set(self, bind_key: Optional[str], metadata: MetaData) -> None:
+    def set(self, bind_key: str | None, metadata: MetaData) -> None:
         """Set the metadata for the given bind key.
 
         Args:
@@ -466,16 +476,16 @@ class MetadataRegistry:
         """
         self._registry[bind_key] = metadata
 
-    def __iter__(self) -> Iterator[Union[str, None]]:
+    def __iter__(self) -> Iterator[str | None]:
         return iter(self._registry)
 
-    def __getitem__(self, bind_key: Union[str, None]) -> MetaData:
+    def __getitem__(self, bind_key: str | None) -> MetaData:
         return self._registry[bind_key]
 
-    def __setitem__(self, bind_key: Union[str, None], metadata: MetaData) -> None:
+    def __setitem__(self, bind_key: str | None, metadata: MetaData) -> None:
         self._registry[bind_key] = metadata
 
-    def __contains__(self, bind_key: Union[str, None]) -> bool:
+    def __contains__(self, bind_key: str | None) -> bool:
         return bind_key in self._registry
 
 
@@ -496,7 +506,7 @@ class AdvancedDeclarativeBase(DeclarativeBase):
     registry = orm_registry
     __abstract__ = True
     __metadata_registry__: MetadataRegistry = MetadataRegistry()
-    __bind_key__: Optional[str] = None
+    __bind_key__: str | None = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         bind_key = getattr(cls, "__bind_key__", None)

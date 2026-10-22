@@ -1,6 +1,6 @@
-from collections.abc import AsyncGenerator, Generator, Sequence
+from collections.abc import AsyncGenerator, Callable, Generator, Sequence
 from contextlib import asynccontextmanager, contextmanager
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast, overload
+from typing import TYPE_CHECKING, Any, Optional, Union, cast, overload
 
 from sanic import Request, Sanic
 
@@ -52,7 +52,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
             msg = "Could not locate either Sanic or Sanic Extensions. Both libraries must be installed to use Advanced Alchemy. Try: pip install sanic[ext]"
             raise MissingDependencyError(msg)
         self._config = sqlalchemy_config if isinstance(sqlalchemy_config, Sequence) else [sqlalchemy_config]
-        self._mapped_configs: dict[str, Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]] = self.map_configs()
+        self._mapped_configs: dict[str, SQLAlchemyAsyncConfig | SQLAlchemySyncConfig] = self.map_configs()
         self._app = sanic_app
         self._initialized = False
         if self._app is not None:
@@ -97,14 +97,14 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         Returns:
             A dictionary mapping bind keys to SQLAlchemy configurations.
         """
-        mapped_configs: dict[str, Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]] = {}
+        mapped_configs: dict[str, SQLAlchemyAsyncConfig | SQLAlchemySyncConfig] = {}
         for config in self.sqlalchemy_config:
             if config.bind_key is None:
                 config.bind_key = "default"
             mapped_configs[config.bind_key] = config
         return mapped_configs
 
-    def get_config(self, key: Optional[str] = None) -> Union["SQLAlchemyAsyncConfig", "SQLAlchemySyncConfig"]:
+    def get_config(self, key: str | None = None) -> Union["SQLAlchemyAsyncConfig", "SQLAlchemySyncConfig"]:
         """Get the config for the given key.
 
         Returns:
@@ -123,7 +123,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
             raise ImproperConfigurationError(msg)
         return config
 
-    def get_async_config(self, key: Optional[str] = None) -> "SQLAlchemyAsyncConfig":
+    def get_async_config(self, key: str | None = None) -> "SQLAlchemyAsyncConfig":
         """Get the async config for the given key.
 
         Returns:
@@ -138,7 +138,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
             raise ImproperConfigurationError(msg)
         return config
 
-    def get_sync_config(self, key: Optional[str] = None) -> "SQLAlchemySyncConfig":
+    def get_sync_config(self, key: str | None = None) -> "SQLAlchemySyncConfig":
         """Get the sync config for the given key.
 
         Returns:
@@ -155,7 +155,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
 
     @asynccontextmanager
     async def with_async_session(
-        self, key: Optional[str] = None
+        self, key: str | None = None
     ) -> AsyncGenerator["AsyncSession", None]:  # pragma: no cover
         """Context manager for getting an async session.
 
@@ -167,7 +167,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
             yield session
 
     @contextmanager
-    def with_sync_session(self, key: Optional[str] = None) -> Generator["Session", None]:  # pragma: no cover
+    def with_sync_session(self, key: str | None = None) -> Generator["Session", None]:  # pragma: no cover
         """Context manager for getting a sync session.
 
         Yields:
@@ -200,10 +200,10 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
             reset_routing_context()
             session = config.get_session()
             setattr(request.ctx, config.session_key, session)
-        return cast("Union[Session, AsyncSession]", session)
+        return cast("Session | AsyncSession", session)
 
     def get_session(
-        self, request: "Request", key: Optional[str] = None
+        self, request: "Request", key: str | None = None
     ) -> Union["Session", "AsyncSession"]:  # pragma: no cover
         """Get the session for the given key.
 
@@ -213,7 +213,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         config = self.get_config(key)
         return self._get_session_from_request(request, config)
 
-    def get_async_session(self, request: "Request", key: Optional[str] = None) -> "AsyncSession":  # pragma: no cover
+    def get_async_session(self, request: "Request", key: str | None = None) -> "AsyncSession":  # pragma: no cover
         """Get the async session for the given key.
 
         Returns:
@@ -222,7 +222,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         config = self.get_async_config(key)
         return self._get_session_from_request(request, config)
 
-    def get_sync_session(self, request: "Request", key: Optional[str] = None) -> "Session":  # pragma: no cover
+    def get_sync_session(self, request: "Request", key: str | None = None) -> "Session":  # pragma: no cover
         """Get the sync session for the given key.
 
         Returns:
@@ -232,7 +232,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         return self._get_session_from_request(request, config)
 
     def provide_session(
-        self, key: Optional[str] = None
+        self, key: str | None = None
     ) -> Callable[["Request"], Union["Session", "AsyncSession"]]:  # pragma: no cover
         """Get session provider for the given key.
 
@@ -247,7 +247,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         return _get_session
 
     def provide_async_session(
-        self, key: Optional[str] = None
+        self, key: str | None = None
     ) -> Callable[["Request"], "AsyncSession"]:  # pragma: no cover
         """Get async session provider for the given key.
 
@@ -261,7 +261,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
 
         return _get_session
 
-    def provide_sync_session(self, key: Optional[str] = None) -> Callable[[Request], "Session"]:  # pragma: no cover
+    def provide_sync_session(self, key: str | None = None) -> Callable[[Request], "Session"]:  # pragma: no cover
         """Get sync session provider for the given key.
 
         Returns:
@@ -274,7 +274,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
 
         return _get_session
 
-    def get_engine(self, key: Optional[str] = None) -> Union["Engine", "AsyncEngine"]:  # pragma: no cover
+    def get_engine(self, key: str | None = None) -> Union["Engine", "AsyncEngine"]:  # pragma: no cover
         """Get the engine for the given key.
 
         Returns:
@@ -283,7 +283,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         config = self.get_config(key)
         return config.get_engine()
 
-    def get_async_engine(self, key: Optional[str] = None) -> "AsyncEngine":  # pragma: no cover
+    def get_async_engine(self, key: str | None = None) -> "AsyncEngine":  # pragma: no cover
         """Get the async engine for the given key.
 
         Returns:
@@ -292,7 +292,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         config = self.get_async_config(key)
         return config.get_engine()
 
-    def get_sync_engine(self, key: Optional[str] = None) -> "Engine":  # pragma: no cover
+    def get_sync_engine(self, key: str | None = None) -> "Engine":  # pragma: no cover
         """Get the sync engine for the given key.
 
         Returns:
@@ -302,7 +302,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         return config.get_engine()
 
     def provide_engine(
-        self, key: Optional[str] = None
+        self, key: str | None = None
     ) -> Callable[[], Union["Engine", "AsyncEngine"]]:  # pragma: no cover
         """Get the engine for the given key.
 
@@ -316,7 +316,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
 
         return _get_engine
 
-    def provide_async_engine(self, key: Optional[str] = None) -> Callable[[], "AsyncEngine"]:  # pragma: no cover
+    def provide_async_engine(self, key: str | None = None) -> Callable[[], "AsyncEngine"]:  # pragma: no cover
         """Get the async engine for the given key.
 
         Returns:
@@ -329,7 +329,7 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
 
         return _get_engine
 
-    def provide_sync_engine(self, key: Optional[str] = None) -> Callable[[], "Engine"]:  # pragma: no cover
+    def provide_sync_engine(self, key: str | None = None) -> Callable[[], "Engine"]:  # pragma: no cover
         """Get the sync engine for the given key.
 
         Returns:
@@ -343,13 +343,11 @@ class AdvancedAlchemy(Extension):  # type: ignore[no-untyped-call]  # pyright: i
         return _get_engine
 
     def add_session_dependency(
-        self, session_type: type[Union["Session", "AsyncSession"]], key: Optional[str] = None
+        self, session_type: type[Union["Session", "AsyncSession"]], key: str | None = None
     ) -> None:
         """Add a session dependency to the Sanic app."""
         self.sanic_app.ext.add_dependency(session_type, self.provide_session(key))  # pyright: ignore[reportUnknownMemberType]
 
-    def add_engine_dependency(
-        self, engine_type: type[Union["Engine", "AsyncEngine"]], key: Optional[str] = None
-    ) -> None:
+    def add_engine_dependency(self, engine_type: type[Union["Engine", "AsyncEngine"]], key: str | None = None) -> None:
         """Add an engine dependency to the Sanic app."""
         self.sanic_app.ext.add_dependency(engine_type, self.provide_engine(key))  # pyright: ignore[reportUnknownMemberType]

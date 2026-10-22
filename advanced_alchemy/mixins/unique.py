@@ -1,8 +1,7 @@
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Self
 
 from sqlalchemy import ColumnElement, select
-from typing_extensions import Self
 
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception
 
@@ -28,7 +27,7 @@ class UniqueMixin:
     @contextmanager
     def _prevent_autoflush(
         cls,
-        session: "Union[AsyncSession, async_scoped_session[AsyncSession], Session, scoped_session[Session]]",
+        session: "AsyncSession | async_scoped_session[AsyncSession] | Session | scoped_session[Session]",
     ) -> "Generator[None, None, None]":
         with session.no_autoflush, wrap_sqlalchemy_exception():
             yield
@@ -36,12 +35,12 @@ class UniqueMixin:
     @classmethod
     def _check_uniqueness(
         cls,
-        cache: "Optional[dict[tuple[type[Self], Hashable], Self]]",
-        session: "Union[AsyncSession, async_scoped_session[AsyncSession], Session, scoped_session[Session]]",
+        cache: "dict[tuple[type[Self], Hashable], Self] | None",
+        session: "AsyncSession | async_scoped_session[AsyncSession] | Session | scoped_session[Session]",
         key: "tuple[type[Self], Hashable]",
         *args: Any,
         **kwargs: Any,
-    ) -> "tuple[dict[tuple[type[Self], Hashable], Self], Select[tuple[Self]], Optional[Self]]":
+    ) -> "tuple[dict[tuple[type[Self], Hashable], Self], Select[tuple[Self]], Self | None]":
         if cache is None:
             cache = {}
             setattr(session, "_unique_cache", cache)
@@ -51,7 +50,7 @@ class UniqueMixin:
     @classmethod
     async def as_unique_async(
         cls,
-        session: "Union[AsyncSession, async_scoped_session[AsyncSession]]",
+        session: "AsyncSession | async_scoped_session[AsyncSession]",
         *args: Any,
         **kwargs: Any,
     ) -> Self:
@@ -86,7 +85,7 @@ class UniqueMixin:
     @classmethod
     def as_unique_sync(
         cls,
-        session: "Union[Session, scoped_session[Session]]",
+        session: "Session | scoped_session[Session]",
         *args: Any,
         **kwargs: Any,
     ) -> Self:

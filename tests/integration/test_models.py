@@ -152,7 +152,8 @@ This infrastructure ensures reliable, fast, and maintainable tests across all da
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import pytest
 from sqlalchemy import ForeignKey, Integer, MetaData, String, Text
