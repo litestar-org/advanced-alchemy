@@ -40,7 +40,6 @@ from tests.integration.helpers import get_worker_id
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.xdist_group("filters"),
 ]
 
 

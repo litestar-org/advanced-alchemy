@@ -31,7 +31,6 @@ logger = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.xdist_group("file_object"),
 ]
 
 
@@ -1397,7 +1396,6 @@ async def test_file_object_save_async_no_data(storage_registry: StorageRegistry)
         await obj.save_async()
 
 
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_sqlalchemy_single_file_persist_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:
@@ -1475,7 +1473,6 @@ async def test_obstore_backend_listener_sqlalchemy_single_file_persist_async(
     assert loaded_content == file_content
 
 
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_sqlalchemy_multiple_files_persist_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:
@@ -1529,7 +1526,6 @@ def test_obstore_backend_sqlalchemy_multiple_files_persist_sync(
     assert loaded_obj2.get_content() == img2_content
 
 
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_delete_on_update_clear_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:
@@ -1600,7 +1596,6 @@ async def test_obstore_backend_listener_delete_on_update_clear_async(
 
 
 @pytest.mark.flaky(reruns=5)
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_update_file_object_sync(session: Session, storage_registry: StorageRegistry) -> None:
     """Test listener deletes old file when attribute is updated and session committed using synchronous SQLAlchemy session."""
     setup_file_object_listeners()
@@ -1683,7 +1678,6 @@ async def test_obstore_backend_listener_update_file_object_async(
 
 
 @pytest.mark.flaky(reruns=5)
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_delete_multiple_removed_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:

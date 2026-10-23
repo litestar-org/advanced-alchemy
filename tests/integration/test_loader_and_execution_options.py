@@ -15,11 +15,9 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.xdist_group("loader_execution"),
 ]
 
 
-@pytest.mark.xdist_group("loader")
 def test_loader(monkeypatch: MonkeyPatch, engine: Engine) -> None:
     # Skip mock engines as they don't support multi-row inserts with RETURNING
     if getattr(engine.dialect, "name", "") == "mock":
@@ -140,7 +138,6 @@ def test_loader(monkeypatch: MonkeyPatch, engine: Engine) -> None:
         db_session.expire_all()
 
 
-@pytest.mark.xdist_group("loader")
 async def test_async_loader(monkeypatch: MonkeyPatch, async_engine: AsyncEngine) -> None:
     # Skip mock engines as they don't support multi-row inserts with RETURNING
     if getattr(async_engine.dialect, "name", "") == "mock":
@@ -261,7 +258,6 @@ async def test_async_loader(monkeypatch: MonkeyPatch, async_engine: AsyncEngine)
         db_session.expire_all()
 
 
-@pytest.mark.xdist_group("loader")
 def test_default_overrides_loader(monkeypatch: MonkeyPatch, engine: Engine) -> None:
     # Skip mock engines as they don't support multi-row inserts with RETURNING
     if getattr(engine.dialect, "name", "") == "mock":
@@ -351,7 +347,6 @@ def test_default_overrides_loader(monkeypatch: MonkeyPatch, engine: Engine) -> N
         assert len(usa_country_2.states) == 2
 
 
-@pytest.mark.xdist_group("loader")
 async def test_default_overrides_async_loader(monkeypatch: MonkeyPatch, async_engine: AsyncEngine) -> None:
     # Skip mock engines as they don't support multi-row inserts with RETURNING
     if getattr(async_engine.dialect, "name", "") == "mock":

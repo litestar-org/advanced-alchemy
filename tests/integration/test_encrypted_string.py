@@ -13,7 +13,6 @@ from advanced_alchemy.typing import PYOTP_INSTALLED
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.xdist_group("encrypted_string"),
 ]
 
 

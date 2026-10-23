@@ -33,7 +33,6 @@ TagModel = type[models_uuid.UUIDTag]
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.xdist_group("alembic_commands"),
 ]
 
 
@@ -45,6 +44,7 @@ pytestmark = [
             marks=[
                 pytest.mark.sqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -123,6 +123,7 @@ def sync_sqlalchemy_config(request: FixtureRequest) -> Generator[SQLAlchemySyncC
             marks=[
                 pytest.mark.aiosqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -327,7 +328,6 @@ async def test_alembic_init_already(alembic_commands: commands.AlembicCommands, 
         alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
 
 
-@pytest.mark.xdist_group("alembic_drop_all")  # Isolate destructive test to prevent race conditions
 async def test_drop_all(
     alembic_commands: commands.AlembicCommands,
     any_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
