@@ -6,17 +6,18 @@ import sys
 import types
 import uuid as uuid_module
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import cast
 
 import pytest
 from sqlalchemy import Table, create_engine
 from sqlalchemy.dialects import mssql, oracle, postgresql
-from sqlalchemy.orm import DeclarativeBase, Mapped, declarative_mixin, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, declarative_mixin, mapped_column
 from sqlalchemy.schema import CreateTable
 
 from advanced_alchemy._typing import MSGSPEC_INSTALLED
 from advanced_alchemy.base import ModelProtocol, UUIDBase, create_registry, orm_registry
+from advanced_alchemy.mixins.sentinel import SentinelMixin
 from advanced_alchemy.repository import SQLAlchemySyncRepository
 from advanced_alchemy.types import JsonB
 from tests.helpers import purge_module
@@ -398,3 +399,35 @@ def test_plain_declarative_model_satisfies_protocol_statically() -> None:
 def test_advanced_alchemy_model_satisfies_protocol_statically() -> None:
     instance: ModelProtocol = AAModel()
     assert isinstance(instance, ModelProtocol)
+
+
+def test_sentinel_mixin_compatible_with_mapped_as_dataclass_and_subsequent_models() -> None:
+    """SentinelMixin works with MappedAsDataclass without warnings or mutating subsequent non-dataclass models."""
+    with warnings.catch_warnings(record=True) as recorded_warnings:
+        warnings.simplefilter("always")
+
+        class DataclassBase(MappedAsDataclass, DeclarativeBase):
+            pass
+
+        class DataclassSentinelModel(DataclassBase, SentinelMixin):
+            __tablename__ = "test_dc_sentinel_model"
+            id: Mapped[int] = mapped_column(primary_key=True, init=False)
+            name: Mapped[str] = mapped_column()
+
+        class StandardSentinelModel(PlainDeclarativeBase, SentinelMixin):
+            __tablename__ = "test_std_sentinel_model"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            name: Mapped[str] = mapped_column()
+
+    dcmx_warnings = [w for w in recorded_warnings if "not a dataclass" in str(w.message)]
+    assert dcmx_warnings == []
+
+    dc_instance = DataclassSentinelModel(name="alpha")
+    assert dc_instance.name == "alpha"
+    assert [f.name for f in fields(DataclassSentinelModel)] == ["id", "name"]
+    assert "sa_orm_sentinel" in DataclassSentinelModel.__table__.c
+
+    std_instance = StandardSentinelModel(id=1, name="beta")
+    assert std_instance.name == "beta"
+    assert "sa_orm_sentinel" in StandardSentinelModel.__table__.c
+    assert list(StandardSentinelModel.__table__.c.keys()) == ["id", "name", "sa_orm_sentinel"]

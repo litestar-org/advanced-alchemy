@@ -15,13 +15,14 @@ __all__ = ("GUID",)
 
 UUID_UTILS_INSTALLED = find_spec("uuid_utils")
 NANOID_INSTALLED = find_spec("fastnanoid")
+_UUID_BYTE_LENGTH = 16
 
 
 class GUID(TypeDecorator[UUID]):
     """Platform-independent GUID type.
 
     Uses PostgreSQL's UUID type (Postgres, DuckDB, Cockroach),
-    MSSQL's UNIQUEIDENTIFIER type, Oracle's RAW(16) type,
+    MSSQL's UNIQUEIDENTIFIER type, Oracle's RAW(16) or CHAR(32) type,
     otherwise uses BINARY(16) or CHAR(32),
     storing as stringified hex values.
 
@@ -37,13 +38,16 @@ class GUID(TypeDecorator[UUID]):
         return UUID
 
     def __init__(self, *args: Any, binary: bool = True, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
         self.binary = binary
 
     def load_dialect_impl(self, dialect: Dialect) -> Any:
         if dialect.name in {"postgresql", "duckdb", "cockroachdb"}:
             return dialect.type_descriptor(PG_UUID())
         if dialect.name == "oracle":
-            return dialect.type_descriptor(ORA_RAW(16))
+            if self.binary:
+                return dialect.type_descriptor(ORA_RAW(16))
+            return dialect.type_descriptor(CHAR(32))
         if dialect.name == "mssql":
             return dialect.type_descriptor(MSSQL_UNIQUEIDENTIFIER())
         if self.binary:
@@ -62,7 +66,7 @@ class GUID(TypeDecorator[UUID]):
         value = self.to_uuid(value)
         if value is None:
             return value
-        if dialect.name in {"oracle", "spanner+spanner"}:
+        if dialect.name in {"spanner", "spanner+spanner"}:
             return value.bytes
         return value.bytes if self.binary else value.hex
 
@@ -75,8 +79,10 @@ class GUID(TypeDecorator[UUID]):
             return value
         if value.__class__.__name__ == "UUID":
             return cast("UUID", value)
-        if dialect.name == "spanner+spanner":
+        if dialect.name in {"spanner", "spanner+spanner"}:
             return UUID(bytes=b64decode(cast("Union[str, Buffer]", value)))
+        if isinstance(value, bytes):
+            return UUID(bytes=value) if len(value) == _UUID_BYTE_LENGTH else UUID(hex=value.decode("ascii"))
         if self.binary:
             return UUID(bytes=cast("bytes", value))
         return UUID(hex=cast("str", value))

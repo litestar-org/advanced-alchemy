@@ -60,7 +60,10 @@ def test_fernet_backend_is_client_side() -> None:
 
 def test_pgcrypto_backend_wraps_sql() -> None:
     """PGCrypto runs server-side, wrapping binds/reads in pgcrypto functions."""
-    from advanced_alchemy.types.encrypted_string import PGCryptoBackend
+    import advanced_alchemy.types as aa_types
+    from advanced_alchemy.types import PGCryptoBackend
+
+    assert "PGCryptoBackend" in aa_types.__all__
 
     backend = PGCryptoBackend()
     backend.mount_vault("k")

@@ -8,6 +8,7 @@ from advanced_alchemy.types.encrypted_string import (
     EncryptedText,
     EncryptionBackend,
     FernetBackend,
+    PGCryptoBackend,
 )
 from advanced_alchemy.types.file_object import (
     FileObject,
@@ -50,6 +51,7 @@ __all__ = (
     "JsonB",
     "MutableList",
     "OneTimeCode",
+    "PGCryptoBackend",
     "PasswordHash",
     "StorageBackend",
     "StorageBackendT",
