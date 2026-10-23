@@ -4,7 +4,8 @@ This module provides custom SQLAlchemy session classes that implement
 read/write routing via the ``get_bind()`` method.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Union
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, Optional, Union, cast
 
 from sqlalchemy import Delete, Insert, Update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -94,11 +95,19 @@ class RoutingSyncSession(Session):
         Returns:
             The selected engine.
         """
-        # 1. Check for explicit bind group in execution options
-        if clause is not None and hasattr(clause, "_execution_options"):
-            bind_group = clause._execution_options.get("bind_group")  # noqa: SLF001
-            if bind_group:
-                return self._get_engine_for_group(bind_group)
+        if clause is not None:
+            options: Any = None
+            if hasattr(clause, "get_execution_options") and callable(clause.get_execution_options):
+                try:
+                    options = clause.get_execution_options()
+                except (AttributeError, TypeError):
+                    options = None
+            if not isinstance(options, Mapping):
+                options = getattr(clause, "_execution_options", None)
+            if isinstance(options, Mapping):
+                bind_group = cast("Mapping[str, Any]", options).get("bind_group")
+                if bind_group and isinstance(bind_group, str):
+                    return self._get_engine_for_group(bind_group)
 
         # 2. Check context variable for bind group
         bind_group = bind_group_var.get()
@@ -217,9 +226,10 @@ class RoutingAsyncSession(AsyncSession):
 
         sync_selectors = {name: _SyncEngineSelectorWrapper(selector) for name, selector in selectors.items()}
         self.bind: Optional[Union[AsyncEngine, AsyncConnection]] = None  # type: ignore[assignment]
+        sync_session_class = kwargs.pop("sync_session_class", RoutingSyncSession)
 
         super().__init__(
-            sync_session_class=RoutingSyncSession,
+            sync_session_class=sync_session_class,
             routing_config=routing_config,
             selectors=sync_selectors,
             default_engine=default_engine.sync_engine,
