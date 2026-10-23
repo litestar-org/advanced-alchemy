@@ -9,4 +9,5 @@ Advanced Alchemy's repository pattern provides a clean, consistent interface for
 
     basics
     filtering
+    relationship-filtering
     advanced

@@ -28,6 +28,7 @@ NON_EXECUTABLE_DOCS = (
     "usage/frameworks/flask.rst",
     "usage/frameworks/sanic.rst",
     "usage/frameworks/starlette.rst",
+    "usage/repositories/relationship-filtering.rst",
     "usage/routing.rst",
 )
 
