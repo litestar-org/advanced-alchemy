@@ -3,7 +3,7 @@ import sys
 from typing import TYPE_CHECKING, Any, Callable
 from uuid import UUID
 
-from sqlalchemy.orm import Mapped, declarative_mixin, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
 from advanced_alchemy.mixins.sentinel import SentinelMixin
 from advanced_alchemy.types import UUID_UTILS_INSTALLED
@@ -30,7 +30,6 @@ else:
 logger = logging.getLogger("advanced_alchemy")
 
 
-@declarative_mixin
 class UUIDPrimaryKey(SentinelMixin):
     """UUID Primary Key Field Mixin."""
 
@@ -38,7 +37,6 @@ class UUIDPrimaryKey(SentinelMixin):
     """UUID Primary key column."""
 
 
-@declarative_mixin
 class UUIDv6PrimaryKey(SentinelMixin):
     """UUID v6 Primary Key Field Mixin."""
 
@@ -55,7 +53,6 @@ class UUIDv6PrimaryKey(SentinelMixin):
     """UUID Primary key column."""
 
 
-@declarative_mixin
 class UUIDv7PrimaryKey(SentinelMixin):
     """UUID v7 Primary Key Field Mixin."""
 

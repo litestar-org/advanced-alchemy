@@ -1,7 +1,7 @@
 from typing import Any, Optional
 
 from sqlalchemy import Identity, Sequence
-from sqlalchemy.orm import Mapped, declarative_mixin, declared_attr, mapped_column
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 from advanced_alchemy.types import BigIntIdentity
 
@@ -21,7 +21,6 @@ def _get_schema(cls: "BigIntPrimaryKey") -> Optional[str]:  # pragma: nocover
     return None
 
 
-@declarative_mixin
 class BigIntPrimaryKey:
     """BigInt Primary Key Field Mixin."""
 
@@ -39,7 +38,6 @@ class BigIntPrimaryKey:
         )
 
 
-@declarative_mixin
 class IdentityPrimaryKey:
     """Primary Key Field Mixin using database IDENTITY feature.
 
