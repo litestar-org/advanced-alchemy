@@ -1,5 +1,5 @@
 import datetime
-from typing import Optional
+from typing import Optional, cast
 
 from sqlalchemy import DateTime
 from sqlalchemy.dialects import mysql
@@ -25,7 +25,7 @@ class DateTimeUTC(TypeDecorator[datetime.datetime]):
     cache_ok = True
 
     def __init__(self, timezone: bool = True, fsp: Optional[int] = None) -> None:
-        if fsp is not None and (not isinstance(fsp, int) or not 0 <= fsp <= _MAX_MYSQL_DATETIME_FSP):
+        if fsp is not None and (not isinstance(fsp, int) or not 0 <= fsp <= _MAX_MYSQL_DATETIME_FSP):  # pyright: ignore[reportUnnecessaryIsInstance]
             msg = "fsp must be an integer between 0 and 6"
             raise ValueError(msg)
         self.timezone = timezone
@@ -38,8 +38,8 @@ class DateTimeUTC(TypeDecorator[datetime.datetime]):
 
     def load_dialect_impl(self, dialect: Dialect) -> DateTime:
         if self.fsp is not None and dialect.name in {"mysql", "mariadb"}:
-            return dialect.type_descriptor(mysql.DATETIME(fsp=self.fsp))
-        return dialect.type_descriptor(DateTime(timezone=self.timezone))
+            return cast("DateTime", dialect.type_descriptor(mysql.DATETIME(fsp=self.fsp)))
+        return cast("DateTime", dialect.type_descriptor(DateTime(timezone=self.timezone)))
 
     def process_bind_param(self, value: Optional[datetime.datetime], dialect: Dialect) -> Optional[datetime.datetime]:
         if value is None:

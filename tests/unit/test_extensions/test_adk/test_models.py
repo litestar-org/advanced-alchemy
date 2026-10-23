@@ -1,106 +1,76 @@
 import datetime
 
 import pytest
-from sqlalchemy import Column, String, create_engine, inspect
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.schema import CreateIndex
 
+from tests.unit.test_extensions.test_adk.fixtures import (
+    SampleADKAppState,
+    SampleADKArtifact,
+    SampleADKEvent,
+    SampleADKMemory,
+    SampleADKSession,
+    SampleADKUserState,
+    metadata,
+)
 
-def test_v1_models_match_adk_table_contract() -> None:
-    from advanced_alchemy.extensions.adk.v1 import (
-        ADKAppState,
-        ADKEvent,
-        ADKMetadata,
-        ADKSession,
-        ADKUserState,
-        metadata,
-    )
+
+def test_adk_model_mixins_create_user_owned_tables_with_expected_columns() -> None:
     from advanced_alchemy.types.datetime import DateTimeUTC
+    from advanced_alchemy.types.file_object import StoredObject
 
-    assert metadata is ADKSession.metadata
-    assert ADKSession.__tablename__ == "sessions"
-    assert ADKEvent.__tablename__ == "events"
-    assert ADKAppState.__tablename__ == "app_states"
-    assert ADKUserState.__tablename__ == "user_states"
-    assert ADKMetadata.__tablename__ == "adk_internal_metadata"
+    assert SampleADKSession.__tablename__ == "test_adk_sessions"
+    assert SampleADKEvent.__tablename__ == "test_adk_events"
+    assert SampleADKAppState.__tablename__ == "test_adk_app_states"
+    assert SampleADKUserState.__tablename__ == "test_adk_user_states"
+    assert SampleADKArtifact.__tablename__ == "test_adk_artifacts"
+    assert SampleADKMemory.__tablename__ == "test_adk_memory_entries"
 
-    assert [column.name for column in ADKSession.__table__.primary_key.columns] == ["app_name", "user_id", "id"]
-    assert [column.name for column in ADKEvent.__table__.primary_key.columns] == [
-        "id",
-        "app_name",
-        "user_id",
-        "session_id",
-    ]
-    assert [column.name for column in ADKAppState.__table__.primary_key.columns] == ["app_name"]
-    assert [column.name for column in ADKUserState.__table__.primary_key.columns] == ["app_name", "user_id"]
-    assert [column.name for column in ADKMetadata.__table__.primary_key.columns] == ["key"]
+    assert "owner_id" in SampleADKSession.__table__.c
+    assert [column.name for column in SampleADKSession.__table__.primary_key.columns] == ["id"]
+    assert [column.name for column in SampleADKEvent.__table__.primary_key.columns] == ["id"]
 
-    foreign_key = next(iter(ADKEvent.__table__.foreign_key_constraints))
-    assert foreign_key.ondelete == "CASCADE"
-    assert [element.parent.name for element in foreign_key.elements] == ["app_name", "user_id", "session_id"]
-    assert [element.column.name for element in foreign_key.elements] == ["app_name", "user_id", "id"]
+    session_unique = next(
+        constraint
+        for constraint in SampleADKSession.__table__.constraints
+        if constraint.name == "uq_test_adk_sessions_adk_session"
+    )
+    assert [column.name for column in session_unique.columns] == ["app_name", "user_id", "session_id"]
 
-    index = next(index for index in ADKEvent.__table__.indexes if index.name == "idx_events_app_user_session_ts")
-    assert "timestamp DESC" in str(CreateIndex(index).compile(dialect=create_engine("sqlite://").dialect))
+    event_index = next(
+        index for index in SampleADKEvent.__table__.indexes if index.name == "ix_test_adk_events_adk_session_ts"
+    )
+    assert "timestamp DESC" in str(CreateIndex(event_index).compile(dialect=create_engine("sqlite://").dialect))
 
-    assert ADKSession.__table__.c.state.type.python_type is dict
-    assert ADKEvent.__table__.c.event_data.nullable is True
-    assert isinstance(ADKSession.__table__.c.create_time.type, DateTimeUTC)
-    assert ADKSession.__table__.c.create_time.type.fsp == 6
-    assert ADKSession.__table__.c.update_time.type.fsp == 6
-    assert ADKEvent.__table__.c.timestamp.type.fsp == 6
+    assert SampleADKSession.__table__.c.state.type.python_type is dict
+    assert SampleADKEvent.__table__.c.event_data.nullable is True
+    assert isinstance(SampleADKSession.__table__.c.create_time.type, DateTimeUTC)
+    assert SampleADKSession.__table__.c.create_time.type.fsp == 6
+    assert SampleADKEvent.__table__.c.timestamp.type.fsp == 6
+    assert isinstance(SampleADKArtifact.__table__.c.blob.type, StoredObject)
 
 
-def test_v1_metadata_create_all_produces_expected_sqlite_schema() -> None:
-    from advanced_alchemy.extensions.adk.v1 import metadata
-
+def test_adk_mixins_autogenerate_with_advanced_alchemy_metadata() -> None:
     engine = create_engine("sqlite://")
     metadata.create_all(engine)
     inspector = inspect(engine)
 
     assert {
-        "adk_internal_metadata",
-        "app_states",
-        "events",
-        "sessions",
-        "user_states",
+        "test_adk_app_states",
+        "test_adk_artifacts",
+        "test_adk_events",
+        "test_adk_memory_entries",
+        "test_adk_sessions",
+        "test_adk_user_states",
     }.issubset(inspector.get_table_names())
-    assert inspector.get_pk_constraint("sessions")["constrained_columns"] == ["app_name", "user_id", "id"]
-    assert inspector.get_pk_constraint("events")["constrained_columns"] == ["id", "app_name", "user_id", "session_id"]
-    assert inspector.get_foreign_keys("events")[0]["referred_table"] == "sessions"
-    assert inspector.get_foreign_keys("events")[0]["options"] == {"ondelete": "CASCADE"}
-
-
-def test_schema_registry_returns_v1_model_bundle() -> None:
-    from advanced_alchemy.extensions.adk import ADKSchemaVersion, get_models
-    from advanced_alchemy.extensions.adk.v1 import ADKEvent, ADKSession, metadata
-
-    models = get_models(ADKSchemaVersion.V1)
-
-    assert models.metadata is metadata
-    assert models.session_model is ADKSession
-    assert models.event_model is ADKEvent
-
-
-def test_with_owner_column_returns_createable_session_model() -> None:
-    from advanced_alchemy.extensions.adk.v1 import ADKSession, with_owner_column
-
-    OwnedSession = with_owner_column(ADKSession, Column("owner_id", String(64), nullable=False))
-
-    assert "owner_id" in OwnedSession.__table__.c
-    assert OwnedSession.__table__.c.owner_id.type.length == 64
-
-    engine = create_engine("sqlite://")
-    OwnedSession.__table__.metadata.create_all(engine)
-    assert "owner_id" in {column["name"] for column in inspect(engine).get_columns("sessions")}
+    assert "owner_id" in {column["name"] for column in inspector.get_columns("test_adk_sessions")}
 
 
 def test_session_update_marker_matches_upstream_microsecond_format() -> None:
-    from advanced_alchemy.extensions.adk.v1 import ADKSession
-
-    session = ADKSession(
+    session = SampleADKSession(
         app_name="app",
         user_id="user",
-        id="session",
+        session_id="session",
         state={},
         update_time=datetime.datetime(2026, 5, 24, 12, 30, 1, 123, tzinfo=datetime.timezone.utc),
     )
@@ -113,13 +83,11 @@ def test_model_helpers_round_trip_adk_session_and_event_when_extra_is_installed(
     event_module = pytest.importorskip("google.adk.events.event")
     session_module = pytest.importorskip("google.adk.sessions.session")
 
-    from advanced_alchemy.extensions.adk.v1 import ADKEvent, ADKSession
-
     session = session_module.Session(id="session", app_name="app", user_id="user", state={"key": "value"})
     event = event_module.Event(id="event", invocation_id="invocation", author="agent", timestamp=123.5)
-    stored_event = ADKEvent.from_event(session, event)
+    stored_event = SampleADKEvent.from_event(session, event)
 
-    assert stored_event.id == "event"
+    assert stored_event.event_id == "event"
     assert stored_event.session_id == "session"
     assert stored_event.event_data["author"] == "agent"
 
@@ -127,10 +95,10 @@ def test_model_helpers_round_trip_adk_session_and_event_when_extra_is_installed(
     assert round_tripped_event.id == "event"
     assert round_tripped_event.invocation_id == "invocation"
 
-    stored_session = ADKSession(
+    stored_session = SampleADKSession(
         app_name="app",
         user_id="user",
-        id="session",
+        session_id="session",
         state={},
         update_time=datetime.datetime.fromtimestamp(123.5, tz=datetime.timezone.utc),
     )

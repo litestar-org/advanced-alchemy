@@ -42,4 +42,5 @@ Framework Integration
     :caption: Framework Support
 
     extensions/index
+    adk-compatibility-matrix
     alembic/index
