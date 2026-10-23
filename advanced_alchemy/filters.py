@@ -908,17 +908,21 @@ class ExistsFilter(StatementFilter):
     """Filter for EXISTS subqueries.
 
     This filter creates an EXISTS condition using a list of column expressions.
-    The expressions can be combined using either AND or OR logic. The filter applies
-    a correlated subquery that returns only the rows from the main query that match
-    the specified conditions.
+    The expressions can be combined using either AND or OR logic.
 
-    For example, if searching movies with `Movie.genre == "Action"`, only rows where
-    the genre is "Action" will be returned.
+    .. important::
+
+        ``values`` must include the condition that joins the subquery to the outer query.
+        :meth:`~sqlalchemy.sql.expression.Select.correlate` only *permits* correlation; it cannot
+        infer a join. Conditions that never mention the outer table produce a standalone subquery,
+        which is true whenever any row matches it — so the filter matches **every** row of the outer
+        query rather than raising.
 
     Parameters
     ----------
     values : list[ColumnElement[bool]]
-        values: List of SQLAlchemy column expressions to use in the EXISTS clause
+        values: List of SQLAlchemy column expressions to use in the EXISTS clause, including the
+        correlation between the outer table and the subquery table
     operator : Literal["and", "or"], optional
         operator: If "and", combines conditions with AND, otherwise uses OR. Defaults to "and".
 
@@ -930,13 +934,17 @@ class ExistsFilter(StatementFilter):
             from advanced_alchemy.filters import ExistsFilter
 
             filter = ExistsFilter(
-                values=[User.email.like("%@example.com%")],
+                values=[
+                    User.organization_id
+                    == Organization.id,  # correlation
+                    User.email.like("%@example.com%"),
+                ],
             )
             statement = filter.append_to_statement(
                 select(Organization), Organization
             )
 
-        This will return only organizations where the user's email contains "@example.com".
+        This will return only organizations that have a user whose email contains "@example.com".
 
         Using OR conditions::
 
@@ -945,7 +953,8 @@ class ExistsFilter(StatementFilter):
                 operator="or",
             )
 
-        This will return organizations where the user's role is either "admin" OR "owner".
+        Note that this example is *not* correlated on its own — combine it with the correlation, or
+        nest it in a :class:`FilterGroup`, to restrict the outer query.
 
     See Also:
     --------
