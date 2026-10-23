@@ -145,7 +145,7 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
                 self.session_maker,  # pyright: ignore[reportUnknownMemberType]
             )
         elif isinstance(self.session_maker, RoutingSyncSessionMaker):
-            event_target = self.session_maker.sync_session_maker
+            event_target = self.session_maker.session_maker
 
         if event_target is not None:
             if self.enable_file_object_listener:

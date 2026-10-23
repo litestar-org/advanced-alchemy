@@ -4,6 +4,7 @@ This module provides session maker classes that create routing-aware sessions
 with properly configured primary and replica engines.
 """
 
+import warnings
 from typing import Any, Callable, Optional
 
 from sqlalchemy import Engine, create_engine
@@ -72,8 +73,14 @@ class RoutingSyncSessionMaker:
         """
         self._routing_config = routing_config
         self._engine_config = engine_config or {}
-        self._session_config = session_config or {}
-        self._session_maker: sessionmaker[RoutingSyncSession] = sessionmaker(class_=RoutingSyncSession)
+        self._session_config = (session_config or {}).copy()
+        session_maker_kwargs = self._session_config.copy()
+        session_maker_kwargs.pop("bind", None)
+        session_maker_kwargs.pop("binds", None)
+        self._session_maker: sessionmaker[RoutingSyncSession] = sessionmaker(
+            class_=RoutingSyncSession,
+            **session_maker_kwargs,
+        )
 
         self._engines: dict[str, list[Engine]] = {}
         self._selectors: dict[str, EngineSelector[Engine]] = {}
@@ -168,14 +175,35 @@ class RoutingSyncSessionMaker:
             **kwargs: Session configuration options to merge into the maker.
         """
         self._session_config.update(kwargs)
+        maker_kwargs = kwargs.copy()
+        maker_kwargs.pop("bind", None)
+        maker_kwargs.pop("binds", None)
+        self._session_maker.configure(**maker_kwargs)
 
     @property
-    def sync_session_maker(self) -> sessionmaker[RoutingSyncSession]:
+    def session_maker(self) -> sessionmaker[RoutingSyncSession]:
         """Get the underlying SQLAlchemy sync sessionmaker used for event registration.
 
         Returns:
             The underlying :class:`sqlalchemy.orm.sessionmaker` instance.
         """
+        return self._session_maker
+
+    @property
+    def sync_session_maker(self) -> sessionmaker[RoutingSyncSession]:
+        """Get the underlying SQLAlchemy sync sessionmaker used for event registration.
+
+        .. deprecated:: 1.13.0
+            Use :attr:`session_maker` instead.
+
+        Returns:
+            The underlying :class:`sqlalchemy.orm.sessionmaker` instance.
+        """
+        warnings.warn(
+            "RoutingSyncSessionMaker.sync_session_maker is deprecated; use session_maker instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._session_maker
 
     @property
