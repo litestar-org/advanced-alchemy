@@ -14,9 +14,11 @@ import pytest
 from sqlalchemy import Engine, event
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.pool import NullPool
 
 from advanced_alchemy._listeners import touch_updated_timestamp
 from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
+from advanced_alchemy.config.engine import EngineConfig
 from advanced_alchemy.config.routing import RoutingConfig, RoutingStrategy
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.routing.maker import (
@@ -566,7 +568,7 @@ async def test_async_config_with_routing_attaches_and_removes_listeners() -> Non
         primary_connection_string="sqlite+aiosqlite:///:memory:",
         read_replicas=["sqlite+aiosqlite:///:memory:"],
     )
-    config = SQLAlchemyAsyncConfig(routing_config=routing)
+    config = SQLAlchemyAsyncConfig(routing_config=routing, engine_config=EngineConfig(poolclass=NullPool))
     maker = config.create_session_maker()
     assert isinstance(maker, RoutingAsyncSessionMaker)
     sync_maker = maker._session_config["sync_session_class"]
@@ -653,7 +655,7 @@ async def test_async_routing_session_executes_listeners(tmp_path: Path) -> None:
         primary_connection_string=f"sqlite+aiosqlite:///{db_file}",
         read_replicas=[f"sqlite+aiosqlite:///{db_file}"],
     )
-    config = SQLAlchemyAsyncConfig(routing_config=routing)
+    config = SQLAlchemyAsyncConfig(routing_config=routing, engine_config=EngineConfig(poolclass=NullPool))
     maker = config.create_session_maker()
     assert isinstance(maker, RoutingAsyncSessionMaker)
 
