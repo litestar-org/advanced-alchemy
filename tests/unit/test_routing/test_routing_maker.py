@@ -625,12 +625,12 @@ def test_sync_routing_session_executes_listeners(tmp_path: Path) -> None:
         session.commit()
 
     with maker() as session:
-        item = session.get(AuditModel, 1)
-        assert item is not None
-        item.name = "updated"
+        retrieved = session.get(AuditModel, 1)
+        assert retrieved is not None
+        retrieved.name = "updated"
         session.commit()
-        assert item.updated_at is not None
-        assert item.updated_at > initial_time
+        assert retrieved.updated_at is not None
+        assert retrieved.updated_at > initial_time
 
     maker.close_all()
 
@@ -667,12 +667,12 @@ async def test_async_routing_session_executes_listeners(tmp_path: Path) -> None:
         await session.commit()
 
     async with maker() as session:
-        item = await session.get(AuditModel, 1)
-        assert item is not None
-        item.name = "updated"
+        retrieved = await session.get(AuditModel, 1)
+        assert retrieved is not None
+        retrieved.name = "updated"
         await session.commit()
-        await session.refresh(item)
-        assert item.updated_at is not None
-        assert item.updated_at > initial_time
+        await session.refresh(retrieved)
+        assert retrieved.updated_at is not None
+        assert retrieved.updated_at > initial_time
 
     await maker.close_all()
