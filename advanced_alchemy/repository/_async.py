@@ -40,7 +40,7 @@ from sqlalchemy import func as sql_func
 from sqlalchemy.exc import MissingGreenlet, NoInspectionAvailable
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio.scoping import async_scoped_session
-from sqlalchemy.orm import InstrumentedAttribute, Load
+from sqlalchemy.orm import InstrumentedAttribute, Load, with_loader_criteria
 from sqlalchemy.sql import ColumnElement
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from sqlalchemy.sql.selectable import ForUpdateArg, ForUpdateParameter
@@ -55,6 +55,7 @@ from advanced_alchemy.exceptions import (
     wrap_sqlalchemy_exception,
 )
 from advanced_alchemy.filters import StatementFilter, StatementTypeT
+from advanced_alchemy.mixins.softdelete import SoftDeleteMixin
 from advanced_alchemy.operations import (
     OnConflictUpsert,
     UpsertStrategy,
@@ -100,6 +101,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
     order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None
     error_messages: Optional[ErrorMessages] = None
     wrap_exceptions: bool = True
+    include_deleted: bool = False
 
     @property
     def pk_attr_names(self) -> tuple[str, ...]: ...
@@ -127,6 +129,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         wrap_exceptions: bool = True,
+        include_deleted: bool = False,
         **kwargs: Any,
     ) -> None: ...
 
@@ -179,6 +182,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        include_deleted: bool = True,
         bind_group: Optional[str] = None,
     ) -> ModelT: ...
 
@@ -193,6 +197,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        include_deleted: bool = True,
         bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]: ...
 
@@ -205,8 +210,71 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         execution_options: Optional[dict[str, Any]] = None,
         sanity_check: bool = True,
+        include_deleted: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
+    ) -> Sequence[ModelT]: ...
+
+    async def soft_delete(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        cascade: bool = True,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        auto_refresh: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
+    ) -> ModelT: ...
+
+    async def soft_delete_many(
+        self,
+        item_ids: List[PrimaryKeyType],
+        *,
+        cascade: bool = True,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        chunk_size: Optional[int] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
+    ) -> Sequence[ModelT]: ...
+
+    async def restore(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        cascade: bool = True,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        auto_refresh: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
+    ) -> ModelT: ...
+
+    async def restore_many(
+        self,
+        item_ids: List[PrimaryKeyType],
+        *,
+        cascade: bool = True,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        chunk_size: Optional[int] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]: ...
 
     async def exists(
@@ -215,6 +283,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: Optional[LoadSpec] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         execution_options: Optional[dict[str, Any]] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> bool: ...
@@ -230,6 +299,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         with_for_update: ForUpdateParameter = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> ModelT: ...
 
@@ -242,6 +312,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         with_for_update: ForUpdateParameter = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> ModelT: ...
@@ -255,6 +326,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         with_for_update: ForUpdateParameter = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Optional[ModelT]: ...
@@ -299,6 +371,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         load: Optional[LoadSpec] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         execution_options: Optional[dict[str, Any]] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> int: ...
@@ -382,6 +455,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         execution_options: Optional[dict[str, Any]] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]: ...
@@ -397,6 +471,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         execution_options: Optional[dict[str, Any]] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
@@ -416,6 +491,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         execution_options: Optional[dict[str, Any]] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> List[ModelT]: ...
@@ -430,6 +506,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         execution_options: Optional[dict[str, Any]] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> List[ModelT]:
@@ -557,6 +634,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         count_with_window_function: Optional[bool] = None,
         cache_manager: Optional["CacheManager"] = None,
         bind_group: Optional[str] = None,
+        include_deleted: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
         """Repository for SQLAlchemy models.
@@ -577,6 +655,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
             cache_manager: Optional cache manager for repository-level caching. If not provided, retrieved from ``session.info``.
             bind_group: Optional default routing group to use for all operations. Can be overridden per-method.
+            include_deleted: Whether to include soft-deleted records (`SoftDeleteMixin`) in read queries by default.
             **kwargs: Additional arguments.
 
         """
@@ -598,6 +677,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             error_messages=error_messages, default_messages=self.error_messages
         )
         self.wrap_exceptions = wrap_exceptions
+        self.include_deleted = include_deleted if include_deleted is not None else self.include_deleted
         self._uniquify = uniquify if uniquify is not None else self.uniquify
         self.count_with_window_function = (
             count_with_window_function if count_with_window_function is not None else self.count_with_window_function
@@ -821,6 +901,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: bool = True,
         bind_group: Optional[str] = None,
     ) -> ModelT:
         """Delete instance identified by ``item_id``.
@@ -839,6 +920,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            include_deleted: Whether to allow deleting already soft-deleted records. Defaults to ``True``.
             bind_group: Optional routing group for multi-master configurations.
 
         Returns:
@@ -854,6 +936,9 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         """
         with self._wrap_exceptions(error_messages=error_messages):
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
+            get_kwargs: dict[str, Any] = {}
+            if self._has_soft_delete or not include_deleted:
+                get_kwargs["include_deleted"] = include_deleted
             instance = await self.get(
                 item_id,
                 id_attribute=id_attribute,
@@ -861,6 +946,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 execution_options=execution_options,
                 uniquify=uniquify,
                 bind_group=bind_group,
+                **get_kwargs,
             )
             await self.session.delete(instance)
             await self._flush_or_commit(auto_commit=auto_commit)
@@ -880,6 +966,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: bool = True,
         bind_group: Optional[str] = None,
     ) -> Sequence[ModelT]:
         """Delete multiple instances identified by ``item_ids``.
@@ -903,6 +990,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            include_deleted: Whether to allow deleting already soft-deleted records. Defaults to ``True``.
             bind_group: Optional routing group for multi-master configurations.
 
         Returns:
@@ -943,6 +1031,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                     load=load,
                     execution_options=execution_options,
                     uniquify=uniquify,
+                    include_deleted=include_deleted,
                     bind_group=bind_group,
                 )
                 for instance in instances:
@@ -973,6 +1062,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                                 statement=delete(self.model_type).where(pk_filter),
                                 loader_options=None,
                                 execution_options=execution_options,
+                                include_deleted=include_deleted,
                             ).returning(self.model_type)
                             instances.extend(await self.session.scalars(returning_delete_stmt))
                         else:
@@ -980,6 +1070,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                                 statement=select(self.model_type).where(pk_filter),
                                 loader_options=loader_options,
                                 execution_options=execution_options,
+                                include_deleted=include_deleted,
                             )
                             instances.extend(await self.session.scalars(select_stmt))
 
@@ -987,6 +1078,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                                 statement=delete(self.model_type).where(pk_filter),
                                 loader_options=None,
                                 execution_options=execution_options,
+                                include_deleted=include_deleted,
                             )
                             await self.session.execute(plain_delete_stmt)
                 else:
@@ -1010,6 +1102,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                                         supports_returning=self._dialect.delete_executemany_returning,
                                         loader_options=loader_options,
                                         execution_options=execution_options,
+                                        include_deleted=include_deleted,
                                     ),
                                 ),
                             )
@@ -1024,6 +1117,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                                         supports_returning=self._dialect.delete_executemany_returning,
                                         loader_options=loader_options,
                                         execution_options=execution_options,
+                                        include_deleted=include_deleted,
                                     ),
                                 ),
                             )
@@ -1036,6 +1130,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                                     supports_returning=self._dialect.delete_executemany_returning,
                                     loader_options=loader_options,
                                     execution_options=execution_options,
+                                    include_deleted=include_deleted,
                                 ),
                             )
             await self._flush_or_commit(auto_commit=auto_commit)
@@ -1054,6 +1149,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
@@ -1069,6 +1165,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            include_deleted: Whether to allow deleting already soft-deleted records. Defaults to ``True``.
             bind_group: Optional routing group for multi-master configurations.
             **kwargs: Arguments to apply to a delete
 
@@ -1094,6 +1191,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                         auto_expunge=False,
                         uniquify=uniquify,
                         use_cache=False,
+                        include_deleted=include_deleted,
                         bind_group=bind_group,
                         **kwargs,
                     ),
@@ -1105,12 +1203,16 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                     statement=delete(model_type),
                     loader_options=loader_options,
                     execution_options=execution_options,
+                    include_deleted=include_deleted,
                 )
                 statement = self._filter_select_by_kwargs(statement=statement, kwargs=kwargs)
                 statement = self._apply_filters(*filters, statement=statement, apply_pagination=False)
                 if self._dialect.delete_executemany_returning:
                     instances.extend(await self.session.scalars(statement.returning(model_type)))
                 else:
+                    get_many_kwargs: dict[str, Any] = dict(kwargs)
+                    if self._has_soft_delete or not include_deleted:
+                        get_many_kwargs["include_deleted"] = include_deleted
                     instances.extend(
                         await self.get_many(
                             *filters,
@@ -1120,7 +1222,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                             uniquify=uniquify,
                             use_cache=False,
                             bind_group=bind_group,
-                            **kwargs,
+                            **get_many_kwargs,
                         ),
                     )
                     result = await self.session.execute(statement)
@@ -1129,6 +1231,247 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                         await self.session.rollback()
                         raise RepositoryError(detail="Deleted count does not match fetched count. Rollback issued.")
 
+            await self._flush_or_commit(auto_commit=auto_commit)
+            for instance in instances:
+                self._expunge(instance, auto_expunge=auto_expunge)
+                self._queue_cache_invalidation(self.get_primary_key_value(instance), resolved_bind_group)
+            return instances
+
+    async def soft_delete(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        cascade: bool = True,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        auto_refresh: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
+    ) -> ModelT:
+        """Mark the instance identified by ``item_id`` as soft-deleted.
+
+        Args:
+            item_id: Identifier of the instance to soft-delete.
+            cascade: Whether to cascade soft-delete to loaded ``SoftDeleteMixin`` child relationships.
+            auto_commit: Commit objects before returning.
+            auto_expunge: Remove object from session before returning.
+            auto_refresh: Refresh object from session before returning.
+            id_attribute: Optional custom identifier attribute name.
+            error_messages: Optional custom error message templates.
+            load: Relationships to load.
+            execution_options: Execution options for the underlying query.
+            uniquify: Optionally apply ``unique()`` to results.
+            with_for_update: Optional ``FOR UPDATE`` clause parameters.
+            bind_group: Optional routing group.
+
+        Returns:
+            The soft-deleted instance.
+        """
+        self._require_soft_delete()
+        with self._wrap_exceptions(error_messages=error_messages):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
+            instance = await self.get(
+                item_id,
+                id_attribute=id_attribute,
+                load=load,
+                execution_options=execution_options,
+                with_for_update=with_for_update,
+                uniquify=uniquify,
+                include_deleted=False,
+                auto_expunge=False,
+                use_cache=False,
+                bind_group=bind_group,
+            )
+            deleted_at = datetime.datetime.now(datetime.timezone.utc)
+            self._apply_soft_delete_to_instance(instance, deleted_at=deleted_at, cascade=cascade)
+            instance = await self._attach_to_session(instance, strategy="merge")
+            await self._flush_or_commit(auto_commit=auto_commit)
+            await self._refresh(instance, auto_refresh=auto_refresh, with_for_update=with_for_update)
+            self._expunge(instance, auto_expunge=auto_expunge)
+            self._queue_cache_invalidation(self.get_primary_key_value(instance), resolved_bind_group)
+            return instance
+
+    async def soft_delete_many(
+        self,
+        item_ids: List[PrimaryKeyType],
+        *,
+        cascade: bool = True,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        chunk_size: Optional[int] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
+    ) -> Sequence[ModelT]:
+        """Mark multiple instances identified by ``item_ids`` as soft-deleted.
+
+        Args:
+            item_ids: Identifiers of instances to soft-delete.
+            cascade: Whether to cascade soft-delete to loaded ``SoftDeleteMixin`` child relationships.
+            auto_commit: Commit objects before returning.
+            auto_expunge: Remove objects from session before returning.
+            id_attribute: Optional custom identifier attribute name.
+            chunk_size: Optional batch parameter chunk size.
+            error_messages: Optional custom error message templates.
+            load: Relationships to load.
+            execution_options: Execution options for the underlying query.
+            uniquify: Optionally apply ``unique()`` to results.
+            bind_group: Optional routing group.
+
+        Returns:
+            Sequence of soft-deleted instances.
+        """
+        self._require_soft_delete()
+        if not item_ids:
+            return []
+        with self._wrap_exceptions(error_messages=error_messages):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
+            instances = await self._fetch_many_by_ids(
+                item_ids,
+                id_attribute=id_attribute,
+                chunk_size=chunk_size,
+                load=load,
+                execution_options=execution_options,
+                uniquify=uniquify,
+                include_deleted=False,
+                bind_group=bind_group,
+            )
+            deleted_at = datetime.datetime.now(datetime.timezone.utc)
+            visited: set[int] = set()
+            for instance in instances:
+                self._apply_soft_delete_to_instance(
+                    instance,
+                    deleted_at=deleted_at,
+                    cascade=cascade,
+                    visited=visited,
+                )
+            await self._flush_or_commit(auto_commit=auto_commit)
+            for instance in instances:
+                self._expunge(instance, auto_expunge=auto_expunge)
+                self._queue_cache_invalidation(self.get_primary_key_value(instance), resolved_bind_group)
+            return instances
+
+    async def restore(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        cascade: bool = True,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        auto_refresh: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
+    ) -> ModelT:
+        """Restore a soft-deleted instance identified by ``item_id``.
+
+        Args:
+            item_id: Identifier of the instance to restore.
+            cascade: Whether to cascade restore to loaded ``SoftDeleteMixin`` child relationships.
+            auto_commit: Commit objects before returning.
+            auto_expunge: Remove object from session before returning.
+            auto_refresh: Refresh object from session before returning.
+            id_attribute: Optional custom identifier attribute name.
+            error_messages: Optional custom error message templates.
+            load: Relationships to load.
+            execution_options: Execution options for the underlying query.
+            uniquify: Optionally apply ``unique()`` to results.
+            with_for_update: Optional ``FOR UPDATE`` clause parameters.
+            bind_group: Optional routing group.
+
+        Returns:
+            The restored instance.
+        """
+        self._require_soft_delete()
+        with self._wrap_exceptions(error_messages=error_messages):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
+            instance = await self.get(
+                item_id,
+                id_attribute=id_attribute,
+                load=load,
+                execution_options=execution_options,
+                with_for_update=with_for_update,
+                uniquify=uniquify,
+                include_deleted=True,
+                auto_expunge=False,
+                use_cache=False,
+                bind_group=bind_group,
+            )
+            self._apply_restore_to_instance(instance, cascade=cascade)
+            instance = await self._attach_to_session(instance, strategy="merge")
+            await self._flush_or_commit(auto_commit=auto_commit)
+            await self._refresh(instance, auto_refresh=auto_refresh, with_for_update=with_for_update)
+            self._expunge(instance, auto_expunge=auto_expunge)
+            self._queue_cache_invalidation(self.get_primary_key_value(instance), resolved_bind_group)
+            return instance
+
+    async def restore_many(
+        self,
+        item_ids: List[PrimaryKeyType],
+        *,
+        cascade: bool = True,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        chunk_size: Optional[int] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
+    ) -> Sequence[ModelT]:
+        """Restore multiple soft-deleted instances identified by ``item_ids``.
+
+        Args:
+            item_ids: Identifiers of instances to restore.
+            cascade: Whether to cascade restore to loaded ``SoftDeleteMixin`` child relationships.
+            auto_commit: Commit objects before returning.
+            auto_expunge: Remove objects from session before returning.
+            id_attribute: Optional custom identifier attribute name.
+            chunk_size: Optional batch parameter chunk size.
+            error_messages: Optional custom error message templates.
+            load: Relationships to load.
+            execution_options: Execution options for the underlying query.
+            uniquify: Optionally apply ``unique()`` to results.
+            bind_group: Optional routing group.
+
+        Returns:
+            Sequence of restored instances.
+        """
+        self._require_soft_delete()
+        if not item_ids:
+            return []
+        with self._wrap_exceptions(error_messages=error_messages):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
+            execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
+            instances = await self._fetch_many_by_ids(
+                item_ids,
+                id_attribute=id_attribute,
+                chunk_size=chunk_size,
+                load=load,
+                execution_options=execution_options,
+                uniquify=uniquify,
+                include_deleted=True,
+                bind_group=bind_group,
+            )
+            visited: set[int] = set()
+            for instance in instances:
+                self._apply_restore_to_instance(instance, cascade=cascade, visited=visited)
             await self._flush_or_commit(auto_commit=auto_commit)
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
@@ -1144,6 +1487,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> List[ModelT]:
         """Fetch multiple instances by primary key or ``id_attribute`` in dialect-safe chunks."""
@@ -1151,6 +1495,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         if not item_ids:
             return []
         loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+        resolved_include_deleted = self._resolve_include_deleted(include_deleted)
         use_composite_path = id_attribute is None and self.has_composite_pk
         instances: List[ModelT] = []
         if use_composite_path:
@@ -1168,6 +1513,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                     statement=select(self.model_type).where(pk_filter),
                     loader_options=loader_options,
                     execution_options=execution_options,
+                    include_deleted=resolved_include_deleted,
                 )
                 result = await self._execute(
                     select_stmt,
@@ -1194,6 +1540,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                         supports_returning=False,
                         loader_options=loader_options,
                         execution_options=execution_options,
+                        include_deleted=resolved_include_deleted,
                     ),
                 )
                 result = await self._execute(
@@ -1210,6 +1557,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> bool:
@@ -1222,6 +1570,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: Optional routing group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
@@ -1233,13 +1582,16 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
+        count_kwargs: dict[str, Any] = dict(kwargs)
+        if include_deleted is not None or self._has_soft_delete:
+            count_kwargs["include_deleted"] = include_deleted
         existing = await self.count(
             *filters,
             load=load,
             execution_options=execution_options,
             error_messages=error_messages,
             bind_group=bind_group,
-            **kwargs,
+            **count_kwargs,
         )
         return existing > 0
 
@@ -1249,6 +1601,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         statement: StatementTypeT,
         loader_options: Optional[List[Load]],
         execution_options: Optional[dict[str, Any]],
+        include_deleted: bool = False,
     ) -> StatementTypeT:
         """Get base statement with options applied.
 
@@ -1256,12 +1609,24 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             statement: The select statement to modify
             loader_options: Options for loading relationships
             execution_options: Options for statement execution
+            include_deleted: Whether to include soft-deleted records when querying SoftDeleteMixin models.
 
         Returns:
             Modified select statement
         """
         if loader_options:
             statement = cast("StatementTypeT", statement.options(*loader_options))
+        if isinstance(statement, (Select, Delete)) and not include_deleted:
+            statement = cast(
+                "StatementTypeT",
+                statement.options(
+                    with_loader_criteria(
+                        SoftDeleteMixin,
+                        lambda cls: cls.deleted_at.is_(None),
+                        include_aliases=True,
+                    ),
+                ),
+            )
         if execution_options:
             statement = cast("StatementTypeT", statement.execution_options(**execution_options))
         return statement
@@ -1301,11 +1666,16 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         statement_type: Literal["delete", "select"] = "delete",
         loader_options: Optional[List[Load]],
         execution_options: Optional[dict[str, Any]],
+        include_deleted: bool = True,
     ) -> Union[Select[tuple[ModelT]], Delete, ReturningDelete[tuple[ModelT]]]:
+        base_stmt_kwargs: dict[str, Any] = {}
+        if not include_deleted:
+            base_stmt_kwargs["include_deleted"] = include_deleted
         statement = self._get_base_stmt(
             statement=delete(model_type) if statement_type == "delete" else select(model_type),
             loader_options=loader_options,
             execution_options=execution_options,
+            **base_stmt_kwargs,
         )
         if execution_options:
             statement = statement.execution_options(**execution_options)
@@ -1328,6 +1698,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         execution_options: Optional[dict[str, Any]],
         with_for_update: ForUpdateParameter,
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> ModelT:
         """Fetch an entity from the database without using cache."""
@@ -1335,10 +1706,15 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             resolved_execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             resolved_statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            base_stmt_kwargs: dict[str, Any] = {}
+            resolved_include_deleted = self._resolve_include_deleted(include_deleted)
+            if resolved_include_deleted:
+                base_stmt_kwargs["include_deleted"] = True
             resolved_statement = self._get_base_stmt(
                 statement=resolved_statement,
                 loader_options=loader_options,
                 execution_options=resolved_execution_options,
+                **base_stmt_kwargs,
             )
             if id_attribute is None:
                 resolved_statement = resolved_statement.where(self._build_pk_filter(item_id))
@@ -1368,6 +1744,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         execution_options: Optional[dict[str, Any]],
         with_for_update: ForUpdateParameter,
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> ModelT:
         """Singleflight creator for get(id) caching (async)."""
@@ -1382,6 +1759,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 execution_options=execution_options,
                 with_for_update=with_for_update,
                 uniquify=uniquify,
+                include_deleted=include_deleted,
                 bind_group=bind_group,
             )
 
@@ -1389,6 +1767,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             model_name, item_id, self.model_type, bind_group=bind_group
         )
         if existing is not None:
+            if self._should_filter_soft_deleted(include_deleted) and getattr(existing, "deleted_at", None) is not None:
+                return self.check_not_found(None)
             return existing
 
         instance = await self._get_from_db(
@@ -1401,6 +1781,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options=execution_options,
             with_for_update=with_for_update,
             uniquify=uniquify,
+            include_deleted=include_deleted,
             bind_group=bind_group,
         )
         await self._cache_manager.set_entity_async(model_name, item_id, instance, bind_group=bind_group)
@@ -1418,6 +1799,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> List[ModelT]:
         """Fetch a list of entities from the database without using cache."""
@@ -1425,10 +1807,14 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             resolved_execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             resolved_statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            base_stmt_kwargs: dict[str, Any] = {}
+            if self._resolve_include_deleted(include_deleted):
+                base_stmt_kwargs["include_deleted"] = True
             resolved_statement = self._get_base_stmt(
                 statement=resolved_statement,
                 loader_options=loader_options,
                 execution_options=resolved_execution_options,
+                **base_stmt_kwargs,
             )
             if order_by is None:
                 order_by = self.order_by if self.order_by is not None else []
@@ -1457,6 +1843,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> List[ModelT]:
         """Singleflight creator for list caching (async)."""
@@ -1471,6 +1858,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                include_deleted=include_deleted,
                 bind_group=bind_group,
             )
 
@@ -1488,6 +1876,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options=execution_options,
             kwargs=kwargs,
             uniquify=uniquify,
+            include_deleted=include_deleted,
             bind_group=bind_group,
         )
         await self._cache_manager.set_many_async(cache_key, list(instances))
@@ -1506,9 +1895,13 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> tuple[List[ModelT], int]:
         """Fetch a list+count payload from the database without using cache."""
+        extra_kwargs: dict[str, Any] = dict(kwargs)
+        if include_deleted is not None or self._has_soft_delete:
+            extra_kwargs["include_deleted"] = include_deleted
         if self._dialect.name in {"spanner", "spanner+spanner"} or not count_with_window_function:
             return await self._get_many_and_count_basic(
                 *filters,
@@ -1520,7 +1913,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 error_messages=error_messages,
                 uniquify=uniquify,
                 bind_group=bind_group,
-                **kwargs,
+                **extra_kwargs,
             )
         return await self._get_many_and_count_window(
             *filters,
@@ -1532,7 +1925,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             order_by=order_by,
             uniquify=uniquify,
             bind_group=bind_group,
-            **kwargs,
+            **extra_kwargs,
         )
 
     async def _get_many_and_count_cached_creator(
@@ -1549,6 +1942,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         execution_options: Optional[dict[str, Any]],
         kwargs: dict[str, Any],
         uniquify: Optional[bool],
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> tuple[List[ModelT], int]:
         """Singleflight creator for list_and_count caching (async)."""
@@ -1564,6 +1958,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                include_deleted=include_deleted,
                 bind_group=bind_group,
             )
 
@@ -1582,6 +1977,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options=execution_options,
             kwargs=kwargs,
             uniquify=uniquify,
+            include_deleted=include_deleted,
             bind_group=bind_group,
         )
         await self._cache_manager.set_many_and_count_async(cache_key, list(instances), count)
@@ -1600,6 +1996,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> ModelT:
         """Get instance identified by `item_id`.
@@ -1621,6 +2018,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
             use_cache: Whether to use caching for this query (default True).
+            include_deleted: Whether to include soft-deleted records.
             bind_group: Optional routing group to use for the operation.
 
         Returns:
@@ -1675,6 +2073,11 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 model_name, item_id, self.model_type, bind_group=resolved_bind_group
             )
             if cached is not None:
+                if (
+                    self._should_filter_soft_deleted(include_deleted)
+                    and getattr(cached, "deleted_at", None) is not None
+                ):
+                    return self.check_not_found(None)
                 return cached
 
             singleflight_key = (
@@ -1696,6 +2099,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                     execution_options=execution_options,
                     with_for_update=with_for_update,
                     uniquify=uniquify,
+                    include_deleted=include_deleted,
                     bind_group=resolved_bind_group,
                 ),
             )
@@ -1710,6 +2114,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options=execution_options,
             with_for_update=with_for_update,
             uniquify=uniquify,
+            include_deleted=include_deleted,
             bind_group=bind_group,
         )
 
@@ -1723,6 +2128,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> ModelT:
@@ -1738,6 +2144,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: Optional routing group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
@@ -1749,10 +2156,19 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            statement = self._get_base_stmt(
-                statement=statement,
-                loader_options=loader_options,
-                execution_options=execution_options,
+            statement = (
+                self._get_base_stmt(
+                    statement=statement,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                    include_deleted=True,
+                )
+                if self._resolve_include_deleted(include_deleted)
+                else self._get_base_stmt(
+                    statement=statement,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                )
             )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
@@ -1777,6 +2193,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Union[ModelT, None]:
@@ -1792,6 +2209,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             with_for_update: Optional FOR UPDATE clause / parameters to apply to the SELECT statement.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: Optional routing group to use for the operation.
             **kwargs: Identifier of the instance to be retrieved.
 
@@ -1802,10 +2220,19 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            statement = self._get_base_stmt(
-                statement=statement,
-                loader_options=loader_options,
-                execution_options=execution_options,
+            statement = (
+                self._get_base_stmt(
+                    statement=statement,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                    include_deleted=True,
+                )
+                if self._resolve_include_deleted(include_deleted)
+                else self._get_base_stmt(
+                    statement=statement,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                )
             )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
@@ -1998,6 +2425,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> int:
@@ -2011,6 +2439,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
@@ -2021,10 +2450,20 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            statement = self._get_base_stmt(
-                statement=statement,
-                loader_options=loader_options,
-                execution_options=execution_options,
+            resolved_include_deleted = self._resolve_include_deleted(include_deleted)
+            statement = (
+                self._get_base_stmt(
+                    statement=statement,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                    include_deleted=True,
+                )
+                if resolved_include_deleted
+                else self._get_base_stmt(
+                    statement=statement,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                )
             )
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
@@ -2317,6 +2756,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
@@ -2334,6 +2774,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             use_cache: Whether to use the cache for this query. Defaults to ``True``.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
@@ -2352,6 +2793,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         resolved_auto_expunge = self.auto_expunge if auto_expunge is None else auto_expunge
         resolved_execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
         resolved_order_by = order_by if order_by is not None else (self.order_by if self.order_by is not None else [])
+        resolved_include_deleted = self._resolve_include_deleted(include_deleted)
 
         cache_manager = self._cache_manager
         if not (
@@ -2373,6 +2815,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                include_deleted=include_deleted,
                 bind_group=bind_group,
             )
 
@@ -2390,6 +2833,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             uniquify=should_uniquify,
             count_with_window_function=count_with_window_function,
             bind_group=resolved_bind_group,
+            include_deleted=resolved_include_deleted,
         )
         if cache_key is None:
             return await self._get_many_and_count_from_db(
@@ -2403,6 +2847,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                include_deleted=include_deleted,
                 bind_group=bind_group,
             )
 
@@ -2425,6 +2870,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                include_deleted=include_deleted,
                 bind_group=bind_group,
             ),
         )
@@ -2496,6 +2942,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
@@ -2511,6 +2958,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
@@ -2521,10 +2969,20 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            statement = self._get_base_stmt(
-                statement=statement,
-                loader_options=loader_options,
-                execution_options=execution_options,
+            resolved_include_deleted = self._resolve_include_deleted(include_deleted)
+            statement = (
+                self._get_base_stmt(
+                    statement=statement,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                    include_deleted=True,
+                )
+                if resolved_include_deleted
+                else self._get_base_stmt(
+                    statement=statement,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                )
             )
             if order_by is None:
                 order_by = self.order_by if self.order_by is not None else []
@@ -2554,6 +3012,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
@@ -2569,6 +3028,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             load: Set relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
@@ -2579,10 +3039,20 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
             loader_options, loader_options_have_wildcard = self._get_loader_options(load)
-            statement = self._get_base_stmt(
-                statement=statement,
-                loader_options=loader_options,
-                execution_options=execution_options,
+            resolved_include_deleted = self._resolve_include_deleted(include_deleted)
+            statement = (
+                self._get_base_stmt(
+                    statement=statement,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                    include_deleted=True,
+                )
+                if resolved_include_deleted
+                else self._get_base_stmt(
+                    statement=statement,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                )
             )
             if order_by is None:
                 order_by = self.order_by if self.order_by is not None else []
@@ -3121,6 +3591,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> List[ModelT]:
@@ -3137,6 +3608,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
             use_cache: Whether to use the cache for this query. Defaults to ``True``.
+            include_deleted: Whether to include soft-deleted records.
             bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
@@ -3152,6 +3624,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         resolved_auto_expunge = self.auto_expunge if auto_expunge is None else auto_expunge
         resolved_execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
         resolved_order_by = order_by if order_by is not None else (self.order_by if self.order_by is not None else [])
+        resolved_include_deleted = self._resolve_include_deleted(include_deleted)
 
         cache_manager = self._cache_manager
         if not (
@@ -3172,6 +3645,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                include_deleted=include_deleted,
                 bind_group=bind_group,
             )
 
@@ -3188,6 +3662,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options=resolved_execution_options,
             uniquify=should_uniquify,
             bind_group=resolved_bind_group,
+            include_deleted=resolved_include_deleted,
         )
         if cache_key is None:
             return await self._get_many_from_db(
@@ -3200,6 +3675,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                include_deleted=include_deleted,
                 bind_group=bind_group,
             )
 
@@ -3221,6 +3697,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 execution_options=execution_options,
                 kwargs=kwargs,
                 uniquify=uniquify,
+                include_deleted=include_deleted,
                 bind_group=bind_group,
             ),
         )
@@ -3237,6 +3714,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
@@ -3263,6 +3741,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options=execution_options,
             uniquify=uniquify,
             use_cache=use_cache,
+            include_deleted=include_deleted,
             bind_group=bind_group,
             **kwargs,
         )
@@ -3278,6 +3757,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> List[ModelT]:
@@ -3303,6 +3783,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             execution_options=execution_options,
             uniquify=uniquify,
             use_cache=use_cache,
+            include_deleted=include_deleted,
             bind_group=bind_group,
             **kwargs,
         )
@@ -3431,6 +3912,8 @@ class SQLAlchemyAsyncSlugRepositoryMixin(Generic[ModelT]):
         execution_options: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> bool:
+        if getattr(self, "_has_soft_delete", False):
+            kwargs.setdefault("include_deleted", True)
         return await self.exists(slug=slug, load=load, execution_options=execution_options, **kwargs) is False  # type: ignore[attr-defined]
 
 

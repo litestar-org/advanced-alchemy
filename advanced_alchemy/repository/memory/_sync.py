@@ -77,6 +77,7 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         "error_messages",
         "wrap_exceptions",
         "uniquify",
+        "include_deleted",
         "bind_group",
     }
 
@@ -95,6 +96,7 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
         if model_type is not None:
@@ -115,6 +117,7 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
             error_messages=error_messages, default_messages=self.error_messages
         )
         self.wrap_exceptions = wrap_exceptions
+        self.include_deleted = include_deleted if include_deleted is not None else self.include_deleted
         self.order_by = order_by
         self._dialect: Dialect = create_autospec(Dialect, instance=True)
         self._dialect.name = "mock"
@@ -293,15 +296,19 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
     ) -> List[ModelT]:
         return InMemoryFilterEvaluator.apply_filters(result, *filters, apply_pagination=apply_pagination)
 
-    def _get_collection_items(self) -> List[ModelT]:
-        return list(self.__collection__().get_all())
+    def _get_collection_items(self, include_deleted: Optional[bool] = None) -> List[ModelT]:
+        items = list(self.__collection__().get_all())
+        if self._should_filter_soft_deleted(include_deleted):
+            return [item for item in items if getattr(item, "deleted_at", None) is None]
+        return items
 
     def _get_many_and_count_basic(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
+        include_deleted: Optional[bool] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
-        filtered = self._filter_result_by_kwargs(self._get_collection_items(), kwargs)
+        filtered = self._filter_result_by_kwargs(self._get_collection_items(include_deleted), kwargs)
         filtered = self._apply_filters(filtered, *filters, apply_pagination=False)
         total_count = len(filtered)
         return InMemoryFilterEvaluator.paginate_items(filtered, *filters), total_count
@@ -309,18 +316,21 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
     def _get_many_and_count_window(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
+        include_deleted: Optional[bool] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
-        return self._get_many_and_count_basic(*filters, **kwargs)
+        return self._get_many_and_count_basic(*filters, include_deleted=include_deleted, **kwargs)
 
     def _find_or_raise_not_found(
         self,
         id_: PrimaryKeyType,
+        include_deleted: Optional[bool] = None,
     ) -> ModelT:
         """Find an item by primary key or raise NotFoundError.
 
         Args:
             id_: Primary key value (scalar, tuple, or dict).
+            include_deleted: Whether to include soft-deleted records.
 
         Returns:
             The found model instance.
@@ -330,6 +340,12 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         """
         store_key = self._get_store_key(id_)
         item = self.__collection__().get_or_none(store_key)
+        if (
+            item is not None
+            and self._should_filter_soft_deleted(include_deleted)
+            and getattr(item, "deleted_at", None) is not None
+        ):
+            item = None
         return self.check_not_found(item)
 
     def _find_many_by_ids(
@@ -337,6 +353,7 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         item_ids: List[PrimaryKeyType],
         *,
         id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        include_deleted: Optional[bool] = None,
     ) -> List[ModelT]:
         resolved_attr = (
             id_attribute.key if isinstance(id_attribute, InstrumentedAttribute) else (id_attribute or self.id_attribute)
@@ -348,12 +365,16 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
                 obj = self.__collection__().get_or_none(store_key)
                 if obj is None:
                     continue
+                if self._should_filter_soft_deleted(include_deleted) and getattr(obj, "deleted_at", None) is not None:
+                    continue
                 matched.append(obj)
             return matched
 
         target_values = list(item_ids)
         matched.extend(
-            obj for obj in self._get_collection_items() if getattr(obj, str(resolved_attr), MISSING) in target_values
+            obj
+            for obj in self._get_collection_items(include_deleted=include_deleted)
+            if getattr(obj, str(resolved_attr), MISSING) in target_values
         )
         return matched
 
@@ -393,9 +414,10 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         uniquify: Optional[bool] = None,
         with_for_update: ForUpdateParameter = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> ModelT:
-        return self._find_or_raise_not_found(item_id)
+        return self._find_or_raise_not_found(item_id, include_deleted=include_deleted)
 
     def get_one(
         self,
@@ -406,10 +428,11 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> ModelT:
-        return self.check_not_found(self.get_one_or_none(*filters, **kwargs))
+        return self.check_not_found(self.get_one_or_none(*filters, include_deleted=include_deleted, **kwargs))
 
     def get_one_or_none(
         self,
@@ -420,10 +443,11 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Union[ModelT, None]:
-        result = self._apply_filters(self._get_collection_items(), *filters)
+        result = self._apply_filters(self._get_collection_items(include_deleted), *filters)
         result = self._filter_result_by_kwargs(result, kwargs)
         if len(result) > 1:
             msg = "Multiple objects when one was expected"
@@ -508,20 +532,22 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         self,
         *filters: "Union[StatementFilter, ColumnElement[bool]]",
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> bool:
-        existing = self.count(*filters, **kwargs)
+        existing = self.count(*filters, include_deleted=include_deleted, **kwargs)
         return existing > 0
 
     def count(
         self,
         *filters: "Union[StatementFilter, ColumnElement[bool]]",
         uniquify: Optional[bool] = None,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> int:
-        result = self._apply_filters(self._get_collection_items(), *filters, apply_pagination=False)
+        result = self._apply_filters(self._get_collection_items(include_deleted), *filters, apply_pagination=False)
         return len(self._filter_result_by_kwargs(result, kwargs))
 
     def add(
@@ -599,10 +625,11 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: bool = True,
         bind_group: Optional[str] = None,
     ) -> ModelT:
         store_key = self._get_store_key(item_id)
-        item = self._find_or_raise_not_found(item_id)
+        item = self._find_or_raise_not_found(item_id, include_deleted=include_deleted)
         self.__collection__().remove(store_key)
         return item
 
@@ -618,11 +645,13 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: bool = True,
         bind_group: Optional[str] = None,
     ) -> List[ModelT]:
         deleted = self._find_many_by_ids(
             item_ids,
             id_attribute=id_attribute,
+            include_deleted=include_deleted,
         )
         for obj in deleted:
             store_key = self._get_store_key_from_instance(obj)
@@ -639,14 +668,138 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
+        include_deleted: bool = True,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> List[ModelT]:
-        result = self._get_collection_items()
+        result = self._get_collection_items(include_deleted=include_deleted)
         result = self._apply_filters(result, *filters)
         models = self._filter_result_by_kwargs(result, kwargs)
         item_ids: list[PrimaryKeyType] = [self.get_primary_key_value(model) for model in models]
-        return self.delete_many(item_ids=item_ids)
+        return self.delete_many(item_ids=item_ids, include_deleted=include_deleted)
+
+    def soft_delete(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        cascade: bool = True,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        auto_refresh: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
+    ) -> ModelT:
+        _ = with_for_update
+        self._require_soft_delete("soft_delete")
+        instance = self.get(
+            item_id,
+            id_attribute=id_attribute,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            uniquify=uniquify,
+            include_deleted=False,
+            bind_group=bind_group,
+        )
+        self._apply_soft_delete_to_instance(instance, cascade=cascade)
+        return self.__collection__().update(instance)
+
+    def soft_delete_many(
+        self,
+        item_ids: List[PrimaryKeyType],
+        *,
+        cascade: bool = True,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        chunk_size: Optional[int] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
+    ) -> List[ModelT]:
+        _ = chunk_size
+        self._require_soft_delete("soft_delete_many")
+        if not item_ids:
+            return []
+        instances = self._find_many_by_ids(
+            item_ids,
+            id_attribute=id_attribute,
+            include_deleted=False,
+        )
+        now = datetime.datetime.now(datetime.timezone.utc)
+        visited: set[int] = set()
+        for instance in instances:
+            self._apply_soft_delete_to_instance(instance, now, cascade=cascade, visited=visited)
+            self.__collection__().update(instance)
+        return instances
+
+    def restore(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        cascade: bool = True,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        auto_refresh: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
+    ) -> ModelT:
+        _ = with_for_update
+        self._require_soft_delete("restore")
+        instance = self.get(
+            item_id,
+            id_attribute=id_attribute,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            uniquify=uniquify,
+            include_deleted=True,
+            bind_group=bind_group,
+        )
+        self._apply_restore_to_instance(instance, cascade=cascade)
+        return self.__collection__().update(instance)
+
+    def restore_many(
+        self,
+        item_ids: List[PrimaryKeyType],
+        *,
+        cascade: bool = True,
+        auto_commit: Optional[bool] = None,
+        auto_expunge: Optional[bool] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        chunk_size: Optional[int] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
+    ) -> List[ModelT]:
+        _ = chunk_size
+        self._require_soft_delete("restore_many")
+        if not item_ids:
+            return []
+        instances = self._find_many_by_ids(
+            item_ids,
+            id_attribute=id_attribute,
+            include_deleted=True,
+        )
+        visited: set[int] = set()
+        for instance in instances:
+            self._apply_restore_to_instance(instance, cascade=cascade, visited=visited)
+            self.__collection__().update(instance)
+        return instances
 
     def upsert(
         self,
@@ -699,10 +852,11 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
-        return self._get_many_and_count_basic(*filters, **kwargs)
+        return self._get_many_and_count_basic(*filters, include_deleted=include_deleted, **kwargs)
 
     def list_and_count(
         self,
@@ -716,6 +870,7 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
@@ -731,17 +886,18 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
             removal_in="2.0.0",
             alternative="get_many_and_count",
         )
-        return self.get_many_and_count(*filters, **kwargs)
+        return self.get_many_and_count(*filters, include_deleted=include_deleted, **kwargs)
 
     def get_many(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         uniquify: Optional[bool] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> List[ModelT]:
-        result = self._filter_result_by_kwargs(self._get_collection_items(), kwargs)
+        result = self._filter_result_by_kwargs(self._get_collection_items(include_deleted), kwargs)
         return self._apply_filters(result, *filters)
 
     def list(
@@ -749,6 +905,7 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         *filters: Union[StatementFilter, ColumnElement[bool]],
         uniquify: Optional[bool] = None,
         use_cache: bool = True,
+        include_deleted: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> List[ModelT]:
@@ -764,7 +921,7 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
             removal_in="2.0.0",
             alternative="get_many",
         )
-        return self.get_many(*filters, **kwargs)
+        return self.get_many(*filters, include_deleted=include_deleted, **kwargs)
 
 
 class SQLAlchemySyncMockSlugRepository(
