@@ -369,6 +369,130 @@ Attrs Classes
     complex types, nested structures, and custom converters.
 
 
+Multi-Service Acquisition and Composition
+-----------------------------------------
+
+When workflows require multiple services operating on the same transaction boundaries, ``provide_services`` and
+``ServiceGroup`` allow coordinating multiple services over a single shared SQLAlchemy session.
+
+Key capabilities include:
+
+- **Unified Interface**: Accepts either service classes (``BlogPostService``) or provider callables (generators or functions) as positional specifications.
+- **Sync and Async Parity**: Supports both ``async with provide_services(...)`` and ``with provide_services(...)``.
+- **Flexible Session Resolution**:
+  - ``session=``: Use an existing session without managing its lifecycle.
+  - ``config=``: Automatically acquires a new session via ``config.get_session()`` and commits/closes it upon block exit (ideal for CLI commands and background tasks).
+  - ``connection=``: Resolves the request-scoped session from an active ASGI connection (e.g. Litestar ``Request`` or ``ASGIConnection``) via ``config.provide_session()``.
+- **LIFO Teardown**: Cleans up generator providers in reverse order of entry, ensuring dependent resources are released safely.
+
+Using ``provide_services``
+**************************
+
+Acquire multiple services inside an ``async with`` block:
+
+.. code-block:: python
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from advanced_alchemy.service import provide_services
+
+
+    async def publish_post_with_audit(
+        session: AsyncSession,
+        post_id: int,
+    ) -> None:
+        async with provide_services(
+            BlogPostService,
+            BlogTagService,
+            session=session,
+        ) as (post_service, tag_service):
+            post = await post_service.get(post_id)
+            tag = await tag_service.get_one_or_none(name="announcements")
+            assert post_service.session is tag_service.session
+
+Session Resolution with ``config=`` (CLI & Workers)
+***************************************************
+
+For standalone scripts, CLI commands, or background task runners where an active session does not yet exist, pass ``config=`` to automatically open, provide, and tear down the session:
+
+.. code-block:: python
+
+    from advanced_alchemy.config import SQLAlchemyAsyncConfig
+    from advanced_alchemy.service import provide_services
+
+
+    async def run_nightly_batch(config: SQLAlchemyAsyncConfig) -> None:
+        async with provide_services(
+            BlogPostService,
+            BlogTagService,
+            config=config,
+        ) as (posts, tags):
+            ...
+
+ASGI Connection Resolution (Guards & Middleware)
+************************************************
+
+In Litestar guards, middleware, and request interceptors, access the request-scoped session by providing both ``connection=`` and ``config=``:
+
+.. code-block:: python
+
+    from litestar.connection import ASGIConnection
+
+    from advanced_alchemy.config import SQLAlchemyAsyncConfig
+    from advanced_alchemy.service import provide_services
+
+
+    async def auth_guard(
+        connection: ASGIConnection,
+        config: SQLAlchemyAsyncConfig,
+    ) -> None:
+        async with provide_services(
+            BlogPostService,
+            BlogTagService,
+            connection=connection,
+            config=config,
+        ) as (posts, tags):
+            ...
+
+Reusable Composition with ``ServiceGroup``
+******************************************
+
+``ServiceGroup`` defines a reusable group of services with shared default loading options and configurations:
+
+.. code-block:: python
+
+    from advanced_alchemy.service import ServiceGroup
+
+    blog_group = ServiceGroup(BlogPostService, BlogTagService)
+
+Explicit Context Acquisition
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Use ``.new()`` for explicit context acquisition:
+
+.. code-block:: python
+
+    async def acquire_blog_services(session: AsyncSession) -> None:
+        async with blog_group.new(session=session) as (posts, tags):
+            ...
+
+Dependency Injection
+^^^^^^^^^^^^^^^^^^^^
+
+Use ``.provide()`` for dependency injection in Litestar:
+
+.. code-block:: python
+
+    from litestar.di import Provide
+
+    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+    dependencies = {"blog_services": Provide(blog_group.provide(config=config))}
+
+
+    async def handler(blog_services: tuple[BlogPostService, BlogTagService]) -> None:
+        posts, tags = blog_services
+
+
 Framework Integration
 ---------------------
 

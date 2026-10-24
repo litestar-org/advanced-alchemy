@@ -14,6 +14,13 @@ from advanced_alchemy.service._async import (
     SQLAlchemyAsyncRepositoryReadService,
     SQLAlchemyAsyncRepositoryService,
 )
+from advanced_alchemy.service._group import (
+    AsyncServiceProvider,
+    ServiceGroup,
+    ServiceSpec,
+    SyncServiceProvider,
+    provide_services,
+)
 from advanced_alchemy.service._sync import (
     SQLAlchemySyncQueryService,
     SQLAlchemySyncRepositoryReadService,
@@ -58,6 +65,7 @@ from advanced_alchemy.utils.serialization import (
 __all__ = (
     "ATTRS_INSTALLED",
     "DEFAULT_ERROR_MESSAGE_TEMPLATES",
+    "AsyncServiceProvider",
     "AttrsInstance",
     "Empty",
     "EmptyType",
@@ -79,7 +87,10 @@ __all__ = (
     "SQLAlchemySyncRepositoryReadService",
     "SQLAlchemySyncRepositoryService",
     "SchemaDumpConfig",
+    "ServiceGroup",
+    "ServiceSpec",
     "SupportedSchemaModel",
+    "SyncServiceProvider",
     "fields",
     "find_filter",
     "is_attrs_instance",
@@ -104,5 +115,6 @@ __all__ = (
     "is_schema_without_field",
     "is_sqlmodel_table_model",
     "model_from_dict",
+    "provide_services",
     "schema_dump",
 )
