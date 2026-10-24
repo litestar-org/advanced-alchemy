@@ -107,5 +107,6 @@ class MutableList(SQLMutableList[T]):  # pragma: no cover
         self.changed()
 
     def _finalize_pending(self) -> None:
-        """Finalize pending changes by clearing the pending append list."""
+        """Finalize pending changes by clearing the pending append and removed collections."""
         self._pending_append.clear()
+        self._pending_removed.clear()

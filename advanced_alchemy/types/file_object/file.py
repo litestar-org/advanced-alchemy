@@ -65,7 +65,7 @@ class FileObject:
             ValueError: If filename is not provided, size is negative, backend/protocol mismatch,
                         or both 'content' and 'source_path' are provided.
         """
-        self._size = size
+        self._size = len(content) if size is None and isinstance(content, (bytes, bytearray, memoryview)) else size
         self._last_modified = last_modified
         self._checksum = checksum
         self._etag = etag
