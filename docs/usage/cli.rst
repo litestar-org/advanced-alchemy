@@ -62,7 +62,7 @@ The CLI can be invoked using the ``alchemy`` command:
 Global Options
 --------------
 
-The following options are available for all commands:
+The following options are available for all commands (and ``--config`` / ``-c`` and ``--validate-config`` can be placed either before or after the subcommand name):
 
 .. list-table:: Global options
    :header-rows: 1
@@ -70,8 +70,10 @@ The following options are available for all commands:
 
    * - Option
      - Explanation
-   * - ``--config`` TEXT
-     - **Required**. Dotted path to SQLAlchemy config(s), it's an instance of ``SQLAlchemySyncConfig`` or ``SQLAlchemyAsyncConfig``. Example: ``--config path.to.alchemy-config.config``
+   * - ``-c``, ``--config`` TEXT
+     - Dotted (``module.attr``) or colon (``module:attr``) path to SQLAlchemy config(s) or a factory callable (sync or async). Can also be set via ``ALCHEMY_CONFIG`` or ``pyproject.toml`` ``[tool.advanced-alchemy]``.
+   * - ``--validate-config``
+     - Optional. Validate configuration and print loaded config summary before executing the command.
    * - ``--bind-key`` TEXT
      - Optional. Specify which SQLAlchemy config to use
    * - ``--no-prompt``
@@ -80,19 +82,50 @@ The following options are available for all commands:
      - Optional. Enable verbose output
 
 
-Config
-------
+Configuration Discovery
+-----------------------
 
-Here is an example of what **config** looks like.
+The CLI resolves configuration in the following order of precedence:
 
-If the file is named ``alchemy-config.py``, you would need to use it like this ``--config path.to.alchemy-config.config``
+1. **CLI flag** (``--config`` / ``-c``, passed before or after the subcommand):
+
+   .. code-block:: bash
+
+       alchemy --config myapp.config:alchemy_config upgrade
+       alchemy upgrade --config myapp.config:alchemy_config
+
+2. **Environment variable** (``ALCHEMY_CONFIG``):
+
+   .. code-block:: bash
+
+       export ALCHEMY_CONFIG="myapp.config:alchemy_config"
+       alchemy upgrade
+
+3. **Project configuration** (``pyproject.toml``):
+
+   The CLI walks upward from the current working directory (stopping at the ``.git`` repository root) to find ``pyproject.toml`` and reads ``[tool.advanced-alchemy]`` (or ``[tool.alchemy]``):
+
+   .. code-block:: toml
+       :caption: pyproject.toml
+
+       [tool.advanced-alchemy]
+       config = "myapp.config:alchemy_config"
+
+   Multiple configuration paths can be provided as a list or comma-separated string (deduplicated by ``bind_key``):
+
+   .. code-block:: toml
+       :caption: pyproject.toml
+
+       [tool.advanced-alchemy]
+       config = ["myapp.db:primary_config", "myapp.db:analytics_config"]
+
+Here is an example of a configuration module (supporting direct instances, sequences, plugin/extension wrappers, or sync/async factory callables):
 
 .. code-block:: python
     :caption: alchemy-config.py
 
     from advanced_alchemy.config import SQLAlchemySyncConfig
 
-    # Create a test config using SQLite
     config = SQLAlchemySyncConfig(
         connection_string="sqlite:///test.db"
     )
@@ -105,6 +138,15 @@ Migration Commands
 ~~~~~~~~~~~~~~~~~~
 
 These commands manage database migrations and revisions.
+
+show-config
+^^^^^^^^^^^
+
+Display all loaded configurations with migrations enabled:
+
+.. code-block:: bash
+
+    alchemy show-config --config path.to.alchemy-config.config
 
 show-current-revision
 ^^^^^^^^^^^^^^^^^^^^^
@@ -254,6 +296,24 @@ Create a new migration revision:
      - Specific path for version file
    * - ``--rev-id`` TEXT
      - Specific revision ID
+
+.. note:: **PostgreSQL enum changes**
+
+   Alembic's autogenerate does not detect changes to PostgreSQL native ``ENUM``
+   types on its own (for example, adding a value to an existing ``StrEnum``).
+   Advanced Alchemy's migration templates automatically enable this detection
+   when the optional `alembic-postgresql-enum
+   <https://pypi.org/project/alembic-postgresql-enum/>`_ package is installed.
+   Install it with the ``postgresql`` extra:
+
+   .. code-block:: bash
+
+       pip install "advanced-alchemy[postgresql]"
+
+   The generated ``env.py`` imports the package inside a ``try``/``except`` block,
+   so no configuration is required — it activates only when the package is present.
+   If you initialized your migrations with an older version of Advanced Alchemy,
+   add ``import alembic_postgresql_enum`` near the top of your ``env.py`` to enable it.
 
 
 Inspection Commands
