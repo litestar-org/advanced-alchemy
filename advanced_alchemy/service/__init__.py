@@ -20,7 +20,7 @@ from advanced_alchemy.service._sync import (
     SQLAlchemySyncRepositoryService,
 )
 from advanced_alchemy.service._util import ResultConverter, find_filter
-from advanced_alchemy.service.pagination import OffsetPagination
+from advanced_alchemy.service.pagination import CursorPagination, OffsetPagination
 from advanced_alchemy.typing import ATTRS_INSTALLED
 from advanced_alchemy.utils.serialization import (
     AttrsInstance,
@@ -59,6 +59,7 @@ __all__ = (
     "ATTRS_INSTALLED",
     "DEFAULT_ERROR_MESSAGE_TEMPLATES",
     "AttrsInstance",
+    "CursorPagination",
     "Empty",
     "EmptyType",
     "ErrorMessages",
