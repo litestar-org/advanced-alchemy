@@ -294,65 +294,67 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
 
     @classmethod
     def _get_property_fields(
-        cls, model_type: "type[DeclarativeBase]", processed_fields: set[str]
+        cls,
+        model_type: "type[DeclarativeBase]",
+        processed_fields: set[str],
+        namespace: Optional[dict[str, Any]] = None,
     ) -> "dict[str, FieldDefinition]":
         """Get fields defined as @property or @cached_property on the model.
 
         Properties are marked read-only; setter support is not implemented.
+        Walks ``model_type.__mro__`` dictionaries directly rather than invoking
+        ``getattr`` or ``inspect.getmembers`` so descriptors are not evaluated.
 
         Args:
             model_type: The SQLAlchemy model type to extract properties from.
             processed_fields: Fields to exclude
+            namespace: Optional pre-populated forward-reference resolution namespace.
 
         Returns:
             A dictionary mapping property names to their field definitions.
         """
-        namespace = cls.get_model_namespace(model_type)
+        resolved_namespace = namespace if namespace is not None else cls.get_model_namespace(model_type)
         sqla_internal_properties = {"awaitable_attrs", "registry", "metadata"}
         exclude = {*processed_fields, *sqla_internal_properties}
 
         properties: dict[str, FieldDefinition] = {}
 
-        # hint[janek]: don't use inspect.getmembers, as it will evaluate descriptors
-        # (including ORM descriptors, such as hybrid_property), which might have side
-        # effects. from 3.11 onwards, inspect.getmembers_static is available, which does
-        # not evaluate descriptors, however, for our use case, doing this manually still
-        # offers the advantage of being able to skip previously processed fields.
-        for name in dir(model_type):
-            if name in exclude:
-                continue
-
-            try:
-                member = getattr(model_type, name)
-            except AttributeError:
-                continue
-
-            if isinstance(member, cached_property):
-                func = member.func
-            elif isinstance(member, property):
-                if member.fget is None:
+        for base in model_type.__mro__:
+            for name, member in base.__dict__.items():
+                if name in exclude:
                     continue
-                func = member.fget
-            else:
-                continue
+                exclude.add(name)
 
-            try:
-                sig = ParsedSignature.from_fn(func, namespace)
-                properties[name] = replace(sig.return_type, name=name)
-            except (AttributeError, TypeError, ValueError) as e:
-                logger.debug(
-                    "could not parse type hint for property %s.%s: %s, using Any type",
-                    model_type.__name__,
-                    name,
-                    e,
-                )
-                properties[name] = FieldDefinition.from_annotation(Any, name=name)
+                if isinstance(member, cached_property):
+                    func = member.func
+                elif isinstance(member, property):
+                    if member.fget is None:
+                        continue
+                    func = member.fget
+                else:
+                    continue
+
+                try:
+                    sig = ParsedSignature.from_fn(func, resolved_namespace)
+                    properties[name] = replace(sig.return_type, name=name)
+                except (AttributeError, TypeError, ValueError) as e:
+                    logger.debug(
+                        "could not parse type hint for property %s.%s: %s, using Any type",
+                        model_type.__name__,
+                        name,
+                        e,
+                    )
+                    properties[name] = FieldDefinition.from_annotation(Any, name=name)
 
         return properties
 
     @classmethod
     def generate_field_definitions(cls, model_type: type[DeclarativeBase]) -> Generator[DTOFieldDefinition, None, None]:
         """Generate DTO field definitions from a SQLAlchemy model.
+
+        Duplicates of hybrid property descriptors across bound method names are deduplicated,
+        and descriptors excluded or omitted by ``SQLAlchemyDTOConfig`` on the root model are
+        skipped prior to type inspection.
 
         Args:
             model_type (typing.Type[sqlalchemy.orm.DeclarativeBase]): The SQLAlchemy model type to generate field definitions from.
@@ -367,14 +369,18 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
             msg = "Unexpected `None` value for mapper."  # type: ignore[unreachable]
             raise RuntimeError(msg)
 
-        # includes SQLAlchemy names and other mapped class names in the forward reference resolution namespace
         namespace = {**SQLA_NS, **{m.class_.__name__: m.class_ for m in mapper.registry.mappers if m is not mapper}}
         model_type_hints = cls.get_model_type_hints(model_type, namespace=namespace)
         model_name = model_type.__name__
         include_implicit_fields = cls.config.include_implicit_fields
+        is_root_model = getattr(cls, "model_type", model_type) is model_type
+        excluded_keys: set[str] = {k for k in cls.config.exclude if isinstance(k, str)} if is_root_model else set()
+        included_keys: set[str] = (
+            {k.split(".", 1)[0] for k in cls.config.include if isinstance(k, str)}
+            if is_root_model and cls.config.include
+            else set()
+        )
 
-        # the same hybrid property descriptor can be included in `all_orm_descriptors` multiple times, once
-        # for each method name it is bound to. We only need to see it once, so track views of it here.
         seen_hybrid_descriptors: set[hybrid_property] = set()  # pyright: ignore[reportUnknownVariableType,reportMissingTypeArgument]
         skipped_descriptors: set[str] = set()
         processed_fields: set[str] = set()
@@ -387,45 +393,34 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
 
         processed_fields.update(skipped_descriptors)
 
-        yielded_sqla_keys: set[str] = set()  # Keep track of keys yielded by SQLAlchemy logic
+        yielded_sqla_keys: set[str] = set()
 
         for key, orm_descriptor in mapper.all_orm_descriptors.items():
             processed_fields.add(key)
+            if key in skipped_descriptors or key in excluded_keys or (included_keys and key not in included_keys):
+                continue
+
             if is_hybrid_property := isinstance(orm_descriptor, hybrid_property):
                 if orm_descriptor in seen_hybrid_descriptors:
                     continue
 
                 seen_hybrid_descriptors.add(orm_descriptor)  # pyright: ignore[reportUnknownMemberType]
 
-            if key in skipped_descriptors:
-                continue
-
             should_skip_descriptor = False
             dto_field: Optional[DTOField] = None
             if hasattr(orm_descriptor, "property"):  # pyright: ignore[reportUnknownArgumentType]
-                # Access info safely, checking if property exists first
                 prop = getattr(orm_descriptor, "property", None)  # pyright: ignore[reportUnknownArgumentType]
                 if prop and hasattr(prop, "info"):
                     dto_field = prop.info.get(DTO_FIELD_META_KEY)
                 elif hasattr(orm_descriptor, "info"):  # pyright: ignore[reportUnknownArgumentType]
                     dto_field = orm_descriptor.info.get(DTO_FIELD_META_KEY)  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownVariableType]
 
-            # Case 1
             is_field_marked_not_private = dto_field and dto_field.mark is not Mark.PRIVATE  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
-
-            # Case 2
             should_exclude_anything_implicit = not include_implicit_fields and key not in model_type_hints
-
-            # Case 3
             should_exclude_non_hybrid_only = (
                 not is_hybrid_property and include_implicit_fields == "hybrid-only" and key not in model_type_hints
             )
 
-            # Descriptor is marked with either Mark.READ_ONLY or Mark.WRITE_ONLY (see Case 1):
-            # - always include it regardless of anything else.
-            # Descriptor is not marked:
-            # - It's implicit BUT config excludes anything implicit (see Case 2): exclude
-            # - It's implicit AND not hybrid BUT config includes hybrid-only implicit descriptors (Case 3): exclude
             should_skip_descriptor = not is_field_marked_not_private and (
                 should_exclude_anything_implicit or should_exclude_non_hybrid_only
             )
@@ -433,7 +428,6 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
             if should_skip_descriptor:
                 continue
 
-            # Yield definitions from SQLAlchemy descriptor handling
             definitions = cls.handle_orm_descriptor(
                 orm_descriptor.extension_type,
                 key,
@@ -442,12 +436,17 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                 model_name,
             )
             for definition in definitions:
-                yielded_sqla_keys.add(definition.name)  # Track yielded key
+                yielded_sqla_keys.add(definition.name)
                 yield definition
 
-        property_fields = cls._get_property_fields(model_type, processed_fields)
+        property_fields = cls._get_property_fields(model_type, processed_fields | excluded_keys, namespace=namespace)
         for key, property_field_definition in property_fields.items():
-            if key.startswith("_") or key in yielded_sqla_keys:
+            if (
+                key.startswith("_")
+                or key in yielded_sqla_keys
+                or key in excluded_keys
+                or (included_keys and key not in included_keys)
+            ):
                 continue
 
             yield DTOFieldDefinition.from_field_definition(

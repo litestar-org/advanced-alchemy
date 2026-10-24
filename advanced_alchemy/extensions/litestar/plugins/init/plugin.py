@@ -151,7 +151,7 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPlugin, _slots_base.SlotsBase)
             app_config.before_send.append(cast("BeforeMessageSendHookHandler", config.before_send_handler))
         app_config.signature_namespace.update(signature_namespace_values)
         if configure_exception_handler and not any(
-            isinstance(exc, int) or issubclass(exc, RepositoryError)
+            isinstance(exc, type) and issubclass(exc, RepositoryError)
             for exc in app_config.exception_handlers  # pyright: ignore[reportUnknownMemberType]
         ):
             app_config.exception_handlers.update({RepositoryError: exception_to_http_response})  # pyright: ignore[reportUnknownMemberType]
