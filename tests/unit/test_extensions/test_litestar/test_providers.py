@@ -1286,3 +1286,100 @@ def test_custom_query_aliases_match_requests_and_openapi() -> None:
         "account_id_in",
         "is_active",
     }
+
+
+def test_dependency_defaults_prefix() -> None:
+    defaults = DependencyDefaults(prefix="service")
+    assert defaults.prefix == "service"
+    assert defaults.FILTERS_DEPENDENCY_KEY == "service_filters"
+    assert defaults.CREATED_FILTER_DEPENDENCY_KEY == "service_created_filter"
+    assert defaults.ID_FILTER_DEPENDENCY_KEY == "service_id_filter"
+    assert defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY == "service_limit_offset_filter"
+    assert defaults.UPDATED_FILTER_DEPENDENCY_KEY == "service_updated_filter"
+    assert defaults.ORDER_BY_FILTER_DEPENDENCY_KEY == "service_order_by_filter"
+    assert defaults.SEARCH_FILTER_DEPENDENCY_KEY == "service_search_filter"
+    assert defaults.DEFAULT_PAGINATION_SIZE == 20
+
+    defaults_with_trailing = DependencyDefaults(prefix="service_")
+    assert defaults_with_trailing.FILTERS_DEPENDENCY_KEY == "service_filters"
+
+    defaults_custom = DependencyDefaults(prefix="user", search_filter_key="custom_search")
+    assert defaults_custom.SEARCH_FILTER_DEPENDENCY_KEY == "user_custom_search"
+
+
+def test_create_service_dependencies_scoped_filters() -> None:
+    with patch("advanced_alchemy.extensions.litestar.providers.create_service_provider") as mock_create_provider:
+        mock_create_provider.return_value = lambda: "user_service"
+        deps = create_service_dependencies(
+            MockSyncService,
+            key="user_service",
+            scoped_filters=True,
+            filters=cast(
+                FilterConfig,
+                {
+                    "id_filter": True,
+                    "search": "name",
+                    "pagination_type": "limit_offset",
+                    "in_fields": ["status"],
+                },
+            ),
+        )
+        assert "user_service" in deps
+        assert "user_service_filters" in deps
+        assert "user_service_id_filter" in deps
+        assert "user_service_search_filter" in deps
+        assert "user_service_limit_offset_filter" in deps
+        assert "user_service_status_in_filter" in deps
+
+
+def test_create_service_dependencies_merge_collision_prevented() -> None:
+    with patch("advanced_alchemy.extensions.litestar.providers.create_service_provider") as mock_create_provider:
+        mock_create_provider.side_effect = [lambda: "user_service", lambda: "course_service"]
+        user_deps = create_service_dependencies(
+            MockSyncService,
+            key="user_service",
+            scoped_filters=True,
+            filters=cast(
+                FilterConfig,
+                {"search": "name", "pagination_type": "limit_offset", "id_filter": True},
+            ),
+        )
+        course_deps = create_service_dependencies(
+            MockSyncService,
+            key="course_service",
+            scoped_filters=True,
+            filters=cast(
+                FilterConfig,
+                {"search": "title", "pagination_type": "limit_offset", "id_filter": True},
+            ),
+        )
+
+        merged_deps = {**user_deps, **course_deps}
+        # Verify no keys were overwritten or lost during merge
+        assert len(merged_deps) == len(user_deps) + len(course_deps)
+        assert "user_service_filters" in merged_deps
+        assert "course_service_filters" in merged_deps
+        assert "user_service_search_filter" in merged_deps
+        assert "course_service_search_filter" in merged_deps
+        assert "user_service_limit_offset_filter" in merged_deps
+        assert "course_service_limit_offset_filter" in merged_deps
+
+        @get("/combined")
+        def handler(
+            user_service_filters: NamedDependency[SkipValidation[list[FilterTypes]]],
+            course_service_filters: NamedDependency[SkipValidation[list[FilterTypes]]],
+        ) -> dict[str, Any]:
+            return {
+                "user_filters": [type(f).__name__ for f in user_service_filters],
+                "course_filters": [type(f).__name__ for f in course_service_filters],
+            }
+
+        app = Litestar(route_handlers=[handler], dependencies=merged_deps, debug=True)
+        with TestClient(app) as client:
+            resp = client.get("/combined", params={"searchString": "test", "pageSize": 10})
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            assert "SearchFilter" in data["user_filters"]
+            assert "LimitOffset" in data["user_filters"]
+            assert "SearchFilter" in data["course_filters"]
+            assert "LimitOffset" in data["course_filters"]
