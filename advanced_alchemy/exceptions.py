@@ -41,7 +41,16 @@ DUPLICATE_KEY_REGEXES = {
     ],
     "oracle": [],
     "spanner+spanner": [],
-    "duckdb": [],
+    "duckdb": [
+        re.compile(
+            r"^.*Duplicate\s+key\s+\"(?P<columns>[^\"]+)\"\s+violates\s+(primary\s+key|unique)\s+constraint.*$",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"^.*Duplicate\s+key.*violates\s+(primary\s+key|unique)\s+constraint.*$",
+            re.IGNORECASE,
+        ),
+    ],
     "mssql": [],
     "bigquery": [],
     "cockroach": [],
@@ -70,7 +79,9 @@ FOREIGN_KEY_REGEXES = {
     ],
     "oracle": [],
     "spanner+spanner": [],
-    "duckdb": [],
+    "duckdb": [
+        re.compile(r".*Violates\s+foreign\s+key\s+constraint.*", re.IGNORECASE),
+    ],
     "mssql": [],
     "bigquery": [],
     "cockroach": [],
@@ -84,7 +95,9 @@ CHECK_CONSTRAINT_REGEXES = {
     "mysql": [],
     "oracle": [],
     "spanner+spanner": [],
-    "duckdb": [],
+    "duckdb": [
+        re.compile(r".*CHECK\s+constraint\s+failed.*", re.IGNORECASE),
+    ],
     "mssql": [],
     "bigquery": [],
     "cockroach": [],
@@ -94,6 +107,15 @@ SQLSTATE_TO_ERROR_KEY = {
     "23505": "duplicate_key",
     "23503": "foreign_key",
     "23514": "check_constraint",
+}
+
+DUCKDB_ERROR_TYPE_TO_KEY = {
+    "duplicate_key": "duplicate_key",
+    "primary_key": "duplicate_key",
+    "unique": "duplicate_key",
+    "foreign_key": "foreign_key",
+    "check_constraint": "check_constraint",
+    "check": "check_constraint",
 }
 
 
@@ -316,6 +338,11 @@ def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
                 "check_constraint": (CHECK_CONSTRAINT_REGEXES.get(dialect_name, []), IntegrityError),
                 "foreign_key": (FOREIGN_KEY_REGEXES.get(dialect_name, []), ForeignKeyError),
             }
+            error_type = getattr(exc.orig, "error_type", None)
+            if isinstance(error_type, str) and (key := DUCKDB_ERROR_TYPE_TO_KEY.get(error_type.lower())) is not None:
+                raise keys_to_regex[key][1](
+                    detail=_get_error_message(error_messages=error_messages, key=key, exc=exc),
+                ) from exc
             sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
             if isinstance(sqlstate, str) and (key := SQLSTATE_TO_ERROR_KEY.get(sqlstate)) is not None:
                 raise keys_to_regex[key][1](
