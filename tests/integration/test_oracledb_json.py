@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 pytestmark = [
     pytest.mark.skipif(platform.uname()[4] != "x86_64", reason="oracle not available on this platform"),
     pytest.mark.integration,
+    pytest.mark.oracledb_sync,
 ]
 
 
