@@ -1,14 +1,12 @@
 from __future__ import annotations
-# ruff: noqa: I001
 
 import logging
 from collections.abc import AsyncGenerator, Generator
-from typing import TYPE_CHECKING, cast
-from unittest.mock import create_autospec, NonCallableMagicMock
+from typing import TYPE_CHECKING, Any, cast
+from unittest.mock import NonCallableMagicMock, create_autospec
 
 import pytest
 import pytest_asyncio
-from google.cloud import spanner  # pyright: ignore
 from pytest import FixtureRequest
 from pytest_databases.docker.cockroachdb import CockroachDBService
 from pytest_databases.docker.mssql import MSSQLService
@@ -20,9 +18,6 @@ from sqlalchemy import Dialect, Engine, NullPool, create_engine, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 
-# Local test helpers and fixtures
-
-# Import all fixtures from repository_fixtures
 from tests.integration.repository_fixtures import *  # noqa: F403
 
 if TYPE_CHECKING:
@@ -156,6 +151,188 @@ def _patch_bases(monkeypatch: MonkeyPatch) -> None:  # pyright: ignore[reportUnu
     monkeypatch.setattr(base, "BigIntAuditBase", NewBigIntAuditBase)
 
 
+_DATABASE_PLUGINS: tuple[str, ...] = (
+    "pytest_databases.docker",
+    "pytest_databases.docker.rustfs",
+    "pytest_databases.docker.mysql",
+    "pytest_databases.docker.oracle",
+    "pytest_databases.docker.postgres",
+    "pytest_databases.docker.spanner",
+    "pytest_databases.docker.cockroachdb",
+    "pytest_databases.docker.mssql",
+    "pytest_databases.embedded.postgres",
+)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Dynamically register database plugins for integration tests.
+
+    Avoids deprecation warnings in newer pytest by using import_plugin
+    on the pluginmanager rather than pytest_plugins list.
+    """
+    for plugin in _DATABASE_PLUGINS:
+        if not config.pluginmanager.has_plugin(plugin):
+            config.pluginmanager.import_plugin(plugin)
+
+
+def _build_cockroachdb_url(drivername: str, service: CockroachDBService) -> str:
+    """Build a CockroachDB connection URL for the specified driver and service.
+
+    Args:
+        drivername: The driver name (e.g. 'psycopg' or 'asyncpg').
+        service: The CockroachDB container service.
+
+    Returns:
+        Formatted SQLAlchemy connection URL.
+    """
+    opts = ""
+    if drivername != "asyncpg" and getattr(service, "driver_opts", None):
+        opts = "&".join(f"{k}={v}" for k, v in sorted(service.driver_opts.items()))
+    query_string = f"?{opts}" if opts else ""
+    return f"cockroachdb+{drivername}://root@{service.host}:{service.port}/{service.database}{query_string}"
+
+
+@pytest.fixture(scope="session")
+def cockroachdb_psycopg_url(cockroachdb_service: CockroachDBService) -> str:
+    """Return a session-scoped connection URL for CockroachDB using psycopg."""
+    return _build_cockroachdb_url("psycopg", cockroachdb_service)
+
+
+@pytest.fixture(scope="session")
+def cockroachdb_asyncpg_url(cockroachdb_service: CockroachDBService) -> str:
+    """Return a session-scoped connection URL for CockroachDB using asyncpg."""
+    return _build_cockroachdb_url("asyncpg", cockroachdb_service)
+
+
+@pytest.fixture(scope="session")
+def mssql_pyodbc_url(mssql_service: MSSQLService) -> str:
+    """Use the running mssql service to return a URL for connecting using pyodbc."""
+    driver = "ODBC Driver 18 for SQL Server".replace(" ", "+")
+    return (
+        f"mssql+pyodbc://{mssql_service.user}:{mssql_service.password}@"
+        f"{mssql_service.host}:{mssql_service.port}/{mssql_service.database}"
+        f"?driver={driver}&encrypt=no&TrustServerCertificate=yes"
+    )
+
+
+@pytest.fixture(scope="session")
+def mssql_aioodbc_url(mssql_service: MSSQLService) -> str:
+    """Use the running mssql service to return a URL for connecting using aioodbc."""
+    driver = "ODBC Driver 18 for SQL Server".replace(" ", "+")
+    return (
+        f"mssql+aioodbc://{mssql_service.user}:{mssql_service.password}@"
+        f"{mssql_service.host}:{mssql_service.port}/{mssql_service.database}"
+        f"?driver={driver}&encrypt=no&TrustServerCertificate=yes"
+    )
+
+
+@pytest.fixture(scope="session")
+def mysql_asyncmy_url(mysql_service: MySQLService) -> str:
+    """Use the running mysql service to return a URL for connecting using asyncmy."""
+    return (
+        f"mysql+asyncmy://{mysql_service.user}:{mysql_service.password}@"
+        f"{mysql_service.host}:{mysql_service.port}/{mysql_service.db}"
+    )
+
+
+@pytest.fixture(scope="session")
+def oracle18c_url(oracle_18c_service: OracleService) -> str:
+    """Use the running oracle service to return a URL for connecting using oracledb."""
+    return (
+        f"oracle+oracledb://{oracle_18c_service.user}:{oracle_18c_service.password}@"
+        f"{oracle_18c_service.host}:{oracle_18c_service.port}/?service_name={oracle_18c_service.service_name}"
+    )
+
+
+@pytest.fixture(scope="session")
+def oracle23ai_url(oracle_23ai_service: OracleService) -> str:
+    """Use the running oracle service to return a URL for connecting using oracledb."""
+    return (
+        f"oracle+oracledb://{oracle_23ai_service.user}:{oracle_23ai_service.password}@"
+        f"{oracle_23ai_service.host}:{oracle_23ai_service.port}/?service_name={oracle_23ai_service.service_name}"
+    )
+
+
+@pytest.fixture(scope="session")
+def postgres_asyncpg_url(postgres_service: PostgresService) -> str:
+    """Use the running postgres service to return a URL for connecting using asyncpg."""
+    return (
+        f"postgresql+asyncpg://{postgres_service.user}:{postgres_service.password}@"
+        f"{postgres_service.host}:{postgres_service.port}/{postgres_service.database}"
+    )
+
+
+@pytest.fixture(scope="session")
+def postgres_psycopg_url(postgres_service: PostgresService) -> str:
+    """Use the running postgres service to return a URL for connecting using psycopg."""
+    return (
+        f"postgresql+psycopg://{postgres_service.user}:{postgres_service.password}@"
+        f"{postgres_service.host}:{postgres_service.port}/{postgres_service.database}"
+    )
+
+
+def _build_spanner_url(service: SpannerService) -> str:
+    """Build a Cloud Spanner emulator connection URL.
+
+    Args:
+        service: The Spanner container service.
+
+    Returns:
+        Formatted SQLAlchemy connection URL.
+    """
+    return (
+        f"spanner+spanner:///projects/{service.project}/"
+        f"instances/{service.instance_name}/databases/{service.database_name}"
+    )
+
+
+@pytest.fixture(scope="session")
+def spanner_url(spanner_service: SpannerService) -> str:
+    """Format SQLAlchemy connection URL for Cloud Spanner emulator."""
+    return _build_spanner_url(spanner_service)
+
+
+@pytest.fixture(scope="session")
+def spanner_client(
+    spanner_service: SpannerService,
+    monkeypatch_session: MonkeyPatch,
+) -> Generator[Any, None, None]:
+    """Provide a session-scoped Google Cloud Spanner client connected to emulator."""
+    from datetime import timedelta
+
+    from google.api_core.client_options import ClientOptions
+    from google.auth.credentials import AnonymousCredentials
+    from google.cloud import spanner as spanner_module
+    from google.cloud.spanner_v1 import database_sessions_manager
+
+    monkeypatch_session.setattr(
+        database_sessions_manager.DatabaseSessionsManager,
+        "_MAINTENANCE_THREAD_POLLING_INTERVAL",
+        timedelta(milliseconds=100),
+    )
+    monkeypatch_session.setenv("SPANNER_EMULATOR_HOST", f"{spanner_service.host}:{spanner_service.port}")
+    monkeypatch_session.setenv("GOOGLE_CLOUD_PROJECT", spanner_service.project)
+
+    client_cls: Any = spanner_module.Client
+    credentials_cls: Any = AnonymousCredentials
+    client_options_cls: Any = ClientOptions
+
+    client: Any = client_cls(
+        project=spanner_service.project,
+        credentials=credentials_cls(),
+        client_options=client_options_cls(api_endpoint=f"{spanner_service.host}:{spanner_service.port}"),
+    )
+    try:
+        instance = client.instance(spanner_service.instance_name)
+        database = instance.database(spanner_service.database_name)
+        with database.snapshot() as snapshot:
+            resp = next(iter(snapshot.execute_sql("SELECT 1")))
+        assert resp[0] == 1
+        yield client
+    finally:
+        client.close()
+
+
 @pytest.fixture(scope="session")
 def duckdb_engine(
     tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest
@@ -233,12 +410,15 @@ def sqlite_engine(
 
 @pytest.fixture(scope="session")
 def spanner_engine(
-    spanner_url: str, spanner_connection: spanner.Client, spanner_service: SpannerService
+    spanner_url: str,
+    spanner_client: Any,
 ) -> Generator[Engine, None, None]:
-    # Environment variables are still set by set_spanner_emulator in root conftest,
-    # but we use the explicit URL fixture now for consistency.
-
-    yield create_engine(spanner_url, poolclass=NullPool, connect_args={"client": spanner_connection})
+    """Provide a session-scoped SQLAlchemy Engine for Cloud Spanner."""
+    engine = create_engine(spanner_url, poolclass=NullPool, connect_args={"client": spanner_client})
+    try:
+        yield engine
+    finally:
+        engine.dispose()
 
 
 @pytest.fixture(scope="session")
