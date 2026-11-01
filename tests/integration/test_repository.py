@@ -684,6 +684,7 @@ def _make_mock_session(engine: AsyncEngine) -> AsyncSession:
 
 
 @pytest.mark.mock_async
+@pytest.mark.xdist_group("mock")
 def test_repo_error_message_overrides_are_isolated(
     mock_async_engine: AsyncEngine, uuid_models_dba: "dict[str, type]"
 ) -> None:
@@ -712,6 +713,7 @@ def test_repo_error_message_overrides_are_isolated(
 
 
 @pytest.mark.mock_async
+@pytest.mark.xdist_group("mock")
 def test_mock_repo_error_message_overrides_are_isolated(
     mock_async_engine: AsyncEngine, uuid_models_dba: "dict[str, type]"
 ) -> None:

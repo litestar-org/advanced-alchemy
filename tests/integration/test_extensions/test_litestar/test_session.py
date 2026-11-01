@@ -566,6 +566,8 @@ async def test_sync_session_middleware_integration(
         assert response.json() == {"counter": 2}
 
 
+@pytest.mark.aiosqlite
+@pytest.mark.xdist_group("sqlite")
 async def test_docs_store_based_session_pattern(tmp_path: Path) -> None:
     """The documented store-based pattern persists session data to the database.
 
@@ -609,6 +611,8 @@ async def test_docs_store_based_session_pattern(tmp_path: Path) -> None:
     assert len(rows) == 1, "store-based session was not persisted to the database"
 
 
+@pytest.mark.aiosqlite
+@pytest.mark.xdist_group("sqlite")
 async def test_docs_backend_based_session_pattern(tmp_path: Path) -> None:
     """The documented backend-based pattern persists session data to the database.
 
