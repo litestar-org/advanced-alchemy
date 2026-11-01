@@ -17,6 +17,7 @@ from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
 
 pytestmark = [
     pytest.mark.integration,
+    pytest.mark.asyncpg,
     pytest.mark.xdist_group("postgres"),
 ]
 

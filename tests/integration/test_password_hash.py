@@ -238,6 +238,7 @@ def test_one_time_code_sync(engine: Engine, password_test_tables: None) -> None:
         assert reloaded.verify("123456") is False
 
 
+@pytest.mark.unit
 def test_password_hash_repr() -> None:
     """Test __repr__() method for PasswordHash with different backends."""
     # Test Argon2Hasher backend
@@ -253,6 +254,7 @@ def test_password_hash_repr() -> None:
     assert repr(pwdlib_hash) == "PasswordHash(backend=sa.PwdlibHasher(), length=512)"
 
 
+@pytest.mark.unit
 def test_encrypted_string_repr() -> None:
     """Test __repr__() method for EncryptedString with different backends."""
     # Test FernetBackend (default)

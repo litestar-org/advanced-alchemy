@@ -27,8 +27,7 @@ pytestmark = [
 @pytest.fixture(name="rows")
 def generate_mock_data() -> Iterator[list[dict[str, Any]]]:
     rows = [{"col_1": i, "col_2": f"value_{i}", "col_3": i} for i in range(1, 3)]
-    # Duplicate the last row in the list to violate the unique constraint
-    rows.extend([rows[-1]] * 3)  # 3 is arbitrary
+    rows.extend([rows[-1]] * 3)
     yield rows
 
 

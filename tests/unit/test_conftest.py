@@ -223,3 +223,58 @@ def test_fast_suite_deselects_all_container_service_fixtures() -> None:
     raw_json = result.stdout.split("__FAST_LEAKED_START__")[1].split("__FAST_LEAKED_END__")[0]
     leaked = cast("list[list[Any]]", json.loads(raw_json))
     assert not leaked, f"Fast suite collection leaked container service fixtures: {leaked}"
+
+
+def test_integration_items_do_not_combine_multiple_xdist_groups() -> None:
+    """Ensure no test under tests/integration carries multiple distinct xdist_group marks."""
+    python_code = (
+        "import json, sys, pytest\n"
+        "class GroupCollectorPlugin:\n"
+        "    def __init__(self):\n"
+        "        self.multi_groups = []\n"
+        "        self.missing_groups = []\n"
+        "    def pytest_collection_finish(self, session):\n"
+        "        for item in session.items:\n"
+        "            if item.get_closest_marker('unit') is not None:\n"
+        "                continue\n"
+        "            groups = set()\n"
+        "            for mark in item.iter_markers('xdist_group'):\n"
+        "                val = mark.args[0] if mark.args else mark.kwargs.get('name')\n"
+        "                if val:\n"
+        "                    groups.add(val)\n"
+        "            if len(groups) > 1:\n"
+        "                self.multi_groups.append((item.nodeid, sorted(groups)))\n"
+        "            elif len(groups) == 0:\n"
+        "                self.missing_groups.append(item.nodeid)\n"
+        "plugin = GroupCollectorPlugin()\n"
+        "pytest.main(['--collect-only', '-q', 'tests/integration'], plugins=[plugin])\n"
+        "sys.stdout.write('__GROUPS_START__' + json.dumps({'multi': plugin.multi_groups, 'missing': plugin.missing_groups}) + '__GROUPS_END__')\n"
+    )
+    env = os.environ.copy()
+    env["UV_NO_BUILD_ISOLATION"] = "1"
+    env["UV_NO_SYNC"] = "1"
+    result = subprocess.run(
+        [sys.executable, "-c", python_code],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    if "__GROUPS_START__" not in result.stdout:
+        raise RuntimeError(f"Subprocess failed to output xdist_group audit: {result.stdout}\n{result.stderr}")
+    raw_json = result.stdout.split("__GROUPS_START__")[1].split("__GROUPS_END__")[0]
+    data = cast("dict[str, list[Any]]", json.loads(raw_json))
+    assert not data["multi"], f"Integration items combined multiple xdist_groups: {data['multi']}"
+    assert not data["missing"], f"Integration items missing xdist_group: {data['missing']}"
+
+
+def test_file_object_rustfs_helpers_use_upstream_service_contract() -> None:
+    """Ensure deprecated RustFS bucket and endpoint helpers are removed from test_file_object."""
+    import tests.integration.test_file_object as test_file_object
+
+    assert not hasattr(test_file_object, "ensure_rustfs_bucket"), (
+        "ensure_rustfs_bucket should be removed in favor of upstream RustfsService contract"
+    )
+    assert not hasattr(test_file_object, "rustfs_endpoint_url"), (
+        "rustfs_endpoint_url should be removed in favor of rustfs_service.endpoint_url"
+    )

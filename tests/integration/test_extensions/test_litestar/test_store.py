@@ -27,7 +27,6 @@ pytestmark = [
 ]
 
 
-# Module-level cache for model classes to prevent recreation
 _store_model_cache: dict[str, type] = {}
 
 

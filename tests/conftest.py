@@ -17,6 +17,8 @@ import pytest
 from pytest import MonkeyPatch
 
 os.environ.setdefault("SPANNER_DISABLE_BUILTIN_METRICS", "true")
+os.environ.setdefault("no_proxy", "127.0.0.1,localhost")
+os.environ.setdefault("NO_PROXY", "127.0.0.1,localhost")
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:

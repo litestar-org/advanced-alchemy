@@ -43,7 +43,6 @@ pytestmark = [
 ]
 
 
-# Module-level cache for Movie model and counter for unique names
 _movie_model_cache: dict[str, type] = {}
 _movie_class_counter = 0
 
@@ -54,7 +53,7 @@ def get_movie_model_for_engine(engine_dialect_name: str, worker_id: str) -> type
     cache_key = f"movie_{worker_id}_{engine_dialect_name}"
 
     if cache_key not in _movie_model_cache:
-        # Create unique base class with its own metadata for each engine
+
         class TestBase(DeclarativeBase):
             pass
 
