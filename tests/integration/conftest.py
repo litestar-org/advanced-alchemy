@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import logging
+import os
 from collections.abc import AsyncGenerator, Generator
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import NonCallableMagicMock, create_autospec
@@ -14,7 +16,9 @@ from pytest_databases.docker.mysql import MySQLService
 from pytest_databases.docker.oracle import OracleService
 from pytest_databases.docker.postgres import PostgresService
 from pytest_databases.docker.spanner import SpannerService
+from pytest_databases.embedded.postgres import EmbeddedPostgresService
 from sqlalchemy import Dialect, Engine, NullPool, create_engine, text
+from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 
@@ -253,22 +257,66 @@ def oracle23ai_url(oracle_23ai_service: OracleService) -> str:
     )
 
 
-@pytest.fixture(scope="session")
-def postgres_asyncpg_url(postgres_service: PostgresService) -> str:
-    """Use the running postgres service to return a URL for connecting using asyncpg."""
-    return (
-        f"postgresql+asyncpg://{postgres_service.user}:{postgres_service.password}@"
-        f"{postgres_service.host}:{postgres_service.port}/{postgres_service.database}"
-    )
+def _use_embedded_postgres(config: pytest.Config) -> bool:
+    """Determine whether PostgreSQL tests should use embedded PostgreSQL.
+
+    Args:
+        config: The pytest configuration object.
+
+    Returns:
+        True if embedded PostgreSQL is enabled via CLI option or environment.
+    """
+    if config.getoption("--use-embedded-postgres", default=False):
+        return True
+    return os.environ.get("PYTEST_EMBEDDED_POSTGRES", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _render_postgres_url(drivername: str, service: PostgresService | EmbeddedPostgresService) -> str:
+    """Render a PostgreSQL connection URL from service metadata.
+
+    Args:
+        drivername: Fully-qualified driver scheme (e.g. 'postgresql+asyncpg').
+        service: The PostgresService or EmbeddedPostgresService instance.
+
+    Returns:
+        Formatted SQLAlchemy connection URL.
+    """
+    password = service.password if getattr(service, "password", None) else None
+    return URL.create(
+        drivername=drivername,
+        username=service.user,
+        password=password,
+        host=service.host,
+        port=service.port,
+        database=service.database,
+    ).render_as_string(hide_password=False)
 
 
 @pytest.fixture(scope="session")
-def postgres_psycopg_url(postgres_service: PostgresService) -> str:
-    """Use the running postgres service to return a URL for connecting using psycopg."""
-    return (
-        f"postgresql+psycopg://{postgres_service.user}:{postgres_service.password}@"
-        f"{postgres_service.host}:{postgres_service.port}/{postgres_service.database}"
-    )
+def postgres_backend_service(request: FixtureRequest) -> PostgresService | EmbeddedPostgresService:
+    """Provide the active PostgreSQL backend service (Docker or embedded).
+
+    Args:
+        request: The active fixture request.
+
+    Returns:
+        EmbeddedPostgresService when embedded mode is enabled, otherwise PostgresService.
+    """
+    if _use_embedded_postgres(request.config):
+        return cast("EmbeddedPostgresService", request.getfixturevalue("embedded_postgres_service"))
+    return cast("PostgresService", request.getfixturevalue("postgres_service"))
+
+
+@pytest.fixture(scope="session")
+def postgres_asyncpg_url(postgres_backend_service: PostgresService | EmbeddedPostgresService) -> str:
+    """Use the active postgres backend service to return a URL for connecting using asyncpg."""
+    return _render_postgres_url("postgresql+asyncpg", postgres_backend_service)
+
+
+@pytest.fixture(scope="session")
+def postgres_psycopg_url(postgres_backend_service: PostgresService | EmbeddedPostgresService) -> str:
+    """Use the active postgres backend service to return a URL for connecting using psycopg."""
+    return _render_postgres_url("postgresql+psycopg", postgres_backend_service)
 
 
 def _build_spanner_url(service: SpannerService) -> str:
@@ -377,8 +425,13 @@ def oracle23ai_engine(oracle23ai_url: str, oracle_23ai_service: OracleService) -
 
 
 @pytest.fixture(scope="session")
-def psycopg_engine(postgres_psycopg_url: str, postgres_service: PostgresService) -> Generator[Engine, None, None]:
-    yield create_engine(postgres_psycopg_url, poolclass=NullPool)
+def psycopg_engine(postgres_psycopg_url: str) -> Generator[Engine, None, None]:
+    """Provide a session-scoped SQLAlchemy Engine for PostgreSQL using psycopg."""
+    engine = create_engine(postgres_psycopg_url, poolclass=NullPool)
+    try:
+        yield engine
+    finally:
+        engine.dispose()
 
 
 @pytest.fixture(scope="session")
@@ -800,15 +853,15 @@ async def asyncmy_engine(mysql_asyncmy_url: str, mysql_service: MySQLService) ->
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def asyncpg_engine(
-    postgres_asyncpg_url: str, postgres_service: PostgresService
+    postgres_asyncpg_url: str,
 ) -> AsyncGenerator[AsyncEngine, None]:
     """AsyncPG engine fixture that ensures pgcrypto extension is created."""
     engine = create_async_engine(postgres_asyncpg_url, poolclass=NullPool)
     try:
-        # Ensure pgcrypto extension is available
         async with engine.connect() as conn:
-            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
-            await conn.commit()  # Commit the extension creation
+            with contextlib.suppress(Exception):
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
+                await conn.commit()
         yield engine
     finally:
         await engine.dispose()
@@ -816,9 +869,14 @@ async def asyncpg_engine(
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def psycopg_async_engine(
-    postgres_psycopg_url: str, postgres_service: PostgresService
+    postgres_psycopg_url: str,
 ) -> AsyncGenerator[AsyncEngine, None]:
-    yield create_async_engine(postgres_psycopg_url, poolclass=NullPool)
+    """Provide a session-scoped async SQLAlchemy Engine for PostgreSQL using psycopg."""
+    engine = create_async_engine(postgres_psycopg_url, poolclass=NullPool)
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")

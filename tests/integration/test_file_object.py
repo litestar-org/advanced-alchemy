@@ -247,6 +247,7 @@ async def async_session(
     set_async_context(False)
 
 
+@pytest.mark.rustfs
 @pytest.mark.xdist_group("file_object")
 @pytest.mark.xfail(
     sys.version_info < (3, 10),
@@ -312,6 +313,7 @@ async def test_fsspec_s3_basic_operations_async(
         await backend.get_content_async(file_path)
 
 
+@pytest.mark.rustfs
 @pytest.mark.xdist_group("file_object")
 @pytest.mark.xfail(
     sys.version_info < (3, 10),
@@ -381,6 +383,7 @@ def test_fsspec_s3_basic_operations_sync(
         backend.get_content(file_path)
 
 
+@pytest.mark.rustfs
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_s3_basic_operations_async(
     storage_registry: StorageRegistry,
@@ -445,6 +448,7 @@ async def test_obstore_s3_basic_operations_async(
         await backend.get_content_async(file_path)
 
 
+@pytest.mark.rustfs
 @pytest.mark.xdist_group("file_object")
 def test_obstore_s3_basic_operations_sync(
     storage_registry: StorageRegistry,
