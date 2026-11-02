@@ -321,6 +321,58 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             ),
         )
 
+    def get_by_id(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        auto_expunge: Optional[bool] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
+    ) -> ModelT:
+        """Retrieve an instance by `item_id`, raising `NotFoundError` if not found."""
+        return self.get(
+            item_id=item_id,
+            statement=statement,
+            id_attribute=id_attribute,
+            auto_expunge=auto_expunge,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            uniquify=uniquify,
+            bind_group=bind_group,
+        )
+
+    def get_or_none(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        auto_expunge: Optional[bool] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
+    ) -> Optional[ModelT]:
+        """Retrieve an instance by `item_id` or return `None` if not found."""
+        return self.repository.get_or_none(
+            item_id=item_id,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            id_attribute=id_attribute,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            uniquify=self._get_uniquify(uniquify),
+            bind_group=bind_group,
+        )
+
     def get_one(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],

@@ -593,6 +593,40 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
     ) -> ModelT:
         return self._find_or_raise_not_found(item_id)
 
+    async def get_by_id(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        auto_expunge: Optional[bool] = None,
+        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
+        id_attribute: Union[str, InstrumentedAttribute[Any], None] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
+    ) -> ModelT:
+        return self._find_or_raise_not_found(item_id)
+
+    async def get_or_none(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        auto_expunge: Optional[bool] = None,
+        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
+        id_attribute: Union[str, InstrumentedAttribute[Any], None] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
+    ) -> Optional[ModelT]:
+        return self.__collection__().get_or_none(item_id)
+
     async def get_one(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
