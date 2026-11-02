@@ -251,6 +251,8 @@ def test_alembic_command_config_propagates_alembic_options() -> None:
     assert command_config.user_module_prefix == "sqlalchemy."
 
 
+@pytest.mark.sqlite
+@pytest.mark.xdist_group("sqlite")
 @pytest.mark.parametrize("async_mode", [False, True], ids=["sync", "async"])
 @pytest.mark.parametrize("offline", [False, True], ids=["online", "offline"])
 @pytest.mark.parametrize("schema", [None, "custom_schema"], ids=["default_schema", "custom_schema"])
