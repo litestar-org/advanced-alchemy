@@ -91,8 +91,10 @@ class InMemoryStore(Generic[T]):
             raise KeyError from error
         return self._store[key]
 
-    def get_or_none(self, key: Any, default: Any = _NotSet) -> "Union[T, None]":
-        return self.get(key) if default is _NotSet else self.get(key, default)
+    def get_or_none(self, key: Any, default: Any = None) -> "Union[T, None]":
+        with contextlib.suppress(KeyError):
+            return self.get(key)
+        return cast("Union[T, None]", default)
 
     def remove(self, key: Any) -> T:
         return self._store.pop(self._resolve_key(key))

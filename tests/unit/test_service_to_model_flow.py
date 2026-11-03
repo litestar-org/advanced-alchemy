@@ -557,3 +557,26 @@ def test_sync_update_preserves_existing_instance_attributes() -> None:
     # Existing ID should be preserved from existing instance
     assert result.name == "New Name"
     assert result.id == "existing-id"  # From mock repository's get()
+
+
+@pytest.mark.asyncio
+async def test_async_service_get_by_id_and_get_or_none() -> None:
+    """Test async service get_by_id and get_or_none delegate to repository."""
+    service = TrackingService()
+    found = await service.get_by_id("existing-id")
+    assert found.id == "existing-id"
+
+    service.repository.get_or_none = AsyncMock(side_effect=[found, None])  # type: ignore[method-assign]
+    assert await service.get_or_none("existing-id") is found
+    assert await service.get_or_none("missing-id") is None
+
+
+def test_sync_service_get_by_id_and_get_or_none() -> None:
+    """Test sync service get_by_id and get_or_none delegate to repository."""
+    service = TrackingSyncService()
+    found = service.get_by_id("existing-id")
+    assert found.id == "existing-id"
+
+    service.repository.get_or_none = MagicMock(side_effect=[found, None])  # type: ignore[method-assign]
+    assert service.get_or_none("existing-id") is found
+    assert service.get_or_none("missing-id") is None
