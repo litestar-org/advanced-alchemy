@@ -625,7 +625,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         use_cache: bool = True,
         bind_group: Optional[str] = None,
     ) -> Optional[ModelT]:
-        return self.__collection__().get_or_none(item_id)
+        return self.__collection__().get_or_none(self._get_store_key(item_id))
 
     async def get_one(
         self,
