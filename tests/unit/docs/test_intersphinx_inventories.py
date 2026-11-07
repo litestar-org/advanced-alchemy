@@ -6,6 +6,7 @@ import zlib
 from pathlib import Path
 
 import pytest
+
 from tools.docs.update_inventories import (
     UPSTREAM_INVENTORIES,
     InventoryTarget,

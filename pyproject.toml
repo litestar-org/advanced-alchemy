@@ -124,7 +124,6 @@ doc = [
   "sphinx-paramlinks>=0.6.0",
   "sphinx-togglebutton>=0.3.2",
   "myst-parser",
-  "sphinx-autodoc-typehints",
   "sybil",
 ]
 duckdb = ["duckdb>=1.1.2", "duckdb-engine>=0.13.4", "pytz>=2024.2"]
@@ -433,6 +432,7 @@ classmethod-decorators = [
 
 [tool.ruff.lint.per-file-ignores]
 "advanced_alchemy/alembic/templates/*/env.py" = ["INP001"]
+"docs/conf.py" = ["A001"]
 "advanced_alchemy/repository/*.py" = ['C901', 'UP006', 'UP035']
 "advanced_alchemy/repository/memory/*.py" = ['UP006', 'UP035']
 "advanced_alchemy/service/*.py" = ["PLR0911", "UP006", "UP035"]
@@ -477,7 +477,7 @@ classmethod-decorators = [
 ban-relative-imports = "all"
 
 [tool.ruff.lint.isort]
-known-first-party = ["advanced_alchemy", "tests"]
+known-first-party = ["advanced_alchemy", "tests", "tools", "docs"]
 
 [tool.slotscheck]
 exclude-modules = '''
