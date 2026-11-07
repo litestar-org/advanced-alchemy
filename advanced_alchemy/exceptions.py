@@ -315,13 +315,22 @@ class InvalidRequestError(RepositoryError):
 
 
 class ErrorMessages(TypedDict, total=False):
+    """Custom error message templates or callables keyed by error category."""
+
     duplicate_key: Union[str, Callable[[Exception], str]]
+    """Error message or callable for duplicate key constraint violations."""
     integrity: Union[str, Callable[[Exception], str]]
+    """Error message or callable for general integrity constraint violations."""
     foreign_key: Union[str, Callable[[Exception], str]]
+    """Error message or callable for foreign key constraint violations."""
     multiple_rows: Union[str, Callable[[Exception], str]]
+    """Error message or callable for queries returning multiple rows when one was expected."""
     check_constraint: Union[str, Callable[[Exception], str]]
+    """Error message or callable for check constraint violations."""
     other: Union[str, Callable[[Exception], str]]
+    """Error message or callable for unclassified repository exceptions."""
     not_found: Union[str, Callable[[Exception], str]]
+    """Error message or callable when no matching row is found."""
 
 
 def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) -> str:
