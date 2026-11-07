@@ -62,7 +62,7 @@ The CLI can be invoked using the ``alchemy`` command:
 Global Options
 --------------
 
-The following options are available for all commands:
+The following options are available for all commands (and ``--config`` / ``-c`` and ``--validate-config`` can be placed either before or after the subcommand name):
 
 .. list-table:: Global options
    :header-rows: 1
@@ -70,8 +70,10 @@ The following options are available for all commands:
 
    * - Option
      - Explanation
-   * - ``--config`` TEXT
-     - **Required**. Dotted path to SQLAlchemy config(s), it's an instance of ``SQLAlchemySyncConfig`` or ``SQLAlchemyAsyncConfig``. Example: ``--config path.to.alchemy-config.config``
+   * - ``-c``, ``--config`` TEXT
+     - Dotted (``module.attr``) or colon (``module:attr``) path to SQLAlchemy config(s) or a factory callable (sync or async). Can also be set via ``ALCHEMY_CONFIG`` or ``pyproject.toml`` ``[tool.advanced-alchemy]``.
+   * - ``--validate-config``
+     - Optional. Validate configuration and print loaded config summary before executing the command.
    * - ``--bind-key`` TEXT
      - Optional. Specify which SQLAlchemy config to use
    * - ``--no-prompt``
@@ -80,19 +82,50 @@ The following options are available for all commands:
      - Optional. Enable verbose output
 
 
-Config
-------
+Configuration Discovery
+-----------------------
 
-Here is an example of what **config** looks like.
+The CLI resolves configuration in the following order of precedence:
 
-If the file is named ``alchemy-config.py``, you would need to use it like this ``--config path.to.alchemy-config.config``
+1. **CLI flag** (``--config`` / ``-c``, passed before or after the subcommand):
+
+   .. code-block:: bash
+
+       alchemy --config myapp.config:alchemy_config upgrade
+       alchemy upgrade --config myapp.config:alchemy_config
+
+2. **Environment variable** (``ALCHEMY_CONFIG``):
+
+   .. code-block:: bash
+
+       export ALCHEMY_CONFIG="myapp.config:alchemy_config"
+       alchemy upgrade
+
+3. **Project configuration** (``pyproject.toml``):
+
+   The CLI walks upward from the current working directory (stopping at the ``.git`` repository root) to find ``pyproject.toml`` and reads ``[tool.advanced-alchemy]`` (or ``[tool.alchemy]``):
+
+   .. code-block:: toml
+       :caption: pyproject.toml
+
+       [tool.advanced-alchemy]
+       config = "myapp.config:alchemy_config"
+
+   Multiple configuration paths can be provided as a list or comma-separated string (deduplicated by ``bind_key``):
+
+   .. code-block:: toml
+       :caption: pyproject.toml
+
+       [tool.advanced-alchemy]
+       config = ["myapp.db:primary_config", "myapp.db:analytics_config"]
+
+Here is an example of a configuration module (supporting direct instances, sequences, plugin/extension wrappers, or sync/async factory callables):
 
 .. code-block:: python
     :caption: alchemy-config.py
 
     from advanced_alchemy.config import SQLAlchemySyncConfig
 
-    # Create a test config using SQLite
     config = SQLAlchemySyncConfig(
         connection_string="sqlite:///test.db"
     )
@@ -105,6 +138,15 @@ Migration Commands
 ~~~~~~~~~~~~~~~~~~
 
 These commands manage database migrations and revisions.
+
+show-config
+^^^^^^^^^^^
+
+Display all loaded configurations with migrations enabled:
+
+.. code-block:: bash
+
+    alchemy show-config --config path.to.alchemy-config.config
 
 show-current-revision
 ^^^^^^^^^^^^^^^^^^^^^
@@ -545,17 +587,14 @@ Here's how to extend the CLI with your own commands:
     from advanced_alchemy.cli import get_alchemy_group, add_migration_commands
     import click
 
-    # Get the base group
     alchemy_group = get_alchemy_group()
 
-    # Add your custom commands
     @alchemy_group.command(name="my-command")
     @click.option("--my-option", help="Custom option")
     def my_command(my_option):
         """My custom command."""
         click.echo(f"Running my command with option: {my_option}")
 
-    # Add migration commands to your group
     add_migration_commands(alchemy_group)
 
 Custom Group Integration
@@ -573,7 +612,6 @@ You can also integrate Advanced Alchemy's commands into your existing Click grou
         """My application CLI."""
         pass
 
-    # Add migration commands to your CLI group
     add_migration_commands(cli)
 
     @cli.command()
@@ -612,15 +650,9 @@ You can integrate Advanced Alchemy's CLI commands into your existing ``Typer`` a
 
     def create_cli() -> typer.Typer:
         """Create the CLI application with both Typer and Click commands."""
-        # Get the Click group from advanced_alchemy
         alchemy_group = get_alchemy_group()
-
-        # Convert our Typer app to a Click command object
         typer_click_object = typer.main.get_command(app)
-
-        # Add all migration commands from the alchemy group to our CLI
         typer_click_object.add_command(add_migration_commands(alchemy_group))
-
         return typer_click_object
 
     if __name__ == "__main__":
