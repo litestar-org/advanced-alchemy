@@ -116,3 +116,16 @@ def test_flask_extension_ambiguous_config_xrefs_qualified() -> None:
     assert ":class:`advanced_alchemy.extensions.flask.SQLAlchemyAsyncConfig`" in text
     assert ":class:`advanced_alchemy.extensions.flask.SQLAlchemySyncConfig`" in text
 
+
+def test_operations_module_xref_and_conftest_async_sessionmaker() -> None:
+    """operations.py uses valid module xref and docs/conftest.py uses async_sessionmaker."""
+    repo_root = Path(__file__).resolve().parents[3]
+    ops_text = (repo_root / "advanced_alchemy" / "operations.py").read_text(encoding="utf-8")
+    conftest_text = (repo_root / "docs" / "conftest.py").read_text(encoding="utf-8")
+
+    assert ":mod:`advanced_alchemy.extensions`" not in ops_text
+    assert ":mod:`advanced_alchemy.extensions.litestar`" in ops_text
+    assert ":meth:`Repository.upsert_many`" not in ops_text
+    assert "async_sessionmaker(\n        bind=engine, expire_on_commit=False\n    )" in conftest_text
+
+

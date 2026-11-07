@@ -123,3 +123,14 @@ def test_build_docs_cleanup_and_convert_docs_removed() -> None:
         if tok.type == tokenize.COMMENT
     ]
     assert comments == []
+
+
+def test_pyproject_includes_tools_and_docs_in_mypy_and_pyright() -> None:
+    """pyproject.toml includes tools and docs in mypy packages and pyright include."""
+    pyproject_text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert '"tools"' in pyproject_text
+    assert '"docs"' in pyproject_text
+    assert '"docs/conftest.py"' not in pyproject_text
+    assert 'include = ["advanced_alchemy", "tools", "docs"]' in pyproject_text
+

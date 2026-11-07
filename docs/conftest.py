@@ -1,10 +1,16 @@
-from collections.abc import AsyncGenerator
+"""Sybil doctest configuration and fixtures for documentation examples."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sybil import Sybil
 from sybil.parsers.rest import PythonCodeBlockParser, SkipParser
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 EXECUTABLE_DOCS = (
     "usage/modeling/basics.rst",
@@ -16,8 +22,6 @@ EXECUTABLE_DOCS = (
     "usage/repositories/filtering.rst",
     "usage/database_seeding.rst",
     "usage/services.rst",
-    # litestar.rst is executable only for the session-integration blocks; all
-    # other code blocks are wrapped in ``.. skip: start``/``.. skip: end``.
     "usage/frameworks/litestar.rst",
 )
 
@@ -34,6 +38,7 @@ NON_EXECUTABLE_DOCS = (
 
 @pytest.fixture(name="engine")
 async def engine_fixture() -> AsyncGenerator[AsyncEngine, None]:
+    """Provide an in-memory SQLite async engine for documentation code blocks."""
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     yield engine
     await engine.dispose()
@@ -41,8 +46,9 @@ async def engine_fixture() -> AsyncGenerator[AsyncEngine, None]:
 
 @pytest.fixture(name="db_session")
 async def db_session_fixture(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
-    async_session_factory: sessionmaker[AsyncSession] = sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
+    """Provide an AsyncSession bound to the documentation engine fixture."""
+    async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
+        bind=engine, expire_on_commit=False
     )
     async with async_session_factory() as session:
         yield session

@@ -501,9 +501,9 @@ strict-imports = true
 [tool.mypy]
 disallow_any_generics = false
 disallow_untyped_decorators = true
-exclude = ["docs/conftest.py"]
+exclude = []
 implicit_reexport = false
-packages = ["advanced_alchemy", "tests", "docs", "examples"]
+packages = ["advanced_alchemy", "tests", "tools", "docs", "examples"]
 python_version = "3.9"
 show_error_codes = true
 strict = true
@@ -516,7 +516,7 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 disable_error_code = "attr-defined,type-var,union-attr"
 disallow_untyped_decorators = false
-module = "tests.*"
+module = ["tests.*", "docs.conftest"]
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
@@ -605,14 +605,13 @@ warn_unreachable = false
 [tool.pyright]
 disableBytesTypePromotions = true
 exclude = [
-  "docs",
   "tests/unit/test_extensions",
   "tests/unit/test_repository.py",
   "tests/helpers.py",
   "tests/docker_service_fixtures.py",
   "examples/flask/flask_services.py",
 ]
-include = ["advanced_alchemy"]
+include = ["advanced_alchemy", "tools", "docs"]
 pythonVersion = "3.9"
 reportMissingTypeStubs = false
 reportPrivateImportUsage = false

@@ -25,15 +25,13 @@ Never pass user input directly as table names, column names, or other SQL identi
 Data values are properly parameterized using bindparam() to prevent SQL injection.
 
 Notes:
-------
-This module is designed to be database-agnostic where possible, with specialized
-optimizations for specific database backends where appropriate.
+    This module is designed to be database-agnostic where possible, with specialized
+    optimizations for specific database backends where appropriate.
 
 See Also:
----------
-- :mod:`sqlalchemy.sql.expression` : SQLAlchemy Core expression language
-- :mod:`sqlalchemy.orm` : SQLAlchemy ORM functionality
-- :mod:`advanced_alchemy.extensions` : Additional database extensions
+    - :mod:`sqlalchemy.sql.expression`: SQLAlchemy Core expression language
+    - :mod:`sqlalchemy.orm`: SQLAlchemy ORM functionality
+    - :mod:`advanced_alchemy.extensions.litestar`: Litestar framework integration
 """
 
 import re
@@ -375,7 +373,7 @@ class OnConflictUpsert:
         :meth:`OnConflictUpsert.create_upsert` can compile directly. The
         bulk ``MERGE`` (mssql, oracle) and ``INSERT OR UPDATE`` (spanner)
         primitives are dispatched separately by
-        :meth:`Repository.upsert_many` via :func:`resolve_upsert_strategy`
+        :meth:`~advanced_alchemy.repository.SQLAlchemyAsyncRepository.upsert_many` via :func:`resolve_upsert_strategy`
         and are intentionally **not** reported here.
 
         Args:
