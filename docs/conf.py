@@ -42,7 +42,6 @@ extensions = [
     "sphinx_design",
     "sphinxcontrib.mermaid",
     "sphinx_togglebutton",
-    "sphinx_paramlinks",
 ]
 
 intersphinx_mapping = InventoryUpdater.build_intersphinx_mapping(DOCS_DIR)
@@ -57,7 +56,7 @@ auto_pytabs_max_version = (3, 13)
 
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
-napoleon_include_special_with_doc = True
+napoleon_include_special_with_doc = False
 napoleon_use_admonition_for_examples = True
 napoleon_use_admonition_for_notes = True
 napoleon_use_admonition_for_references = False
@@ -68,7 +67,7 @@ napoleon_use_rtype = True
 napoleon_preprocess_types = True
 
 autoclass_content = "class"
-autodoc_class_signature = "separated"
+autodoc_class_signature = "mixed"
 autodoc_default_options = {
     "members": True,
     "show-inheritance": True,
@@ -77,10 +76,12 @@ autodoc_default_options = {
 autodoc_member_order = "bysource"
 autodoc_typehints_format = "short"
 autodoc_typehints = "description"
+autodoc_typehints_description_target = "documented_params"
 autodoc_preserve_defaults = True
 python_maximum_signature_line_length = 68
 python_use_unqualified_type_names = True
 python_display_short_literal_types = True
+toc_object_entries = False
 
 autodoc_type_aliases = {
     "ModelT": "advanced_alchemy.repository.typing.ModelT",
@@ -150,6 +151,8 @@ autodoc_type_aliases = {
     "advanced_alchemy.types.password_hash.bcrypt.BcryptHasher": "advanced_alchemy.types.password_hash.bcrypt.BcryptHasher",
     "advanced_alchemy.types.password_hash.passlib.PasslibHasher": "advanced_alchemy.types.password_hash.passlib.PasslibHasher",
     "ForUpdateArg": "sqlalchemy.sql.selectable.ForUpdateArg",
+    "LoadSpec": "advanced_alchemy.repository.LoadSpec",
+    "OrderingPair": "advanced_alchemy.repository.OrderingPair",
 }
 autodoc_mock_imports: list[str] = []
 

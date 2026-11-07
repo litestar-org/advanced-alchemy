@@ -14,6 +14,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 from docutils.utils import get_source_line
 from sphinx.domains.python import ObjectEntry, PythonDomain
+from sphinx.ext.autodoc import ClassDocumenter, Documenter, FunctionDocumenter, MethodDocumenter
+from sphinx.ext.autodoc import directive as autodoc_directive
+from sphinx.ext.autodoc import typehints as autodoc_typehints
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
@@ -467,6 +470,31 @@ def _register_alias_group(objects: dict[str, ObjectEntry], group: tuple[str, ...
             _propagate_member_aliases(objects, canonical_name, alias_name)
 
 
+def _register_undocumented_class_members(objects: dict[str, ObjectEntry]) -> None:
+    """Register public methods and attributes of documented classes onto their class anchor."""
+    for fullname, entry in list(objects.items()):
+        if entry.objtype != "class" or entry.aliased or not fullname.startswith("advanced_alchemy."):
+            continue
+        mod_name, _, cls_name = fullname.rpartition(".")
+        try:
+            mod = importlib.import_module(mod_name)
+        except ImportError:
+            continue
+        cls = getattr(mod, cls_name, None)
+        if not isinstance(cls, type):
+            continue
+        for attr_name in dir(cls):
+            if attr_name.startswith("_"):
+                continue
+            member_fullname = f"{fullname}.{attr_name}"
+            if member_fullname in objects:
+                continue
+            static_attr = inspect.getattr_static(cls, attr_name, None)
+            is_callable = callable(static_attr) or isinstance(static_attr, (classmethod, staticmethod))
+            member_objtype = "method" if is_callable else "attribute"
+            objects[member_fullname] = ObjectEntry(entry.docname, entry.node_id, member_objtype, True)
+
+
 def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
     """Populate Python domain object aliases for package re-exports and Litestar cross-references."""
     del app
@@ -475,9 +503,12 @@ def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
     if objects is None:
         return []
 
+    _register_undocumented_class_members(objects)
+
     for group in LITESTAR_OBJECT_ALIAS_GROUPS:
         _register_alias_group(objects, group)
 
+    reexport_by_name: dict[str, list[str]] = {}
     for pkg_name in PACKAGE_REEXPORT_MODULES:
         try:
             pkg = importlib.import_module(pkg_name)
@@ -489,13 +520,22 @@ def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
             if sym is None or inspect.ismodule(sym):
                 continue
             origin_module = getattr(sym, "__module__", None)
-            candidates: list[str] = [f"{pkg_name}.{sym_name}"]
+            candidates = reexport_by_name.setdefault(sym_name, [])
+            pkg_full = f"{pkg_name}.{sym_name}"
+            if pkg_full not in candidates:
+                candidates.append(pkg_full)
             if isinstance(origin_module, str) and origin_module.startswith("advanced_alchemy"):
                 origin_full = f"{origin_module}.{sym_name}"
                 if origin_full not in candidates:
                     candidates.append(origin_full)
-            if len(candidates) > 1:
-                _register_alias_group(objects, tuple(candidates))
+                parent_mod = origin_module.rsplit(".", 1)[0]
+                parent_full = f"{parent_mod}.{sym_name}"
+                if parent_full not in candidates:
+                    candidates.append(parent_full)
+
+    for candidates in reexport_by_name.values():
+        if len(candidates) > 1:
+            _register_alias_group(objects, tuple(candidates))
 
     litestar_submodules = (
         "base",
@@ -546,6 +586,86 @@ def _install_python_domain_dual_role_patch() -> None:
 
     setattr(PythonDomain, "get_objects", _patched_get_objects)
     setattr(PythonDomain, "_aa_dual_role_patched", True)
+
+
+def _install_autodoc_explicit_members_patch() -> None:
+    """Preserve explicit ``:members:`` allowlists and compact description-mode overload signatures."""
+    if getattr(autodoc_directive, "_aa_explicit_members_patched", False):
+        return
+
+    original_process = autodoc_directive.process_documenter_options
+
+    def _patched_process_documenter_options(
+        documenter: Any,
+        config: Any,
+        options: dict[str, str],
+    ) -> Any:
+        explicit_members = options.get("members")
+        resolved = original_process(documenter, config, options)
+        if isinstance(explicit_members, str) and explicit_members.strip():
+            resolved["members"] = [item.strip() for item in explicit_members.split(",") if item.strip()]
+        return resolved
+
+    original_func_sig = FunctionDocumenter.format_signature
+    original_meth_sig = MethodDocumenter.format_signature
+
+    def _compact_func_signature(self: FunctionDocumenter, **kwargs: Any) -> str:
+        if self.config.autodoc_typehints == "description":
+            return Documenter.format_signature(self, **kwargs)
+        return original_func_sig(self, **kwargs)
+
+    def _compact_meth_signature(self: MethodDocumenter, **kwargs: Any) -> str:
+        if self.config.autodoc_typehints == "description":
+            return Documenter.format_signature(self, **kwargs)
+        return original_meth_sig(self, **kwargs)
+
+    original_cls_get_sig = ClassDocumenter._get_signature
+
+    def _compact_cls_get_signature(self: ClassDocumenter) -> tuple[Any | None, str | None, Any | None]:
+        if (
+            not self.options.inherited_members
+            and isinstance(self.object, type)
+            and "__init__" not in self.object.__dict__
+            and "__new__" not in self.object.__dict__
+            and "__dataclass_fields__" not in self.object.__dict__
+        ):
+            return None, None, None
+        return original_cls_get_sig(self)
+
+    original_record_typehints = autodoc_typehints.record_typehints
+
+    def _compact_record_typehints(
+        app: Sphinx,
+        objtype: str,
+        name: str,
+        obj: Any,
+        options: Any,
+        args: str,
+        retann: str,
+    ) -> None:
+        if objtype == "class" and isinstance(obj, type):
+            doc = getattr(obj, "__doc__", "") or ""
+            if "Args:" not in doc and "Parameters" not in doc and ":param " not in doc:
+                return
+        original_record_typehints(app, objtype, name, obj, options, args, retann)
+        annotations = app.env.temp_data.get("annotations", {}).get(name)
+        if isinstance(annotations, dict):
+            for key, val in list(annotations.items()):
+                if isinstance(val, str):
+                    if "_AbstractLoad" in val:
+                        annotations[key] = "~advanced_alchemy.repository.LoadSpec | None"
+                    elif "UnaryExpression" in val and "InstrumentedAttribute" in val:
+                        annotations[key] = (
+                            "list[~advanced_alchemy.repository.OrderingPair] "
+                            "| ~advanced_alchemy.repository.OrderingPair | None"
+                        )
+
+    setattr(autodoc_directive, "process_documenter_options", _patched_process_documenter_options)
+    setattr(FunctionDocumenter, "format_signature", _compact_func_signature)
+    setattr(MethodDocumenter, "format_signature", _compact_meth_signature)
+    setattr(ClassDocumenter, "_get_signature", _compact_cls_get_signature)
+    setattr(autodoc_typehints, "record_typehints", _compact_record_typehints)
+    setattr(autodoc_directive, "_aa_explicit_members_patched", True)
 
 
 def _is_offline_mode() -> bool:
@@ -718,8 +838,40 @@ def on_missing_reference(app: Sphinx, env: BuildEnvironment, node: pending_xref,
 def setup(app: Sphinx) -> dict[str, bool]:
     """Register Sphinx missing-reference and inventory-alias hooks."""
     _install_python_domain_dual_role_patch()
+    _install_autodoc_explicit_members_patch()
+    app.connect("autodoc-process-signature", _sanitize_recorded_typehints, priority=600)
     app.connect("env-updated", register_inventory_aliases)
     app.connect("missing-reference", on_missing_reference)
     app.connect("warn-missing-reference", on_warn_missing_reference)
     app.add_config_value("ignore_missing_refs", default={}, rebuild="env")
     return {"parallel_read_safe": True, "parallel_write_safe": True}
+
+
+def _sanitize_recorded_typehints(
+    app: Sphinx,
+    objtype: str,
+    name: str,
+    obj: Any,
+    options: Any,
+    args: str,
+    retann: str,
+) -> None:
+    """Normalize expanded runtime type aliases in recorded autodoc annotations."""
+    del options, args, retann
+    annotations = app.env.temp_data.get("annotations", {}).get(name)
+    if not isinstance(annotations, dict):
+        return
+    if objtype == "class" and isinstance(obj, type):
+        doc = getattr(obj, "__doc__", "") or ""
+        if "Args:" not in doc and "Parameters" not in doc and ":param " not in doc:
+            annotations.clear()
+            return
+    for key, val in list(annotations.items()):
+        if isinstance(val, str):
+            if "_AbstractLoad" in val:
+                annotations[key] = "~advanced_alchemy.repository.LoadSpec | None"
+            elif "UnaryExpression" in val and "InstrumentedAttribute" in val:
+                annotations[key] = (
+                    "list[~advanced_alchemy.repository.OrderingPair] "
+                    "| ~advanced_alchemy.repository.OrderingPair | None"
+                )
