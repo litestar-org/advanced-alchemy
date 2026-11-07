@@ -40,10 +40,13 @@ def _count_rside_toc_items(html_text: str) -> int:
         "repository.rst",
         "repository_memory.rst",
         "service.rst",
+        "filters.rst",
+        "operations.rst",
+        "exceptions.rst",
     ],
 )
 def test_repository_and_service_reference_directive_hygiene(page: str) -> None:
-    """Verify repository and service reference pages use H2 categories and explicit directives."""
+    """Verify curated reference pages use H2 categories and explicit directives."""
     content = (REFERENCE_DIR / page).read_text(encoding="utf-8")
     h2_headings = _extract_h2_headings(content)
     assert 2 <= len(h2_headings) <= 5
@@ -53,12 +56,22 @@ def test_repository_and_service_reference_directive_hygiene(page: str) -> None:
     assert ":no-index:" not in content
 
 
+def test_exceptions_reference_contains_qualified_sqlalchemy_xrefs() -> None:
+    """Verify docs/reference/exceptions.rst includes qualified SQLAlchemy exception cross-references."""
+    content = (REFERENCE_DIR / "exceptions.rst").read_text(encoding="utf-8")
+    assert ":exc:`sqlalchemy.exc.IntegrityError`" in content
+    assert ":exc:`sqlalchemy.exc.OperationalError`" in content
+
+
 @pytest.mark.parametrize(
     "html_page",
     [
         "repository.html",
         "repository_memory.html",
         "service.html",
+        "filters.html",
+        "operations.html",
+        "exceptions.html",
     ],
 )
 def test_repository_and_service_built_html_and_toc_budgets(html_page: str) -> None:
