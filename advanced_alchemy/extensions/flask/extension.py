@@ -1,4 +1,3 @@
-# ruff: noqa: ARG001
 """Flask extension for Advanced Alchemy."""
 
 from collections.abc import Generator, Sequence
@@ -37,7 +36,14 @@ class AdvancedAlchemy:
         *,
         portal_provider: "Optional[PortalProvider]" = None,
     ) -> None:
-        """Initialize the extension."""
+        """Initialize the extension.
+
+        Args:
+            config: One or more :class:`advanced_alchemy.extensions.flask.SQLAlchemySyncConfig` or
+                :class:`advanced_alchemy.extensions.flask.SQLAlchemyAsyncConfig` instances.
+            app: Optional Flask application instance.
+            portal_provider: Optional portal provider for running async operations from sync contexts.
+        """
         self.portal_provider = portal_provider if portal_provider is not None else PortalProvider()
         self._config = config if isinstance(config, Sequence) else [config]
         self._has_async_config = any(isinstance(c, SQLAlchemyAsyncConfig) for c in self.config)
@@ -53,7 +59,12 @@ class AdvancedAlchemy:
 
     @property
     def config(self) -> "Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]":
-        """Get the SQLAlchemy configuration(s)."""
+        """Get the SQLAlchemy configuration(s).
+
+        Returns:
+            Sequence of :class:`advanced_alchemy.extensions.flask.SQLAlchemyAsyncConfig` or
+            :class:`advanced_alchemy.extensions.flask.SQLAlchemySyncConfig` instances.
+        """
         return self._config
 
     @property
@@ -89,40 +100,35 @@ class AdvancedAlchemy:
         if self._has_async_config:
             self.portal_provider.start()
 
-            # Create tables for async configs
             for cfg in self._config:
                 if isinstance(cfg, SQLAlchemyAsyncConfig):
                     self.portal_provider.portal.call(cfg.create_all_metadata)
 
-            # Register shutdown handler for the portal
             @app.teardown_appcontext
-            def shutdown_portal(exception: "Optional[BaseException]" = None) -> None:  # pyright: ignore[reportUnusedFunction]
+            def shutdown_portal(_exception: "Optional[BaseException]" = None) -> None:  # pyright: ignore[reportUnusedFunction]
                 """Stop the portal when the application shuts down."""
-                if not app.debug:  # Don't stop portal in debug mode
+                if not app.debug:
                     with suppress(Exception):
                         self.portal_provider.stop()
 
-        # Initialize each config with the app
         for config in self.config:
             config.init_app(app, self.portal_provider.portal)
             bind_key = config.bind_key if config.bind_key is not None else "default"
             session_maker = config.create_session_maker()
             self._session_makers[bind_key] = session_maker
 
-        # Register session cleanup only
         app.teardown_appcontext(self._teardown_appcontext)
 
         app.extensions["advanced_alchemy"] = self
         db_group_cmd = cast("click.Command", database_group)
         app.cli.add_command(db_group_cmd)
 
-    def _teardown_appcontext(self, exception: "Optional[BaseException]" = None) -> None:
+    def _teardown_appcontext(self, _exception: "Optional[BaseException]" = None) -> None:
         """Clean up resources when the application context ends."""
         for key in list(g):
             if key.startswith("advanced_alchemy_session_"):
                 session = getattr(g, key)
                 if isinstance(session, AsyncSession):
-                    # Close async sessions through the portal
                     with suppress(ImproperConfigurationError):
                         self.portal_provider.portal.call(session.close)
                 else:
@@ -148,7 +154,6 @@ class AdvancedAlchemy:
         if hasattr(g, session_key):
             return cast("Union[AsyncSession, Session]", getattr(g, session_key))
 
-        # Reset routing context for request-scoped isolation when creating a new session
         reset_routing_context()
 
         session_maker = self._session_makers.get(bind_key)
@@ -159,7 +164,6 @@ class AdvancedAlchemy:
         session = session_maker()
 
         if self._has_async_config:
-            # Ensure portal is started
             if not self.portal_provider.is_running:
                 self.portal_provider.start()
             setattr(session, "_session_portal", self.portal_provider.portal)
@@ -203,7 +207,7 @@ class AdvancedAlchemy:
         return session
 
     @contextmanager
-    def with_session(  # pragma: no cover (more on this later)
+    def with_session(  # pragma: no cover
         self, bind_key: str = "default"
     ) -> "Generator[Union[AsyncSession, Session], None, None]":
         """Provide a transactional scope around a series of operations.

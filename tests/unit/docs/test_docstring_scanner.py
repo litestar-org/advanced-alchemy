@@ -80,3 +80,39 @@ def test_advanced_alchemy_public_docstrings_clean() -> None:
     )
 
     assert diagnostics == []
+
+
+def test_config_common_broken_sqlalchemy_xrefs_replaced() -> None:
+    """config/common.py replaces broken sqlalchemy.get_engine and Connection.in_transaction xrefs."""
+    repo_root = Path(__file__).resolve().parents[3]
+    text = (repo_root / "advanced_alchemy" / "config" / "common.py").read_text(encoding="utf-8")
+
+    assert "sqlalchemy.get_engine" not in text
+    assert "sqlalchemy.Connection.in_transaction" not in text
+    assert "sqlalchemy.Session" not in text
+    assert ":func:`sqlalchemy.create_engine`" in text
+    assert ":meth:`sqlalchemy.engine.Connection.in_transaction`" in text
+
+
+def test_config_engine_broken_serialization_xrefs_replaced() -> None:
+    """config/engine.py replaces broken .serialization.* and sqlalchemy.get_engine.params.* xrefs."""
+    repo_root = Path(__file__).resolve().parents[3]
+    text = (repo_root / "advanced_alchemy" / "config" / "engine.py").read_text(encoding="utf-8")
+
+    assert "<.serialization.decode_json>" not in text
+    assert "<.serialization.encode_json>" not in text
+    assert ":attr:`serialization.decode_json`" not in text
+    assert ":attr:`serialization.encode_json`" not in text
+    assert "sqlalchemy.get_engine" not in text
+    assert ":func:`advanced_alchemy.utils.serialization.decode_json`" in text
+    assert ":func:`advanced_alchemy.utils.serialization.encode_json`" in text
+
+
+def test_flask_extension_ambiguous_config_xrefs_qualified() -> None:
+    """extensions/flask/extension.py qualifies SQLAlchemyAsyncConfig and SQLAlchemySyncConfig xrefs."""
+    repo_root = Path(__file__).resolve().parents[3]
+    text = (repo_root / "advanced_alchemy" / "extensions" / "flask" / "extension.py").read_text(encoding="utf-8")
+
+    assert ":class:`advanced_alchemy.extensions.flask.SQLAlchemyAsyncConfig`" in text
+    assert ":class:`advanced_alchemy.extensions.flask.SQLAlchemySyncConfig`" in text
+
