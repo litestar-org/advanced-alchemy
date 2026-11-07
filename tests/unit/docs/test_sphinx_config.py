@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import io
 import runpy
 import tokenize
@@ -11,6 +12,9 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONF_PATH = REPO_ROOT / "docs" / "conf.py"
+CUSTOM_CSS_PATH = REPO_ROOT / "docs" / "_static" / "custom.css"
+BUILD_DOCS_PATH = REPO_ROOT / "tools" / "build_docs.py"
+CONVERT_DOCS_PATH = REPO_ROOT / "tools" / "convert_docs.sh"
 
 
 @pytest.fixture(scope="module")
@@ -80,6 +84,39 @@ def test_sphinx_conf_nav_links_and_version_env(
 def test_sphinx_conf_has_no_inline_comments() -> None:
     """Verify docs/conf.py contains zero inline # comments."""
     source = CONF_PATH.read_text(encoding="utf-8")
+    comments = [
+        tok.string
+        for tok in tokenize.generate_tokens(io.StringIO(source).readline)
+        if tok.type == tokenize.COMMENT
+    ]
+    assert comments == []
+
+
+def test_shibuya_custom_css_layout_and_link_contracts() -> None:
+    """Verify docs/_static/custom.css enforces Shibuya layout, sapphire links, and scoped code pills."""
+    css = CUSTOM_CSS_PATH.read_text(encoding="utf-8")
+    assert ".sy-rside" in css
+    assert "display: block !important;" in css
+    assert "visibility: visible !important;" in css
+    assert ".sy-content" in css
+    assert "max-width: 46rem !important;" in css
+    assert "margin-inline: auto;" in css
+    assert "#1d4ed8" in css
+    assert "#60a5fa" in css
+    assert "text-underline-offset: 0.18em;" in css
+    assert "border: none;" in css
+    assert "a > code.literal" in css
+
+
+def test_build_docs_cleanup_and_convert_docs_removed() -> None:
+    """Verify tools/convert_docs.sh is deleted and tools/build_docs.py has no dead checkout or comments."""
+    assert not CONVERT_DOCS_PATH.exists()
+
+    source = BUILD_DOCS_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    func_names = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+    assert "checkout" not in func_names
+    assert "_ADVANCED_ALCHEMY_DOCS_BUILD_VERSION" in source
     comments = [
         tok.string
         for tok in tokenize.generate_tokens(io.StringIO(source).readline)

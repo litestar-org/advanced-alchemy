@@ -18,14 +18,25 @@
   --brand-letter-spacing-md: 0.1em;
   --brand-letter-spacing-sm: 0.05em;
   --brand-letter-spacing-xs: 0.03em;
+
+  --aa-link-light: #1d4ed8;
+  --aa-link-light-hover: #1e40af;
+  --aa-link-dark: #60a5fa;
+  --aa-link-dark-hover: #93c5fd;
 }
 
-/* Light mode: Use Shibuya's accent color variables
- * --accent-9 is the primary accent color
- * --accent-10 is slightly darker
- * --accent-11 is for high-contrast text
- * --accent-a1 through --accent-a12 are transparent variants
- */
+/* Shibuya reading measure and right-hand TOC visibility */
+.sy-rside {
+  display: block !important;
+  visibility: visible !important;
+}
+
+.sy-content {
+  max-width: 46rem !important;
+  margin-inline: auto;
+}
+
+/* Light mode: Use Shibuya's accent color variables */
 html.light {
   --brand-text-glow: 0 0 10px var(--accent-a3),
     0 0 20px var(--accent-a2), 0 0 30px var(--accent-a1);
@@ -151,26 +162,74 @@ html.dark .title-with-logo .brand-text {
 
 /* =====================================================
  * Brand-Aligned UI Element Enhancements
- * Uses Shibuya's accent colors for consistency
+ * WCAG AAA sapphire prose links & scoped code pills
  * ===================================================== */
 
-/* Inline code styling - uses accent colors */
+/* Prose links: high-contrast sapphire blue with underline affordance */
+html.light .yue a:not(.headerlink):not(:has(> code:only-child)):not(code a) {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+html.light .yue a:not(.headerlink):not(:has(> code:only-child)):not(code a):hover {
+  color: #1e40af;
+}
+
+html.dark .yue a:not(.headerlink):not(:has(> code:only-child)):not(code a) {
+  color: #60a5fa;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+html.dark .yue a:not(.headerlink):not(:has(> code:only-child)):not(code a):hover {
+  color: #93c5fd;
+}
+
+/* Plain inline code spans: subtle borderless fill */
 html.light code.literal {
-  background-color: var(--accent-a2);
-  border: 1px solid var(--accent-a4);
-  color: var(--accent-11);
-  padding: 0.1em 0.4em;
+  background-color: rgba(15, 23, 42, 0.055);
+  border: none;
+  color: #0f172a;
+  padding: 0.12em 0.38em;
   border-radius: 0.3em;
   font-size: 90%;
 }
 
 html.dark code.literal {
-  background-color: var(--accent-a3);
-  border: 1px solid var(--accent-a5);
-  color: var(--accent-11);
-  padding: 0.1em 0.4em;
+  background-color: rgba(148, 163, 184, 0.14);
+  border: none;
+  color: #f1f5f9;
+  padding: 0.12em 0.38em;
   border-radius: 0.3em;
   font-size: 90%;
+}
+
+/* Linked code pills: reserve border strictly for clickable code links */
+html.light a > code.literal {
+  background-color: rgba(29, 78, 216, 0.07);
+  border: 1px solid rgba(29, 78, 216, 0.28);
+  color: #1d4ed8;
+  text-decoration: none;
+}
+
+html.light a:hover > code.literal {
+  background-color: rgba(29, 78, 216, 0.13);
+  border-color: rgba(29, 78, 216, 0.45);
+  color: #1e40af;
+}
+
+html.dark a > code.literal {
+  background-color: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  color: #60a5fa;
+  text-decoration: none;
+}
+
+html.dark a:hover > code.literal {
+  background-color: rgba(96, 165, 250, 0.2);
+  border-color: rgba(96, 165, 250, 0.55);
+  color: #93c5fd;
 }
 
 /* Navigation links - accent color on hover */
