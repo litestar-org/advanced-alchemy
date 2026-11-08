@@ -282,6 +282,7 @@ LITESTAR_OBJECT_ALIAS_GROUPS: tuple[tuple[str, ...], ...] = (
 
 PACKAGE_REEXPORT_MODULES: tuple[str, ...] = (
     "advanced_alchemy",
+    "advanced_alchemy.alembic.commands",
     "advanced_alchemy.base",
     "advanced_alchemy.cache",
     "advanced_alchemy.cli",
@@ -297,6 +298,8 @@ PACKAGE_REEXPORT_MODULES: tuple[str, ...] = (
     "advanced_alchemy.service",
     "advanced_alchemy.types",
     "advanced_alchemy.utils",
+    "advanced_alchemy.utils.dataclass",
+    "advanced_alchemy.extensions",
     "advanced_alchemy.extensions.litestar",
     "advanced_alchemy.extensions.litestar.cli",
     "advanced_alchemy.extensions.litestar.dto",
@@ -536,7 +539,7 @@ def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
     for group in LITESTAR_OBJECT_ALIAS_GROUPS:
         _register_alias_group(objects, group)
 
-    reexport_by_identity: dict[tuple[str, str], list[str]] = {}
+    reexport_by_identity: dict[tuple[int, str], list[str]] = {}
     for pkg_name in PACKAGE_REEXPORT_MODULES:
         try:
             pkg = importlib.import_module(pkg_name)
@@ -548,7 +551,7 @@ def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
             if sym is None or inspect.ismodule(sym):
                 continue
             origin_module = getattr(sym, "__module__", None)
-            identity_key = (origin_module if isinstance(origin_module, str) else pkg_name, sym_name)
+            identity_key = (id(sym), sym_name)
             candidates = reexport_by_identity.setdefault(identity_key, [])
             pkg_full = f"{pkg_name}.{sym_name}"
             if pkg_full not in candidates:
@@ -565,6 +568,24 @@ def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
     for candidates in reexport_by_identity.values():
         if len(candidates) > 1:
             _register_alias_group(objects, tuple(candidates))
+
+    modules_map = cast("dict[str, Any]", getattr(py_domain, "modules", {}))
+    for pkg_name in PACKAGE_REEXPORT_MODULES:
+        mod_entry = modules_map.get(pkg_name)
+        if mod_entry is None:
+            continue
+        try:
+            pkg = importlib.import_module(pkg_name)
+        except ImportError:
+            continue
+        for sym_name in getattr(pkg, "__all__", ()):
+            sym = getattr(pkg, sym_name, None)
+            if sym is None or inspect.ismodule(sym):
+                continue
+            pkg_full = f"{pkg_name}.{sym_name}"
+            if pkg_full not in objects:
+                fallback_type = "class" if isinstance(sym, type) else ("function" if callable(sym) else "data")
+                objects[pkg_full] = ObjectEntry(mod_entry.docname, mod_entry.node_id, fallback_type, True)
 
     litestar_submodules = (
         "base",
@@ -586,6 +607,17 @@ def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
                 alias_name = f"{dst_prefix}{suffix}"
                 if alias_name not in objects:
                     objects[alias_name] = ObjectEntry(entry.docname, entry.node_id, entry.objtype, True)
+
+    audit_entry = objects.get("advanced_alchemy.mixins.audit.AuditColumns") or objects.get(
+        "advanced_alchemy.base.UUIDAuditBase"
+    )
+    if audit_entry is not None:
+        for touch_alias in (
+            "advanced_alchemy._listeners.touch_updated_timestamp",
+            "advanced_alchemy.base.touch_updated_timestamp",
+        ):
+            if touch_alias not in objects:
+                objects[touch_alias] = ObjectEntry(audit_entry.docname, audit_entry.node_id, "function", True)
 
     return []
 

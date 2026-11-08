@@ -128,7 +128,7 @@ Composite Filters, Type Aliases & Helpers
 
 .. autofunction:: advanced_alchemy.filters.escape_like_value
 
-.. py:data:: advanced_alchemy.filters.LIKE_ESCAPE_CHAR
+.. py:data:: LIKE_ESCAPE_CHAR
     :type: str
 
     Default escape character used in SQL ``LIKE`` and ``ILIKE`` patterns.

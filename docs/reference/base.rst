@@ -117,27 +117,27 @@ Registries, Utilities & Type Aliases
 
 .. autofunction:: advanced_alchemy.base.model_to_dict
 
-.. py:data:: advanced_alchemy.base.orm_registry
+.. py:data:: orm_registry
     :type: sqlalchemy.orm.registry
 
     Default SQLAlchemy ORM registry instance.
 
-.. py:data:: advanced_alchemy.base.metadata_registry
+.. py:data:: metadata_registry
     :type: MetadataRegistry
 
     Global registry mapping bind keys to SQLAlchemy ``MetaData`` instances.
 
-.. py:data:: advanced_alchemy.base.convention
+.. py:data:: convention
     :type: dict[str, str]
 
     Default SQLAlchemy constraint naming convention dictionary.
 
-.. py:data:: advanced_alchemy.base.table_name_regexp
+.. py:data:: table_name_regexp
     :type: re.Pattern[str]
 
     Compiled regular expression used to derive snake_case table names.
 
-.. py:data:: advanced_alchemy.base.TableArgsType
+.. py:data:: TableArgsType
     :type: typing.TypeAlias
 
     Type alias representing SQLAlchemy ``__table_args__`` declarations.

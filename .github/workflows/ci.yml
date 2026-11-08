@@ -182,15 +182,19 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
+      - name: Verify public docstrings
+        run: uv run python -m tools.docs.scan_public_docstrings --check-leaks --check-overloads --check-typeddicts advanced_alchemy
+
       - name: Test docs examples
         run: uv run make docs-test
 
       - name: Build docs
         run: uv run make docs
 
+      - name: Verify docs artifacts
+        run: uv run python -m tools.docs.verify_docs_artifacts --build-dir docs/_build/html --docs-dir docs
+
       - name: Check docs links
-        env:
-          LITESTAR_DOCS_IGNORE_MISSING_EXAMPLE_OUTPUT: 1
         run: uv run make docs-linkcheck
 
       - name: Save PR number

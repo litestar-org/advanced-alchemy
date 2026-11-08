@@ -8,7 +8,7 @@ Async Repositories
 ------------------
 
 .. autoclass:: advanced_alchemy.repository.SQLAlchemyAsyncRepository
-    :members: add, get, list, list_and_count, update, delete, count, check_health
+    :members: add, get, list, list_and_count, update, delete, count
     :no-inherited-members:
     :show-inheritance:
 
@@ -80,7 +80,7 @@ Helpers & Type Definitions
 
 .. autofunction:: advanced_alchemy.repository.model_from_dict
 
-.. py:data:: advanced_alchemy.repository.DEFAULT_ERROR_MESSAGE_TEMPLATES
+.. py:data:: DEFAULT_ERROR_MESSAGE_TEMPLATES
     :type: ErrorMessages
 
     Default error message templates mapped by exception category.

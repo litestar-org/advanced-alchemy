@@ -75,12 +75,12 @@ Routing Context Managers & State
 
 .. autofunction:: advanced_alchemy.routing.reset_routing_context
 
-.. py:data:: advanced_alchemy.routing.stick_to_primary_var
+.. py:data:: stick_to_primary_var
     :type: contextvars.ContextVar[bool]
 
     Context variable tracking whether subsequent reads should stick to the primary after a write.
 
-.. py:data:: advanced_alchemy.routing.force_primary_var
+.. py:data:: force_primary_var
     :type: contextvars.ContextVar[bool]
 
     Context variable forcing operations onto the primary engine.

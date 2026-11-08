@@ -10,17 +10,6 @@ SHELL := /bin/bash
 .EXPORT_ALL_VARIABLES:
 MAKEFLAGS += --no-print-directory
 
-DOC_TEST_FILES := \
-	docs/usage/modeling/basics.rst \
-	docs/usage/modeling/inheritance.rst \
-	docs/usage/modeling/sqlmodel.rst \
-	docs/usage/modeling/types.rst \
-	docs/usage/repositories/advanced.rst \
-	docs/usage/repositories/basics.rst \
-	docs/usage/repositories/filtering.rst \
-	docs/usage/database_seeding.rst \
-	docs/usage/services.rst
-
 # -----------------------------------------------------------------------------
 # Display Formatting and Colors
 # -----------------------------------------------------------------------------
@@ -156,7 +145,7 @@ clean:                                              ## Cleanup temporary build a
 .PHONY: docs-test
 docs-test:                                         ## Run executable documentation examples
 	@echo "${INFO} Running executable documentation examples... 📚"
-	@uv run pytest $(DOC_TEST_FILES) --quiet
+	@uv run pytest docs/ tests/unit/docs/ tests/unit/test_docs.py --quiet
 	@echo "${OK} Documentation examples passed ✨"
 
 .PHONY: test
@@ -240,10 +229,31 @@ docs-serve:                              ## Serve documentation locally
 	@echo "${INFO} Starting documentation server... 📚"
 	@uv run sphinx-autobuild docs docs/_build/ -j auto --watch advanced_alchemy --watch docs --watch tests --watch CONTRIBUTING.rst --open-browser
 
+.PHONY: docs-update-inventories
+docs-update-inventories:                           ## Refresh cached upstream intersphinx inventories
+	@echo "${INFO} Updating intersphinx inventories... 🔄"
+	@uv run python -m tools.docs.update_inventories
+	@echo "${OK} Intersphinx inventories updated"
+
+.PHONY: docs-llms
+docs-llms:                                         ## Generate llms.txt and llms-full.txt from Sphinx doctrees
+	@echo "${INFO} Generating llms.txt and llms-full.txt... 🤖"
+	@uv run python -m tools.sphinx_ext.llms_txt --docs-dir docs --output-dir docs/_build/html
+	@echo "${OK} llms.txt artifacts generated"
+
+.PHONY: docs-check
+docs-check:                                        ## Verify docstrings and built documentation artifacts
+	@echo "${INFO} Verifying documentation docstrings and artifacts... 🔍"
+	@uv run python -m tools.docs.scan_public_docstrings --check-leaks --check-overloads --check-typeddicts advanced_alchemy
+	@uv run python -m tools.docs.verify_docs_artifacts --build-dir docs/_build/html --docs-dir docs
+	@echo "${OK} Documentation checks passed ✨"
+
 .PHONY: docs
 docs: docs-clean                                   ## Build documentation
 	@echo "${INFO} Building documentation... 📝"
+	@uv run python -m tools.docs.scan_public_docstrings --check-leaks --check-overloads --check-typeddicts advanced_alchemy
 	@uv run sphinx-build -M html docs docs/_build/ -E -a -j auto -W --keep-going
+	@uv run python -m tools.docs.verify_docs_artifacts --build-dir docs/_build/html --docs-dir docs
 	@echo "${OK} Documentation built successfully"
 
 .PHONY: docs-linkcheck

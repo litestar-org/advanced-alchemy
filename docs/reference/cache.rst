@@ -29,7 +29,7 @@ Serialization & Listeners
 
 .. autofunction:: advanced_alchemy.cache.setup_cache_listeners
 
-.. py:data:: advanced_alchemy.cache.DOGPILE_CACHE_INSTALLED
+.. py:data:: DOGPILE_CACHE_INSTALLED
     :type: bool
 
     Boolean flag indicating whether ``dogpile.cache`` is installed.

@@ -31,7 +31,7 @@ Strategy Resolution & Validation
 
 .. autofunction:: advanced_alchemy.operations.validate_identifier
 
-.. py:data:: advanced_alchemy.operations.UpsertKind
+.. py:data:: UpsertKind
     :type: typing.TypeAlias
 
     Literal union of supported dialect upsert execution strategies.

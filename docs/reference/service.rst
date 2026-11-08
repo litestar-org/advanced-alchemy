@@ -31,7 +31,7 @@ Sync Services
     :show-inheritance:
 
 .. autoclass:: advanced_alchemy.service.SQLAlchemySyncRepositoryService
-    :members: to_model
+    :no-members:
     :no-inherited-members:
     :show-inheritance:
 
@@ -82,7 +82,7 @@ Conversion, Pagination & Helpers
     :no-members:
     :no-inherited-members:
 
-.. py:data:: advanced_alchemy.service.ATTRS_INSTALLED
+.. py:data:: ATTRS_INSTALLED
     :type: bool
 
     Boolean flag indicating whether ``attrs`` is installed.

@@ -17,12 +17,12 @@ Identifiers, Timestamps & JSON Types
     :no-inherited-members:
     :show-inheritance:
 
-.. py:data:: advanced_alchemy.types.BigIntIdentity
+.. py:data:: BigIntIdentity
     :type: sqlalchemy.types.TypeEngine
 
     Dialect-aware 64-bit integer identity column type.
 
-.. py:data:: advanced_alchemy.types.JsonB
+.. py:data:: JsonB
     :type: sqlalchemy.types.TypeEngine
 
     Dialect-aware JSONB column type with binary JSON support on PostgreSQL and Oracle.
@@ -47,12 +47,12 @@ Identifiers, Timestamps & JSON Types
     :no-inherited-members:
     :show-inheritance:
 
-.. py:data:: advanced_alchemy.types.UUID_UTILS_INSTALLED
+.. py:data:: UUID_UTILS_INSTALLED
     :type: bool
 
     Boolean flag indicating whether ``uuid-utils`` is installed.
 
-.. py:data:: advanced_alchemy.types.NANOID_INSTALLED
+.. py:data:: NANOID_INSTALLED
     :type: bool
 
     Boolean flag indicating whether ``fastnanoid`` is installed.
@@ -85,7 +85,7 @@ Object Storage Types & Registry
     :no-inherited-members:
     :show-inheritance:
 
-.. py:data:: advanced_alchemy.types.storages
+.. py:data:: storages
     :type: StorageRegistry
 
     Default global :class:`~advanced_alchemy.types.StorageRegistry` singleton.

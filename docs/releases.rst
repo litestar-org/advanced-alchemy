@@ -41,7 +41,7 @@ Long-term Support Releases (LTS)
 
 Major releases are designated as LTS releases for the life of that major release series.
 These releases will receive bugfixes for a guaranteed period of time as defined in
-`Supported Versions <#supported-versions>`_.
+`Supported Versions <#supported-versions>`__.
 
 Deprecation Policy
 ------------------
