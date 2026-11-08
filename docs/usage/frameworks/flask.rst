@@ -2,19 +2,18 @@
 Flask Integration
 =================
 
-Advanced Alchemy integrates with Flask through an extension that manages application-context sessions,
-supports sync and async SQLAlchemy configs, and registers database migration commands on the Flask CLI.
+Advanced Alchemy integrates with Flask through :class:`~advanced_alchemy.extensions.flask.AdvancedAlchemy`, managing application-context sessions, synchronous and asynchronous SQLAlchemy configurations, and Flask CLI database migration commands.
 
 Basic Setup
 -----------
 
-Use ``SQLAlchemySyncConfig`` for standard Flask applications:
+Use :class:`~advanced_alchemy.extensions.flask.SQLAlchemySyncConfig` for standard WSGI Flask applications:
 
 .. code-block:: python
 
     from flask import Flask
     from sqlalchemy import select
-    from sqlalchemy.orm import Mapped, mapped_column
+    from sqlalchemy.orm import Mapped
 
     from advanced_alchemy.extensions.flask import AdvancedAlchemy, SQLAlchemySyncConfig, base
 
@@ -28,7 +27,7 @@ Use ``SQLAlchemySyncConfig`` for standard Flask applications:
     app = Flask(__name__)
     alchemy = AdvancedAlchemy(
         SQLAlchemySyncConfig(
-            connection_string="sqlite:///local.db",
+            connection_string="sqlite:///:memory:",
             commit_mode="autocommit",
             create_all=True,
         ),
@@ -42,67 +41,64 @@ Use ``SQLAlchemySyncConfig`` for standard Flask applications:
         users = session.execute(select(User)).scalars().all()
         return {"users": [{"id": user.id, "name": user.name} for user in users]}
 
-Sessions are cached on Flask's application context, so repeated ``get_session()`` calls within the same request
-reuse the same SQLAlchemy session.
+Sessions are cached on Flask's application context, so repeated ``get_session()`` calls within the same request reuse the same SQLAlchemy session.
 
 Multiple Databases
 ------------------
 
-Provide a sequence of configs when you need more than one bind key:
+Provide a sequence of configurations when you need more than one bind key:
 
 .. code-block:: python
 
-    configs = [
-        SQLAlchemySyncConfig(connection_string="sqlite:///users.db", bind_key="users"),
-        SQLAlchemySyncConfig(connection_string="sqlite:///products.db", bind_key="products"),
-    ]
+    multi_app = Flask("flask_multi_db")
+    multi_alchemy = AdvancedAlchemy(
+        [
+            SQLAlchemySyncConfig(connection_string="sqlite:///:memory:", bind_key="users"),
+            SQLAlchemySyncConfig(connection_string="sqlite:///:memory:", bind_key="products"),
+        ],
+        multi_app,
+    )
 
-    alchemy = AdvancedAlchemy(configs, app)
+    with multi_app.app_context():
+        users_session = multi_alchemy.get_sync_session("users")
+        products_session = multi_alchemy.get_sync_session("products")
 
-    users_session = alchemy.get_sync_session("users")
-    products_session = alchemy.get_sync_session("products")
+Async Support and Portal Execution
+----------------------------------
 
-If you register multiple configs, call ``get_session()`` or ``get_sync_session()`` with an explicit bind key unless
-you also have a ``default`` bind configured.
-
-Async Support
--------------
-
-Flask can also work with async SQLAlchemy sessions:
+Flask routes can also use asynchronous SQLAlchemy sessions or execute async coroutines from synchronous routes through the extension portal:
 
 .. code-block:: python
 
     from advanced_alchemy.extensions.flask import SQLAlchemyAsyncConfig
 
-    alchemy = AdvancedAlchemy(
+    async_app = Flask("flask_async_db")
+    async_alchemy = AdvancedAlchemy(
         SQLAlchemyAsyncConfig(
-            connection_string="sqlite+aiosqlite:///local.db",
+            connection_string="sqlite+aiosqlite:///:memory:",
             create_all=True,
         ),
-        app,
+        async_app,
     )
 
 
-    @app.route("/users")
+    @async_app.route("/users")
     async def list_users_async() -> dict[str, list[dict[str, object]]]:
-        session = alchemy.get_async_session()
+        session = async_alchemy.get_async_session()
         users = (await session.execute(select(User))).scalars().all()
         return {"users": [{"id": user.id, "name": user.name} for user in users]}
 
-For sync routes that need to call an async session explicitly, use the extension portal:
 
-.. code-block:: python
-
-    @app.route("/users/sync-bridge")
+    @async_app.route("/users/sync-bridge")
     def list_users_via_portal() -> dict[str, list[dict[str, object]]]:
-        session = alchemy.get_async_session()
-        users = alchemy.portal.call(session.execute, select(User)).scalars().all()
+        session = async_alchemy.get_async_session()
+        users = async_alchemy.portal.call(session.execute, select(User)).scalars().all()
         return {"users": [{"id": user.id, "name": user.name} for user in users]}
 
 Service Integration
 -------------------
 
-``FlaskServiceMixin`` adds a ``jsonify()`` helper that serializes service results using Advanced Alchemy's configured serializer:
+:class:`~advanced_alchemy.extensions.flask.FlaskServiceMixin` adds a ``jsonify()`` helper that serializes service results into a Flask ``Response``:
 
 .. code-block:: python
 
@@ -110,15 +106,12 @@ Service Integration
     from typing import Optional
     from uuid import UUID
 
-    from flask import request
+    from flask import Response, request
     from msgspec import Struct
-    from sqlalchemy.orm import Mapped, mapped_column
+    from sqlalchemy.orm import Mapped
 
     from advanced_alchemy.extensions.flask import (
         FlaskServiceMixin,
-        SQLAlchemySyncConfig,
-        AdvancedAlchemy,
-        base,
         filters,
         repository,
         service,
@@ -133,31 +126,36 @@ Service Integration
 
 
     class AuthorSchema(Struct):
-        id: Optional[UUID] = None
         name: str
+        id: Optional[UUID] = None
         dob: Optional[datetime.date] = None
 
 
-    class AuthorService(service.SQLAlchemySyncRepositoryService[Author], FlaskServiceMixin):
-        class Repo(repository.SQLAlchemySyncRepository[Author]):
-            model_type = Author
-
-        repository_type = Repo
+    class AuthorRepository(repository.SQLAlchemySyncRepository[Author]):
+        model_type = Author
 
 
-    alchemy = AdvancedAlchemy(
-        SQLAlchemySyncConfig(connection_string="sqlite:///local.db", commit_mode="autocommit"),
-        app,
+    class AuthorService(
+        service.SQLAlchemySyncRepositoryService[Author, AuthorRepository],
+        FlaskServiceMixin,
+    ):
+        repository_type = AuthorRepository
+
+
+    service_app = Flask("flask_service_db")
+    service_alchemy = AdvancedAlchemy(
+        SQLAlchemySyncConfig(connection_string="sqlite:///:memory:", commit_mode="autocommit"),
+        service_app,
     )
 
 
-    @app.route("/authors", methods=["GET"])
-    def list_authors():
+    @service_app.route("/authors", methods=["GET"])
+    def list_authors() -> Response:
         current_page = request.args.get("currentPage", 1, type=int)
         page_size = request.args.get("pageSize", 10, type=int)
         limit_offset = filters.LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
 
-        author_service = AuthorService(session=alchemy.get_sync_session())
+        author_service = AuthorService(session=service_alchemy.get_sync_session())
         results, total = author_service.get_many_and_count(limit_offset)
         payload = author_service.to_schema(
             results,
@@ -167,17 +165,10 @@ Service Integration
         )
         return author_service.jsonify(payload)
 
-
-    @app.route("/authors", methods=["POST"])
-    def create_author():
-        author_service = AuthorService(session=alchemy.get_sync_session())
-        author = author_service.create(data=request.get_json())
-        return author_service.jsonify(author_service.to_schema(author, schema_type=AuthorSchema))
-
 Database Migrations
 -------------------
 
-When the Flask extension is initialized, database commands are added to the Flask CLI:
+When the Flask extension is initialized, database migration commands are registered on the Flask CLI:
 
 .. code-block:: bash
 
