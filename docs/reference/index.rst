@@ -2,6 +2,8 @@
 API Reference
 =============
 
+.. py:module:: advanced_alchemy
+
 The API reference provides detailed documentation for all public classes, functions,
 and modules in Advanced Alchemy. Each section includes complete type information,
 usage examples, and links to related documentation.

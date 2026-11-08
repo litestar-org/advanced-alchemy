@@ -2,6 +2,8 @@
 config
 ======
 
+.. py:module:: advanced_alchemy.config
+
 API Reference for the ``Config`` module
 
 .. note:: Private methods and attributes are not included in the API reference.

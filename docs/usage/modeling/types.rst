@@ -2,478 +2,109 @@
 Advanced Types
 ==============
 
-Advanced Alchemy provides several custom SQLAlchemy types that handle common requirements like encryption, UTC datetimes, and file storage.
+Advanced Alchemy provides dialect-adaptive SQLAlchemy column types in :mod:`advanced_alchemy.types` with strict Python type annotations. Security and file storage types are covered in :doc:`security_and_storage_types`.
 
-All types include:
+DateTimeUTC
+-----------
 
-- Proper Python type annotations for modern IDE support
-- Automatic dialect-specific implementations
-- Consistent behavior across different database backends
-- Integration with SQLAlchemy's type system
+:class:`~advanced_alchemy.types.DateTimeUTC` normalizes timezone-aware ``datetime`` values to UTC on write and returns timezone-aware UTC ``datetime`` instances on read across all dialects:
 
 .. code-block:: python
 
     from datetime import datetime
-    from typing import Optional
-
     from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import UUIDBase
-    from advanced_alchemy.types import (
-        DateTimeUTC,
-        EncryptedString,
-        FileObject,
-        JsonB,
-        StoredObject,
-        storages,
-    )
-
-    storages.register_backend("file:///tmp/", key="avatars")
-
-    class UserRecord(UUIDBase):
-        __tablename__ = "user_records"
-        created_at: Mapped[datetime] = mapped_column(DateTimeUTC)
-        password: Mapped[str] = mapped_column(EncryptedString(key="secret-key"))
-        preferences: Mapped[dict[str, str]] = mapped_column(JsonB)
-        avatar: Mapped[Optional[FileObject]] = mapped_column(StoredObject(backend="avatars"))
-
-
-DateTime UTC
-------------
-
-- Ensures all datetime values are stored in UTC
-- Requires timezone information for input values
-- Automatically converts stored values to UTC timezone
-- Returns timezone-aware datetime objects
-- Supports configurable fractional-second precision (``fsp`` / ``precision``)
-
-.. code-block:: python
-
-    from datetime import datetime
-
-    from sqlalchemy.orm import Mapped, mapped_column
-
     from advanced_alchemy.base import BigIntBase
     from advanced_alchemy.types import DateTimeUTC
+
 
     class AuditLogRecord(BigIntBase):
-        __tablename__ = "audit_log"
+        __tablename__ = "audit_log_record"
 
-        created_at: Mapped[datetime] = mapped_column(DateTimeUTC(fsp=6))
+        occurred_at: Mapped[datetime] = mapped_column(DateTimeUTC)
 
-.. warning::
+GUID and UUIDv7 Keys
+--------------------
 
-    On MySQL/MariaDB and Oracle, SQLAlchemy's default ``DateTime(timezone=True)`` compiles to
-    whole-second types (``DATETIME`` on MySQL/MariaDB and ``DATE`` on Oracle), which truncate
-    fractional seconds. Compiling ``DateTimeUTC()`` on those dialects without an explicit ``fsp``
-    now emits a ``DeprecationWarning``.
-
-    Pass ``DateTimeUTC(fsp=6)`` to preserve microsecond precision (compiling to ``DATETIME(6)``
-    on MySQL/MariaDB and ``TIMESTAMP WITH TIME ZONE`` on Oracle), or pass ``DateTimeUTC(fsp=0)``
-    to explicitly keep legacy whole-second DDL without migration churn. In v2.0, ``fsp=6`` will
-    become the default.
-
-To apply ``DateTimeUTC(fsp=6)`` (or ``DateTimeUTC(fsp=0)``) across all ``Mapped[datetime]``
-columns on a custom declarative base without annotating each column individually, pass
-``custom_annotation_map`` to :func:`~advanced_alchemy.base.create_registry`:
-
-.. code-block:: python
-
-    from datetime import datetime
-
-    from advanced_alchemy.base import UUIDBase, create_registry
-    from advanced_alchemy.types import DateTimeUTC
-
-    class AppBase(UUIDBase):
-        __abstract__ = True
-        registry = create_registry(custom_annotation_map={datetime: DateTimeUTC(fsp=6)})
-
-
-Encrypted Types
----------------
-
-Advanced Alchemy supports two types for storing encrypted data with multiple encryption backends.
-
-EncryptedString
-~~~~~~~~~~~~~~~
-
-For storing encrypted string values with configurable length.
-
-.. code-block:: python
-
-    from sqlalchemy.orm import Mapped, mapped_column
-
-    from advanced_alchemy.base import BigIntBase
-    from advanced_alchemy.types import EncryptedString
-
-    class SecretRecord(BigIntBase):
-        __tablename__ = "secret_record"
-
-        secret: Mapped[str] = mapped_column(EncryptedString(key="my-secret-key"))
-
-.. warning::
-
-    Always pass an explicit ``key``. Omitting it falls back to a random key generated
-    once per process, which changes on every restart and makes previously written rows
-    permanently undecryptable. Constructing the type without a ``key`` now emits a
-    ``DeprecationWarning``.
-
-The key may be a string, bytes, or a callable returning either. Use a callable to read
-the key from configuration at runtime so it is never hard-coded in the model:
-
-.. code-block:: python
-
-    import os
-
-    from advanced_alchemy.types import EncryptedString
-
-    secret: Mapped[str] = mapped_column(
-        EncryptedString(key=lambda: os.environ["APP_ENCRYPTION_KEY"])
-    )
-
-A callable key is re-resolved on every read and write, so rotating the value in the
-environment takes effect without code changes; a static (string/bytes) key derives the
-cipher once and reuses it.
-
-EncryptedText
-~~~~~~~~~~~~~
-
-For storing larger encrypted text content (CLOB).
-
-.. code-block:: python
-
-    from sqlalchemy.orm import Mapped, mapped_column
-
-    from advanced_alchemy.base import BigIntBase
-    from advanced_alchemy.types import EncryptedText
-
-    class LongSecretRecord(BigIntBase):
-        __tablename__ = "long_secret_record"
-
-        large_secret: Mapped[str] = mapped_column(EncryptedText(key="my-secret-key"))
-
-Encryption Backends
-~~~~~~~~~~~~~~~~~~~
-
-Two encryption backends are available:
-
-- :class:`FernetBackend <advanced_alchemy.types.encrypted_string.FernetBackend>`: the
-  default. Uses Python's ``cryptography`` library with Fernet (AES-128-CBC + HMAC-SHA256).
-  Requires the ``cryptography`` extra (``pip install advanced_alchemy[cryptography]``);
-  constructing it without ``cryptography`` installed raises ``MissingDependencyError``.
-- :class:`PGCryptoBackend <advanced_alchemy.types.encrypted_string.PGCryptoBackend>`: Uses
-  PostgreSQL's ``pgcrypto`` extension (PostgreSQL only). Encryption and decryption run
-  server-side, so the ``pgcrypto`` extension must be enabled on the database first:
-
-  .. code-block:: sql
-
-      CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-Password Hashing
-----------------
-
-:class:`PasswordHash <advanced_alchemy.types.PasswordHash>` stores a password as a one-way
-hash (never reversibly encrypted) and returns a
-:class:`HashedPassword <advanced_alchemy.types.HashedPassword>` on read. Choose a backend
-explicitly — each pulls a different optional dependency:
-
-- :class:`Argon2Hasher <advanced_alchemy.types.password_hash.argon2.Argon2Hasher>` (``advanced_alchemy[argon2]``)
-- :class:`BcryptHasher <advanced_alchemy.types.password_hash.bcrypt.BcryptHasher>` (``advanced_alchemy[bcrypt]``)
-- :class:`PasslibHasher <advanced_alchemy.types.password_hash.passlib.PasslibHasher>` (``advanced_alchemy[passlib]``)
-- :class:`PwdlibHasher <advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher>` (``advanced_alchemy[pwdlib]``)
-
-.. code-block:: python
-
-    from sqlalchemy.orm import Mapped, mapped_column
-
-    from advanced_alchemy.base import BigIntBase
-    from advanced_alchemy.types import PasswordHash
-    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
-
-    class Account(BigIntBase):
-        __tablename__ = "account"
-
-        password: Mapped[str] = mapped_column(PasswordHash(backend=Argon2Hasher()))
-
-On read, ``account.password`` is a :class:`HashedPassword <advanced_alchemy.types.HashedPassword>`.
-Verify with ``verify``, or use ``verify_and_update`` to transparently upgrade a hash created
-with weaker parameters after a successful login. The same wrapper can be built standalone:
-
-.. code-block:: python
-
-    from advanced_alchemy.types import HashedPassword
-    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
-
-    backend = Argon2Hasher()
-    stored = HashedPassword(backend.hash("s3cret"), backend)
-
-    ok, new_hash = stored.verify_and_update("s3cret")
-    if ok and new_hash is not None:
-        ...  # persist new_hash back to the row
-
-The default column ``length`` is 255 to accommodate stacked passlib schemes.
-
-TOTP Secrets
-------------
-
-:class:`TOTPSecret <advanced_alchemy.types.TOTPSecret>` stores a base32 TOTP shared secret
-encrypted at rest (it extends ``EncryptedString``) and returns a
-:class:`TOTPProvider <advanced_alchemy.types.TOTPProvider>` on read. Requires the ``pyotp``
-extra (``pip install advanced_alchemy[pyotp]``); a ``key`` is mandatory.
-
-.. code-block:: python
-
-    from sqlalchemy.orm import Mapped, mapped_column
-
-    from advanced_alchemy.base import BigIntBase
-    from advanced_alchemy.types import TOTPSecret, generate_totp_secret
-
-    class MfaEnrollment(BigIntBase):
-        __tablename__ = "mfa_enrollment"
-
-        seed: Mapped[str] = mapped_column(TOTPSecret(key="my-secret-key", issuer="ACME"))
-
-After loading a row, ``enrollment.seed`` is a
-:class:`TOTPProvider <advanced_alchemy.types.TOTPProvider>`. Build one directly to generate a
-provisioning URI (render it as a QR code) and verify submitted codes:
-
-.. code-block:: python
-
-    from advanced_alchemy.types import TOTPProvider, generate_totp_secret
-
-    provider = TOTPProvider(generate_totp_secret(), issuer="ACME")
-    uri = provider.provisioning_uri(name="alice@example.com")
-    is_valid = provider.verify("123456")  # tolerates one tick of clock drift by default
-
-One-Time Codes
---------------
-
-:class:`OneTimeCode <advanced_alchemy.types.OneTimeCode>` stores a transient one-time code
-(email/SMS OTP) **hashed** in a JSON column that also holds its expiry, redemption, and
-attempt state — so the whole lifecycle lives in a single column. On read it returns a
-:class:`HashedOneTimeCode <advanced_alchemy.types.HashedOneTimeCode>` whose ``verify``
-succeeds only while the code is still redeemable (not expired, not already used, and not
-locked out after too many wrong guesses).
-
-.. code-block:: python
-
-    from typing import Any
-
-    from sqlalchemy.orm import Mapped, mapped_column
-
-    from advanced_alchemy.base import BigIntBase
-    from advanced_alchemy.types import OneTimeCode
-    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
-
-    class LoginCode(BigIntBase):
-        __tablename__ = "login_code"
-
-        # codes expire after 10 minutes and lock after 3 wrong guesses (the default)
-        code: Mapped[Any] = mapped_column(
-            OneTimeCode(backend=Argon2Hasher(), ttl_seconds=600, max_attempts=3)
-        )
-
-To issue a code, assign a freshly generated value; ``generate_one_time_code`` returns a
-cryptographically random code:
-
-.. code-block:: python
-
-    from advanced_alchemy.types import generate_one_time_code
-
-    code = generate_one_time_code()  # e.g. "418207" — send this to the user
-    login = LoginCode(code=code)     # stored hashed, with expiry + attempt state
-
-To redeem, ``redeem`` verifies the candidate and returns the updated value to persist — it
-marks the code used on success or records a failed attempt otherwise. Single-use and
-attempt limits are enforced after the value is committed and reloaded:
-
-.. code-block:: python
-
-    from advanced_alchemy.types import HashedOneTimeCode
-    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
-
-    backend = Argon2Hasher()
-    otp = HashedOneTimeCode(backend.hash("418207"), backend, max_attempts=3)
-
-    ok, otp = otp.redeem("418207")   # assign back to the column and commit to persist
-    assert ok is True
-    assert otp.is_used is True       # a reloaded value now rejects the same code
-
-.. note::
-
-    Single-use is always enforced (a successful ``redeem`` marks the code used); a stateless
-    column type still cannot write to the database on its own, so persist the value returned
-    by ``redeem`` (assign it back and commit) for the used/attempt state to survive a reload.
-
-GUID
-----
-
-A platform-independent GUID/UUID type that adapts to different database backends:
-
-- **PostgreSQL/DuckDB/CockroachDB**: Uses native UUID type
-- **MSSQL**: Uses UNIQUEIDENTIFIER
-- **Oracle**: Uses RAW(16)
-- **Others**: Uses BINARY(16) or CHAR(32)
+:class:`~advanced_alchemy.types.GUID` stores UUID values using the native ``UUID`` type on PostgreSQL, DuckDB, and CockroachDB, ``UNIQUEIDENTIFIER`` on MSSQL, ``RAW(16)`` on Oracle, and ``BINARY(16)`` or ``CHAR(32)`` on other dialects:
 
 .. code-block:: python
 
     from uuid import UUID
-
-    from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-
-    from advanced_alchemy.base import CommonTableAttributes, orm_registry
+    from sqlalchemy.orm import Mapped, mapped_column
+    from advanced_alchemy.base import DefaultBase, UUIDv7AuditBase
     from advanced_alchemy.types import GUID
 
-    class Base(CommonTableAttributes, DeclarativeBase):
-        registry = orm_registry
 
-    class ExternalIdentity(Base):
+    class ExternalIdentity(DefaultBase):
         __tablename__ = "external_identity"
 
         id: Mapped[UUID] = mapped_column(GUID, primary_key=True)
 
-GUID and UUIDv7
-~~~~~~~~~~~~~~~~
 
-:class:`~advanced_alchemy.types.GUID` values are generated by the
-application rather than the database, so they are stable across inserts and
-can be assigned deterministically by client code, ORM defaults, or test
-fixtures on every backend.
+    class TimeOrderedOrder(UUIDv7AuditBase):
+        __tablename__ = "time_ordered_orders"
 
-For primary keys, use **UUIDv7** (time-ordered, RFC 9562). Its
-leading-timestamp bytes give a monotonic insert order, which keeps B-tree
-indexes balanced and avoids the page splits caused by random UUIDv4 keys.
-This applies across all supported backends -- PostgreSQL, MySQL, MSSQL,
-SQLite, and Oracle alike.
+For primary keys, prefer :class:`~advanced_alchemy.base.UUIDv7Base` or :class:`~advanced_alchemy.base.UUIDv7AuditBase` so monotonic RFC 9562 timestamps keep B-tree indexes balanced.
 
-The optional ``uuid-utils`` dependency provides ``uuid7()``. Advanced
-Alchemy ships bases that wire it into the primary key:
+BigIntIdentity
+--------------
+
+:class:`~advanced_alchemy.types.BigIntIdentity` maps to ``BIGINT`` on relational databases while falling back to ``INTEGER`` on SQLite so auto-incrementing primary keys work seamlessly in SQLite test suites:
 
 .. code-block:: python
 
-    from advanced_alchemy.base import UUIDv7AuditBase
+    from sqlalchemy.orm import Mapped, mapped_column
+    from advanced_alchemy.base import DefaultBase
+    from advanced_alchemy.types import BigIntIdentity
 
 
-    class Order(UUIDv7AuditBase):
-        __tablename__ = "orders"
+    class LedgerEntry(DefaultBase):
+        __tablename__ = "ledger_entry"
 
-See ``UUIDv7Base`` and ``UUIDv7AuditBase`` for time-ordered variants, or
-:class:`~advanced_alchemy.mixins.UUIDv7PrimaryKey` to mix the UUIDv7
-primary key into a custom base.
+        id: Mapped[int] = mapped_column(BigIntIdentity, primary_key=True)
+        description: Mapped[str]
 
 JsonB
 -----
 
-A JSON type that uses the most efficient JSON storage for each database:
-
-- **PostgreSQL/CockroachDB**: Uses native JSONB
-- **Oracle**: Uses Binary JSON (BLOB with JSON constraint)
-- **Others**: Uses standard JSON type
+:class:`~advanced_alchemy.types.JsonB` selects native ``JSONB`` on PostgreSQL and CockroachDB, Binary JSON (``BLOB`` with JSON constraint) on Oracle, and standard ``JSON`` on other dialects:
 
 .. code-block:: python
 
     from sqlalchemy.orm import Mapped, mapped_column
-
     from advanced_alchemy.base import BigIntBase
     from advanced_alchemy.types import JsonB
+
 
     class SettingsRecord(BigIntBase):
         __tablename__ = "settings_record"
 
-        data: Mapped[dict[str, str]] = mapped_column(JsonB)
+        preferences: Mapped[dict[str, str]] = mapped_column(JsonB)
 
-Password Hash
--------------
+Vector Embeddings
+-----------------
 
-A type for storing password hashes with configurable backends. Currently supports:
-
-- :class:`~advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher`: Uses ``pwdlib``
-- :class:`~advanced_alchemy.types.password_hash.argon2.Argon2Hasher`: Uses ``argon2-cffi``
-- :class:`~advanced_alchemy.types.password_hash.passlib.PasslibHasher`: Uses ``passlib``
+:class:`~advanced_alchemy.types.Vector` stores fixed-dimension float embeddings for similarity search on PostgreSQL (``pgvector``), Oracle 23ai+, CockroachDB, DuckDB, and JSON/array fallbacks on SQLite:
 
 .. code-block:: python
 
     from sqlalchemy.orm import Mapped, mapped_column
-
-    from advanced_alchemy.base import BigIntBase
-    from advanced_alchemy.types import PasswordHash
-    from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
-    from pwdlib.hashers.argon2 import Argon2Hasher as PwdlibArgon2Hasher
-
-    class CredentialRecord(BigIntBase):
-        __tablename__ = "credential_record"
-
-        password: Mapped[str] = mapped_column(
-            PasswordHash(backend=PwdlibHasher(hasher=PwdlibArgon2Hasher()))
-        )
-
-File Object Storage
--------------------
-
-Advanced Alchemy provides a powerful file object storage system through the :class:`StoredObject` type. This system supports multiple storage backends and provides automatic file cleanup.
-
-The Litestar fullstack reference applications register a named storage backend during application startup and reference that key from :class:`StoredObject`.
-
-Basic Usage
-~~~~~~~~~~~
-
-.. code-block:: python
-
-    from typing import Optional
-
-    from sqlalchemy.orm import Mapped, mapped_column
-
     from advanced_alchemy.base import UUIDBase
-    from advanced_alchemy.types import FileObject, FileObjectList, StoredObject, storages
+    from advanced_alchemy.types import Vector
 
-    storages.register_backend("file:///tmp/", key="documents")
 
-    class Document(UUIDBase):
-        __tablename__ = "documents"
+    class DocumentChunk(UUIDBase):
+        __tablename__ = "document_chunk"
 
-        # Single file storage
-        attachment: Mapped[Optional[FileObject]] = mapped_column(
-            StoredObject(backend="documents"),
-            nullable=True,
-        )
+        embedding: Mapped[list[float]] = mapped_column(Vector(dim=3))
 
-        # Multiple file storage
-        images: Mapped[Optional[FileObjectList]] = mapped_column(
-            StoredObject(backend="documents", multiple=True),
-            nullable=True,
-        )
+Related Guides
+--------------
 
-Storage Backends
-~~~~~~~~~~~~~~~~
+.. toctree::
+    :hidden:
 
-- **FSSpec Backend**: Supports various storage systems using the ``fsspec`` library.
-- **Obstore Backend**: Provides a simple interface for object storage (S3, GCS, etc).
+    security_and_storage_types
 
-Metadata
-~~~~~~~~
-
-File objects support metadata storage:
-
-.. code-block:: python
-
-    file_obj = FileObject(
-        backend="documents",
-        filename="test.txt",
-        metadata={
-            "category": "document",
-            "tags": ["important", "review"],
-        },
-    )
-
-    # Update metadata
-    file_obj.update_metadata({"priority": "high"})
-
-Automatic Cleanup
-~~~~~~~~~~~~~~~~~
-
-When a file object is removed from a model or the model is deleted, the associated file is automatically saved or deleted from storage.
-
-.. note::
-
-    File object listeners are wired through the SQLAlchemy config and framework integrations while
-    ``enable_file_object_listener`` remains enabled, which is the default. Disable that flag only
-    if your application is taking full responsibility for saving and deleting file objects.
+- :doc:`security_and_storage_types` — ``EncryptedString``, ``EncryptedText``, ``PasswordHash``, ``TOTPSecret``, ``OneTimeCode``, and ``StoredObject``.
+- :doc:`/reference/types` — Complete custom types API reference.
