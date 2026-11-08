@@ -2,13 +2,12 @@
 Starlette Integration
 ======================
 
-Advanced Alchemy integrates with Starlette through an application helper that initializes SQLAlchemy configs,
-manages request-scoped sessions, and exposes engine/session accessors for route handlers.
+Advanced Alchemy integrates with Starlette through :class:`~advanced_alchemy.extensions.starlette.AdvancedAlchemy`, which initializes SQLAlchemy configurations, manages request-scoped sessions on ``request.state``, and exposes engine and session accessors for route handlers.
 
 Basic Setup
 -----------
 
-Initialize the extension with a Starlette app and one or more SQLAlchemy configs:
+Initialize the extension with a Starlette ``app`` and one or more SQLAlchemy configurations:
 
 .. code-block:: python
 
@@ -24,55 +23,103 @@ Initialize the extension with a Starlette app and one or more SQLAlchemy configs
         connection_string="sqlite+aiosqlite:///:memory:",
         session_config=AsyncSessionConfig(expire_on_commit=False),
         commit_mode="autocommit",
+        create_all=True,
     )
 
     app = Starlette()
     alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
 
-Working with Sessions in Routes
--------------------------------
+Working with Services, Filters, and Sessions in Routes
+------------------------------------------------------
 
-Use the helper methods to access request-scoped sessions and the configured engine:
+Use ``alchemy.get_async_session(request)`` (or ``alchemy.get_sync_session(request)``) inside Starlette route handlers to instantiate repository services, apply filters, and return serialized schemas:
 
 .. code-block:: python
 
-    from sqlalchemy import text
+    from uuid import UUID
+
+    import msgspec
+    from sqlalchemy.orm import Mapped
     from starlette.requests import Request
-    from starlette.responses import JSONResponse
+    from starlette.responses import JSONResponse, Response
     from starlette.routing import Route
 
-    async def healthcheck(request: Request) -> JSONResponse:
-        session = alchemy.get_async_session(request)
-        await session.execute(text("SELECT 1"))
+    from advanced_alchemy.extensions.starlette import base, filters, repository, service
 
+
+    class AuthorModel(base.UUIDBase):
+        __tablename__ = "starlette_author"
+
+        name: Mapped[str]
+
+
+    class AuthorSchema(msgspec.Struct):
+        id: UUID
+        name: str
+
+
+    class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
+        class Repo(repository.SQLAlchemyAsyncRepository[AuthorModel]):
+            model_type = AuthorModel
+
+        repository_type = Repo
+
+
+    async def list_authors(request: Request) -> Response:
+        current_page = int(request.query_params.get("currentPage", 1))
+        page_size = int(request.query_params.get("pageSize", 10))
+        limit_offset = filters.LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
+
+        authors_service = AuthorService(session=alchemy.get_async_session(request))
+        results, total = await authors_service.get_many_and_count(limit_offset)
+        pagination = authors_service.to_schema(
+            results,
+            total,
+            filters=[limit_offset],
+            schema_type=AuthorSchema,
+        )
+        return Response(content=msgspec.json.encode(pagination), media_type="application/json")
+
+
+    async def healthcheck(request: Request) -> JSONResponse:
+        db_session = alchemy.get_async_session(request)
         engine = alchemy.get_async_engine()
+        assert db_session is not None
         return JSONResponse({"dialect": engine.dialect.name, "status": "ok"})
 
-    app.router.routes.append(Route("/health", endpoint=healthcheck))
+
+    app.router.routes.extend(
+        [
+            Route("/authors", endpoint=list_authors, methods=["GET"]),
+            Route("/health", endpoint=healthcheck, methods=["GET"]),
+        ]
+    )
 
 Commit Modes
 ------------
 
-Starlette integration supports the same commit strategies as the core SQLAlchemy configs:
+Starlette integration supports the same commit strategies as the core SQLAlchemy configurations:
 
 .. code-block:: python
 
-    write_config = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///:memory:",
         commit_mode="autocommit_include_redirect",
     )
 
-    alchemy = AdvancedAlchemy(config=write_config, app=app)
+    app = Starlette()
+    alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
 
 Multiple Binds
 --------------
 
-Provide a sequence of configs when you need more than one bind key:
+Provide a sequence of configurations when you need more than one bind key:
 
 .. code-block:: python
 
     from advanced_alchemy.extensions.starlette import SQLAlchemySyncConfig
 
+    app = Starlette()
     alchemy = AdvancedAlchemy(
         config=[
             SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:"),
@@ -81,12 +128,14 @@ Provide a sequence of configs when you need more than one bind key:
         app=app,
     )
 
-    async_session = alchemy.get_async_config()
-    reporting_session = alchemy.get_sync_config("reporting")
+    default_config = alchemy.get_async_config()
+    reporting_config = alchemy.get_sync_config("reporting")
+    assert default_config.bind_key == "default"
+    assert reporting_config.bind_key == "reporting"
 
 Notes
 -----
 
 - ``AdvancedAlchemy(config=..., app=app)`` calls ``init_app()`` for you.
 - Sessions are stored on ``request.state`` and are reused within the same request.
-- Use ``get_session(request)`` when your code should support either sync or async configs.
+- Use ``alchemy.get_session(request)`` when your code should support either sync or async configurations.

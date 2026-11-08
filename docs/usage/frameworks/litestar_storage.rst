@@ -11,7 +11,7 @@ Register a local filesystem URL, cloud bucket URL (S3, GCS, Azure Blob Storage v
 
 .. literalinclude:: /examples/litestar/session_store.py
     :language: python
-    :lines: 113-128
+    :pyobject: create_app
 
 Declarative Model Columns
 -------------------------
@@ -20,7 +20,8 @@ Declare :class:`~advanced_alchemy.types.StoredObject` columns on your SQLAlchemy
 
 .. literalinclude:: /examples/litestar/session_store.py
     :language: python
-    :lines: 45-62
+    :start-at: class AttachmentModel
+    :end-before: class AttachmentRepository
 
 Handling Uploads in Route Handlers
 ----------------------------------
@@ -41,7 +42,7 @@ When storing ``StoredObject`` metadata on dialects that require custom JSON seri
     from advanced_alchemy.extensions.litestar import EngineConfig, SQLAlchemyAsyncConfig
     from advanced_alchemy.utils.serialization import decode_json, encode_json
 
-    storage_db_config = SQLAlchemyAsyncConfig(
+    alchemy_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///:memory:",
         engine_config=EngineConfig(
             json_serializer=encode_json,

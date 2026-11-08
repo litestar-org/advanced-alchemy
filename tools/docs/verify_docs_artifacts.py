@@ -406,23 +406,37 @@ class DocsArtifactVerifier:
                     )
 
         violations.extend(self._check_internal_fragments(page_ids, page_hrefs))
+        violations.extend(self._check_rst_source_files())
+        return violations
 
-        if self.docs_dir is not None and self.docs_dir.is_dir():
-            rst_candidates = list((self.docs_dir / "usage").rglob("*.rst"))
-            getting_started = self.docs_dir / "getting-started.rst"
-            if getting_started.is_file():
-                rst_candidates.append(getting_started)
-            for rst_file in sorted(rst_candidates):
-                line_count = len(rst_file.read_text(encoding="utf-8").splitlines())
-                if line_count > self.config.max_usage_rst_lines:
-                    violations.append(
-                        ArtifactViolation(
-                            "rst-budget",
-                            str(rst_file),
-                            f"Usage RST line count {line_count} exceeds {self.config.max_usage_rst_lines} lines",
-                        )
+    def _check_rst_source_files(self) -> list[ArtifactViolation]:
+        """Verify RST line budgets and forbid fragile :lines: ranges in literalinclude directives."""
+        if self.docs_dir is None or not self.docs_dir.is_dir():
+            return []
+        violations: list[ArtifactViolation] = []
+        rst_candidates = list((self.docs_dir / "usage").rglob("*.rst"))
+        getting_started = self.docs_dir / "getting-started.rst"
+        if getting_started.is_file():
+            rst_candidates.append(getting_started)
+        for rst_file in sorted(rst_candidates):
+            text = rst_file.read_text(encoding="utf-8")
+            line_count = len(text.splitlines())
+            if line_count > self.config.max_usage_rst_lines:
+                violations.append(
+                    ArtifactViolation(
+                        "rst-budget",
+                        str(rst_file),
+                        f"Usage RST line count {line_count} exceeds {self.config.max_usage_rst_lines} lines",
                     )
-
+                )
+            if ":lines:" in text:
+                violations.append(
+                    ArtifactViolation(
+                        "literalinclude",
+                        str(rst_file),
+                        "Use :pyobject: or :start-at:/:end-before: instead of fragile :lines: in literalinclude",
+                    )
+                )
         return violations
 
     def _check_internal_fragments(

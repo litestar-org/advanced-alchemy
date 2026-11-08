@@ -72,8 +72,8 @@ Pass a sequence of :class:`~advanced_alchemy.extensions.fastapi.SQLAlchemyAsyncC
         SQLAlchemySyncConfig,
     )
 
-    multi_app = FastAPI()
-    multi_alchemy = AdvancedAlchemy(
+    app = FastAPI()
+    alchemy = AdvancedAlchemy(
         config=[
             SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:"),
             SQLAlchemySyncConfig(
@@ -81,10 +81,10 @@ Pass a sequence of :class:`~advanced_alchemy.extensions.fastapi.SQLAlchemyAsyncC
                 bind_key="reporting",
             ),
         ],
-        app=multi_app,
+        app=app,
     )
-    assert multi_alchemy.get_async_config().bind_key == "default"
-    assert multi_alchemy.get_sync_config("reporting").bind_key == "reporting"
+    assert alchemy.get_async_config().bind_key == "default"
+    assert alchemy.get_sync_config("reporting").bind_key == "reporting"
 
 Related Documentation
 ---------------------

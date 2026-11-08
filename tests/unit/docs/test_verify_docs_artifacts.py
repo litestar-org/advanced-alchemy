@@ -187,3 +187,19 @@ def test_verify_docs_artifacts_has_zero_inline_comments() -> None:
     for line in raw.splitlines():
         stripped = line.strip()
         assert not stripped.startswith("#"), f"Inline comment found: {line}"
+
+
+def test_verifier_detects_fragile_literalinclude_lines(tmp_path: Path) -> None:
+    """Verify DocsArtifactVerifier flags :lines: in literalinclude directives inside RST files."""
+    build_dir = tmp_path / "html"
+    build_dir.mkdir(parents=True)
+    docs_dir = tmp_path / "docs"
+    usage_dir = docs_dir / "usage"
+    usage_dir.mkdir(parents=True)
+    (usage_dir / "example.rst").write_text(
+        "Example\n=======\n\n.. literalinclude:: /examples/app.py\n    :lines: 10-20\n",
+        encoding="utf-8",
+    )
+    verifier = DocsArtifactVerifier(build_dir=build_dir, docs_dir=docs_dir)
+    violations = verifier.check_html_and_rst_budgets()
+    assert any(v.category == "literalinclude" for v in violations)

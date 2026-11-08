@@ -90,7 +90,7 @@ def create_app(db_path: Path) -> FastAPI:
     @router.get("/authors")
     async def list_authors(
         authors_service: Annotated[AuthorService, Depends(alchemy.provide_service(AuthorService))],
-        parsed_filters: Annotated[
+        filters: Annotated[
             list[filters.FilterTypes],
             Depends(
                 alchemy.provide_filters(
@@ -104,11 +104,11 @@ def create_app(db_path: Path) -> FastAPI:
         ],
     ) -> service.OffsetPagination[AuthorSchema]:
         """List authors with limit/offset pagination and search filters."""
-        results, total = await authors_service.get_many_and_count(*parsed_filters)
+        results, total = await authors_service.get_many_and_count(*filters)
         return authors_service.to_schema(
             results,
             total,
-            filters=parsed_filters,
+            filters=filters,
             schema_type=AuthorSchema,
         )
 

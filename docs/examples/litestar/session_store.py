@@ -11,13 +11,13 @@ from litestar import Litestar, Request, get, post
 from litestar.middleware.session.server_side import ServerSideSessionConfig
 from litestar.stores.registry import StoreRegistry
 from litestar.testing import TestClient
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from advanced_alchemy.extensions.litestar import (
     SQLAlchemyAsyncConfig,
     SQLAlchemyPlugin,
     base,
+    providers,
     repository,
     service,
 )
@@ -85,20 +85,22 @@ async def get_session_value(key: str, request: Request[Any, Any, Any]) -> dict[s
     return {"key": key, "value": request.session.get(key)}
 
 
-@post(path="/attachments")
+@post(
+    path="/attachments",
+    dependencies=providers.create_service_dependencies(AttachmentService, "attachments_service"),
+)
 async def upload_attachment(
     data: dict[str, str],
-    db_session: AsyncSession,
+    attachments_service: AttachmentService,
 ) -> AttachmentSchema:
     """Persist an attachment record and its StoredObject file payload."""
-    svc = AttachmentService(session=db_session)
     file_obj = FileObject(
         backend="litestar_docs_fs",
         filename=data["filename"],
         content_type="text/plain",
         content=data["content"].encode("utf-8"),
     )
-    record = await svc.create(
+    record = await attachments_service.create(
         {"title": data["title"], "document": file_obj},
         auto_commit=True,
     )

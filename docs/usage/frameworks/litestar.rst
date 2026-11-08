@@ -60,7 +60,8 @@ Define declarative models using the base classes in :mod:`advanced_alchemy.base`
 
 .. literalinclude:: /examples/litestar/basic_app.py
     :language: python
-    :lines: 40-66
+    :start-at: class AuthorModel
+    :end-before: class AuthorRepository
 
 :class:`~advanced_alchemy.extensions.litestar.dto.SQLAlchemyDTO` automatically inspects model columns, relationships, and ``@property`` / ``@cached_property`` descriptors (exposing properties as read-only fields):
 
@@ -94,7 +95,8 @@ Bind a model to a repository and service class to encapsulate query execution, p
 
 .. literalinclude:: /examples/litestar/basic_app.py
     :language: python
-    :lines: 69-79
+    :start-at: class AuthorRepository
+    :end-before: class AuthorController
 
 Controllers and Dependency Injection
 ------------------------------------

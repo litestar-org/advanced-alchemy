@@ -46,13 +46,14 @@ Advanced Alchemy provides :class:`~advanced_alchemy.extensions.litestar.store.SQ
 
 .. literalinclude:: /examples/litestar/session_store.py
     :language: python
-    :lines: 39-43
+    :pyobject: AppStoreModel
 
 Wire :class:`~advanced_alchemy.extensions.litestar.store.SQLAlchemyStore` into Litestar's :class:`~litestar.stores.registry.StoreRegistry` and :class:`~litestar.middleware.session.server_side.ServerSideSessionConfig`:
 
 .. literalinclude:: /examples/litestar/session_store.py
     :language: python
-    :lines: 76-86
+    :start-at: @post(path="/session/{key:str}/{value:str}")
+    :end-before: @post(
 
 .. literalinclude:: /examples/litestar/session_store.py
     :language: python

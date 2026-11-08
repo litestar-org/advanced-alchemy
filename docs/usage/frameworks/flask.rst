@@ -50,18 +50,18 @@ Provide a sequence of configurations when you need more than one bind key:
 
 .. code-block:: python
 
-    multi_app = Flask("flask_multi_db")
-    multi_alchemy = AdvancedAlchemy(
+    app = Flask("flask_multi_db")
+    alchemy = AdvancedAlchemy(
         [
             SQLAlchemySyncConfig(connection_string="sqlite:///:memory:", bind_key="users"),
             SQLAlchemySyncConfig(connection_string="sqlite:///:memory:", bind_key="products"),
         ],
-        multi_app,
+        app,
     )
 
-    with multi_app.app_context():
-        users_session = multi_alchemy.get_sync_session("users")
-        products_session = multi_alchemy.get_sync_session("products")
+    with app.app_context():
+        users_session = alchemy.get_sync_session("users")
+        products_session = alchemy.get_sync_session("products")
 
 Async Support and Portal Execution
 ----------------------------------
@@ -72,27 +72,27 @@ Flask routes can also use asynchronous SQLAlchemy sessions or execute async coro
 
     from advanced_alchemy.extensions.flask import SQLAlchemyAsyncConfig
 
-    async_app = Flask("flask_async_db")
-    async_alchemy = AdvancedAlchemy(
+    app = Flask("flask_async_db")
+    alchemy = AdvancedAlchemy(
         SQLAlchemyAsyncConfig(
             connection_string="sqlite+aiosqlite:///:memory:",
             create_all=True,
         ),
-        async_app,
+        app,
     )
 
 
-    @async_app.route("/users")
+    @app.route("/users")
     async def list_users_async() -> dict[str, list[dict[str, object]]]:
-        session = async_alchemy.get_async_session()
+        session = alchemy.get_async_session()
         users = (await session.execute(select(User))).scalars().all()
         return {"users": [{"id": user.id, "name": user.name} for user in users]}
 
 
-    @async_app.route("/users/sync-bridge")
+    @app.route("/users/sync-bridge")
     def list_users_via_portal() -> dict[str, list[dict[str, object]]]:
-        session = async_alchemy.get_async_session()
-        users = async_alchemy.portal.call(session.execute, select(User)).scalars().all()
+        session = alchemy.get_async_session()
+        users = alchemy.portal.call(session.execute, select(User)).scalars().all()
         return {"users": [{"id": user.id, "name": user.name} for user in users]}
 
 Service Integration
@@ -131,39 +131,37 @@ Service Integration
         dob: Optional[datetime.date] = None
 
 
-    class AuthorRepository(repository.SQLAlchemySyncRepository[Author]):
-        model_type = Author
+    class AuthorService(service.SQLAlchemySyncRepositoryService[Author], FlaskServiceMixin):
+        class Repo(repository.SQLAlchemySyncRepository[Author]):
+            model_type = Author
+
+        repository_type = Repo
 
 
-    class AuthorService(
-        service.SQLAlchemySyncRepositoryService[Author, AuthorRepository],
-        FlaskServiceMixin,
-    ):
-        repository_type = AuthorRepository
-
-
-    service_app = Flask("flask_service_db")
-    service_alchemy = AdvancedAlchemy(
-        SQLAlchemySyncConfig(connection_string="sqlite:///:memory:", commit_mode="autocommit"),
-        service_app,
+    app = Flask("flask_service_db")
+    alchemy_config = SQLAlchemySyncConfig(
+        connection_string="sqlite:///:memory:",
+        commit_mode="autocommit",
+        create_all=True,
     )
+    alchemy = AdvancedAlchemy(alchemy_config, app)
 
 
-    @service_app.route("/authors", methods=["GET"])
+    @app.route("/authors", methods=["GET"])
     def list_authors() -> Response:
-        current_page = request.args.get("currentPage", 1, type=int)
+        page = request.args.get("currentPage", 1, type=int)
         page_size = request.args.get("pageSize", 10, type=int)
-        limit_offset = filters.LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
+        limit_offset = filters.LimitOffset(limit=page_size, offset=page_size * (page - 1))
 
-        author_service = AuthorService(session=service_alchemy.get_sync_session())
-        results, total = author_service.get_many_and_count(limit_offset)
-        payload = author_service.to_schema(
+        authors_service = AuthorService(session=alchemy.get_sync_session())
+        results, total = authors_service.get_many_and_count(limit_offset)
+        response = authors_service.to_schema(
             results,
             total,
             filters=[limit_offset],
             schema_type=AuthorSchema,
         )
-        return author_service.jsonify(payload)
+        return authors_service.jsonify(response)
 
 Database Migrations
 -------------------

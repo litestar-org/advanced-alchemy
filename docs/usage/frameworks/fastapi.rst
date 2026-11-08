@@ -54,7 +54,7 @@ Configure :class:`~advanced_alchemy.extensions.fastapi.SQLAlchemyAsyncConfig` or
         SQLAlchemyAsyncConfig,
     )
 
-    fastapi_app = FastAPI()
+    app = FastAPI()
     alchemy = AdvancedAlchemy(
         config=SQLAlchemyAsyncConfig(
             connection_string="sqlite+aiosqlite:///:memory:",
@@ -62,7 +62,7 @@ Configure :class:`~advanced_alchemy.extensions.fastapi.SQLAlchemyAsyncConfig` or
             create_all=True,
             commit_mode="autocommit",
         ),
-        app=fastapi_app,
+        app=app,
     )
 
 Models, Schemas, and Services
@@ -72,7 +72,8 @@ Define declarative SQLAlchemy models, Pydantic schemas, and repository services:
 
 .. literalinclude:: /examples/fastapi/service_di.py
     :language: python
-    :lines: 35-67
+    :start-at: class AuthorModel
+    :end-before: def create_app
 
 Dependency Injection and Filters
 --------------------------------
