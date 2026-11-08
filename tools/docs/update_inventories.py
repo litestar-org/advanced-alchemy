@@ -157,13 +157,18 @@ class InventoryUpdater:
         targets: Sequence[InventoryTarget] = UPSTREAM_INVENTORIES,
     ) -> dict[str, tuple[str, tuple[str | None, ...]]]:
         """Construct Sphinx intersphinx_mapping with local cache preference and offline safety."""
-        is_offline = (
-            offline
-            if offline is not None
-            else os.getenv("_ADVANCED_ALCHEMY_DOCS_OFFLINE", "").strip().lower() in {"1", "true", "yes"}
-        )
-        mapping: dict[str, tuple[str, tuple[str | None, ...]]] = {}
         inv_dir = docs_dir / "_inv"
+        if offline is not None:
+            is_offline = offline
+        else:
+            env_flag = os.getenv("_ADVANCED_ALCHEMY_DOCS_OFFLINE", "").strip().lower()
+            if env_flag in {"1", "true", "yes"}:
+                is_offline = True
+            elif env_flag in {"0", "false", "no"}:
+                is_offline = False
+            else:
+                is_offline = not inv_dir.is_dir() or not any(inv_dir.glob("*.inv"))
+        mapping: dict[str, tuple[str, tuple[str | None, ...]]] = {}
         for target in targets:
             cached_file = inv_dir / f"{target.name}.inv"
             rel_inv = f"_inv/{target.name}.inv"

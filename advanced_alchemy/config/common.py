@@ -193,11 +193,11 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     """Optional :class:`CacheConfig <advanced_alchemy.cache.CacheConfig>` for dogpile.cache integration.
 
     When set, a :class:`CacheManager <advanced_alchemy.cache.CacheManager>` is instantiated during
-    :meth:`__post_init__` and stored in ``session_config.info["cache_manager"]``. Repositories
+    ``__post_init__`` and stored in ``session_config.info["cache_manager"]``. Repositories
     created against sessions produced by this config will pick the manager up automatically.
 
     Requires the optional ``dogpile.cache`` dependency (``pip install advanced-alchemy[dogpile]``);
-    without it the manager falls back to a no-op :class:`NullRegion`.
+    without it the manager falls back to a no-op ``NullRegion``.
 
     .. seealso::
         :doc:`/usage/caching`

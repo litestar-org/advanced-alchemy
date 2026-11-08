@@ -31,7 +31,7 @@ def warn_deprecation(
         removal_in: Advanced Alchemy version where the deprecated function will be removed
         alternative: Name of a function that should be used instead
         info: Additional information
-        pending: Use :class:`warnings.PendingDeprecationWarning` instead of :class:`warnings.DeprecationWarning`
+        pending: Use :class:`PendingDeprecationWarning` instead of :class:`DeprecationWarning`
         kind: Type of the deprecated thing
     """
     parts = []
@@ -82,7 +82,7 @@ def deprecated(
         removal_in: Advanced Alchemy version where the deprecated function will be removed
         alternative: Name of a function that should be used instead
         info: Additional information
-        pending: Use :class:`warnings.PendingDeprecationWarning` instead of :class:`warnings.DeprecationWarning`
+        pending: Use :class:`PendingDeprecationWarning` instead of :class:`DeprecationWarning`
         kind: Type of the deprecated callable. If ``None``, will use ``inspect`` to figure
             out if it's a function or method
 

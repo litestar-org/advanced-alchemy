@@ -17,13 +17,13 @@ def check_email(email: str) -> str:
     Very simple email validation.
 
     Args:
-        email (str): The email to validate.
+        email: The email to validate.
 
     Raises:
         ValueError: If the email is invalid.
 
     Returns:
-        str: The validated email.
+        The validated email.
     """
     if "@" not in email:
         msg = "Invalid email!"
@@ -40,13 +40,13 @@ def slugify(value: str, allow_unicode: bool = False, separator: Optional[str] = 
     trailing whitespace, dashes, and underscores.
 
     Args:
-        value (str): the string to slugify
-        allow_unicode (bool, optional): allow unicode characters in slug. Defaults to False.
-        separator (str, optional): by default a `-` is used to delimit word boundaries.
+        value: the string to slugify
+        allow_unicode: allow unicode characters in slug. Defaults to ``False``.
+        separator: by default a ``-`` is used to delimit word boundaries.
             Set this to configure something different.
 
     Returns:
-        str: a slugified string of the value parameter
+        a slugified string of the value parameter
     """
     if allow_unicode:
         value = unicodedata.normalize("NFKC", value)

@@ -44,7 +44,7 @@ from typing_extensions import TypeAlias, TypeVar
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
-__all__ = ("SQLAlchemyDTO",)
+__all__ = ("SQLAlchemyDTO", "SQLAlchemyDTOConfig")
 
 logger = logging.getLogger(__name__)
 
@@ -355,10 +355,10 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         """Generate DTO field definitions from a SQLAlchemy model.
 
         Args:
-            model_type (typing.Type[sqlalchemy.orm.DeclarativeBase]): The SQLAlchemy model type to generate field definitions from.
+            model_type: The SQLAlchemy model type to generate field definitions from.
 
         Yields:
-            collections.abc.Generator[litestar.dto.data_structures.DTOFieldDefinition, None, None]: A generator yielding DTO field definitions.
+            A generator yielding DTO field definitions.
 
         Raises:
             RuntimeError: If the mapper cannot be found for the model type.

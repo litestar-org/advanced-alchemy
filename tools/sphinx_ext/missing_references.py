@@ -192,6 +192,7 @@ LITESTAR_OBJECT_ALIAS_GROUPS: tuple[tuple[str, ...], ...] = (
     (
         "advanced_alchemy.config.engine.EngineConfig",
         "advanced_alchemy.config.EngineConfig",
+        "advanced_alchemy.config.routing.EngineConfig",
     ),
     (
         "advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig",
@@ -291,6 +292,7 @@ PACKAGE_REEXPORT_MODULES: tuple[str, ...] = (
     "advanced_alchemy.repository",
     "advanced_alchemy.repository.memory",
     "advanced_alchemy.routing",
+    "advanced_alchemy.routing.selectors",
     "advanced_alchemy.service",
     "advanced_alchemy.types",
     "advanced_alchemy.utils",
@@ -348,29 +350,46 @@ def get_module_global_imports(module_import_path: str, reference_target_source_o
     except ImportError:
         return set()
 
-    source_file: str | None = None
+    source_files: list[str] = []
+    try:
+        mod_file = inspect.getsourcefile(module)
+        if mod_file:
+            source_files.append(mod_file)
+    except TypeError:
+        pass
+
     if reference_target_source_obj:
-        root_attr = reference_target_source_obj.split(".", 1)[0]
-        obj = getattr(module, root_attr, None)
+        parts = reference_target_source_obj.split(".")
+        obj = getattr(module, parts[0], None)
         if obj is not None:
-            try:
-                source_file = inspect.getsourcefile(obj)
-            except TypeError:
-                source_file = None
+            for candidate in (obj, *getattr(obj, "__mro__", ())):
+                cand_mod = getattr(candidate, "__module__", "") or ""
+                if cand_mod and not cand_mod.startswith("advanced_alchemy"):
+                    continue
+                try:
+                    cand_file = inspect.getsourcefile(candidate)
+                    if cand_file and cand_file not in source_files:
+                        source_files.append(cand_file)
+                except TypeError:
+                    pass
+            if len(parts) > 1:
+                member = getattr(obj, parts[1], None)
+                if isinstance(member, property):
+                    member = member.fget
+                if member is not None:
+                    try:
+                        mem_file = inspect.getsourcefile(member)
+                        if mem_file and mem_file not in source_files:
+                            source_files.append(mem_file)
+                    except TypeError:
+                        pass
 
-    if source_file is None:
-        try:
-            source_file = inspect.getsourcefile(module)
-        except TypeError:
-            return set()
-
-    if not source_file:
-        return set()
-
-    tree = _get_module_ast(source_file)
-    import_nodes = _get_import_nodes(tree.body)
-    imported_names = {path.asname or path.name for import_node in import_nodes for path in import_node.names}
-    imported_names.update(_get_typevar_assigned_names(tree.body))
+    imported_names: set[str] = set()
+    for src in source_files:
+        tree = _get_module_ast(src)
+        import_nodes = _get_import_nodes(tree.body)
+        imported_names.update(path.asname or path.name for import_node in import_nodes for path in import_node.names)
+        imported_names.update(_get_typevar_assigned_names(tree.body))
     return imported_names
 
 
@@ -391,7 +410,9 @@ def _resolve_advanced_alchemy_reference(target: str, module: str) -> bool:
     always return ``False`` so Sphinx surfaces the warning.
     """
     external_prefixes = ("sqlalchemy.", "alembic.", "litestar.", "click.", "msgspec.", "pydantic.")
-    if not module.startswith("advanced_alchemy") or target.startswith(external_prefixes):
+    if target.startswith(external_prefixes):
+        return False
+    if not module.startswith("advanced_alchemy") and not target.startswith("advanced_alchemy."):
         return False
 
     resolved = False
@@ -411,11 +432,16 @@ def _resolve_advanced_alchemy_reference(target: str, module: str) -> bool:
             target_mod = importlib.import_module(mod_path)
         except ImportError:
             return False
+        has_private_segment = any(seg.startswith("_") for seg in target.split("."))
         if hasattr(target_mod, attr_name):
             runtime_obj = getattr(target_mod, attr_name)
-            resolved = _is_runtime_typevar_or_alias(runtime_obj) or attr_name in CLASS_ROLE_DATA_SUFFIXES
+            resolved = (
+                _is_runtime_typevar_or_alias(runtime_obj)
+                or attr_name in CLASS_ROLE_DATA_SUFFIXES
+                or has_private_segment
+            )
         else:
-            resolved = attr_name in get_module_global_imports(mod_path) and attr_name in CLASS_ROLE_DATA_SUFFIXES
+            resolved = attr_name in get_module_global_imports(mod_path)
 
     return resolved
 
@@ -562,12 +588,48 @@ def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
     return []
 
 
+def _disambiguate_domain_matches(
+    modname: str | None,
+    matches: list[tuple[str, ObjectEntry]],
+) -> list[tuple[str, ObjectEntry]]:
+    """Select the single best match when an unqualified Python domain lookup matches multiple entries."""
+    if len(matches) <= 1:
+        return matches
+    if modname:
+        exact_prefix = f"{modname}."
+        for m_name, m_entry in matches:
+            if m_name.startswith(exact_prefix):
+                return [(m_name, m_entry)]
+        parts = modname.split(".")
+        if len(parts) >= 3 and parts[1] == "extensions":
+            ext_prefix = ".".join(parts[:3]) + "."
+            ext_matches = [(n, e) for n, e in matches if n.startswith(ext_prefix) and not e.aliased]
+            if ext_matches:
+                return [ext_matches[0]]
+            ext_any = [(n, e) for n, e in matches if n.startswith(ext_prefix)]
+            if ext_any:
+                return [ext_any[0]]
+
+    non_aliased = [(n, e) for n, e in matches if not e.aliased]
+    core_non_aliased = [
+        (n, e)
+        for n, e in non_aliased
+        if not n.startswith("advanced_alchemy.extensions.")
+    ]
+    if core_non_aliased:
+        return [core_non_aliased[0]]
+    if non_aliased:
+        return [non_aliased[0]]
+    return [matches[0]]
+
+
 def _install_python_domain_dual_role_patch() -> None:
     """Ensure PythonDomain.get_objects yields py:class aliases for data/type-alias inventory entries."""
     if getattr(PythonDomain, "_aa_dual_role_patched", False):
         return
 
     original_get_objects = PythonDomain.get_objects
+    original_find_obj = PythonDomain.find_obj
 
     def _patched_get_objects(self: PythonDomain) -> Iterator[tuple[str, str, str, str, str, int]]:
         emitted_classes: set[str] = set()
@@ -585,7 +647,22 @@ def _install_python_domain_dual_role_patch() -> None:
                     emitted_classes.add(fullname)
                     yield (fullname, dispname, "class", docname, anchor, -1)
 
+    def _patched_find_obj(
+        self: PythonDomain,
+        env: BuildEnvironment,
+        modname: str | None,
+        classname: str | None,
+        name: str,
+        type: str | None,
+        searchmode: int = 0,
+    ) -> list[tuple[str, ObjectEntry]]:
+        matches = original_find_obj(self, env, modname, classname, name, type, searchmode)
+        if len(matches) > 1 and "." not in name:
+            return _disambiguate_domain_matches(modname, matches)
+        return matches
+
     setattr(PythonDomain, "get_objects", _patched_get_objects)
+    setattr(PythonDomain, "find_obj", _patched_find_obj)
     setattr(PythonDomain, "_aa_dual_role_patched", True)
 
 
@@ -671,7 +748,13 @@ def _install_autodoc_explicit_members_patch() -> None:
 
 def _is_offline_mode() -> bool:
     """Return True when offline documentation build mode is active."""
-    return os.getenv("_ADVANCED_ALCHEMY_DOCS_OFFLINE", "").strip().lower() in {"1", "true", "yes"}
+    env_flag = os.getenv("_ADVANCED_ALCHEMY_DOCS_OFFLINE", "").strip().lower()
+    if env_flag in {"1", "true", "yes"}:
+        return True
+    if env_flag in {"0", "false", "no"}:
+        return False
+    inv_dir = Path(__file__).resolve().parents[2] / "docs" / "_inv"
+    return not inv_dir.is_dir() or not any(inv_dir.glob("*.inv"))
 
 
 def _resolve_external_runtime_symbol(target: str) -> bool:
@@ -732,8 +815,33 @@ def _target_matches(targets: set[str] | list[Any] | re.Pattern[str], target: str
     return False
 
 
+def _extract_enclosing_module_and_obj(node: Node) -> tuple[str, str]:
+    """Extract py:module and object fullname from ``node`` or its enclosing ``<desc>`` ancestor."""
+    attributes = cast("dict[str, Any]", getattr(node, "attributes", {}))
+    module = str(attributes.get("py:module", "") or "")
+    obj_name = str(
+        attributes.get("py:class") or attributes.get("py:meth") or attributes.get("py:func") or ""
+    )
+    current: Node | None = getattr(node, "parent", None)
+    while current is not None and (not module or not obj_name):
+        cur_attrs = cast("dict[str, Any]", getattr(current, "attributes", {}))
+        if not module and cur_attrs.get("module"):
+            module = str(cur_attrs["module"])
+        if not obj_name and cur_attrs.get("fullname"):
+            obj_name = str(cur_attrs["fullname"])
+        children = getattr(current, "children", None)
+        if (not module or not obj_name) and getattr(current, "tagname", None) == "desc" and children:
+            sig_attrs = cast("dict[str, Any]", getattr(children[0], "attributes", {}))
+            if not module and sig_attrs.get("module"):
+                module = str(sig_attrs["module"])
+            if not obj_name and sig_attrs.get("fullname"):
+                obj_name = str(sig_attrs["fullname"])
+        current = getattr(current, "parent", None)
+    return module, obj_name
+
+
 def _should_ignore_offline_reference(
-    domain: str,
+    domain: Any,
     ref_type: str,
     target: str,
     module: str,
@@ -742,16 +850,25 @@ def _should_ignore_offline_reference(
     """Return True if an external reference should be suppressed in offline mode."""
     if not _is_offline_mode():
         return False
-    if domain == "std" and ref_type == "doc" and ":" in target:
+    domain_name = getattr(domain, "name", str(domain or ""))
+    if (domain_name == "std" or ref_type == "doc") and ":" in target:
         return target.split(":", 1)[0] != "advanced-alchemy"
-    if target.startswith("advanced_alchemy"):
+    clean_target = target.lstrip("~")
+    if clean_target.startswith("advanced_alchemy"):
         return False
-    if "." in target:
-        return _resolve_external_runtime_symbol(target)
+    if any(sep in clean_target for sep in ("[", "|", ",")):
+        tokens = [tok for tok in re.split(r"[\s\[\],|]+", clean_target) if tok and tok != "optional"]
+        return bool(tokens) and all(
+            _should_ignore_offline_reference(domain_name, ref_type, tok, module, reference_target_source_obj)
+            or _should_ignore_module_typechecking_import(tok, module, reference_target_source_obj)
+            for tok in tokens
+        )
+    if "." in clean_target:
+        return _resolve_external_runtime_symbol(clean_target)
     if module:
         global_names = get_module_global_imports(module, reference_target_source_obj)
-        return target in global_names or hasattr(builtins, target)
-    return hasattr(builtins, target)
+        return clean_target in global_names or hasattr(builtins, clean_target)
+    return hasattr(builtins, clean_target)
 
 
 def _should_ignore_module_typechecking_import(
@@ -760,17 +877,26 @@ def _should_ignore_module_typechecking_import(
     reference_target_source_obj: str,
 ) -> bool:
     """Return True if ``target`` is a verified module TypeVar or TYPE_CHECKING-only import."""
-    if not module or target.startswith("advanced_alchemy."):
-        return False
-    if _resolve_advanced_alchemy_reference(target, module):
+    clean_target = target.lstrip("~")
+    if any(sep in clean_target for sep in ("[", "|")) and not clean_target.startswith(":"):
+        tokens = [tok for tok in re.split(r"[\s\[\],|]+", clean_target) if tok]
+        if len(tokens) > 1 and all(
+            _should_ignore_module_typechecking_import(tok, module, reference_target_source_obj)
+            or hasattr(builtins, tok)
+            for tok in tokens
+        ):
+            return True
+    if _resolve_advanced_alchemy_reference(clean_target, module):
         return True
-    if reference_target_source_obj and "." not in target:
+    if not module or clean_target.startswith("advanced_alchemy."):
+        return False
+    if reference_target_source_obj and "." not in clean_target:
         global_names = get_module_global_imports(module, reference_target_source_obj)
-        return target in global_names and not hasattr(importlib.import_module(module), target)
+        return clean_target in global_names and not hasattr(importlib.import_module(module), clean_target)
     return False
 
 
-def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | None:
+def on_warn_missing_reference(app: Sphinx, domain: Any, node: Node) -> bool | None:
     """Evaluate unresolved pending_xref nodes against AST imports, ignore rules, and offline mode."""
     if getattr(node, "tagname", None) != "pending_xref" or not hasattr(node, "attributes"):
         return None
@@ -783,12 +909,12 @@ def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | No
         return None
 
     ref_type = str(attributes.get("reftype", ""))
-    module = str(attributes.get("py:module", "") or "")
-    reference_target_source_obj = str(
-        attributes.get("py:class") or attributes.get("py:meth") or attributes.get("py:func") or ""
-    )
+    module, reference_target_source_obj = _extract_enclosing_module_and_obj(node)
 
     if _should_ignore_module_typechecking_import(target, module, reference_target_source_obj):
+        return True
+
+    if _is_offline_mode() and attributes.get("inventory"):
         return True
 
     raw_source = get_source_line(node)[0] or ""
@@ -820,8 +946,8 @@ def on_missing_reference(app: Sphinx, env: BuildEnvironment, node: pending_xref,
     refdoc = node.get("refdoc", env.docname)
 
     candidate_targets: list[str] = [target]
-    module = attributes.get("py:module")
-    if isinstance(module, str) and module and "." not in target:
+    module, _ = _extract_enclosing_module_and_obj(node)
+    if module and "." not in target:
         candidate_targets.append(f"{module}.{target}")
 
     for candidate in candidate_targets:
@@ -839,6 +965,13 @@ def on_missing_reference(app: Sphinx, env: BuildEnvironment, node: pending_xref,
 def _purge_aliased_inventory_entries(app: Sphinx, env: BuildEnvironment, docnames: list[str]) -> None:
     """Remove synthetic aliased ObjectEntry records before incremental document reading."""
     del app, docnames
+    if _is_offline_mode():
+        from tools.docs.update_inventories import UPSTREAM_INVENTORIES
+
+        named_inv = getattr(env, "intersphinx_named_inventory", None)
+        if isinstance(named_inv, dict):
+            for target in UPSTREAM_INVENTORIES:
+                named_inv.setdefault(target.name, {})
     py_domain = env.domains.get("py")
     objects = cast("dict[str, ObjectEntry] | None", getattr(py_domain, "objects", None))
     if objects is None:

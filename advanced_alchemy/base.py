@@ -110,8 +110,8 @@ def merge_table_arguments(cls: type[DeclarativeBase], table_args: Optional[Table
     making it easier to append additional information such as comments or constraints to the model.
 
     Args:
-        cls (type[:class:`sqlalchemy.orm.DeclarativeBase`]): The model that will get the table args.
-        table_args (:class:`TableArgsType`, optional): Additional information to add to table_args.
+        cls: The model that will get the table args.
+        table_args: Additional information to add to table_args.
 
     Returns:
         :class:`TableArgsType`: Merged table arguments.
@@ -148,8 +148,8 @@ class ModelProtocol(Protocol):
     a mapper and table (including SQLModel ``table=True`` models) satisfies this protocol.
 
     Attributes:
-        __table__ (:class:`sqlalchemy.sql.FromClause`): The table associated with the model.
-        __mapper__ (:class:`sqlalchemy.orm.Mapper`): The mapper for the model.
+        __table__: The table associated with the model.
+        __mapper__: The mapper for the model.
     """
 
     if TYPE_CHECKING:
@@ -228,7 +228,7 @@ class CommonTableAttributes(BasicAttributes):
     - **Concrete Table Inheritance (CTI)**: Child classes have independent tables
 
     Attributes:
-        __tablename__ (str | None): The inferred table name, or None for Single Table Inheritance children.
+        __tablename__: The inferred table name, or ``None`` for Single Table Inheritance children.
     """
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -385,7 +385,7 @@ def create_registry(
     """Create a new SQLAlchemy registry.
 
     Args:
-        custom_annotation_map (dict, optional): Custom type annotations to use for the registry.
+        custom_annotation_map: Custom type annotations to use for the registry.
 
     Returns:
         :class:`sqlalchemy.orm.registry`: A new SQLAlchemy registry with the specified type annotations.
@@ -430,10 +430,6 @@ class MetadataRegistry:
     """A registry for metadata.
 
     Provides methods to get and set metadata for different bind keys.
-
-    Methods:
-        get: Retrieves the metadata for a given bind key.
-        set: Sets the metadata for a given bind key.
     """
 
     _instance: Optional["MetadataRegistry"] = None
@@ -448,7 +444,7 @@ class MetadataRegistry:
         """Get the metadata for the given bind key.
 
         Args:
-            bind_key (Optional[str]): The bind key for the metadata.
+            bind_key: The bind key for the metadata.
 
         Returns:
             :class:`sqlalchemy.MetaData`: The metadata for the given bind key.
@@ -459,8 +455,8 @@ class MetadataRegistry:
         """Set the metadata for the given bind key.
 
         Args:
-            bind_key (Optional[str]): The bind key for the metadata.
-            metadata (:class:`sqlalchemy.MetaData`): The metadata to set.
+            bind_key: The bind key for the metadata.
+            metadata: The metadata to set.
         """
         self._registry[bind_key] = metadata
 
@@ -486,9 +482,9 @@ class AdvancedDeclarativeBase(DeclarativeBase):
     Inherits from :class:`sqlalchemy.orm.DeclarativeBase`.
 
     Attributes:
-        registry (:class:`sqlalchemy.orm.registry`): The registry for the declarative base.
-        __metadata_registry__ (:class:`~advanced_alchemy.base.MetadataRegistry`): The metadata registry.
-        __bind_key__ (Optional[:class:`str`]): The bind key for the metadata.
+        registry: The registry for the declarative base.
+        __metadata_registry__: The metadata registry.
+        __bind_key__: The bind key for the metadata.
     """
 
     registry = orm_registry

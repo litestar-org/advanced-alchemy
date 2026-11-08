@@ -106,6 +106,11 @@ Integer & NanoID Declarative Bases
 Registries, Utilities & Type Aliases
 ------------------------------------
 
+.. autoclass:: advanced_alchemy.base.MetadataRegistry
+    :members: get, set
+    :no-inherited-members:
+    :show-inheritance:
+
 .. autofunction:: advanced_alchemy.base.create_registry
 
 .. autofunction:: advanced_alchemy.base.merge_table_arguments
@@ -118,7 +123,7 @@ Registries, Utilities & Type Aliases
     Default SQLAlchemy ORM registry instance.
 
 .. py:data:: advanced_alchemy.base.metadata_registry
-    :type: AdvancedAlchemyMetaDataRegistry
+    :type: MetadataRegistry
 
     Global registry mapping bind keys to SQLAlchemy ``MetaData`` instances.
 

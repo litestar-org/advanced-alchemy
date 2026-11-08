@@ -33,6 +33,13 @@ Dataclass & Sentinel Utilities
 
 .. autofunction:: advanced_alchemy.utils.dataclass.simple_asdict
 
+.. py:module:: advanced_alchemy.utils.serialization
+    :no-typesetting:
+
+.. autofunction:: advanced_alchemy.utils.serialization.decode_json
+
+.. autofunction:: advanced_alchemy.utils.serialization.encode_json
+
 Dependency & Filter Helpers
 ---------------------------
 
@@ -45,6 +52,11 @@ Dependency & Filter Helpers
     :show-inheritance:
 
 .. autoclass:: advanced_alchemy.utils.dependencies.ChoiceField
+    :no-members:
+    :no-inherited-members:
+    :show-inheritance:
+
+.. autoclass:: advanced_alchemy.utils.dependencies.FieldNameType
     :no-members:
     :no-inherited-members:
     :show-inheritance:

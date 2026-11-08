@@ -56,6 +56,11 @@ def _count_rside_toc_items(html_text: str) -> int:
         "extensions/litestar/index.rst",
         "extensions/litestar/plugins.rst",
         "extensions/litestar/store.rst",
+        "extensions/litestar/dto.rst",
+        "extensions/fastapi/index.rst",
+        "extensions/sanic/index.rst",
+        "extensions/starlette/index.rst",
+        "extensions/flask/index.rst",
     ],
 )
 def test_repository_and_service_reference_directive_hygiene(page: str) -> None:
@@ -102,10 +107,20 @@ def test_base_module_and_classes_present_in_objects_inv() -> None:
     assert "advanced_alchemy.extensions" in modules
     assert "advanced_alchemy.extensions.litestar" in modules
     assert "advanced_alchemy.extensions.litestar.plugins" in modules
+    assert "advanced_alchemy.extensions.litestar.dto" in modules
+    assert "advanced_alchemy.extensions.fastapi" in modules
+    assert "advanced_alchemy.extensions.sanic" in modules
+    assert "advanced_alchemy.extensions.starlette" in modules
+    assert "advanced_alchemy.extensions.flask" in modules
     assert "advanced_alchemy.base.UUIDBase" in classes
     assert "advanced_alchemy.routing.RoutingAsyncSession" in classes
     assert "advanced_alchemy.utils.dataclass.Empty" in classes
     assert "advanced_alchemy.extensions.litestar.plugins.SQLAlchemyPlugin" in classes
+    assert "advanced_alchemy.extensions.litestar.dto.SQLAlchemyDTO" in classes
+    assert "advanced_alchemy.extensions.fastapi.AdvancedAlchemy" in classes
+    assert "advanced_alchemy.extensions.sanic.AdvancedAlchemy" in classes
+    assert "advanced_alchemy.extensions.starlette.AdvancedAlchemy" in classes
+    assert "advanced_alchemy.extensions.flask.AdvancedAlchemy" in classes
 
 
 @pytest.mark.parametrize(
@@ -125,6 +140,11 @@ def test_base_module_and_classes_present_in_objects_inv() -> None:
         "extensions/litestar/index.html",
         "extensions/litestar/plugins.html",
         "extensions/litestar/store.html",
+        "extensions/litestar/dto.html",
+        "extensions/fastapi/index.html",
+        "extensions/sanic/index.html",
+        "extensions/starlette/index.html",
+        "extensions/flask/index.html",
     ],
 )
 def test_repository_and_service_built_html_and_toc_budgets(html_page: str) -> None:

@@ -82,7 +82,6 @@ Helpers & Type Definitions
 
 .. py:data:: advanced_alchemy.repository.DEFAULT_ERROR_MESSAGE_TEMPLATES
     :type: ErrorMessages
-    :no-value:
 
     Default error message templates mapped by exception category.
 

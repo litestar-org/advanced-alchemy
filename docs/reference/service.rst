@@ -84,7 +84,6 @@ Conversion, Pagination & Helpers
 
 .. py:data:: advanced_alchemy.service.ATTRS_INSTALLED
     :type: bool
-    :no-value:
 
     Boolean flag indicating whether ``attrs`` is installed.
 

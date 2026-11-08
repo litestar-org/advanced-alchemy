@@ -8,7 +8,7 @@ Async Memory Repositories
 -------------------------
 
 .. autoclass:: advanced_alchemy.repository.memory.SQLAlchemyAsyncMockRepository
-    :members: collection, clear_collection, get_collection, add, add_many, count, delete, delete_many, delete_where, exists, get, get_and_update, get_one, get_one_or_none, get_or_upsert, list, list_and_count, update, update_many, upsert, upsert_many, check_health
+    :members: add, add_many, count, delete, delete_many, delete_where, exists, get, get_and_update, get_one, get_one_or_none, get_or_upsert, list, list_and_count, update, update_many, upsert, upsert_many, check_health
     :no-inherited-members:
     :show-inheritance:
 
@@ -21,7 +21,7 @@ Sync Memory Repositories
 ------------------------
 
 .. autoclass:: advanced_alchemy.repository.memory.SQLAlchemySyncMockRepository
-    :members: collection, clear_collection, get_collection, check_health
+    :members: check_health
     :no-inherited-members:
     :show-inheritance:
 

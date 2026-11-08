@@ -39,6 +39,16 @@ Routing Sessions & Session Makers
 Replica Selectors
 -----------------
 
+.. py:module:: advanced_alchemy.routing.selectors
+    :no-typesetting:
+
+.. autoclass:: advanced_alchemy.routing.selectors.EngineSelector
+    :members: next
+    :no-inherited-members:
+    :show-inheritance:
+
+.. py:currentmodule:: advanced_alchemy.routing
+
 .. autoclass:: advanced_alchemy.routing.ReplicaSelector
     :members: next, has_replicas, count
     :no-inherited-members:

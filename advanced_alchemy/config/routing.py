@@ -67,12 +67,12 @@ class RoutingConfig:
     """
 
     primary_connection_string: Optional[str] = None
-    """Legacy: Connection string for the primary (write) database.
+    """Deprecated — Connection string for the primary (write) database.
     Mapped to ``engines[default_group]``.
     """
 
     read_replicas: list[Union[str, EngineConfig]] = field(default_factory=_default_read_replicas)
-    """Legacy: Read replica connection strings or configs.
+    """Deprecated — Read replica connection strings or configs.
     Mapped to ``engines[read_group]``.
     """
 

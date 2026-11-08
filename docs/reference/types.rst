@@ -126,6 +126,11 @@ Encryption & Password Hashing
     :no-inherited-members:
     :show-inheritance:
 
+.. autoclass:: advanced_alchemy.types.password_hash.base.HashingBackend
+    :no-members:
+    :no-inherited-members:
+    :show-inheritance:
+
 .. autoclass:: advanced_alchemy.types.HashedPassword
     :no-members:
     :no-inherited-members:

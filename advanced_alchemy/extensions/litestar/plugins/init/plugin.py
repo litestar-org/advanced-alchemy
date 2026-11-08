@@ -120,7 +120,7 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPlugin, _slots_base.SlotsBase)
         """Configure application for use with SQLAlchemy.
 
         Args:
-            app_config: The :class:`AppConfig <.config.app.AppConfig>` instance.
+            app_config: The :class:`~litestar.config.app.AppConfig` instance.
         """
         self._validate_config()
 
