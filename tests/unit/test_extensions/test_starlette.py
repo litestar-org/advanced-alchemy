@@ -21,6 +21,7 @@ from typing_extensions import Literal, assert_type
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.starlette import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+from advanced_alchemy.extensions.starlette.config import _make_unique_state_key
 
 if TYPE_CHECKING:
     from pytest import FixtureRequest
@@ -596,3 +597,11 @@ def test_async_session_handler_commit_failure_still_closes(
         response = client.get("/")
         assert response.status_code == 200
         mock_close.assert_called_once()
+
+
+def test_make_unique_state_key_increments_linearly(app: Starlette) -> None:
+    """Verify _make_unique_state_key increments counter by 1 on each collision."""
+    setattr(app.state, "db", True)
+    setattr(app.state, "db_0", True)
+    setattr(app.state, "db_0_1", True)
+    assert _make_unique_state_key(app, "db") == "db_0_1_2"
