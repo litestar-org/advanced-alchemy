@@ -220,42 +220,57 @@ class _ServiceGroupContext(Generic[Unpack[Ts]]):
         msg = "One of session, config, or connection must be provided to acquire services."
         raise ImproperConfigurationError(msg)
 
+    def _build_class_context(self, new_method: Callable[..., Any], session: AsyncSession | Session) -> Any:
+        """Invoke a service class's .new(...) factory with group defaults."""
+        return new_method(
+            session=session,
+            statement=self._statement,
+            config=self._config,
+            error_messages=self._error_messages,
+            load=self._load,
+            execution_options=self._execution_options,
+            uniquify=self._uniquify,
+            count_with_window_function=self._count_with_window_function,
+        )
+
+    @staticmethod
+    def _invoke_spec_callable(
+        spec: Callable[..., Any],
+        session: AsyncSession | Session,
+        *,
+        keyword_first: bool = False,
+    ) -> Any:
+        """Invoke a service class or provider callable with session as keyword, positional, or zero-arg."""
+        if keyword_first:
+            try:
+                return spec(session=session)
+            except TypeError:
+                try:
+                    return spec(session)
+                except TypeError:
+                    return spec()
+        try:
+            return spec(session)
+        except TypeError:
+            try:
+                return spec(session=session)
+            except TypeError:
+                return spec()
+
     async def _enter_spec_async(self, spec: Any, session: AsyncSession, stack: AsyncExitStack) -> Any:
         """Instantiate or enter an individual service specification in an async context."""
         if isclass(spec):
             new_method = getattr(spec, "new", None)
             if callable(new_method):
-                ctx = new_method(
-                    session=session,
-                    statement=self._statement,
-                    config=self._config,
-                    error_messages=self._error_messages,
-                    load=self._load,
-                    execution_options=self._execution_options,
-                    uniquify=self._uniquify,
-                    count_with_window_function=self._count_with_window_function,
-                )
+                ctx = self._build_class_context(new_method, session)
                 if hasattr(ctx, "__aenter__"):
-                    return await stack.enter_async_context(cast("Any", ctx))
+                    return await stack.enter_async_context(ctx)
                 if hasattr(ctx, "__enter__"):
-                    return stack.enter_context(cast("Any", ctx))
+                    return stack.enter_context(ctx)
                 return ctx
-            spec_factory = cast("Callable[..., Any]", spec)
-            try:
-                return spec_factory(session=session)
-            except TypeError:
-                try:
-                    return spec_factory(session)
-                except TypeError:
-                    return spec_factory()
+            return self._invoke_spec_callable(cast("Callable[..., Any]", spec), session, keyword_first=True)
 
-        try:
-            result = spec(session)
-        except TypeError:
-            try:
-                result = spec(session=session)
-            except TypeError:
-                result = spec()
+        result = self._invoke_spec_callable(spec, session)
 
         if inspect.isawaitable(result):
             result = await result
@@ -278,35 +293,13 @@ class _ServiceGroupContext(Generic[Unpack[Ts]]):
         if isclass(spec):
             new_method = getattr(spec, "new", None)
             if callable(new_method):
-                ctx = new_method(
-                    session=session,
-                    statement=self._statement,
-                    config=self._config,
-                    error_messages=self._error_messages,
-                    load=self._load,
-                    execution_options=self._execution_options,
-                    uniquify=self._uniquify,
-                    count_with_window_function=self._count_with_window_function,
-                )
+                ctx = self._build_class_context(new_method, session)
                 if hasattr(ctx, "__enter__"):
-                    return stack.enter_context(cast("Any", ctx))
+                    return stack.enter_context(ctx)
                 return ctx
-            spec_factory = cast("Callable[..., Any]", spec)
-            try:
-                return spec_factory(session=session)
-            except TypeError:
-                try:
-                    return spec_factory(session)
-                except TypeError:
-                    return spec_factory()
+            return self._invoke_spec_callable(cast("Callable[..., Any]", spec), session, keyword_first=True)
 
-        try:
-            result = spec(session)
-        except TypeError:
-            try:
-                result = spec(session=session)
-            except TypeError:
-                result = spec()
+        result = self._invoke_spec_callable(spec, session)
 
         if (
             inspect.isawaitable(result)
@@ -571,25 +564,11 @@ class ServiceGroup(Generic[Unpack[Ts]]):
                 ) as services:
                     yield services
 
-            session_param = inspect.Parameter(
-                name=session_dependency_key,
-                kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                default=inspect.Parameter.empty,
-            )
-            provide_service_group_sync.__name__ = "provide_service_group"
-            setattr(
+            return self._configure_provider_signature(
                 provide_service_group_sync,
-                "__signature__",
-                inspect.Signature(
-                    parameters=[session_param],
-                    return_annotation=cast("Any", Generator[tuple[Unpack[Ts]], None, None]),
-                ),
+                session_dependency_key,
+                cast("Any", Generator[tuple[Unpack[Ts]], None, None]),
             )
-            provide_service_group_sync.__annotations__ = {
-                session_dependency_key: Any,
-                "return": Generator[tuple[Unpack[Ts]], None, None],
-            }
-            return provide_service_group_sync
 
         async def provide_service_group_async(
             *args: Any,
@@ -608,25 +587,42 @@ class ServiceGroup(Generic[Unpack[Ts]]):
             ) as services:
                 yield services
 
+        return self._configure_provider_signature(
+            provide_service_group_async,
+            session_dependency_key,
+            cast("Any", AsyncGenerator[tuple[Unpack[Ts]], None]),
+        )
+
+    @staticmethod
+    def _configure_provider_signature(
+        provider: T,
+        session_dependency_key: str,
+        return_annotation: Any,
+    ) -> T:
+        """Attach explicit inspect.Signature and annotations for DI containers."""
         session_param = inspect.Parameter(
             name=session_dependency_key,
             kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
             default=inspect.Parameter.empty,
         )
-        provide_service_group_async.__name__ = "provide_service_group"
+        setattr(provider, "__name__", "provide_service_group")
         setattr(
-            provide_service_group_async,
+            provider,
             "__signature__",
             inspect.Signature(
                 parameters=[session_param],
-                return_annotation=cast("Any", AsyncGenerator[tuple[Unpack[Ts]], None]),
+                return_annotation=return_annotation,
             ),
         )
-        provide_service_group_async.__annotations__ = {
-            session_dependency_key: Any,
-            "return": AsyncGenerator[tuple[Unpack[Ts]], None],
-        }
-        return provide_service_group_async
+        setattr(
+            provider,
+            "__annotations__",
+            {
+                session_dependency_key: Any,
+                "return": return_annotation,
+            },
+        )
+        return provider
 
 
 @overload
