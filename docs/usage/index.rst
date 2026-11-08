@@ -54,16 +54,3 @@ Once your core tables and routes are running, you can turn on operational featur
 * :doc:`Caching <caching>` — Cache frequent lookups in Redis or memory and clear stale entries automatically on commit.
 * :doc:`CLI & Migrations <cli>` — Generate and apply Alembic schema migrations from the terminal.
 * :doc:`Database Seeding <database_seeding>` — Load starter data from JSON or CSV files.
-
-.. toctree::
-    :maxdepth: 2
-    :caption: Core Features
-    :hidden:
-
-    modeling/index
-    repositories/index
-    services
-    routing
-    caching
-    cli
-    database_seeding

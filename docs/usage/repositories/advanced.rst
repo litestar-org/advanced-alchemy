@@ -116,3 +116,25 @@ Need to purge every unpublished draft in one query without loading each post int
     async def purge_unpublished_drafts(db_session: AsyncSession) -> Sequence[AdvancedPost]:
         repo = AdvancedPostRepository(session=db_session)
         return await repo.delete_where(AdvancedPost.published.is_(False))
+
+Catching Database Errors Cleanly
+--------------------------------
+
+Every database driver raises different low-level error codes when a unique constraint or foreign key fails. Repositories automatically translate native database errors across PostgreSQL, SQLite, MySQL, MariaDB, DuckDB, CockroachDB, Oracle, MSSQL, and Spanner into consistent Python exceptions:
+
+.. code-block:: python
+
+    from advanced_alchemy.exceptions import DuplicateKeyError, ForeignKeyError, NotFoundError
+
+
+    async def safe_assign_role(
+        db_session: AsyncSession,
+        user_id: int,
+        role_id: int,
+    ) -> AdvancedUserRole | None:
+        repo = AdvancedUserRoleRepository(session=db_session)
+        try:
+            return await repo.add(AdvancedUserRole(user_id=user_id, role_id=role_id), auto_commit=True)
+        except (DuplicateKeyError, ForeignKeyError, NotFoundError):
+            await db_session.rollback()
+            return None

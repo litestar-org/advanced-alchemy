@@ -165,10 +165,9 @@ html.dark .sy-head {
 
 .sy-head-brand img + strong {
   display: inline !important;
-  font-size: 0.88rem;
+  font-size: 0.96rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: -0.01em;
   white-space: nowrap;
 }
 

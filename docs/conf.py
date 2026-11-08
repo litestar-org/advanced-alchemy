@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.exc import SAWarning
 
-from advanced_alchemy.__metadata__ import __project__, __version__
+from advanced_alchemy.__metadata__ import __version__
 from tools.docs.update_inventories import InventoryUpdater
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ warnings.filterwarnings("ignore", category=SAWarning)
 
 DOCS_DIR = Path(__file__).resolve().parent
 current_year = datetime.datetime.now(tz=datetime.timezone.utc).year
-project = __project__
+project = "Advanced Alchemy"
 copyright = f"{current_year}, Litestar Organization"
 release = os.getenv("_ADVANCED_ALCHEMY_DOCS_BUILD_VERSION", __version__.rsplit(".")[0])
 suppress_warnings: list[str] = []

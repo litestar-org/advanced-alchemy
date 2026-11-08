@@ -19,10 +19,10 @@ What's Included for Litestar
      - :doc:`API </reference/extensions/litestar/plugins>`
    * - **Service & Filter DI**
      - Injects services and ready-made search/pagination filters straight into controller routes.
-     - :doc:`API </reference/extensions/litestar/index>`
+     - :doc:`Guide <litestar_dtos>` · :doc:`API </reference/extensions/litestar/index>`
    * - **SQLAlchemy DTOs**
      - Auto-generates request/response DTOs from your SQLAlchemy models and ``@property`` fields.
-     - :doc:`API </reference/extensions/litestar/dto>`
+     - :doc:`Guide <litestar_dtos>` · :doc:`API </reference/extensions/litestar/dto>`
    * - **Sessions & Stores**
      - Connects multiple databases and stores server-side user sessions or cache keys in SQL tables.
      - :doc:`Guide <litestar_sessions>` · :doc:`API </reference/extensions/litestar/store>`
@@ -140,6 +140,7 @@ Complete Runnable App
 More Litestar Guides
 --------------------
 
+* :doc:`litestar_dtos` — Injecting services, OpenAPI query filters, and auto-generated ``SQLAlchemyDTO`` schemas.
 * :doc:`litestar_sessions` — Request transactions, multi-database setups, and server-side session stores.
 * :doc:`litestar_storage` — File uploads and cloud/local object storage.
 * `Litestar SQLAlchemy Docs <https://docs.litestar.dev/latest/usage/databases/sqlalchemy/>`_ — Upstream Litestar framework guide.
@@ -148,5 +149,6 @@ More Litestar Guides
     :titlesonly:
     :hidden:
 
+    Services, Filters & DTOs <litestar_dtos>
     Database & Server Sessions <litestar_sessions>
     File & Object Storage <litestar_storage>

@@ -19,7 +19,7 @@ What's Included for FastAPI
      - :doc:`API </reference/extensions/fastapi/index>`
    * - **Depends Helpers**
      - ``provide_session``, ``provide_service``, and ``provide_filters`` (with automatic Swagger UI query params).
-     - :doc:`API </reference/extensions/fastapi/index>`
+     - :doc:`Guide <fastapi_dependencies>` · :doc:`API </reference/extensions/fastapi/index>`
    * - **Uploads & Multi-Binds**
      - Multipart ``UploadFile`` storage columns and support for multiple databases in one app.
      - :doc:`Guide <fastapi_storage>` · :doc:`API </reference/types>`
@@ -117,6 +117,7 @@ Complete Runnable App
 Related Guides
 --------------
 
+* :doc:`fastapi_dependencies` — Injecting services and automatic Swagger UI search/pagination filters with ``Depends``.
 * :doc:`fastapi_storage` — File uploads with ``UploadFile`` and multi-database setups.
 * :doc:`/reference/extensions/fastapi/index` — FastAPI extension API reference.
 
@@ -124,4 +125,5 @@ Related Guides
     :titlesonly:
     :hidden:
 
+    Services & Filter Depends <fastapi_dependencies>
     File Storage & Multi-Binds <fastapi_storage>

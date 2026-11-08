@@ -19,11 +19,11 @@ At a Glance
      - CLI Tool
    * - :doc:`Litestar <litestar>`
      - ``SQLAlchemyPlugin``
-     - Automatic DI, DTO generation, :doc:`session stores <litestar_sessions>`, and :doc:`file uploads <litestar_storage>`
+     - Automatic DI, :doc:`DTOs & filters <litestar_dtos>`, :doc:`session stores <litestar_sessions>`, and :doc:`file uploads <litestar_storage>`
      - ``litestar database``
    * - :doc:`FastAPI <fastapi>`
      - ``AdvancedAlchemy``
-     - Lifespan sessions, ``Depends`` service & filter helpers, and :doc:`file uploads <fastapi_storage>`
+     - Lifespan sessions, :doc:`Depends services & filters <fastapi_dependencies>`, and :doc:`file uploads <fastapi_storage>`
      - ``alchemy``
    * - :doc:`Starlette <starlette>`
      - ``AdvancedAlchemy``
@@ -80,13 +80,3 @@ Choose Your Framework
       :link-type: doc
 
       Full class, provider, DTO, store, and CLI signatures for all five framework packages.
-
-.. toctree::
-    :titlesonly:
-    :hidden:
-
-    Litestar <litestar>
-    FastAPI <fastapi>
-    Starlette <starlette>
-    Flask <flask>
-    Sanic <sanic>

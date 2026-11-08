@@ -16,7 +16,7 @@ Common Column Types at a Glance
    * - Column Type
      - What It Does
    * - ``DateTimeUTC``
-     - Converts datetimes to UTC before saving and always returns timezone-aware UTC datetimes on read.
+     - Converts datetimes to UTC before saving, returns timezone-aware UTC datetimes on read, and supports configurable fractional-second precision (``DateTimeUTC(fsp=6)``).
    * - ``GUID``
      - Stores Python ``UUID`` objects natively on PostgreSQL, CockroachDB, DuckDB, MSSQL, and Oracle, or compactly on SQLite/MySQL.
    * - ``BigIntIdentity``
@@ -37,15 +37,20 @@ Examples by Type
 
             from datetime import datetime
             from sqlalchemy.orm import Mapped, mapped_column
-            from advanced_alchemy.base import BigIntBase
+            from advanced_alchemy.base import BigIntBase, UUIDBase, create_registry
             from advanced_alchemy.types import DateTimeUTC, JsonB
 
 
             class AuditEvent(BigIntBase):
                 __tablename__ = "audit_event"
 
-                occurred_at: Mapped[datetime] = mapped_column(DateTimeUTC)
+                occurred_at: Mapped[datetime] = mapped_column(DateTimeUTC(fsp=6))
                 metadata_payload: Mapped[dict[str, str]] = mapped_column(JsonB)
+
+
+            class PrecisionBase(UUIDBase):
+                __abstract__ = True
+                registry = create_registry(custom_annotation_map={datetime: DateTimeUTC(fsp=6)})
 
     .. tab-item:: UUIDs & Integer Keys
 
@@ -76,6 +81,10 @@ Examples by Type
                 __tablename__ = "document_chunk"
 
                 embedding: Mapped[list[float]] = mapped_column(Vector(dim=3))
+
+.. note::
+
+    On MySQL/MariaDB and Oracle, SQLAlchemy's default ``DateTime(timezone=True)`` stores whole seconds only. Pass ``DateTimeUTC(fsp=6)`` (or set ``custom_annotation_map={datetime: DateTimeUTC(fsp=6)}`` via :func:`~advanced_alchemy.base.create_registry`) to preserve microseconds, or pass ``DateTimeUTC(fsp=0)`` to keep legacy whole-second DDL without migration churn. In v2.0, ``fsp=6`` becomes the default.
 
 Related Guides
 --------------

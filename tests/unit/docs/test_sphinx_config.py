@@ -37,6 +37,7 @@ def test_sphinx_conf_clears_blanket_suppressions_and_mocks(conf_globals: dict[st
 @pytest.mark.parametrize(
     ("setting_name", "expected_value"),
     [
+        ("project", "Advanced Alchemy"),
         ("autosectionlabel_maxdepth", 2),
         ("viewcode_follow_imported_members", False),
         ("autodoc_default_options", {"members": True, "show-inheritance": True, "special-members": False}),

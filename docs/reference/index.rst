@@ -15,15 +15,15 @@ Core Components
     :maxdepth: 2
     :caption: Core API
 
-    base
-    mixins/index
-    config/index
-    cache
-    operations
-    types
-    exceptions
-    cli
-    utils
+    Declarative Base <base>
+    Mixins <mixins/index>
+    Configuration <config/index>
+    Caching <cache>
+    Bulk Operations <operations>
+    Custom Types <types>
+    Exceptions <exceptions>
+    CLI <cli>
+    Utilities <utils>
 
 Repository & Services
 ---------------------
@@ -32,11 +32,11 @@ Repository & Services
     :maxdepth: 2
     :caption: Repository & Services
 
-    repository
-    repository_memory
-    filters
-    service
-    routing
+    Repositories <repository>
+    Memory Repositories <repository_memory>
+    Filters <filters>
+    Services <service>
+    Replica Routing <routing>
 
 Framework Integration
 ---------------------
@@ -45,5 +45,5 @@ Framework Integration
     :maxdepth: 2
     :caption: Framework Support
 
-    extensions/index
-    alembic/index
+    Framework Extensions <extensions/index>
+    Alembic <alembic/index>
