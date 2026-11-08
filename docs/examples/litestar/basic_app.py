@@ -6,7 +6,8 @@ from uuid import UUID
 
 import msgspec
 from litestar import Controller, Litestar, get, post
-from litestar.params import Dependency
+from litestar.di import NamedDependency
+from litestar.params import SkipValidation
 from litestar.testing import TestClient
 from sqlalchemy.orm import Mapped
 
@@ -90,7 +91,7 @@ class AuthorController(Controller):
     @post(path="/")
     async def create_author(
         self,
-        authors_service: AuthorService,
+        authors_service: NamedDependency[AuthorService],
         data: AuthorCreate,
     ) -> AuthorSchema:
         """Create a new author record."""
@@ -100,8 +101,8 @@ class AuthorController(Controller):
     @get(path="/")
     async def list_authors(
         self,
-        authors_service: AuthorService,
-        filters: Annotated[list[filters.FilterTypes], Dependency(skip_validation=True)],
+        authors_service: NamedDependency[AuthorService],
+        filters: NamedDependency[SkipValidation[list[filters.FilterTypes]]],
     ) -> service.OffsetPagination[AuthorSchema]:
         """List authors with standard pagination and filtering."""
         results, total = await authors_service.get_many_and_count(*filters)

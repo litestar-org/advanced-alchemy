@@ -2,8 +2,9 @@ import contextlib
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Union, cast
 
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 from litestar.dto import DTOData
+from litestar.params import SkipValidation
 from litestar.plugins import CLIPlugin, InitPluginProtocol
 from sqlalchemy.ext.asyncio import AsyncSession, async_scoped_session
 from sqlalchemy.orm import Session, scoped_session
@@ -57,6 +58,8 @@ signature_namespace_values: dict[str, Any] = {
     "OffsetPagination": OffsetPagination,
     "ExistsFilter": ExistsFilter,
     "DTOData": DTOData,
+    "NamedDependency": NamedDependency,
+    "SkipValidation": SkipValidation,
     "Sequence": Sequence,
     "ModelT": ModelT,
     "ModelDictT": ModelDictT,

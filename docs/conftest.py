@@ -34,8 +34,14 @@ async def db_session_fixture(engine: AsyncEngine) -> AsyncGenerator[AsyncSession
         yield session
 
 
+def _setup_sybil_namespace(namespace: dict[str, object]) -> None:
+    """Assign a unique module name to each Sybil document execution namespace."""
+    namespace["__name__"] = f"sybil_doc_{id(namespace)}"
+
+
 pytest_collect_file = Sybil(
     parsers=[PythonCodeBlockParser(), SkipParser()],
     patterns=["usage/**/*.rst", "getting-started.rst"],
     fixtures=["db_session", "engine"],
+    setup=_setup_sybil_namespace,
 ).pytest()

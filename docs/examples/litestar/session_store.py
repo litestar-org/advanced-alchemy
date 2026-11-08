@@ -8,7 +8,9 @@ from uuid import UUID
 
 import msgspec
 from litestar import Litestar, Request, get, post
+from litestar.di import NamedDependency
 from litestar.middleware.session.server_side import ServerSideSessionConfig
+from litestar.params import FromPath
 from litestar.stores.registry import StoreRegistry
 from litestar.testing import TestClient
 from sqlalchemy.orm import Mapped, mapped_column
@@ -73,14 +75,21 @@ class AttachmentService(service.SQLAlchemyAsyncRepositoryService[AttachmentModel
 
 
 @post(path="/session/{key:str}/{value:str}")
-async def set_session_value(key: str, value: str, request: Request[Any, Any, Any]) -> dict[str, str]:
+async def set_session_value(
+    key: FromPath[str],
+    value: FromPath[str],
+    request: Request[Any, Any, Any],
+) -> dict[str, str]:
     """Store a key-value pair in the server-side session."""
     request.session[key] = value
     return {"key": key, "value": value}
 
 
 @get(path="/session/{key:str}")
-async def get_session_value(key: str, request: Request[Any, Any, Any]) -> dict[str, Optional[str]]:
+async def get_session_value(
+    key: FromPath[str],
+    request: Request[Any, Any, Any],
+) -> dict[str, Optional[str]]:
     """Read a key-value pair from the server-side session."""
     return {"key": key, "value": request.session.get(key)}
 
@@ -91,7 +100,7 @@ async def get_session_value(key: str, request: Request[Any, Any, Any]) -> dict[s
 )
 async def upload_attachment(
     data: dict[str, str],
-    attachments_service: AttachmentService,
+    attachments_service: NamedDependency[AttachmentService],
 ) -> AttachmentSchema:
     """Persist an attachment record and its StoredObject file payload."""
     file_obj = FileObject(

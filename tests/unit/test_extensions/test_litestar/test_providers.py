@@ -528,7 +528,7 @@ def test_individual_order_by_dependency_injection_skips_runtime_field_validation
     """Test individual Litestar filter dependencies can be injected directly."""
 
     @get("/", dependencies=create_filter_dependencies({"sort_field": "name"}))
-    async def handler(order_by_filter: OrderBy) -> dict[str, str]:
+    async def handler(order_by_filter: NamedDependency[OrderBy]) -> dict[str, str]:
         return {"field_name": cast(str, order_by_filter.field_name), "sort_order": order_by_filter.sort_order}
 
     with TestClient(Litestar([handler])) as client:
@@ -546,7 +546,7 @@ def test_litestar_openapi_schema_uses_typed_sort_parameters() -> None:
     filter_dependencies = create_filter_dependencies({"sort_field": ["name", "id"], "sort_order": "asc"})
 
     @get("/test")
-    async def handler(filters: SkipValidation[list[FilterTypes]]) -> list[str]:
+    async def handler(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> list[str]:
         return [type(filter_).__name__ for filter_ in filters]
 
     app = Litestar(
@@ -662,7 +662,7 @@ def test_choice_filter_openapi_schema_supports_explicit_and_enum_choices() -> No
     )
 
     @get("/items")
-    async def handler(filters: SkipValidation[list[FilterTypes]]) -> list[str]:
+    async def handler(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> list[str]:
         return [type(filter_).__name__ for filter_ in filters]
 
     app = Litestar(
@@ -708,7 +708,7 @@ def test_litestar_in_filter_values_are_isolated() -> None:
     filter_dependencies = create_filter_dependencies(filter_config)
 
     @get("/test")
-    def handler(filters: SkipValidation[list[FilterTypes]]) -> dict[str, list[str]]:
+    def handler(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> dict[str, list[str]]:
         response: dict[str, list[str]] = {}
         for filter_ in filters:
             if isinstance(filter_, CollectionFilter):
@@ -1141,7 +1141,7 @@ def test_litestar_openapi_schema(mock_create_filters: unittest.mock.MagicMock) -
     filter_dependencies = mock_create_filters(filter_config)
 
     @get("/test")
-    async def test_handler(filters: list[FilterTypes]) -> list[str]:
+    async def test_handler(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> list[str]:
         """Dummy handler to test schema generation."""
         return [type(f).__name__ for f in filters]
 
