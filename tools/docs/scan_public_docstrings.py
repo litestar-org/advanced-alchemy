@@ -20,7 +20,6 @@ __all__ = (
     "main",
     "scan_file",
     "scan_package",
-    "scan_paths",
 )
 
 _REF_ROLE_PATTERN = re.compile(r":ref:`([^`]+)`")
@@ -257,24 +256,6 @@ def scan_package(
         check_structs=check_structs,
     )
     return scanner.scan_paths([package_dir])
-
-
-def scan_paths(
-    paths: Iterable[Path],
-    *,
-    check_leaks: bool = True,
-    check_overloads: bool = True,
-    check_typeddicts: bool = True,
-    check_structs: bool = False,
-) -> list[DocstringDiagnostic]:
-    """Scan multiple file or directory paths for docstring diagnostics."""
-    scanner = PublicDocstringScanner(
-        check_leaks=check_leaks,
-        check_overloads=check_overloads,
-        check_typeddicts=check_typeddicts,
-        check_structs=check_structs,
-    )
-    return scanner.scan_paths(paths)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

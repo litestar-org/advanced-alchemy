@@ -17,7 +17,6 @@ from sphinx.addnodes import pending_xref
 from sphinx.domains.python import ObjectEntry, PythonDomain
 from sphinx.ext.autodoc import ClassDocumenter, Documenter, FunctionDocumenter, MethodDocumenter
 from sphinx.ext.autodoc import directive as autodoc_directive
-from sphinx.ext.autodoc import typehints as autodoc_typehints
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
@@ -781,29 +780,10 @@ def _install_autodoc_explicit_members_patch() -> None:
             return None, None, None
         return cast("tuple[Any | None, str | None, Any | None]", original_cls_get_sig(self))
 
-    original_record_typehints = autodoc_typehints.record_typehints
-
-    def _compact_record_typehints(
-        app: Sphinx,
-        objtype: str,
-        name: str,
-        obj: Any,
-        options: Any,
-        args: str,
-        retann: str,
-    ) -> None:
-        if objtype == "class" and isinstance(obj, type):
-            doc = getattr(obj, "__doc__", "") or ""
-            if "Args:" not in doc and "Parameters" not in doc and ":param " not in doc:
-                return
-        original_record_typehints(app, objtype, name, obj, options, args, retann)
-        _apply_recorded_typehint_rewrites(app, name)
-
     setattr(autodoc_directive, "process_documenter_options", _patched_process_documenter_options)
     setattr(FunctionDocumenter, "format_signature", _compact_func_signature)
     setattr(MethodDocumenter, "format_signature", _compact_meth_signature)
     setattr(ClassDocumenter, "_get_signature", _compact_cls_get_signature)
-    setattr(autodoc_typehints, "record_typehints", _compact_record_typehints)
     setattr(autodoc_directive, "_aa_explicit_members_patched", True)
 
 
@@ -1105,13 +1085,4 @@ def _sanitize_recorded_typehints(
         if "Args:" not in doc and "Parameters" not in doc and ":param " not in doc:
             annotations.clear()
             return
-    for key, val in list(annotations.items()):
-        if isinstance(val, str):
-            if "_AbstractLoad" in val:
-                annotations[key] = "~advanced_alchemy.repository.LoadSpec | None"
-            elif "UnaryExpression" in val and "InstrumentedAttribute" in val:
-                annotations[key] = (
-                    "list[~advanced_alchemy.repository.OrderingPair] | ~advanced_alchemy.repository.OrderingPair | None"
-                )
-            elif "ForUpdateArg" in val and "sqlalchemy.sql.selectable.ForUpdateArg" not in val:
-                annotations[key] = val.replace("ForUpdateArg", "~sqlalchemy.sql.selectable.ForUpdateArg")
+    _apply_recorded_typehint_rewrites(app, name)

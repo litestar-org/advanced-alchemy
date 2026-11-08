@@ -41,7 +41,7 @@ def _setup_sybil_namespace(namespace: dict[str, object]) -> None:
 
 pytest_collect_file = Sybil(
     parsers=[PythonCodeBlockParser(), SkipParser()],
-    patterns=["usage/**/*.rst", "getting-started.rst"],
+    patterns=list(EXECUTABLE_DOCS),
     fixtures=["db_session", "engine"],
     setup=_setup_sybil_namespace,
 ).pytest()

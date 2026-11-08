@@ -20,7 +20,6 @@ if TYPE_CHECKING:
     from sphinx.environment import BuildEnvironment
 
 __all__ = (
-    "DoctreeMarkdownRenderer",
     "LlmsConfig",
     "LlmsPageEntry",
     "LlmsSectionGroup",
@@ -730,9 +729,6 @@ class SphinxLlmsGenerator:
                 return True
             current = current.parent
         return False
-
-
-DoctreeMarkdownRenderer = SphinxLlmsGenerator
 
 
 def on_build_finished(app: Sphinx, exception: Exception | None) -> None:
