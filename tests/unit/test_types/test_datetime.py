@@ -5,6 +5,7 @@ from typing import Any, cast
 
 import pytest
 from sqlalchemy.dialects import mysql, oracle, postgresql, sqlite
+from sqlalchemy.dialects.mysql.mariadb import MariaDBDialect
 from sqlalchemy.engine import Dialect
 
 from advanced_alchemy.types import DateTimeUTC
@@ -13,6 +14,12 @@ from advanced_alchemy.types import DateTimeUTC
 def _dialect(module: Any) -> Dialect:
     """Instantiate a SQLAlchemy dialect module for unit testing."""
     factory: Any = module.dialect
+    return cast("Dialect", factory())
+
+
+def _mariadb_dialect() -> Dialect:
+    """Instantiate a SQLAlchemy MariaDB dialect for unit testing."""
+    factory: Any = MariaDBDialect
     return cast("Dialect", factory())
 
 
@@ -27,6 +34,8 @@ def test_default_compilation_emits_deprecation_warning_on_mysql_and_oracle() -> 
     with pytest.deprecated_call(match="DateTimeUTC\\(\\) without an explicit 'fsp'"):
         assert t.compile(dialect=mysql.dialect()) == "DATETIME"
     with pytest.deprecated_call(match="DateTimeUTC\\(\\) without an explicit 'fsp'"):
+        assert t.compile(dialect=_mariadb_dialect()) == "DATETIME"
+    with pytest.deprecated_call(match="DateTimeUTC\\(\\) without an explicit 'fsp'"):
         assert t.compile(dialect=_dialect(oracle)) == "DATE"
     assert t.compile(dialect=_dialect(postgresql)) == "TIMESTAMP WITH TIME ZONE"
     assert t.compile(dialect=sqlite.dialect()) == "DATETIME"
@@ -35,6 +44,7 @@ def test_default_compilation_emits_deprecation_warning_on_mysql_and_oracle() -> 
 def test_fsp_zero_preserves_legacy_ddl_without_warning(recwarn: pytest.WarningsRecorder) -> None:
     t = DateTimeUTC(fsp=0)
     assert t.compile(dialect=mysql.dialect()) == "DATETIME"
+    assert t.compile(dialect=_mariadb_dialect()) == "DATETIME"
     assert t.compile(dialect=_dialect(oracle)) == "DATE"
     assert t.compile(dialect=_dialect(postgresql)) == "TIMESTAMP WITH TIME ZONE"
     assert t.compile(dialect=sqlite.dialect()) == "DATETIME"
@@ -44,6 +54,7 @@ def test_fsp_zero_preserves_legacy_ddl_without_warning(recwarn: pytest.WarningsR
 def test_fsp_compilation(recwarn: pytest.WarningsRecorder) -> None:
     t = DateTimeUTC(fsp=6)
     assert t.compile(dialect=mysql.dialect()) == "DATETIME(6)"
+    assert t.compile(dialect=_mariadb_dialect()) == "DATETIME(6)"
     assert t.compile(dialect=_dialect(oracle)) == "TIMESTAMP WITH TIME ZONE"
     assert t.compile(dialect=_dialect(postgresql)) == "TIMESTAMP WITH TIME ZONE"
     assert t.compile(dialect=sqlite.dialect()) == "DATETIME"
@@ -54,6 +65,9 @@ def test_precision_alias() -> None:
     t = DateTimeUTC(precision=3)
     assert t.fsp == 3
     assert t.compile(dialect=mysql.dialect()) == "DATETIME(3)"
+
+    equal = DateTimeUTC(fsp=6, precision=6)
+    assert equal.fsp == 6
 
     with pytest.raises(ValueError, match="Cannot specify both 'fsp' and 'precision'"):
         DateTimeUTC(fsp=6, precision=3)
