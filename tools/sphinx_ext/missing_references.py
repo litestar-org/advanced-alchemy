@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from docutils.utils import get_source_line
+from sphinx.addnodes import pending_xref
 from sphinx.domains.python import ObjectEntry, PythonDomain
 from sphinx.ext.autodoc import ClassDocumenter, Documenter, FunctionDocumenter, MethodDocumenter
 from sphinx.ext.autodoc import directive as autodoc_directive
@@ -22,7 +23,6 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
 
     from docutils.nodes import Element, Node
-    from sphinx.addnodes import pending_xref
     from sphinx.application import Sphinx
     from sphinx.environment import BuildEnvironment
 
@@ -940,6 +940,8 @@ def on_missing_reference(app: Sphinx, env: BuildEnvironment, node: pending_xref,
         return None
 
     attributes: dict[str, Any] = node.attributes
+    if _is_offline_mode() and attributes.get("inventory"):
+        return contnode
     target = attributes.get("reftarget")
     if not isinstance(target, str):
         return None
@@ -962,6 +964,16 @@ def on_missing_reference(app: Sphinx, env: BuildEnvironment, node: pending_xref,
                 return ref[1]
 
     return None
+
+
+def _resolve_offline_intersphinx_roles(app: Sphinx, doctree: Node) -> None:
+    """Replace explicit :external: pending_xref nodes with inline text when building offline."""
+    del app
+    if not _is_offline_mode():
+        return
+    for node in list(doctree.findall(pending_xref)):
+        if "intersphinx" in node and node.children:
+            node.replace_self(node.children[0].deepcopy())
 
 
 def _purge_aliased_inventory_entries(app: Sphinx, env: BuildEnvironment, docnames: list[str]) -> None:
@@ -1011,9 +1023,10 @@ def setup(app: Sphinx) -> dict[str, bool]:
     _install_autodoc_explicit_members_patch()
     _install_sphinx_click_factory_patch()
     app.connect("env-before-read-docs", _purge_aliased_inventory_entries)
+    app.connect("doctree-read", _resolve_offline_intersphinx_roles)
     app.connect("autodoc-process-signature", _sanitize_recorded_typehints, priority=600)
     app.connect("env-updated", register_inventory_aliases)
-    app.connect("missing-reference", on_missing_reference)
+    app.connect("missing-reference", on_missing_reference, priority=400)
     app.connect("warn-missing-reference", on_warn_missing_reference)
     app.add_config_value("ignore_missing_refs", default={}, rebuild="env")
     return {"parallel_read_safe": True, "parallel_write_safe": True}
