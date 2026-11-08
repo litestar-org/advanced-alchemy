@@ -101,10 +101,5 @@ Vector Embeddings
 Related Guides
 --------------
 
-.. toctree::
-    :hidden:
-
-    security_and_storage_types
-
 - :doc:`security_and_storage_types` — ``EncryptedString``, ``EncryptedText``, ``PasswordHash``, ``TOTPSecret``, ``OneTimeCode``, and ``StoredObject``.
 - :doc:`/reference/types` — Complete custom types API reference.

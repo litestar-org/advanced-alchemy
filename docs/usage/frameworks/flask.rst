@@ -24,7 +24,7 @@ Use :class:`~advanced_alchemy.extensions.flask.SQLAlchemySyncConfig` for standar
         name: Mapped[str]
 
 
-    app = Flask(__name__)
+    app = Flask("flask_basic_db")
     alchemy = AdvancedAlchemy(
         SQLAlchemySyncConfig(
             connection_string="sqlite:///:memory:",

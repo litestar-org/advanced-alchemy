@@ -11,3 +11,4 @@ Advanced Alchemy enhances SQLAlchemy's modeling capabilities with production-rea
     inheritance
     sqlmodel
     types
+    security_and_storage_types

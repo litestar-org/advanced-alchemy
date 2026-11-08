@@ -129,11 +129,6 @@ You can also attach the migration subcommands directly onto your own root ``@cli
 Related Documentation
 ---------------------
 
-.. toctree::
-    :hidden:
-
-    cli_commands
-
 - :doc:`cli_commands` — Migration, inspection, branching, and data dump command workflows.
 - :doc:`/reference/cli` — Standalone ``alchemy`` CLI command and flag reference.
 - :doc:`/reference/extensions/litestar/cli` — Litestar ``database`` CLI command reference.

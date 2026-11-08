@@ -96,10 +96,5 @@ The complete runnable example in ``docs/examples/fastapi/service_di.py`` exercis
 Related Guides
 --------------
 
-.. toctree::
-    :hidden:
-
-    fastapi_storage
-
 - :doc:`fastapi_storage` — Declarative file storage, signed URLs, and multipart uploads in FastAPI.
 - :doc:`/reference/extensions/fastapi/index` — FastAPI extension API reference.

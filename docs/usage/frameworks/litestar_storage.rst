@@ -38,13 +38,15 @@ When storing ``StoredObject`` metadata on dialects that require custom JSON seri
 
 .. code-block:: python
 
-    from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig
+    from advanced_alchemy.extensions.litestar import EngineConfig, SQLAlchemyAsyncConfig
     from advanced_alchemy.utils.serialization import decode_json, encode_json
 
     storage_db_config = SQLAlchemyAsyncConfig(
         connection_string="sqlite+aiosqlite:///:memory:",
-        json_serializer=encode_json,
-        json_deserializer=decode_json,
+        engine_config=EngineConfig(
+            json_serializer=encode_json,
+            json_deserializer=decode_json,
+        ),
     )
 
 Complete Runnable Example

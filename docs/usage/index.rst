@@ -20,6 +20,7 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     routing
     caching
     cli
+    cli_commands
     database_seeding
 
 .. toctree::
@@ -27,8 +28,11 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     :caption: Framework Integration
 
     frameworks/litestar
+    frameworks/litestar_sessions
+    frameworks/litestar_storage
     frameworks/flask
     frameworks/fastapi
+    frameworks/fastapi_storage
     frameworks/sanic
     frameworks/starlette
 

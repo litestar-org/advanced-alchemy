@@ -13,26 +13,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 EXECUTABLE_DOCS = (
-    "usage/modeling/basics.rst",
-    "usage/modeling/inheritance.rst",
-    "usage/modeling/sqlmodel.rst",
-    "usage/modeling/types.rst",
-    "usage/repositories/advanced.rst",
-    "usage/repositories/basics.rst",
-    "usage/repositories/filtering.rst",
-    "usage/database_seeding.rst",
-    "usage/services.rst",
-    "usage/frameworks/litestar.rst",
-)
-
-NON_EXECUTABLE_DOCS = (
-    "usage/caching.rst",
-    "usage/cli.rst",
-    "usage/frameworks/fastapi.rst",
-    "usage/frameworks/flask.rst",
-    "usage/frameworks/sanic.rst",
-    "usage/frameworks/starlette.rst",
-    "usage/routing.rst",
+    "usage/**/*.rst",
+    "getting-started.rst",
 )
 
 
@@ -56,6 +38,6 @@ async def db_session_fixture(engine: AsyncEngine) -> AsyncGenerator[AsyncSession
 
 pytest_collect_file = Sybil(
     parsers=[PythonCodeBlockParser(), SkipParser()],
-    patterns=EXECUTABLE_DOCS,
+    patterns=["usage/**/*.rst", "getting-started.rst"],
     fixtures=["db_session", "engine"],
 ).pytest()

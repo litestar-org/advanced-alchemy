@@ -116,12 +116,6 @@ The full runnable module is located in ``docs/examples/litestar/basic_app.py`` a
 Related Guides
 --------------
 
-.. toctree::
-    :hidden:
-
-    litestar_sessions
-    litestar_storage
-
 - :doc:`litestar_sessions` — Session management, multi-database configurations, and server-side session backends.
 - :doc:`litestar_storage` — Declarative file uploads and storage backends.
 - :doc:`/reference/extensions/litestar/cli` — CLI migration commands.
