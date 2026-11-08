@@ -39,6 +39,10 @@ DUPLICATE_KEY_REGEXES = {
         re.compile(r"^.*\b1062\b.*Duplicate entry '(?P<value>.*)' for key '(?P<columns>[^']+)'.*$"),
         re.compile(r"^.*\b1062\b.*Duplicate entry \\'(?P<value>.*)\\' for key \\'(?P<columns>.+)\\'.*$"),
     ],
+    "mariadb": [
+        re.compile(r"^.*\b1062\b.*Duplicate entry '(?P<value>.*)' for key '(?P<columns>[^']+)'.*$"),
+        re.compile(r"^.*\b1062\b.*Duplicate entry \\'(?P<value>.*)\\' for key \\'(?P<columns>.+)\\'.*$"),
+    ],
     "oracle": [
         re.compile(r"ORA-00001:\s*unique\s+constraint\s*\((?P<columns>[^)]+)\)\s*violated", re.IGNORECASE),
         re.compile(r"\bORA-00001:", re.IGNORECASE),
@@ -80,6 +84,14 @@ FOREIGN_KEY_REGEXES = {
             r'\([`"](?P<key>.+)[`"]\) REFERENCES [`"](?P<key_table>.+)[`"] ',
         ),
     ],
+    "mariadb": [
+        re.compile(
+            r".*Cannot (add|delete) or update a (child|parent) row: "
+            r'a foreign key constraint fails \([`"].+[`"]\.[`"](?P<table>.+)[`"], '
+            r'CONSTRAINT [`"](?P<constraint>.+)[`"] FOREIGN KEY '
+            r'\([`"](?P<key>.+)[`"]\) REFERENCES [`"](?P<key_table>.+)[`"] ',
+        ),
+    ],
     "oracle": [
         re.compile(r"ORA-0229[12]:\s*integrity\s+constraint\s*\((?P<constraint>[^)]+)\)\s*violated", re.IGNORECASE),
         re.compile(r"\bORA-0229[12]:", re.IGNORECASE),
@@ -97,8 +109,17 @@ CHECK_CONSTRAINT_REGEXES = {
     "postgresql": [
         re.compile(r".*new row for relation \"(?P<table>.+)\" violates check constraint (?P<check_name>.+)"),
     ],
-    "sqlite": [],
-    "mysql": [],
+    "sqlite": [
+        re.compile(r"(?i).*CHECK constraint failed.*"),
+    ],
+    "mysql": [
+        re.compile(r"(?i).*check constraint .* is violated.*"),
+        re.compile(r"(?i).*CONSTRAINT .* failed.*"),
+    ],
+    "mariadb": [
+        re.compile(r"(?i).*CONSTRAINT .* failed.*"),
+        re.compile(r"(?i).*check constraint .* is violated.*"),
+    ],
     "oracle": [
         re.compile(r"ORA-02290:\s*check\s+constraint\s*\((?P<check_name>[^)]+)\)\s*violated", re.IGNORECASE),
         re.compile(r"\bORA-02290:", re.IGNORECASE),
@@ -132,6 +153,25 @@ DUCKDB_ERROR_TYPE_TO_KEY = {
     "foreign_key": "foreign_key",
     "check_constraint": "check_constraint",
     "check": "check_constraint",
+}
+
+SQLITE_ERRORCODE_TO_ERROR_KEY = {
+    2067: "duplicate_key",
+    1555: "duplicate_key",
+    787: "foreign_key",
+    275: "check_constraint",
+}
+
+MYSQL_ERRNO_TO_ERROR_KEY = {
+    1062: "duplicate_key",
+    1169: "duplicate_key",
+    1586: "duplicate_key",
+    1216: "foreign_key",
+    1217: "foreign_key",
+    1451: "foreign_key",
+    1452: "foreign_key",
+    3819: "check_constraint",
+    4025: "check_constraint",
 }
 
 
@@ -294,6 +334,11 @@ def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) 
 def _get_error_key_by_code(orig: Optional[BaseException], dialect_name: str) -> Optional[str]:
     """Classify a DBAPI integrity error by the native error code exposed by the driver.
 
+    Checks ``error_type`` for DuckDB, ``sqlstate`` / ``pgcode`` for PostgreSQL and
+    CockroachDB, ``sqlite_errorcode`` for SQLite on Python 3.11+, ``errno`` or
+    ``args[0]`` for MySQL and MariaDB drivers, and ``args[0].code`` for Oracle
+    ``oracledb``.
+
     Args:
         orig: The underlying DBAPI exception, if present.
         dialect_name: The normalized SQLAlchemy dialect name.
@@ -312,12 +357,22 @@ def _get_error_key_by_code(orig: Optional[BaseException], dialect_name: str) -> 
     sqlstate = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
     if isinstance(sqlstate, str) and (key := SQLSTATE_TO_ERROR_KEY.get(sqlstate)) is not None:
         return key
+    sqlite_errorcode = getattr(orig, "sqlite_errorcode", None)
+    if isinstance(sqlite_errorcode, int) and not isinstance(sqlite_errorcode, bool):
+        return SQLITE_ERRORCODE_TO_ERROR_KEY.get(sqlite_errorcode)
     driver_args: tuple[Any, ...] = getattr(orig, "args", ())
-    if dialect_name == "oracle" and driver_args:
+    dialect_key: Optional[str] = None
+    if dialect_name in {"mysql", "mariadb"}:
+        mysql_errno = getattr(orig, "errno", None)
+        if not (isinstance(mysql_errno, int) and not isinstance(mysql_errno, bool)) and driver_args:
+            mysql_errno = driver_args[0]
+        if isinstance(mysql_errno, int) and not isinstance(mysql_errno, bool):
+            dialect_key = MYSQL_ERRNO_TO_ERROR_KEY.get(mysql_errno)
+    elif dialect_name == "oracle" and driver_args:
         oracle_code = getattr(driver_args[0], "code", None)
         if isinstance(oracle_code, int) and not isinstance(oracle_code, bool):
-            return ORACLE_ERROR_CODE_TO_ERROR_KEY.get(oracle_code)
-    return None
+            dialect_key = ORACLE_ERROR_CODE_TO_ERROR_KEY.get(oracle_code)
+    return dialect_key
 
 
 @contextmanager

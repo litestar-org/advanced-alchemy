@@ -16,6 +16,7 @@ from sqlalchemy.exc import (
 
 from advanced_alchemy.exceptions import (
     DuplicateKeyError,
+    ErrorMessages,
     ForeignKeyError,
     IntegrityError,
     InvalidRequestError,
@@ -245,7 +246,7 @@ def test_wrap_sqlalchemy_exception_ignores_non_string_sqlstate() -> None:
         ),
     ],
 )
-def test_wrap_sqlalchemy_exception_mysql_generic_sqlstate_uses_regexes(
+def test_wrap_sqlalchemy_exception_mysql_generic_sqlstate(
     errno: int, message: str, expected: type[IntegrityError]
 ) -> None:
     with (
@@ -360,6 +361,80 @@ def test_wrap_sqlalchemy_exception_oracle_regex_fallback(
 
 
 @pytest.mark.parametrize(
+    ("dialect_name", "orig", "expected"),
+    [
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=2067), DuplicateKeyError),
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=1555), DuplicateKeyError),
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=787), ForeignKeyError),
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=275), IntegrityError),
+        ("sqlite+aiosqlite", _DriverError("whatever", sqlite_errorcode=2067), DuplicateKeyError),
+        ("mysql", _DriverError(1062, "whatever"), DuplicateKeyError),
+        ("mysql", _DriverError(1169, "whatever"), DuplicateKeyError),
+        ("mysql", _DriverError(1586, "whatever"), DuplicateKeyError),
+        ("mysql", _DriverError("whatever", errno=1062), DuplicateKeyError),
+        ("mysql", _DriverError(1216, "whatever"), ForeignKeyError),
+        ("mysql", _DriverError(1217, "whatever"), ForeignKeyError),
+        ("mysql", _DriverError(1451, "whatever"), ForeignKeyError),
+        ("mariadb", _DriverError(1452, "whatever"), ForeignKeyError),
+        ("mariadb+asyncmy", _DriverError("whatever", errno=1452), ForeignKeyError),
+        ("mysql", _DriverError(3819, "whatever"), IntegrityError),
+        ("mariadb", _DriverError(4025, "whatever"), IntegrityError),
+    ],
+)
+def test_wrap_sqlalchemy_exception_integrity_error_by_native_code(
+    dialect_name: str, orig: Exception, expected: type[IntegrityError]
+) -> None:
+    error_messages: ErrorMessages = {
+        "duplicate_key": "duplicate",
+        "foreign_key": "foreign",
+        "check_constraint": "check",
+        "integrity": "integrity",
+    }
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(dialect_name=dialect_name, error_messages=error_messages),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, orig)
+
+    assert excinfo.type is expected
+    assert (
+        str(excinfo.value)
+        == {DuplicateKeyError: "duplicate", ForeignKeyError: "foreign", IntegrityError: "check"}[expected]
+    )
+
+
+@pytest.mark.parametrize(
+    ("dialect_name", "message", "expected", "expected_detail"),
+    [
+        ("sqlite", "CHECK constraint failed: quantity > 0", IntegrityError, "check"),
+        ("mysql", "Check constraint 'ck_quantity' is violated.", IntegrityError, "check"),
+        ("mariadb", "CONSTRAINT `ck_quantity` failed for `db`.`items`", IntegrityError, "check"),
+        ("mariadb", "1062 (23000): Duplicate entry '1' for key 'items.PRIMARY'", DuplicateKeyError, "duplicate"),
+    ],
+)
+def test_wrap_sqlalchemy_exception_sqlite_mysql_mariadb_regex_fallback(
+    dialect_name: str, message: str, expected: type[IntegrityError], expected_detail: str
+) -> None:
+    """Verify SQLite, MySQL, and MariaDB regex fallback when native error codes are absent."""
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(
+            dialect_name=dialect_name,
+            error_messages={
+                "duplicate_key": "duplicate",
+                "foreign_key": "foreign",
+                "check_constraint": "check",
+                "integrity": "integrity",
+            },
+        ),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError(message))
+
+    assert excinfo.type is expected
+    assert str(excinfo.value) == expected_detail
+
+
+@pytest.mark.parametrize(
     ("dialect_name", "orig"),
     [
         ("oracle", _DriverError(_OracleErrorDetail(1400, 'cannot insert NULL into ("APP"."CHILD"."LABEL")'))),
@@ -367,12 +442,17 @@ def test_wrap_sqlalchemy_exception_oracle_regex_fallback(
         ("oracle", _DriverError(_OracleErrorDetail(True, "constraint violated"))),
         ("oracle", None),
         ("mssql", _DriverError(_OracleErrorDetail(1, "constraint violated"))),
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=1299)),
+        ("sqlite", _DriverError("whatever", sqlite_errorcode=True)),
+        ("mysql", _DriverError(1048, "whatever")),
+        ("mysql", _DriverError(True, "whatever")),
+        ("postgresql", _DriverError(1062, "whatever")),
     ],
 )
 def test_wrap_sqlalchemy_exception_oracle_unmapped_or_non_oracle_is_generic(
     dialect_name: str, orig: Optional[BaseException]
 ) -> None:
-    """Verify unmapped Oracle codes (ORA-01400 NOT NULL), boolean codes, None orig, and non-Oracle dialects fall back to generic IntegrityError."""
+    """Verify unmapped native codes, boolean codes, None orig, and mismatched dialects fall back to generic IntegrityError."""
     with (
         pytest.raises(IntegrityError) as excinfo,
         wrap_sqlalchemy_exception(
