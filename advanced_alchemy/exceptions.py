@@ -39,7 +39,10 @@ DUPLICATE_KEY_REGEXES = {
         re.compile(r"^.*\b1062\b.*Duplicate entry '(?P<value>.*)' for key '(?P<columns>[^']+)'.*$"),
         re.compile(r"^.*\b1062\b.*Duplicate entry \\'(?P<value>.*)\\' for key \\'(?P<columns>.+)\\'.*$"),
     ],
-    "oracle": [],
+    "oracle": [
+        re.compile(r"ORA-00001:\s*unique\s+constraint\s*\((?P<columns>[^)]+)\)\s*violated", re.IGNORECASE),
+        re.compile(r"\bORA-00001:", re.IGNORECASE),
+    ],
     "spanner+spanner": [],
     "duckdb": [],
     "mssql": [],
@@ -68,7 +71,10 @@ FOREIGN_KEY_REGEXES = {
             r'\([`"](?P<key>.+)[`"]\) REFERENCES [`"](?P<key_table>.+)[`"] ',
         ),
     ],
-    "oracle": [],
+    "oracle": [
+        re.compile(r"ORA-0229[12]:\s*integrity\s+constraint\s*\((?P<constraint>[^)]+)\)\s*violated", re.IGNORECASE),
+        re.compile(r"\bORA-0229[12]:", re.IGNORECASE),
+    ],
     "spanner+spanner": [],
     "duckdb": [],
     "mssql": [],
@@ -82,7 +88,10 @@ CHECK_CONSTRAINT_REGEXES = {
     ],
     "sqlite": [],
     "mysql": [],
-    "oracle": [],
+    "oracle": [
+        re.compile(r"ORA-02290:\s*check\s+constraint\s*\((?P<check_name>[^)]+)\)\s*violated", re.IGNORECASE),
+        re.compile(r"\bORA-02290:", re.IGNORECASE),
+    ],
     "spanner+spanner": [],
     "duckdb": [],
     "mssql": [],
@@ -94,6 +103,13 @@ SQLSTATE_TO_ERROR_KEY = {
     "23505": "duplicate_key",
     "23503": "foreign_key",
     "23514": "check_constraint",
+}
+
+ORACLE_ERROR_CODE_TO_ERROR_KEY = {
+    1: "duplicate_key",
+    2291: "foreign_key",
+    2292: "foreign_key",
+    2290: "check_constraint",
 }
 
 
@@ -253,6 +269,29 @@ def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) 
     return template  # pyright: ignore[reportUnknownVariableType]
 
 
+def _get_error_key_by_code(orig: Optional[BaseException], dialect_name: str) -> Optional[str]:
+    """Classify a DBAPI integrity error by the native error code exposed by the driver.
+
+    Args:
+        orig: The underlying DBAPI exception, if present.
+        dialect_name: The normalized SQLAlchemy dialect name.
+
+    Returns:
+        The matching ``ErrorMessages`` key, or ``None`` when no mapped code is present.
+    """
+    if orig is None:
+        return None
+    sqlstate = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
+    if isinstance(sqlstate, str) and (key := SQLSTATE_TO_ERROR_KEY.get(sqlstate)) is not None:
+        return key
+    driver_args: tuple[Any, ...] = getattr(orig, "args", ())
+    if dialect_name == "oracle" and driver_args:
+        oracle_code = getattr(driver_args[0], "code", None)
+        if isinstance(oracle_code, int) and not isinstance(oracle_code, bool):
+            return ORACLE_ERROR_CODE_TO_ERROR_KEY.get(oracle_code)
+    return None
+
+
 @contextmanager
 def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
     error_messages: Optional[ErrorMessages] = None,
@@ -311,17 +350,27 @@ def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
         if wrap_exceptions is False:
             raise
         if error_messages is not None and dialect_name is not None:
+            base_dialect = dialect_name.split("+", 1)[0]
             keys_to_regex = {
-                "duplicate_key": (DUPLICATE_KEY_REGEXES.get(dialect_name, []), DuplicateKeyError),
-                "check_constraint": (CHECK_CONSTRAINT_REGEXES.get(dialect_name, []), IntegrityError),
-                "foreign_key": (FOREIGN_KEY_REGEXES.get(dialect_name, []), ForeignKeyError),
+                "duplicate_key": (
+                    DUPLICATE_KEY_REGEXES.get(dialect_name) or DUPLICATE_KEY_REGEXES.get(base_dialect, []),
+                    DuplicateKeyError,
+                ),
+                "check_constraint": (
+                    CHECK_CONSTRAINT_REGEXES.get(dialect_name) or CHECK_CONSTRAINT_REGEXES.get(base_dialect, []),
+                    IntegrityError,
+                ),
+                "foreign_key": (
+                    FOREIGN_KEY_REGEXES.get(dialect_name) or FOREIGN_KEY_REGEXES.get(base_dialect, []),
+                    ForeignKeyError,
+                ),
             }
-            sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
-            if isinstance(sqlstate, str) and (key := SQLSTATE_TO_ERROR_KEY.get(sqlstate)) is not None:
+            if (key := _get_error_key_by_code(exc.orig, base_dialect)) is not None:
                 raise keys_to_regex[key][1](
                     detail=_get_error_message(error_messages=error_messages, key=key, exc=exc),
                 ) from exc
-            detail = " - ".join(str(exc_arg) for exc_arg in exc.orig.args) if exc.orig.args else ""  # type: ignore[union-attr] # pyright: ignore[reportArgumentType,reportOptionalMemberAccess]
+            driver_args: tuple[Any, ...] = getattr(exc.orig, "args", ())
+            detail = " - ".join(str(exc_arg) for exc_arg in driver_args) if driver_args else ""
             for key, (regexes, exception) in keys_to_regex.items():
                 for regex in regexes:
                     if (match := regex.findall(detail)) and match[0]:
