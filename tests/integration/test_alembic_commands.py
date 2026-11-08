@@ -322,7 +322,8 @@ async def test_alembic_init_renders_postgres_enum_import(
     """
     alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
     env_contents = await async_(Path(f"{tmp_project_dir}/migrations/env.py").read_text)()
-    assert "import alembic_postgresql_enum" in env_contents
+    assert 'importlib.import_module("alembic_postgresql_enum")' in env_contents
+    assert 'if config.db_url.startswith("postgresql"):' in env_contents
     assert "contextlib.suppress(ModuleNotFoundError)" in env_contents
 
 

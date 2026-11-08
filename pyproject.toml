@@ -59,50 +59,56 @@ Issue = "https://github.com/litestar-org/advanced-alchemy/issues/"
 Source = "https://github.com/litestar-org/advanced-alchemy"
 
 [project.optional-dependencies]
+aioodbc = ["aioodbc>=0.5.0"]
+aiosqlite = ["aiosqlite>=0.20.0"]
 argon2 = ["argon2-cffi"]
-cli = ["rich-click"]
-cryptography = ["cryptography"]
-dogpile = ["dogpile.cache"]
-fsspec = ["fsspec"]
-nanoid = ["fastnanoid>=0.4.1"]
-obstore = ["obstore"]
-passlib = ["passlib[argon2]"]
-postgresql = ["alembic-postgresql-enum>=1.10.0"]
-pwdlib = ["pwdlib[argon2]"]
-pyotp = ["pyotp"]
-uuid = ["uuid-utils>=0.6.1"]
+asyncmy = ["asyncmy>=0.2.9"]
+asyncpg = ["asyncpg>=0.29.0", "alembic-postgresql-enum>=1.10.0"]
 bcrypt = [
     "bcrypt>=5.0.0",
 ]
+cli = ["rich-click"]
+cockroachdb-asyncpg = ["asyncpg>=0.29.0", "sqlalchemy-cockroachdb>=2.0.2"]
+cockroachdb-psycopg = ["psycopg[binary,pool]>=3.2.3", "sqlalchemy-cockroachdb>=2.0.2"]
+cryptography = ["cryptography"]
+dogpile = ["dogpile.cache"]
+duckdb = ["duckdb>=1.1.2", "duckdb-engine>=0.13.4", "pytz>=2024.2"]
+fastapi = ["fastapi>=0.115.3"]
+flask = ["flask-sqlalchemy>=3.1.1", "flask[async]"]
+fsspec = ["fsspec"]
+litestar = ["litestar[cli]>=2.23.0"]
+nanoid = ["fastnanoid>=0.4.1"]
+obstore = ["obstore"]
+oracledb = ["oracledb>=2.4.1"]
+passlib = ["passlib[argon2]"]
+pgvector = ["pgvector"]
+psycopg = ["psycopg[binary,pool]>=3.2.3", "alembic-postgresql-enum>=1.10.0"]
+psycopg2 = ["psycopg2-binary>=2.9.10", "alembic-postgresql-enum>=1.10.0"]
+pwdlib = ["pwdlib[argon2]"]
+pyodbc = ["pyodbc>=5.2.0"]
+pyotp = ["pyotp"]
+sanic = ["sanic", "sanic[ext]>=24.6.0"]
+spanner = ["sqlalchemy-spanner>=1.7.0"]
+starlette = ["starlette"]
+uuid = ["uuid-utils>=0.6.1"]
 
 [project.scripts]
 alchemy = "advanced_alchemy.__main__:run_cli"
 
 [dependency-groups]
+aioodbc = ["aioodbc>=0.5.0"]
+aiosqlite = ["aiosqlite>=0.20.0"]
+asyncmy = ["asyncmy>=0.2.9"]
+asyncpg = ["asyncpg>=0.29.0", "alembic-postgresql-enum>=1.10.0"]
 build = ["bump-my-version"]
-cockroachdb = [
-  "asyncpg>=0.29.0",
-  "psycopg2-binary>=2.9.10",
-  "psycopg[binary,pool]>=3.2.3",
-  "sqlalchemy-cockroachdb>=2.0.2",
-]
+cockroachdb-asyncpg = ["asyncpg>=0.29.0", "sqlalchemy-cockroachdb>=2.0.2"]
+cockroachdb-psycopg = ["psycopg[binary,pool]>=3.2.3", "sqlalchemy-cockroachdb>=2.0.2"]
 dev = [
   { include-group = "build" },
-  { include-group = "lint" },
   { include-group = "doc" },
+  { include-group = "extras" },
+  { include-group = "lint" },
   { include-group = "test" },
-  { include-group = "litestar" },
-  { include-group = "fastapi" },
-  { include-group = "flask" },
-  { include-group = "sanic" },
-  { include-group = "sqlite" },
-  { include-group = "oracle" },
-  { include-group = "duckdb" },
-  { include-group = "mssql" },
-  { include-group = "mysql" },
-  { include-group = "spanner" },
-  { include-group = "cockroachdb" },
-  { include-group = "postgres" },
 ]
 doc = [
   "accessible-pygments>=0.0.5",
@@ -122,9 +128,26 @@ doc = [
   "sybil",
 ]
 duckdb = ["duckdb>=1.1.2", "duckdb-engine>=0.13.4", "pytz>=2024.2"]
+extras = [
+  { include-group = "aioodbc" },
+  { include-group = "aiosqlite" },
+  { include-group = "asyncmy" },
+  { include-group = "asyncpg" },
+  { include-group = "cockroachdb-asyncpg" },
+  { include-group = "cockroachdb-psycopg" },
+  { include-group = "duckdb" },
+  { include-group = "fastapi" },
+  { include-group = "flask" },
+  { include-group = "litestar" },
+  { include-group = "oracledb" },
+  { include-group = "psycopg" },
+  { include-group = "psycopg2" },
+  { include-group = "pyodbc" },
+  { include-group = "sanic" },
+  { include-group = "spanner" },
+]
 fastapi = ["fastapi[all]>=0.115.3", "starlette"]
 flask = ["flask-sqlalchemy>=3.1.1", "flask[async]"]
-fsspec = ["fsspec>=2024.10.0"]
 lint = [
   # Mypy checks the project with Python 3.9 grammar even when it runs on a
   # newer interpreter. Keep typed dependency sources parseable by that target.
@@ -154,13 +177,12 @@ lint = [
   "types-passlib",
 ]
 litestar = ["litestar[cli]>=2.23.0"]
-mssql = ["aioodbc>=0.5.0", "pyodbc>=5.2.0"]
-mysql = ["asyncmy>=0.2.9"]
-oracle = ["oracledb>=2.4.1"]
-postgres = ["alembic-postgresql-enum>=1.10.0", "asyncpg>=0.29.0", "psycopg2-binary>=2.9.10", "psycopg[binary,pool]>=3.2.3"]
+oracledb = ["oracledb>=2.4.1"]
+psycopg = ["psycopg[binary,pool]>=3.2.3", "alembic-postgresql-enum>=1.10.0"]
+psycopg2 = ["psycopg2-binary>=2.9.10", "alembic-postgresql-enum>=1.10.0"]
+pyodbc = ["pyodbc>=5.2.0"]
 sanic = ["sanic", "sanic-testing>=24.6.0", "sanic[ext]>=24.6.0"]
 spanner = ["sqlalchemy-spanner>=1.7.0"]
-sqlite = ["aiosqlite>=0.20.0"]
 test = [
   "attrs",
   "cattrs",
@@ -189,6 +211,29 @@ test = [
   "click",
   "time-machine>=2.15.0",
 ]
+
+# DEPRECATED: Legacy multi-driver dialect groups below are deprecated and will be
+# removed in v2.0.0. Use the per-driver groups/extras above instead (e.g. `asyncpg`,
+# `psycopg`, `psycopg2`, `cockroachdb-asyncpg`, `cockroachdb-psycopg`, `aioodbc`,
+# `pyodbc`, `asyncmy`, `oracledb`, `aiosqlite`).
+cockroachdb = [
+  { include-group = "cockroachdb-asyncpg" },
+  { include-group = "cockroachdb-psycopg" },
+  { include-group = "psycopg2" },
+]
+fsspec = ["fsspec>=2024.10.0"]
+mssql = [
+  { include-group = "aioodbc" },
+  { include-group = "pyodbc" },
+]
+mysql = [{ include-group = "asyncmy" }]
+oracle = [{ include-group = "oracledb" }]
+postgres = [
+  { include-group = "asyncpg" },
+  { include-group = "psycopg" },
+  { include-group = "psycopg2" },
+]
+sqlite = [{ include-group = "aiosqlite" }]
 
 [tool.bumpversion]
 allow_dirty = true
@@ -387,7 +432,7 @@ classmethod-decorators = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"advanced_alchemy/alembic/templates/*/env.py" = ["INP001", "F401"]
+"advanced_alchemy/alembic/templates/*/env.py" = ["INP001"]
 "advanced_alchemy/repository/*.py" = ['C901', 'UP006', 'UP035']
 "advanced_alchemy/repository/memory/*.py" = ['UP006', 'UP035']
 "advanced_alchemy/service/*.py" = ["PLR0911", "UP006", "UP035"]
@@ -477,7 +522,6 @@ warn_unused_ignores = false
 [[tool.mypy.overrides]]
 ignore_missing_imports = true
 module = [
-  "alembic_postgresql_enum",
   "greenlet",
   "google.auth.*",
   "google.cloud.*",

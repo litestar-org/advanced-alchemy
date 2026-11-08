@@ -1,10 +1,12 @@
 """Synchronous Alembic migration environment template.
 
-When ``alembic-postgresql-enum`` (``advanced-alchemy[postgresql]``) is installed,
-importing it registers autogenerate comparators for PostgreSQL ``ENUM`` types.
+When ``alembic-postgresql-enum`` is installed and the target dialect is
+PostgreSQL, importing it registers autogenerate comparators for PostgreSQL
+``ENUM`` types.
 """
 
 import contextlib
+import importlib
 from typing import TYPE_CHECKING, cast
 
 from alembic.autogenerate import rewriter
@@ -12,9 +14,6 @@ from sqlalchemy import Engine, engine_from_config, pool
 
 from advanced_alchemy.base import metadata_registry
 from alembic import context
-
-with contextlib.suppress(ModuleNotFoundError):
-    import alembic_postgresql_enum  # pyright: ignore[reportMissingImports,reportUnusedImport]
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
@@ -26,6 +25,10 @@ __all__ = ("do_run_migrations", "run_migrations_offline", "run_migrations_online
 
 config: "AlembicCommandConfig" = context.config  # type: ignore
 writer = rewriter.Rewriter()
+
+if config.db_url.startswith("postgresql"):
+    with contextlib.suppress(ModuleNotFoundError):
+        importlib.import_module("alembic_postgresql_enum")
 
 
 def run_migrations_offline() -> None:

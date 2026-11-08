@@ -14,6 +14,7 @@ import pytest
 from click.testing import CliRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from advanced_alchemy.alembic.commands import AlembicCommandConfig
 from advanced_alchemy.cli import (
     add_migration_commands,
     discover_config_from_pyproject,
@@ -886,3 +887,29 @@ def test_framework_extensions_do_not_require_optional_cli_packages_on_import(
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("dialect_name", "expected_calls"),
+    [
+        ("postgresql", 1),
+        ("sqlite", 0),
+        ("oracle", 0),
+        ("cockroachdb", 0),
+    ],
+)
+def test_alembic_command_config_loads_postgres_enum_only_for_postgresql(
+    dialect_name: str,
+    expected_calls: int,
+) -> None:
+    """AlembicCommandConfig should only import alembic_postgresql_enum when the engine dialect is postgresql."""
+    engine = MagicMock()
+    engine.dialect.name = dialect_name
+    engine.url.render_as_string.return_value = f"{dialect_name}://localhost/db"
+    with patch(
+        "advanced_alchemy.alembic.commands.importlib.import_module", side_effect=ModuleNotFoundError
+    ) as mock_import:
+        AlembicCommandConfig(engine=engine, version_table_name="alembic_version")
+    assert mock_import.call_count == expected_calls
+    if expected_calls:
+        mock_import.assert_called_once_with("alembic_postgresql_enum")
