@@ -241,3 +241,75 @@ def test_wrap_sqlalchemy_exception_mysql_generic_sqlstate_uses_regexes(
 
     assert excinfo.type is expected
     assert str(excinfo.value) == {1062: "duplicate", 1452: "foreign"}[errno]
+
+
+class _OracleErrorDetail:
+    """Stands in for ``oracledb``'s error object, which the driver puts in ``exc.orig.args[0]``."""
+
+    def __init__(self, code: int, message: str) -> None:
+        self.code = code
+        self.full_code = f"ORA-{code:05d}"
+        self.message = message
+
+    def __str__(self) -> str:
+        return f"{self.full_code}: {self.message}"
+
+
+@pytest.mark.parametrize(
+    ("code", "message", "expected"),
+    [
+        (1, "unique constraint (APP.UQ_PARENT_NAME) violated", DuplicateKeyError),
+        (2291, "integrity constraint (APP.FK_CHILD_PARENT) violated - parent key not found", ForeignKeyError),
+        (2292, "integrity constraint (APP.FK_CHILD_PARENT) violated - child record found", ForeignKeyError),
+        (2290, "check constraint (APP.CK_CHILD_QUANTITY) violated", IntegrityError),
+    ],
+)
+def test_wrap_sqlalchemy_exception_integrity_error_by_oracle_code(
+    code: int, message: str, expected: type[IntegrityError]
+) -> None:
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(
+            dialect_name="oracle",
+            error_messages={"duplicate_key": "duplicate", "foreign_key": "foreign", "check_constraint": "check"},
+        ),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError(_OracleErrorDetail(code, message)))
+
+    assert excinfo.type is expected
+    assert str(excinfo.value) == {1: "duplicate", 2291: "foreign", 2292: "foreign", 2290: "check"}[code]
+
+
+def test_wrap_sqlalchemy_exception_oracle_unmapped_error_code_is_generic() -> None:
+    # ORA-01400 (NOT NULL) has no specific exception class, matching how Postgres' 23502 is handled.
+    not_null_error = _OracleErrorDetail(1400, 'cannot insert NULL into ("APP"."CHILD"."LABEL")')
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(dialect_name="oracle", error_messages={"integrity": "integrity"}),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError(not_null_error))
+
+    assert excinfo.type is IntegrityError
+    assert str(excinfo.value) == "integrity"
+
+
+def test_wrap_sqlalchemy_exception_oracle_error_without_code_is_generic() -> None:
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(dialect_name="oracle", error_messages={"integrity": "integrity"}),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError("constraint violated"))
+
+    assert excinfo.type is IntegrityError
+    assert str(excinfo.value) == "integrity"
+
+
+def test_wrap_sqlalchemy_exception_oracle_code_ignored_for_other_dialects() -> None:
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(dialect_name="mssql", error_messages={"integrity": "integrity"}),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError(_OracleErrorDetail(1, "constraint violated")))
+
+    assert excinfo.type is IntegrityError
+    assert str(excinfo.value) == "integrity"

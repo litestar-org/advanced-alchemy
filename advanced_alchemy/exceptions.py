@@ -96,6 +96,13 @@ SQLSTATE_TO_ERROR_KEY = {
     "23514": "check_constraint",
 }
 
+ORACLE_ERROR_CODE_TO_ERROR_KEY = {
+    1: "duplicate_key",
+    2291: "foreign_key",
+    2292: "foreign_key",
+    2290: "check_constraint",
+}
+
 
 class AdvancedAlchemyError(Exception):
     """Base exception class from which all Advanced Alchemy exceptions inherit."""
@@ -318,6 +325,12 @@ def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
             }
             sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
             if isinstance(sqlstate, str) and (key := SQLSTATE_TO_ERROR_KEY.get(sqlstate)) is not None:
+                raise keys_to_regex[key][1](
+                    detail=_get_error_message(error_messages=error_messages, key=key, exc=exc),
+                ) from exc
+            driver_args = getattr(exc.orig, "args", ())
+            oracle_code = getattr(driver_args[0], "code", None) if dialect_name == "oracle" and driver_args else None
+            if isinstance(oracle_code, int) and (key := ORACLE_ERROR_CODE_TO_ERROR_KEY.get(oracle_code)) is not None:
                 raise keys_to_regex[key][1](
                     detail=_get_error_message(error_messages=error_messages, key=key, exc=exc),
                 ) from exc
