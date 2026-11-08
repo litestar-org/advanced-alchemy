@@ -387,7 +387,7 @@ classmethod-decorators = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"advanced_alchemy/alembic/templates/*/env.py" = ["INP001", "SIM105"]
+"advanced_alchemy/alembic/templates/*/env.py" = ["INP001", "F401"]
 "advanced_alchemy/repository/*.py" = ['C901', 'UP006', 'UP035']
 "advanced_alchemy/repository/memory/*.py" = ['UP006', 'UP035']
 "advanced_alchemy/service/*.py" = ["PLR0911", "UP006", "UP035"]
@@ -477,6 +477,7 @@ warn_unused_ignores = false
 [[tool.mypy.overrides]]
 ignore_missing_imports = true
 module = [
+  "alembic_postgresql_enum",
   "greenlet",
   "google.auth.*",
   "google.cloud.*",

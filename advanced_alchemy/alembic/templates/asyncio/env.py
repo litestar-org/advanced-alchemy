@@ -1,4 +1,11 @@
+"""Asynchronous Alembic migration environment template.
+
+When ``alembic-postgresql-enum`` (``advanced-alchemy[postgresql]``) is installed,
+importing it registers autogenerate comparators for PostgreSQL ``ENUM`` types.
+"""
+
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING, cast
 
 from alembic.autogenerate import rewriter
@@ -8,14 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_engine_from_config
 from advanced_alchemy.base import metadata_registry
 from alembic import context
 
-try:
-    # Enables autogenerate support for PostgreSQL ``ENUM`` changes (e.g. added values).
-    # Alembic cannot detect these on its own; importing this package registers the
-    # required autogenerate comparators as a side effect. Install with the
-    # ``advanced-alchemy[postgresql]`` extra to enable.
-    import alembic_postgresql_enum  # type: ignore[import-not-found,unused-ignore]  # pyright: ignore[reportMissingImports]  # noqa: F401
-except ModuleNotFoundError:
-    pass
+with contextlib.suppress(ModuleNotFoundError):
+    import alembic_postgresql_enum  # pyright: ignore[reportMissingImports,reportUnusedImport]
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
@@ -25,8 +26,6 @@ if TYPE_CHECKING:
 __all__ = ("do_run_migrations", "run_migrations_offline", "run_migrations_online")
 
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
 config: "AlembicCommandConfig" = context.config  # type: ignore
 writer = rewriter.Rewriter()
 

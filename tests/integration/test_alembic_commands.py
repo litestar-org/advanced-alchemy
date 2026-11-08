@@ -22,6 +22,7 @@ from advanced_alchemy.alembic.utils import drop_all, dump_tables
 from advanced_alchemy.config.asyncio import AlembicAsyncConfig
 from advanced_alchemy.config.sync import AlembicSyncConfig
 from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+from advanced_alchemy.utils.sync_tools import async_
 from tests.fixtures.uuid import models as models_uuid
 from tests.helpers import maybe_async
 
@@ -303,8 +304,6 @@ def test_alembic_version_table_schema(
 
 
 async def test_alembic_init(alembic_commands: commands.AlembicCommands, tmp_project_dir: Path) -> None:
-    from advanced_alchemy.utils.sync_tools import async_
-
     alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
     expected_dirs = [f"{tmp_project_dir}/migrations/", f"{tmp_project_dir}/migrations/versions"]
     expected_files = [f"{tmp_project_dir}/migrations/env.py", f"{tmp_project_dir}/migrations/script.py.mako"]
@@ -321,17 +320,13 @@ async def test_alembic_init_renders_postgres_enum_import(
 
     See https://github.com/litestar-org/advanced-alchemy/issues/492.
     """
-    from advanced_alchemy.utils.sync_tools import async_
-
     alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
     env_contents = await async_(Path(f"{tmp_project_dir}/migrations/env.py").read_text)()
     assert "import alembic_postgresql_enum" in env_contents
-    assert "except ModuleNotFoundError:" in env_contents
+    assert "contextlib.suppress(ModuleNotFoundError)" in env_contents
 
 
 async def test_alembic_init_already(alembic_commands: commands.AlembicCommands, tmp_project_dir: Path) -> None:
-    from advanced_alchemy.utils.sync_tools import async_
-
     alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
     expected_dirs = [f"{tmp_project_dir}/migrations/", f"{tmp_project_dir}/migrations/versions"]
     expected_files = [f"{tmp_project_dir}/migrations/env.py", f"{tmp_project_dir}/migrations/script.py.mako"]

@@ -108,6 +108,7 @@ dev = [
     { name = "accessible-pygments" },
     { name = "aioodbc" },
     { name = "aiosqlite" },
+    { name = "alembic-postgresql-enum" },
     { name = "anyio", version = "4.13.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "asgi-lifespan" },
     { name = "asyncmy" },
@@ -426,7 +427,7 @@ requires-dist = [
     { name = "typing-extensions", specifier = ">=4.0.0" },
     { name = "uuid-utils", marker = "extra == 'uuid'", specifier = ">=0.6.1" },
 ]
-provides-extras = ["argon2", "bcrypt", "cli", "cryptography", "dogpile", "fsspec", "nanoid", "obstore", "passlib", "postgresql", "pwdlib", "pyotp", "uuid"]
+provides-extras = ["argon2", "cli", "cryptography", "dogpile", "fsspec", "nanoid", "obstore", "passlib", "postgresql", "pwdlib", "pyotp", "uuid", "bcrypt"]
 
 [package.metadata.requires-dev]
 build = [{ name = "bump-my-version" }]
@@ -440,6 +441,7 @@ dev = [
     { name = "accessible-pygments", specifier = ">=0.0.5" },
     { name = "aioodbc", specifier = ">=0.5.0" },
     { name = "aiosqlite", specifier = ">=0.20.0" },
+    { name = "alembic-postgresql-enum", specifier = ">=1.10.0" },
     { name = "anyio", marker = "python_full_version >= '3.10'", specifier = ">=4.13,<4.14" },
     { name = "asgi-lifespan" },
     { name = "asyncmy", specifier = ">=0.2.9" },
@@ -1129,7 +1131,7 @@ version = "1.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "alembic", version = "1.16.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "alembic", version = "1.18.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+    { name = "alembic", version = "1.18.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "sqlalchemy" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/63/cf/b5147b926441e7cdc12f306465dac488ff22364b1467a09a5d43743b8cfc/alembic_postgresql_enum-1.10.0.tar.gz", hash = "sha256:ea23481de3d6a00d68d369f92a46ff4fa27b2575e39c583145f1e23ea9c7511d", size = 18557, upload-time = "2026-02-23T16:15:04.148Z" }

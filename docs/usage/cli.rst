@@ -306,11 +306,33 @@ Create a new migration revision:
    <https://pypi.org/project/alembic-postgresql-enum/>`_ package is installed.
    Install it with the ``postgresql`` extra:
 
-   .. code-block:: bash
+   .. tab-set::
 
-       pip install "advanced-alchemy[postgresql]"
+       .. tab-item:: uv
 
-   The generated ``env.py`` imports the package inside a ``try``/``except`` block,
+           .. code-block:: bash
+
+               uv add "advanced-alchemy[postgresql]"
+
+       .. tab-item:: pip
+
+           .. code-block:: bash
+
+               python3 -m pip install "advanced-alchemy[postgresql]"
+
+       .. tab-item:: pdm
+
+           .. code-block:: bash
+
+               pdm add "advanced-alchemy[postgresql]"
+
+       .. tab-item:: poetry
+
+           .. code-block:: bash
+
+               poetry add "advanced-alchemy[postgresql]"
+
+   The generated ``env.py`` imports the package inside ``contextlib.suppress(ModuleNotFoundError)``,
    so no configuration is required — it activates only when the package is present.
    If you initialized your migrations with an older version of Advanced Alchemy,
    add ``import alembic_postgresql_enum`` near the top of your ``env.py`` to enable it.
