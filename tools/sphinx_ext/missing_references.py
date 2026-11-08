@@ -180,12 +180,16 @@ def _resolve_advanced_alchemy_reference(target: str, module: str) -> bool:
         "GenericAlembicConfig",
     }
 
-    func_references = {"repository.SQLAlchemyAsyncRepositoryProtocol.add_many"}
+    func_references = {
+        "repository.SQLAlchemyAsyncRepositoryProtocol.add_many",
+        "create_registry",
+        "merge_table_arguments",
+        "model_to_dict",
+    }
 
-    # Handle type module references
     type_classes = {"DateTimeUTC", "ORA_JSONB", "GUID", "EncryptedString", "EncryptedText"}
 
-    if target in base_classes or target in config_classes or target in type_classes:
+    if target in base_classes or target in config_classes or target in type_classes or target in func_references:
         return True
 
     # Handle fully qualified references
