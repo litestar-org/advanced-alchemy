@@ -508,7 +508,7 @@ def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
     for group in LITESTAR_OBJECT_ALIAS_GROUPS:
         _register_alias_group(objects, group)
 
-    reexport_by_name: dict[str, list[str]] = {}
+    reexport_by_identity: dict[tuple[str, str], list[str]] = {}
     for pkg_name in PACKAGE_REEXPORT_MODULES:
         try:
             pkg = importlib.import_module(pkg_name)
@@ -520,7 +520,8 @@ def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
             if sym is None or inspect.ismodule(sym):
                 continue
             origin_module = getattr(sym, "__module__", None)
-            candidates = reexport_by_name.setdefault(sym_name, [])
+            identity_key = (origin_module if isinstance(origin_module, str) else pkg_name, sym_name)
+            candidates = reexport_by_identity.setdefault(identity_key, [])
             pkg_full = f"{pkg_name}.{sym_name}"
             if pkg_full not in candidates:
                 candidates.append(pkg_full)
@@ -533,7 +534,7 @@ def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
                 if parent_full not in candidates:
                     candidates.append(parent_full)
 
-    for candidates in reexport_by_name.values():
+    for candidates in reexport_by_identity.values():
         if len(candidates) > 1:
             _register_alias_group(objects, tuple(candidates))
 
@@ -835,10 +836,23 @@ def on_missing_reference(app: Sphinx, env: BuildEnvironment, node: pending_xref,
     return None
 
 
+def _purge_aliased_inventory_entries(app: Sphinx, env: BuildEnvironment, docnames: list[str]) -> None:
+    """Remove synthetic aliased ObjectEntry records before incremental document reading."""
+    del app, docnames
+    py_domain = env.domains.get("py")
+    objects = cast("dict[str, ObjectEntry] | None", getattr(py_domain, "objects", None))
+    if objects is None:
+        return
+    for name, entry in list(objects.items()):
+        if entry.aliased:
+            del objects[name]
+
+
 def setup(app: Sphinx) -> dict[str, bool]:
     """Register Sphinx missing-reference and inventory-alias hooks."""
     _install_python_domain_dual_role_patch()
     _install_autodoc_explicit_members_patch()
+    app.connect("env-before-read-docs", _purge_aliased_inventory_entries)
     app.connect("autodoc-process-signature", _sanitize_recorded_typehints, priority=600)
     app.connect("env-updated", register_inventory_aliases)
     app.connect("missing-reference", on_missing_reference)

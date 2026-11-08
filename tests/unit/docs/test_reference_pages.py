@@ -53,6 +53,9 @@ def _count_rside_toc_items(html_text: str) -> int:
         "cache.rst",
         "routing.rst",
         "utils.rst",
+        "extensions/litestar/index.rst",
+        "extensions/litestar/plugins.rst",
+        "extensions/litestar/store.rst",
     ],
 )
 def test_repository_and_service_reference_directive_hygiene(page: str) -> None:
@@ -72,6 +75,12 @@ def test_extensions_index_registers_package_module() -> None:
     assert ".. py:module:: advanced_alchemy.extensions" in content
 
 
+def test_litestar_store_qualifies_improperly_configured_exception() -> None:
+    """Verify docs/reference/extensions/litestar/store.rst qualifies ImproperlyConfiguredException."""
+    content = (REFERENCE_DIR / "extensions" / "litestar" / "store.rst").read_text(encoding="utf-8")
+    assert ":exc:`litestar.exceptions.ImproperlyConfiguredException`" in content
+
+
 def test_exceptions_reference_contains_qualified_sqlalchemy_xrefs() -> None:
     """Verify docs/reference/exceptions.rst includes qualified SQLAlchemy exception cross-references."""
     content = (REFERENCE_DIR / "exceptions.rst").read_text(encoding="utf-8")
@@ -80,7 +89,7 @@ def test_exceptions_reference_contains_qualified_sqlalchemy_xrefs() -> None:
 
 
 def test_base_module_and_classes_present_in_objects_inv() -> None:
-    """Verify removing :no-index: from base.rst, routing.rst, and utils.rst restores objects.inv entries."""
+    """Verify removing :no-index: from base.rst, routing.rst, utils.rst, and plugins.rst restores objects.inv entries."""
     inv_path = BUILD_HTML_DIR / "objects.inv"
     assert inv_path.is_file()
     inventory = InventoryFile.load(_ByteStream(inv_path.read_bytes()), "https://example.com/", urljoin)
@@ -91,9 +100,12 @@ def test_base_module_and_classes_present_in_objects_inv() -> None:
     assert "advanced_alchemy.utils" in modules
     assert "advanced_alchemy.utils.dataclass" in modules
     assert "advanced_alchemy.extensions" in modules
+    assert "advanced_alchemy.extensions.litestar" in modules
+    assert "advanced_alchemy.extensions.litestar.plugins" in modules
     assert "advanced_alchemy.base.UUIDBase" in classes
     assert "advanced_alchemy.routing.RoutingAsyncSession" in classes
     assert "advanced_alchemy.utils.dataclass.Empty" in classes
+    assert "advanced_alchemy.extensions.litestar.plugins.SQLAlchemyPlugin" in classes
 
 
 @pytest.mark.parametrize(
@@ -110,6 +122,9 @@ def test_base_module_and_classes_present_in_objects_inv() -> None:
         "cache.html",
         "routing.html",
         "utils.html",
+        "extensions/litestar/index.html",
+        "extensions/litestar/plugins.html",
+        "extensions/litestar/store.html",
     ],
 )
 def test_repository_and_service_built_html_and_toc_budgets(html_page: str) -> None:
