@@ -487,3 +487,54 @@ def test_sync_repository_constructs_with_routing_session(sqlite_sync_routing_ses
     assert repo.session is sqlite_sync_routing_session
     assert repo._dialect.name == "sqlite"
     assert repo._dialect is sqlite_sync_routing_session.get_bind().dialect
+
+
+def test_get_bind_respects_statement_execution_options_bind_group(
+    routing_session: RoutingSyncSession,
+    mock_primary_engine: Engine,
+    mock_replica_engines: list[Engine],
+) -> None:
+    """Statement execution_options(bind_group=...) routes directly to the target group."""
+    stmt_read = select(1).execution_options(bind_group="read")
+    assert routing_session.get_bind(clause=stmt_read) in mock_replica_engines
+
+    stmt_default = select(1).execution_options(bind_group="default")
+    assert routing_session.get_bind(clause=stmt_default) is mock_primary_engine
+
+
+class _BrokenExecutionOptionsClause:
+    """Stub clause whose get_execution_options raises."""
+
+    def __init__(self, exc_type: type[Exception]) -> None:
+        self._exc_type = exc_type
+        self._execution_options = {"bind_group": "default"}
+
+    def get_execution_options(self) -> dict[str, str]:
+        raise self._exc_type("broken")
+
+
+class _NonMappingExecutionOptionsClause:
+    """Stub clause returning non-Mapping execution options."""
+
+    _execution_options = None
+
+    def get_execution_options(self) -> None:
+        return None
+
+
+@pytest.mark.parametrize("exc_type", [TypeError, AttributeError])
+def test_get_bind_execution_options_callable_raises_falls_back_to_private_attr(
+    routing_session: RoutingSyncSession,
+    mock_primary_engine: Engine,
+    exc_type: type[Exception],
+) -> None:
+    """When get_execution_options() raises TypeError or AttributeError, _execution_options is used."""
+    assert routing_session.get_bind(clause=_BrokenExecutionOptionsClause(exc_type)) is mock_primary_engine
+
+
+def test_get_bind_execution_options_non_mapping_falls_back_to_routing(
+    routing_session: RoutingSyncSession,
+    mock_replica_engines: list[Engine],
+) -> None:
+    """When neither get_execution_options() nor _execution_options yields a Mapping, normal routing runs."""
+    assert routing_session.get_bind(clause=_NonMappingExecutionOptionsClause()) in mock_replica_engines

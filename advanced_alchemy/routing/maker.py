@@ -288,7 +288,6 @@ class RoutingAsyncSessionMaker:
         self._engines: dict[str, list[AsyncEngine]] = {}
         self._selectors: dict[str, EngineSelector[AsyncEngine]] = {}
 
-        # Initialize engines and selectors for all groups
         for group in routing_config.engines:
             engines_for_group: list[AsyncEngine] = []
             for config in routing_config.get_engine_configs(group):
@@ -302,7 +301,6 @@ class RoutingAsyncSessionMaker:
                     routing_config.routing_strategy,
                 )
 
-        # Set default engine (required)
         default_group = routing_config.default_group
         if default_group not in self._engines or not self._engines[default_group]:
             msg = (

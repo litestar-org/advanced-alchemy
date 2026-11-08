@@ -97,9 +97,10 @@ class RoutingSyncSession(Session):
         """
         if clause is not None:
             options: Any = None
-            if hasattr(clause, "get_execution_options") and callable(clause.get_execution_options):
+            get_execution_options = getattr(clause, "get_execution_options", None)
+            if callable(get_execution_options):
                 try:
-                    options = clause.get_execution_options()
+                    options = get_execution_options()
                 except (AttributeError, TypeError):
                     options = None
             if not isinstance(options, Mapping):
@@ -109,16 +110,13 @@ class RoutingSyncSession(Session):
                 if bind_group and isinstance(bind_group, str):
                     return self._get_engine_for_group(bind_group)
 
-        # 2. Check context variable for bind group
         bind_group = bind_group_var.get()
         if bind_group:
             return self._get_engine_for_group(bind_group)
 
-        # 3. Check if we should force/stick to default (writer)
         if self._should_use_default_group(clause):
             return self._get_engine_for_group(self._routing_config.default_group)
 
-        # 4. Read operation -> use read group
         return self._get_engine_for_group(self._routing_config.read_group)
 
     def _get_engine_for_group(self, group: str) -> "Engine":
@@ -135,8 +133,6 @@ class RoutingSyncSession(Session):
             if selector.has_engines():
                 return selector.next()
 
-        # Fallback to default engine if group has no selector/engines
-        # or if it's the default group and we want to be safe
         return self._default_engine
 
     def _should_use_default_group(self, clause: Optional[Any]) -> bool:
