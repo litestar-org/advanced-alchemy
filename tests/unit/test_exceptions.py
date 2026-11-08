@@ -1,6 +1,7 @@
 from typing import Optional
 
 import pytest
+import sqlalchemy as sa
 from sqlalchemy.exc import (
     IntegrityError as SQLAlchemyIntegrityError,
 )
@@ -30,13 +31,14 @@ def test_wrap_sqlalchemy_exception_multiple_results_found() -> None:
         raise MultipleResultsFound()
 
 
-@pytest.mark.parametrize("dialect_name", ["postgresql", "sqlite", "mysql", "oracle"])
+@pytest.mark.parametrize("dialect_name", ["postgresql", "sqlite", "mysql", "oracle", "duckdb"])
 def test_wrap_sqlalchemy_exception_integrity_error_duplicate_key(dialect_name: str) -> None:
     error_message = {
         "postgresql": 'duplicate key value violates unique constraint "uq_%(table_name)s_%(column_0_name)s"',
         "sqlite": "UNIQUE constraint failed: %(table_name)s.%(column_0_name)s",
         "mysql": "1062 (23000): Duplicate entry '%(value)s' for key '%(table_name)s.%(column_0_name)s'",
         "oracle": "ORA-00001: unique constraint (APP.UQ_%(table_name)s_%(column_0_name)s) violated",
+        "duckdb": 'Duplicate key "%(column_0_name)s: %(value)s" violates primary key constraint.',
     }
     with (
         pytest.raises(DuplicateKeyError),
@@ -65,11 +67,17 @@ def test_wrap_sqlalchemy_exception_integrity_error_duplicate_key(dialect_name: s
                 {"table_name": "table", "column_0_name": "id", "value": "1"},
                 Exception("1062 (23000): Duplicate entry '1' for key 'table.id'"),
             )
-        else:
+        elif dialect_name == "oracle":
             exception = SQLAlchemyIntegrityError(
                 "INSERT INTO table (id) VALUES (1)",
                 {"table_name": "table", "column_0_name": "id"},
                 Exception("ORA-00001: unique constraint (APP.UQ_TABLE_ID) violated"),
+            )
+        else:
+            exception = SQLAlchemyIntegrityError(
+                "INSERT INTO table (id) VALUES (1)",
+                {"table_name": "table", "column_0_name": "id", "value": "1"},
+                Exception('Constraint Error: Duplicate key "id: 1" violates primary key constraint.'),
             )
 
         raise exception
@@ -381,3 +389,92 @@ def test_wrap_sqlalchemy_exception_oracle_unmapped_or_non_oracle_is_generic(
 
     assert excinfo.type is IntegrityError
     assert str(excinfo.value) == "integrity"
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ('Constraint Error: Duplicate key "id: 1" violates primary key constraint.', DuplicateKeyError),
+        ('Constraint Error: Duplicate key "email: a@b.com" violates unique constraint.', DuplicateKeyError),
+        (
+            'Constraint Error: Violates foreign key constraint because key "id: 999" does not exist in the referenced table',
+            ForeignKeyError,
+        ),
+        (
+            'Constraint Error: Violates foreign key constraint because key "parent_id: 1" is still referenced by a foreign key in a different table.',
+            ForeignKeyError,
+        ),
+        ("Constraint Error: CHECK constraint failed on table t with expression CHECK((id > 0))", IntegrityError),
+    ],
+)
+def test_wrap_sqlalchemy_exception_duckdb_constraint_regexes(message: str, expected: type[IntegrityError]) -> None:
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(
+            dialect_name="duckdb",
+            error_messages={
+                "duplicate_key": "duplicate",
+                "foreign_key": "foreign",
+                "check_constraint": "check",
+                "integrity": "integrity",
+            },
+        ),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, Exception(message))
+
+    assert excinfo.type is expected
+
+
+@pytest.mark.parametrize(
+    ("error_type", "expected"),
+    [
+        ("duplicate_key", DuplicateKeyError),
+        (" duplicate key ", DuplicateKeyError),
+        ("primary_key", DuplicateKeyError),
+        ("unique", DuplicateKeyError),
+        ("foreign_key", ForeignKeyError),
+        ("FOREIGN KEY", ForeignKeyError),
+        ("check_constraint", IntegrityError),
+        ("check", IntegrityError),
+    ],
+)
+def test_wrap_sqlalchemy_exception_duckdb_native_error_type(error_type: str, expected: type[IntegrityError]) -> None:
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(
+            dialect_name="duckdb",
+            error_messages={
+                "duplicate_key": "duplicate",
+                "foreign_key": "foreign",
+                "check_constraint": "check",
+            },
+        ),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError("some error", error_type=error_type))
+
+    assert excinfo.type is expected
+
+
+def test_wrap_sqlalchemy_exception_duckdb_real_engine() -> None:
+    engine = sa.create_engine("duckdb:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(sa.text("CREATE TABLE parent (id INT PRIMARY KEY);"))
+        conn.execute(
+            sa.text(
+                "CREATE TABLE child (id INT PRIMARY KEY, parent_id INT REFERENCES parent(id), CONSTRAINT chk CHECK (id > 0));"
+            )
+        )
+        conn.execute(sa.text("INSERT INTO parent VALUES (1);"))
+        conn.execute(sa.text("INSERT INTO child VALUES (1, 1);"))
+
+    with pytest.raises(DuplicateKeyError), engine.begin() as conn:
+        with wrap_sqlalchemy_exception(dialect_name=engine.dialect.name, error_messages={}):
+            conn.execute(sa.text("INSERT INTO parent VALUES (1);"))
+
+    with pytest.raises(ForeignKeyError), engine.begin() as conn:
+        with wrap_sqlalchemy_exception(dialect_name=engine.dialect.name, error_messages={}):
+            conn.execute(sa.text("INSERT INTO child VALUES (2, 999);"))
+
+    with pytest.raises(IntegrityError), engine.begin() as conn:
+        with wrap_sqlalchemy_exception(dialect_name=engine.dialect.name, error_messages={}):
+            conn.execute(sa.text("INSERT INTO child VALUES (-1, 1);"))

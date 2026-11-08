@@ -44,7 +44,16 @@ DUPLICATE_KEY_REGEXES = {
         re.compile(r"\bORA-00001:", re.IGNORECASE),
     ],
     "spanner+spanner": [],
-    "duckdb": [],
+    "duckdb": [
+        re.compile(
+            r"^.*Duplicate\s+key\s+\"(?P<columns>[^\"]+)\"\s+violates\s+(primary\s+key|unique)\s+constraint.*$",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"^.*Duplicate\s+key.*violates\s+(primary\s+key|unique)\s+constraint.*$",
+            re.IGNORECASE,
+        ),
+    ],
     "mssql": [],
     "bigquery": [],
     "cockroach": [],
@@ -76,7 +85,9 @@ FOREIGN_KEY_REGEXES = {
         re.compile(r"\bORA-0229[12]:", re.IGNORECASE),
     ],
     "spanner+spanner": [],
-    "duckdb": [],
+    "duckdb": [
+        re.compile(r".*Violates\s+foreign\s+key\s+constraint.*", re.IGNORECASE),
+    ],
     "mssql": [],
     "bigquery": [],
     "cockroach": [],
@@ -93,7 +104,9 @@ CHECK_CONSTRAINT_REGEXES = {
         re.compile(r"\bORA-02290:", re.IGNORECASE),
     ],
     "spanner+spanner": [],
-    "duckdb": [],
+    "duckdb": [
+        re.compile(r".*CHECK\s+constraint\s+failed.*", re.IGNORECASE),
+    ],
     "mssql": [],
     "bigquery": [],
     "cockroach": [],
@@ -110,6 +123,15 @@ ORACLE_ERROR_CODE_TO_ERROR_KEY = {
     2291: "foreign_key",
     2292: "foreign_key",
     2290: "check_constraint",
+}
+
+DUCKDB_ERROR_TYPE_TO_KEY = {
+    "duplicate_key": "duplicate_key",
+    "primary_key": "duplicate_key",
+    "unique": "duplicate_key",
+    "foreign_key": "foreign_key",
+    "check_constraint": "check_constraint",
+    "check": "check_constraint",
 }
 
 
@@ -281,6 +303,12 @@ def _get_error_key_by_code(orig: Optional[BaseException], dialect_name: str) -> 
     """
     if orig is None:
         return None
+    error_type = getattr(orig, "error_type", None)
+    if (
+        isinstance(error_type, str)
+        and (key := DUCKDB_ERROR_TYPE_TO_KEY.get("_".join(error_type.strip().lower().split()))) is not None
+    ):
+        return key
     sqlstate = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
     if isinstance(sqlstate, str) and (key := SQLSTATE_TO_ERROR_KEY.get(sqlstate)) is not None:
         return key
@@ -373,7 +401,7 @@ def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
             detail = " - ".join(str(exc_arg) for exc_arg in driver_args) if driver_args else ""
             for key, (regexes, exception) in keys_to_regex.items():
                 for regex in regexes:
-                    if (match := regex.findall(detail)) and match[0]:
+                    if regex.search(detail):
                         raise exception(
                             detail=_get_error_message(error_messages=error_messages, key=key, exc=exc),
                         ) from exc
