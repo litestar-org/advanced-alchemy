@@ -1071,15 +1071,17 @@ async def test_obstore_backend_storage_registry_management(storage_registry: Sto
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_backend_storage_registry_error_handling(storage_registry: StorageRegistry) -> None:
     """Test StorageRegistry error handling."""
-    # Test get_backend with non-existent key
     with pytest.raises(ImproperConfigurationError, match='No storage backend registered with key "nonexistent"'):
         storage_registry.get_backend("nonexistent")
 
-    # Test unregister_backend with non-existent key
-    storage_registry.unregister_backend("nonexistent")  # Should not raise an error
+    storage_registry.unregister_backend("nonexistent")
 
-    # Test set_default_backend with invalid backend
-    storage_registry.set_default_backend("invalid.module.path.Backend")
+    previous_default = storage_registry.default_backend
+    try:
+        storage_registry.set_default_backend("invalid.module.path.Backend")
+        assert storage_registry.default_backend == "invalid.module.path.Backend"
+    finally:
+        storage_registry.set_default_backend(previous_default)
 
 
 @pytest.mark.xdist_group("file_object")

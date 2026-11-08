@@ -74,6 +74,13 @@ class AsyncUserService(SQLAlchemyAsyncRepositoryService[User], FlaskServiceMixin
     repository_type = Repo
 
 
+@pytest.fixture(autouse=True)
+def restore_default_metadata() -> Generator[None, None, None]:
+    """Restore the default None bind_key metadata after each Flask extension test."""
+    yield
+    base.metadata_registry.set(None, base.orm_registry.metadata)
+
+
 @pytest.fixture(scope="session")
 def tmp_path_session(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return cast("Path", tmp_path_factory.mktemp("test_extensions_flask"))

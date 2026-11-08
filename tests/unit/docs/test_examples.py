@@ -8,6 +8,9 @@ from pathlib import Path
 
 import pytest
 
+from advanced_alchemy.base import metadata_registry, orm_registry
+from advanced_alchemy.types import storages
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLES_DIR = REPO_ROOT / "docs" / "examples"
 
@@ -46,6 +49,8 @@ def test_example_module_has_no_inline_comments(example_path: Path) -> None:
 @pytest.mark.parametrize("example_path", EXAMPLE_FILES, ids=EXAMPLE_IDS)
 def test_example_module_executes_main(example_path: Path) -> None:
     """Import each documentation example module and execute its main() entry point."""
+    metadata_registry.set(None, orm_registry.metadata)
+    storages.set_default_backend("advanced_alchemy.types.file_object.backends.obstore.ObstoreBackend")
     module_name = _module_name_for_path(example_path)
     module = importlib.import_module(module_name)
     assert hasattr(module, "__all__")
