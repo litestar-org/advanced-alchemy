@@ -51,6 +51,8 @@ def _count_rside_toc_items(html_text: str) -> int:
         "base.rst",
         "types.rst",
         "cache.rst",
+        "routing.rst",
+        "utils.rst",
     ],
 )
 def test_repository_and_service_reference_directive_hygiene(page: str) -> None:
@@ -64,6 +66,12 @@ def test_repository_and_service_reference_directive_hygiene(page: str) -> None:
     assert ":no-index:" not in content
 
 
+def test_extensions_index_registers_package_module() -> None:
+    """Verify docs/reference/extensions/index.rst registers the advanced_alchemy.extensions module."""
+    content = (REFERENCE_DIR / "extensions" / "index.rst").read_text(encoding="utf-8")
+    assert ".. py:module:: advanced_alchemy.extensions" in content
+
+
 def test_exceptions_reference_contains_qualified_sqlalchemy_xrefs() -> None:
     """Verify docs/reference/exceptions.rst includes qualified SQLAlchemy exception cross-references."""
     content = (REFERENCE_DIR / "exceptions.rst").read_text(encoding="utf-8")
@@ -72,12 +80,20 @@ def test_exceptions_reference_contains_qualified_sqlalchemy_xrefs() -> None:
 
 
 def test_base_module_and_classes_present_in_objects_inv() -> None:
-    """Verify removing :no-index: from base.rst restores advanced_alchemy.base and UUIDBase in objects.inv."""
+    """Verify removing :no-index: from base.rst, routing.rst, and utils.rst restores objects.inv entries."""
     inv_path = BUILD_HTML_DIR / "objects.inv"
     assert inv_path.is_file()
     inventory = InventoryFile.load(_ByteStream(inv_path.read_bytes()), "https://example.com/", urljoin)
-    assert "advanced_alchemy.base" in inventory.get("py:module", {})
-    assert "advanced_alchemy.base.UUIDBase" in inventory.get("py:class", {})
+    modules = inventory.get("py:module", {})
+    classes = inventory.get("py:class", {})
+    assert "advanced_alchemy.base" in modules
+    assert "advanced_alchemy.routing" in modules
+    assert "advanced_alchemy.utils" in modules
+    assert "advanced_alchemy.utils.dataclass" in modules
+    assert "advanced_alchemy.extensions" in modules
+    assert "advanced_alchemy.base.UUIDBase" in classes
+    assert "advanced_alchemy.routing.RoutingAsyncSession" in classes
+    assert "advanced_alchemy.utils.dataclass.Empty" in classes
 
 
 @pytest.mark.parametrize(
@@ -92,6 +108,8 @@ def test_base_module_and_classes_present_in_objects_inv() -> None:
         "base.html",
         "types.html",
         "cache.html",
+        "routing.html",
+        "utils.html",
     ],
 )
 def test_repository_and_service_built_html_and_toc_budgets(html_page: str) -> None:

@@ -2,9 +2,9 @@
 Extensions
 ==========
 
-API Reference for the ``Extensions`` module
+.. py:module:: advanced_alchemy.extensions
 
-.. note:: Private methods and attributes are not included in the API reference.
+API Reference for the ``advanced_alchemy.extensions`` package.
 
 Available API References
 ------------------------
