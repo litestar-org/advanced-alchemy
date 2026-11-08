@@ -284,6 +284,7 @@ PACKAGE_REEXPORT_MODULES: tuple[str, ...] = (
     "advanced_alchemy",
     "advanced_alchemy.base",
     "advanced_alchemy.cache",
+    "advanced_alchemy.cli",
     "advanced_alchemy.config",
     "advanced_alchemy.exceptions",
     "advanced_alchemy.filters",
@@ -297,6 +298,7 @@ PACKAGE_REEXPORT_MODULES: tuple[str, ...] = (
     "advanced_alchemy.types",
     "advanced_alchemy.utils",
     "advanced_alchemy.extensions.litestar",
+    "advanced_alchemy.extensions.litestar.cli",
     "advanced_alchemy.extensions.litestar.dto",
     "advanced_alchemy.extensions.litestar.plugins",
     "advanced_alchemy.extensions.litestar.session",
@@ -981,10 +983,33 @@ def _purge_aliased_inventory_entries(app: Sphinx, env: BuildEnvironment, docname
             del objects[name]
 
 
+def _install_sphinx_click_factory_patch() -> None:
+    """Allow sphinx-click ``.. click::`` directives to resolve callable group factories."""
+    try:
+        from sphinx_click import ext as sphinx_click_ext
+    except ImportError:
+        return
+    if getattr(sphinx_click_ext.ClickDirective, "_aa_factory_patched", False):
+        return
+
+    original_load_module = sphinx_click_ext.ClickDirective._load_module
+
+    def _patched_load_module(self: Any, module_path: str) -> Any:
+        if module_path == "advanced_alchemy.cli:get_alchemy_group":
+            from advanced_alchemy.cli import add_migration_commands
+
+            return add_migration_commands()
+        return original_load_module(self, module_path)
+
+    setattr(sphinx_click_ext.ClickDirective, "_load_module", _patched_load_module)
+    setattr(sphinx_click_ext.ClickDirective, "_aa_factory_patched", True)
+
+
 def setup(app: Sphinx) -> dict[str, bool]:
     """Register Sphinx missing-reference and inventory-alias hooks."""
     _install_python_domain_dual_role_patch()
     _install_autodoc_explicit_members_patch()
+    _install_sphinx_click_factory_patch()
     app.connect("env-before-read-docs", _purge_aliased_inventory_entries)
     app.connect("autodoc-process-signature", _sanitize_recorded_typehints, priority=600)
     app.connect("env-updated", register_inventory_aliases)

@@ -20,6 +20,7 @@ Core Components
     operations
     types
     exceptions
+    cli
     utils
 
 Repository & Services
@@ -30,6 +31,7 @@ Repository & Services
     :caption: Repository & Services
 
     repository
+    repository_memory
     filters
     service
     routing

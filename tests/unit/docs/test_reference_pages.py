@@ -112,6 +112,8 @@ def test_base_module_and_classes_present_in_objects_inv() -> None:
     assert "advanced_alchemy.extensions.sanic" in modules
     assert "advanced_alchemy.extensions.starlette" in modules
     assert "advanced_alchemy.extensions.flask" in modules
+    assert "advanced_alchemy.cli" in modules
+    assert "advanced_alchemy.extensions.litestar.cli" in modules
     assert "advanced_alchemy.base.UUIDBase" in classes
     assert "advanced_alchemy.routing.RoutingAsyncSession" in classes
     assert "advanced_alchemy.utils.dataclass.Empty" in classes
@@ -145,6 +147,8 @@ def test_base_module_and_classes_present_in_objects_inv() -> None:
         "extensions/sanic/index.html",
         "extensions/starlette/index.html",
         "extensions/flask/index.html",
+        "cli.html",
+        "extensions/litestar/cli.html",
     ],
 )
 def test_repository_and_service_built_html_and_toc_budgets(html_page: str) -> None:
@@ -157,3 +161,23 @@ def test_repository_and_service_built_html_and_toc_budgets(html_page: str) -> No
     html_text = html_path.read_text(encoding="utf-8")
     toc_items = _count_rside_toc_items(html_text)
     assert 1 <= toc_items <= MAX_TOC_ITEMS, f"{html_page} has {toc_items} TOC items (expected 1..{MAX_TOC_ITEMS})"
+
+
+def test_cli_click_directives_and_reference_index() -> None:
+    """Verify cli.rst and extensions/litestar/cli.rst use .. click:: directives and index.rst registers them."""
+    cli_content = (REFERENCE_DIR / "cli.rst").read_text(encoding="utf-8")
+    assert ".. py:module:: advanced_alchemy.cli" in cli_content
+    assert ".. click:: advanced_alchemy.cli:get_alchemy_group" in cli_content
+    assert ":prog: alchemy" in cli_content
+    assert ":nested: full" in cli_content
+
+    litestar_cli_content = (REFERENCE_DIR / "extensions" / "litestar" / "cli.rst").read_text(encoding="utf-8")
+    assert ".. py:module:: advanced_alchemy.extensions.litestar.cli" in litestar_cli_content
+    assert ".. click:: advanced_alchemy.extensions.litestar.cli:database_group" in litestar_cli_content
+    assert ":prog: litestar database" in litestar_cli_content
+    assert ":nested: full" in litestar_cli_content
+
+    index_content = (REFERENCE_DIR / "index.rst").read_text(encoding="utf-8")
+    assert "repository_memory" in index_content
+    assert "cli" in index_content
+
