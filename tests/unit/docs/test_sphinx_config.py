@@ -93,12 +93,13 @@ def test_sphinx_conf_has_no_inline_comments() -> None:
 def test_shibuya_custom_css_layout_and_link_contracts() -> None:
     """Verify docs/_static/custom.css enforces Shibuya layout, sapphire links, and scoped code pills."""
     css = CUSTOM_CSS_PATH.read_text(encoding="utf-8")
+    assert "@media (min-width: 1280px)" in css
     assert ".sy-rside" in css
     assert "display: block !important;" in css
     assert "visibility: visible !important;" in css
-    assert ".sy-content" in css
-    assert "max-width: 46rem !important;" in css
-    assert "margin-inline: auto;" in css
+    assert ".sy-main .yue" in css
+    assert "max-width: 72ch;" in css
+    assert ".sy-content" not in css
     assert "#1d4ed8" in css
     assert "#60a5fa" in css
     assert "text-underline-offset: 0.18em;" in css

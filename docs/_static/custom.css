@@ -25,15 +25,24 @@
   --aa-link-dark-hover: #93c5fd;
 }
 
-/* Shibuya reading measure and right-hand TOC visibility */
-.sy-rside {
-  display: block !important;
-  visibility: visible !important;
+/* Shibuya desktop layout: preserve right-hand TOC visibility and readable prose measure */
+@media (min-width: 1280px) {
+  .sy-rside {
+    display: block !important;
+    visibility: visible !important;
+  }
 }
 
-.sy-content {
-  max-width: 46rem !important;
-  margin-inline: auto;
+.sy-main .yue section > p,
+.sy-main .yue section > ul,
+.sy-main .yue section > ol,
+.sy-main .yue > p,
+.sy-main .yue > ul,
+.sy-main .yue > ol,
+.sy-main .yue dd > p,
+.sy-main .yue dd > ul,
+.sy-main .yue dd > ol {
+  max-width: 72ch;
 }
 
 /* Light mode: Use Shibuya's accent color variables */
