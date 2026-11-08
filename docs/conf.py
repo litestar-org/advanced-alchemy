@@ -35,6 +35,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "tools.sphinx_ext.missing_references",
     "tools.sphinx_ext.changelog",
+    "tools.sphinx_ext.llms_txt",
     "myst_parser",
     "auto_pytabs.sphinx_ext",
     "sphinx_copybutton",
@@ -165,6 +166,7 @@ copybutton_prompt_text = "$ "
 html_theme = "shibuya"
 html_title = "Advanced Alchemy"
 html_short_title = "AA"
+llms_txt_base_url = "https://docs.advanced-alchemy.litestar.dev/latest/"
 
 pygments_style = "a11y-light"
 pygments_dark_style = "a11y-high-contrast-dark"

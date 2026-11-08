@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tools.sphinx_ext import changelog, missing_references
+from tools.sphinx_ext import changelog, llms_txt, missing_references
 
 if TYPE_CHECKING:
     from sphinx.application import Sphinx
@@ -13,8 +13,9 @@ __all__ = ("setup",)
 
 
 def setup(app: Sphinx) -> dict[str, str | bool]:
-    """Initialize custom Sphinx extensions for changelog directives and xref resolution."""
+    """Initialize custom Sphinx extensions for changelog directives, xrefs, and llms.txt."""
     ext_config: dict[str, str | bool] = {}
     ext_config.update(missing_references.setup(app))
     ext_config.update(changelog.setup(app))
+    ext_config.update(llms_txt.setup(app))
     return ext_config

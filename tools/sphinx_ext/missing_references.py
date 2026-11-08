@@ -652,8 +652,8 @@ def _install_python_domain_dual_role_patch() -> None:
     def _patched_find_obj(
         self: PythonDomain,
         env: BuildEnvironment,
-        modname: str | None,
-        classname: str | None,
+        modname: str,
+        classname: str,
         name: str,
         type: str | None,
         searchmode: int = 0,
@@ -738,6 +738,10 @@ def _install_autodoc_explicit_members_patch() -> None:
                         annotations[key] = (
                             "list[~advanced_alchemy.repository.OrderingPair] "
                             "| ~advanced_alchemy.repository.OrderingPair | None"
+                        )
+                    elif "ForUpdateArg" in val and "sqlalchemy.sql.selectable.ForUpdateArg" not in val:
+                        annotations[key] = val.replace(
+                            "ForUpdateArg", "~sqlalchemy.sql.selectable.ForUpdateArg"
                         )
 
     setattr(autodoc_directive, "process_documenter_options", _patched_process_documenter_options)
@@ -998,7 +1002,7 @@ def _purge_aliased_inventory_entries(app: Sphinx, env: BuildEnvironment, docname
 def _install_sphinx_click_factory_patch() -> None:
     """Allow sphinx-click ``.. click::`` directives to resolve callable group factories."""
     try:
-        from sphinx_click import ext as sphinx_click_ext
+        sphinx_click_ext: Any = importlib.import_module("sphinx_click.ext")
     except ImportError:
         return
     if getattr(sphinx_click_ext.ClickDirective, "_aa_factory_patched", False):
@@ -1059,4 +1063,8 @@ def _sanitize_recorded_typehints(
                 annotations[key] = (
                     "list[~advanced_alchemy.repository.OrderingPair] "
                     "| ~advanced_alchemy.repository.OrderingPair | None"
+                )
+            elif "ForUpdateArg" in val and "sqlalchemy.sql.selectable.ForUpdateArg" not in val:
+                annotations[key] = val.replace(
+                    "ForUpdateArg", "~sqlalchemy.sql.selectable.ForUpdateArg"
                 )
