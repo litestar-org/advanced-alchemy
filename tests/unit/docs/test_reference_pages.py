@@ -10,9 +10,11 @@ import pytest
 from sphinx.util.inventory import InventoryFile
 
 from tools.docs.update_inventories import _ByteStream
+from tools.docs.verify_docs_artifacts import DocsArtifactVerifier
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-REFERENCE_DIR = REPO_ROOT / "docs" / "reference"
+DOCS_DIR = REPO_ROOT / "docs"
+REFERENCE_DIR = DOCS_DIR / "reference"
 BUILD_HTML_DIR = REPO_ROOT / "docs" / "_build" / "html"
 BUILD_REFERENCE_DIR = BUILD_HTML_DIR / "reference"
 MAX_REFERENCE_HTML_BYTES = 120_000
@@ -95,6 +97,7 @@ def test_exceptions_reference_contains_qualified_sqlalchemy_xrefs() -> None:
 
 def test_base_module_and_classes_present_in_objects_inv() -> None:
     """Verify removing :no-index: from base.rst, routing.rst, utils.rst, and plugins.rst restores objects.inv entries."""
+    DocsArtifactVerifier.ensure_built_html(BUILD_HTML_DIR, DOCS_DIR)
     inv_path = BUILD_HTML_DIR / "objects.inv"
     assert inv_path.is_file()
     inventory = InventoryFile.load(_ByteStream(inv_path.read_bytes()), "https://example.com/", urljoin)
@@ -153,6 +156,7 @@ def test_base_module_and_classes_present_in_objects_inv() -> None:
 )
 def test_repository_and_service_built_html_and_toc_budgets(html_page: str) -> None:
     """Verify built HTML pages stay within the 120 KB byte budget and 14-item right-rail TOC cap."""
+    DocsArtifactVerifier.ensure_built_html(BUILD_HTML_DIR, DOCS_DIR)
     html_path = BUILD_REFERENCE_DIR / html_page
     assert html_path.is_file(), f"Missing built HTML file: {html_path}"
     size_bytes = html_path.stat().st_size

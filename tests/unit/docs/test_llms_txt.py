@@ -32,15 +32,15 @@ def test_llms_structs_instantiation() -> None:
         section="Usage Guides",
         markdown="# Services\n\nService layer overview.",
     )
-    assert entry.section_group == "Usage Guides"
-    assert entry.markdown_body.startswith("# Services")
+    assert entry.section == "Usage Guides"
+    assert entry.markdown.startswith("# Services")
 
     config = LlmsConfig(
         site_title="Advanced Alchemy",
         site_tagline="SQLAlchemy companion library.",
     )
-    assert config.project_title == "Advanced Alchemy"
-    assert config.tagline == "SQLAlchemy companion library."
+    assert config.site_title == "Advanced Alchemy"
+    assert config.site_tagline == "SQLAlchemy companion library."
     assert "search" in config.excluded_docs
 
 

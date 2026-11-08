@@ -13,7 +13,6 @@ from tools.docs.verify_docs_artifacts import (
     ArtifactViolation,
     DocsArtifactVerifier,
     DocsBudgetConfig,
-    VerificationFinding,
     main,
 )
 
@@ -37,6 +36,7 @@ def _write_synthetic_objects_inv(path: Path, entries: list[tuple[str, str, str, 
 
 def test_real_build_passes_docs_artifact_verifier() -> None:
     """Verify the built documentation tree in docs/_build/html passes all artifact checks."""
+    DocsArtifactVerifier.ensure_built_html(BUILD_HTML_DIR, DOCS_DIR)
     verifier = DocsArtifactVerifier(build_dir=BUILD_HTML_DIR, docs_dir=DOCS_DIR)
     violations = verifier.verify_all()
     assert violations == []
@@ -45,7 +45,7 @@ def test_real_build_passes_docs_artifact_verifier() -> None:
 
 def test_objects_inv_detects_missing_module_and_missing_symbol(tmp_path: Path) -> None:
     """Verify check_objects_inv reports missing public modules and missing __all__ symbols."""
-    assert VerificationFinding is ArtifactViolation
+    assert hasattr(ArtifactViolation, "__struct_fields__")
     inv_path = tmp_path / "objects.inv"
     _write_synthetic_objects_inv(
         inv_path,

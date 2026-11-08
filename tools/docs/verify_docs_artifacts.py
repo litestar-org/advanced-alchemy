@@ -5,13 +5,17 @@ from __future__ import annotations
 import argparse
 import importlib
 import inspect
+import multiprocessing
+import os
 import re
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote
 
+import filelock
 import msgspec
+from sphinx.cmd.build import build_main
 from sphinx.util.inventory import InventoryFile
 
 from tools.docs.update_inventories import _ByteStream
@@ -22,7 +26,6 @@ __all__ = (
     "ArtifactViolation",
     "DocsArtifactVerifier",
     "DocsBudgetConfig",
-    "VerificationFinding",
     "main",
 )
 
@@ -123,9 +126,6 @@ class ArtifactViolation(msgspec.Struct, frozen=True, gc=False):
     detail: str
 
 
-VerificationFinding = ArtifactViolation
-
-
 class _HtmlPageInspector(HTMLParser):
     """Extract HTML element IDs, internal href links, and top-level .sy-rside TOC items."""
 
@@ -200,6 +200,31 @@ class DocsArtifactVerifier:
         self.build_dir = build_dir
         self.docs_dir = docs_dir
         self.config = config or DocsBudgetConfig()
+
+    @staticmethod
+    def ensure_built_html(build_dir: Path, docs_dir: Path) -> Path:
+        """Build Sphinx HTML artifacts offline under a file lock if not already present."""
+        inv_path = build_dir / "objects.inv"
+        llms_path = build_dir / "llms-full.txt"
+        if inv_path.is_file() and llms_path.is_file():
+            return build_dir
+        build_root = build_dir.parent
+        build_root.mkdir(parents=True, exist_ok=True)
+        lock_path = build_root / ".pytest-sphinx.lock"
+        with filelock.FileLock(str(lock_path)):
+            if inv_path.is_file() and llms_path.is_file():
+                return build_dir
+            ctx = multiprocessing.get_context("spawn")
+            proc = ctx.Process(
+                target=DocsArtifactVerifier._run_sphinx_build_worker,
+                args=(str(docs_dir), str(build_dir), str(build_root / "doctrees")),
+            )
+            proc.start()
+            proc.join()
+            if proc.exitcode != 0:
+                msg = f"Sphinx HTML build failed with exit code {proc.exitcode}"
+                raise RuntimeError(msg)
+        return build_dir
 
     def verify_all(self) -> list[ArtifactViolation]:
         """Run all artifact, inventory, LLM export, and HTML/RST budget checks."""
@@ -497,6 +522,25 @@ class DocsArtifactVerifier:
                     )
 
         return violations
+
+    @staticmethod
+    def _run_sphinx_build_worker(docs_dir_str: str, build_dir_str: str, doctree_dir_str: str) -> None:
+        """Execute sphinx-build inside an isolated spawned worker process."""
+        os.environ["_ADVANCED_ALCHEMY_DOCS_OFFLINE"] = "1"
+        rc = build_main(
+            [
+                "-b",
+                "html",
+                "-d",
+                doctree_dir_str,
+                "-W",
+                "--keep-going",
+                docs_dir_str,
+                build_dir_str,
+            ],
+        )
+        if rc != 0:
+            raise SystemExit(rc)
 
 
 def main(argv: list[str] | None = None) -> int:

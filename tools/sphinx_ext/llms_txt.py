@@ -51,16 +51,6 @@ class LlmsPageEntry(msgspec.Struct, frozen=True, gc=False):
     section: str
     markdown: str
 
-    @property
-    def section_group(self) -> str:
-        """Return the section group title for compatibility."""
-        return self.section
-
-    @property
-    def markdown_body(self) -> str:
-        """Return the rendered Markdown body for compatibility."""
-        return self.markdown
-
 
 class LlmsConfig(msgspec.Struct, frozen=True, gc=False):
     """Configuration for Sphinx doctree-to-Markdown llms.txt generation."""
@@ -69,21 +59,6 @@ class LlmsConfig(msgspec.Struct, frozen=True, gc=False):
     site_tagline: str = "A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy."
     base_url: str = "https://docs.advanced-alchemy.litestar.dev/latest/"
     excluded_docs: frozenset[str] = frozenset({"genindex", "modindex", "py-modindex", "search"})
-
-    @property
-    def project_title(self) -> str:
-        """Return the site title."""
-        return self.site_title
-
-    @property
-    def tagline(self) -> str:
-        """Return the site tagline."""
-        return self.site_tagline
-
-    @property
-    def excluded_docnames(self) -> tuple[str, ...]:
-        """Return the sorted tuple of excluded document names."""
-        return tuple(sorted(self.excluded_docs))
 
 
 DEFAULT_SECTION_GROUPS: tuple[LlmsSectionGroup, ...] = (

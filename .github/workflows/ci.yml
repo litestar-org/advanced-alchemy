@@ -185,11 +185,11 @@ jobs:
       - name: Verify public docstrings
         run: uv run python -m tools.docs.scan_public_docstrings --check-leaks --check-overloads --check-typeddicts advanced_alchemy
 
-      - name: Test docs examples
-        run: uv run make docs-test
-
       - name: Build docs
         run: uv run make docs
+
+      - name: Test docs examples
+        run: uv run make docs-test
 
       - name: Verify docs artifacts
         run: uv run python -m tools.docs.verify_docs_artifacts --build-dir docs/_build/html --docs-dir docs
