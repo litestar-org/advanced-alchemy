@@ -180,4 +180,3 @@ def test_cli_click_directives_and_reference_index() -> None:
     index_content = (REFERENCE_DIR / "index.rst").read_text(encoding="utf-8")
     assert "repository_memory" in index_content
     assert "cli" in index_content
-

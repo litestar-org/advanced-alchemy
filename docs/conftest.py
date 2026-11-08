@@ -29,9 +29,7 @@ async def engine_fixture() -> AsyncGenerator[AsyncEngine, None]:
 @pytest.fixture(name="db_session")
 async def db_session_fixture(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
     """Provide an AsyncSession bound to the documentation engine fixture."""
-    async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
-        bind=engine, expire_on_commit=False
-    )
+    async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(bind=engine, expire_on_commit=False)
     async with async_session_factory() as session:
         yield session
 

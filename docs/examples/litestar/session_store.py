@@ -1,17 +1,16 @@
 """Litestar server-side session store and StoredObject file storage example."""
 
-from __future__ import annotations
-
-from pathlib import Path
 import tempfile
-from typing import Any
+from http import HTTPStatus
+from pathlib import Path
+from typing import Any, Optional
 from uuid import UUID
 
+import msgspec
 from litestar import Litestar, Request, get, post
 from litestar.middleware.session.server_side import ServerSideSessionConfig
 from litestar.stores.registry import StoreRegistry
 from litestar.testing import TestClient
-import msgspec
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -47,7 +46,7 @@ class AttachmentModel(base.UUIDBase):
 
     __tablename__ = "litestar_attachment"
     title: Mapped[str]
-    document: Mapped[FileObject | None] = mapped_column(
+    document: Mapped[Optional[FileObject]] = mapped_column(
         StoredObject(backend="litestar_docs_fs"),
         nullable=True,
     )
@@ -58,7 +57,7 @@ class AttachmentSchema(msgspec.Struct):
 
     id: UUID
     title: str
-    filename: str | None = None
+    filename: Optional[str] = None
 
 
 class AttachmentRepository(repository.SQLAlchemyAsyncRepository[AttachmentModel]):
@@ -81,7 +80,7 @@ async def set_session_value(key: str, value: str, request: Request[Any, Any, Any
 
 
 @get(path="/session/{key:str}")
-async def get_session_value(key: str, request: Request[Any, Any, Any]) -> dict[str, str | None]:
+async def get_session_value(key: str, request: Request[Any, Any, Any]) -> dict[str, Optional[str]]:
     """Read a key-value pair from the server-side session."""
     return {"key": key, "value": request.session.get(key)}
 
@@ -138,18 +137,24 @@ def main() -> None:
         app = create_app(db_file, storage_dir)
         with TestClient(app=app) as client:
             set_res = client.post("/session/theme/dark")
-            assert set_res.status_code == 201
+            if set_res.status_code != HTTPStatus.CREATED:
+                msg = f"Unexpected session set status: {set_res.status_code}"
+                raise RuntimeError(msg)
 
             get_res = client.get("/session/theme")
-            assert get_res.status_code == 200
-            assert get_res.json() == {"key": "theme", "value": "dark"}
+            if get_res.status_code != HTTPStatus.OK or get_res.json() != {"key": "theme", "value": "dark"}:
+                msg = f"Unexpected session get response: {get_res.status_code} {get_res.text}"
+                raise RuntimeError(msg)
 
             upload_res = client.post(
                 "/attachments",
                 json={"title": "Architecture Spec", "filename": "spec.txt", "content": "Stored via Advanced Alchemy"},
             )
-            assert upload_res.status_code == 201
+            if upload_res.status_code != HTTPStatus.CREATED:
+                msg = f"Unexpected upload status: {upload_res.status_code}"
+                raise RuntimeError(msg)
             payload = upload_res.json()
-            assert payload["title"] == "Architecture Spec"
-            assert payload["filename"] == "spec.txt"
+            if payload["title"] != "Architecture Spec" or payload["filename"] != "spec.txt":
+                msg = f"Unexpected upload payload: {payload}"
+                raise RuntimeError(msg)
         storages.clear_backends()

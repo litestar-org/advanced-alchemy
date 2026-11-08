@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from docutils import nodes
-import pytest
+from docutils.utils import new_document
 from sphinx import addnodes
 
 from tools.sphinx_ext.llms_txt import (
@@ -47,7 +47,7 @@ def test_llms_structs_instantiation() -> None:
 def test_doctree_table_conversion_escapes_pipes() -> None:
     """Verify Docutils tables render to GitHub-Flavored Markdown tables with escaped pipes."""
     generator = SphinxLlmsGenerator(LlmsConfig(site_title="Advanced Alchemy", site_tagline="Companion"))
-    doc = nodes.document("", nodes.Element())
+    doc = new_document("test")
     table = nodes.table()
     tgroup = nodes.tgroup(cols=2)
     table += tgroup
@@ -85,7 +85,7 @@ def test_doctree_link_and_admonition_rendering() -> None:
         base_url="https://docs.advanced-alchemy.litestar.dev/latest/",
     )
     generator = SphinxLlmsGenerator(config)
-    doc = nodes.document("", nodes.Element())
+    doc = new_document("test")
 
     para = nodes.paragraph()
     ref = nodes.reference("", "Repository Guide", refuri="usage/repositories/basics.html")
@@ -97,14 +97,17 @@ def test_doctree_link_and_admonition_rendering() -> None:
     doc += warning_node
 
     rendered = generator.render_doctree(doc)
-    assert "[Repository Guide](https://docs.advanced-alchemy.litestar.dev/latest/usage/repositories/basics.html)" in rendered
+    assert (
+        "[Repository Guide](https://docs.advanced-alchemy.litestar.dev/latest/usage/repositories/basics.html)"
+        in rendered
+    )
     assert "> **Warning**: Detach cached instances before lazy loading." in rendered
 
 
 def test_doctree_api_desc_signature_rendering() -> None:
     """Verify sphinx.addnodes.desc renders symbol heading, signature block, and content."""
     generator = SphinxLlmsGenerator(LlmsConfig(site_title="Advanced Alchemy", site_tagline="Companion"))
-    doc = nodes.document("", nodes.Element())
+    doc = new_document("test")
 
     desc = addnodes.desc(domain="py", objtype="class")
     sig = addnodes.desc_signature("", "")

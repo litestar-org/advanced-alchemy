@@ -215,9 +215,21 @@ html_theme_options = {
             "title": "Learn",
             "url": "usage/index",
             "children": [
-                {"title": "Getting Started", "url": "getting-started", "summary": "Install and configure Advanced Alchemy"},
-                {"title": "Data Modeling", "url": "usage/modeling/index", "summary": "Declarative bases, mixins, and custom types"},
-                {"title": "Repositories", "url": "usage/repositories/index", "summary": "Async and sync data access and filtering"},
+                {
+                    "title": "Getting Started",
+                    "url": "getting-started",
+                    "summary": "Install and configure Advanced Alchemy",
+                },
+                {
+                    "title": "Data Modeling",
+                    "url": "usage/modeling/index",
+                    "summary": "Declarative bases, mixins, and custom types",
+                },
+                {
+                    "title": "Repositories",
+                    "url": "usage/repositories/index",
+                    "summary": "Async and sync data access and filtering",
+                },
                 {"title": "Services", "url": "usage/services", "summary": "Business logic and schema/DTO hydration"},
                 {"title": "Replica Routing", "url": "usage/routing", "summary": "Read/write replica session routing"},
                 {"title": "Caching", "url": "usage/caching", "summary": "Dogpile L2 query and entity caching"},
@@ -228,10 +240,26 @@ html_theme_options = {
             "title": "Frameworks",
             "url": "usage/frameworks/litestar",
             "children": [
-                {"title": "Litestar", "url": "usage/frameworks/litestar", "summary": "Plugin, DI providers, DTOs, and session stores"},
-                {"title": "FastAPI", "url": "usage/frameworks/fastapi", "summary": "Extension, lifespan, and Annotated dependencies"},
-                {"title": "Starlette", "url": "usage/frameworks/starlette", "summary": "ASGI middleware and request-scoped sessions"},
-                {"title": "Sanic", "url": "usage/frameworks/sanic", "summary": "Sanic extension and dependency injection"},
+                {
+                    "title": "Litestar",
+                    "url": "usage/frameworks/litestar",
+                    "summary": "Plugin, DI providers, DTOs, and session stores",
+                },
+                {
+                    "title": "FastAPI",
+                    "url": "usage/frameworks/fastapi",
+                    "summary": "Extension, lifespan, and Annotated dependencies",
+                },
+                {
+                    "title": "Starlette",
+                    "url": "usage/frameworks/starlette",
+                    "summary": "ASGI middleware and request-scoped sessions",
+                },
+                {
+                    "title": "Sanic",
+                    "url": "usage/frameworks/sanic",
+                    "summary": "Sanic extension and dependency injection",
+                },
                 {"title": "Flask", "url": "usage/frameworks/flask", "summary": "WSGI and async Flask integration"},
             ],
         },

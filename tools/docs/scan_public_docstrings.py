@@ -217,8 +217,7 @@ class PublicDocstringScanner:
                         symbol=f"{symbol}.{field_name}",
                         category=category,
                         message=(
-                            f"Public {kind_label} field '{symbol}.{field_name}' "
-                            "is missing an inline PEP 257 docstring."
+                            f"Public {kind_label} field '{symbol}.{field_name}' is missing an inline PEP 257 docstring."
                         ),
                     )
                 )

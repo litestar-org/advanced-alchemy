@@ -126,6 +126,4 @@ def test_operations_module_xref_and_conftest_async_sessionmaker() -> None:
     assert ":mod:`advanced_alchemy.extensions`" not in ops_text
     assert ":mod:`advanced_alchemy.extensions.litestar`" in ops_text
     assert ":meth:`Repository.upsert_many`" not in ops_text
-    assert "async_sessionmaker(\n        bind=engine, expire_on_commit=False\n    )" in conftest_text
-
-
+    assert "async_sessionmaker(bind=engine, expire_on_commit=False)" in conftest_text

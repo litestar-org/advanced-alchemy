@@ -1,10 +1,8 @@
 """Runnable read/write replica routing example for Advanced Alchemy."""
 
-from __future__ import annotations
-
-from pathlib import Path
 import shutil
 import tempfile
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Mapped
@@ -66,7 +64,9 @@ def main() -> None:
             created = repo.add(Article(title="Primary Write"))
             created_id = created.id
             sticky_read = repo.get(created_id)
-            assert sticky_read.title == "Primary Write"
+            if sticky_read.title != "Primary Write":
+                msg = f"Unexpected sticky read title: {sticky_read.title}"
+                raise RuntimeError(msg)
             session.commit()
 
         shutil.copyfile(primary_db, replica_db)
@@ -75,9 +75,12 @@ def main() -> None:
             repo = ArticleRepository(session=session)
             with replica_context():
                 replica_articles = repo.get_many()
-                assert len(replica_articles) == 1
-                assert replica_articles[0].title == "Primary Write"
+                if len(replica_articles) != 1 or replica_articles[0].title != "Primary Write":
+                    msg = f"Unexpected replica articles: {replica_articles}"
+                    raise RuntimeError(msg)
 
             with primary_context():
                 primary_article = repo.get_one(title="Primary Write")
-                assert primary_article.id == created_id
+                if primary_article.id != created_id:
+                    msg = f"Unexpected primary article id: {primary_article.id}"
+                    raise RuntimeError(msg)

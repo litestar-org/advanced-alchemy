@@ -1,14 +1,13 @@
 """Basic Litestar application with Advanced Alchemy service, DTO, and controller integration."""
 
-from __future__ import annotations
-
+from http import HTTPStatus
 from typing import Annotated
 from uuid import UUID
 
+import msgspec
 from litestar import Controller, Litestar, get, post
 from litestar.params import Dependency
 from litestar.testing import TestClient
-import msgspec
 from sqlalchemy.orm import Mapped
 
 from advanced_alchemy.extensions.litestar import (
@@ -134,12 +133,19 @@ def main() -> None:
     app = create_app()
     with TestClient(app=app) as client:
         create_response = client.post("/authors/", json={"name": "Ada Lovelace"})
-        assert create_response.status_code == 201
+        if create_response.status_code != HTTPStatus.CREATED:
+            msg = f"Unexpected create status: {create_response.status_code}"
+            raise RuntimeError(msg)
         created = create_response.json()
-        assert created["name"] == "Ada Lovelace"
+        if created["name"] != "Ada Lovelace":
+            msg = f"Unexpected created author name: {created['name']}"
+            raise RuntimeError(msg)
 
         list_response = client.get("/authors/?currentPage=1&pageSize=10")
-        assert list_response.status_code == 200
+        if list_response.status_code != HTTPStatus.OK:
+            msg = f"Unexpected list status: {list_response.status_code}"
+            raise RuntimeError(msg)
         payload = list_response.json()
-        assert payload["total"] == 1
-        assert payload["items"][0]["name"] == "Ada Lovelace"
+        if payload["total"] != 1 or payload["items"][0]["name"] != "Ada Lovelace":
+            msg = f"Unexpected list payload: {payload}"
+            raise RuntimeError(msg)

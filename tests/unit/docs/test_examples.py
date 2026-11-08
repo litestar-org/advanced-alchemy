@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import importlib
-from pathlib import Path
 import tokenize
+from pathlib import Path
 
 import pytest
 
@@ -16,11 +16,7 @@ def _discover_example_files() -> list[Path]:
     """Discover all runnable example Python files under docs/examples/."""
     if not EXAMPLES_DIR.exists():
         return []
-    return sorted(
-        path
-        for path in EXAMPLES_DIR.rglob("*.py")
-        if path.name != "__init__.py"
-    )
+    return sorted(path for path in EXAMPLES_DIR.rglob("*.py") if path.name != "__init__.py")
 
 
 def _module_name_for_path(path: Path) -> str:

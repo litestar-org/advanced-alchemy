@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 import zlib
+from pathlib import Path
 
 import pytest
 
@@ -25,11 +25,11 @@ DOCS_DIR = REPO_ROOT / "docs"
 def _write_synthetic_objects_inv(path: Path, entries: list[tuple[str, str, str, str]]) -> None:
     """Write a valid Sphinx v2 objects.inv file containing the supplied entries."""
     header = (
-        "# Sphinx inventory version 2\n"
-        "# Project: Advanced Alchemy\n"
-        "# Version: 1.0\n"
-        "# The remainder of this file is compressed using zlib.\n"
-    ).encode("utf-8")
+        b"# Sphinx inventory version 2\n"
+        b"# Project: Advanced Alchemy\n"
+        b"# Version: 1.0\n"
+        b"# The remainder of this file is compressed using zlib.\n"
+    )
     body_lines = [f"{name} {role} 1 {uri} -\n" for name, role, uri, _disp in entries]
     compressed = zlib.compress("".join(body_lines).encode("utf-8"))
     path.write_bytes(header + compressed)

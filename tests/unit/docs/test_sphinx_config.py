@@ -85,9 +85,7 @@ def test_sphinx_conf_has_no_inline_comments() -> None:
     """Verify docs/conf.py contains zero inline # comments."""
     source = CONF_PATH.read_text(encoding="utf-8")
     comments = [
-        tok.string
-        for tok in tokenize.generate_tokens(io.StringIO(source).readline)
-        if tok.type == tokenize.COMMENT
+        tok.string for tok in tokenize.generate_tokens(io.StringIO(source).readline) if tok.type == tokenize.COMMENT
     ]
     assert comments == []
 
@@ -118,9 +116,7 @@ def test_build_docs_cleanup_and_convert_docs_removed() -> None:
     assert "checkout" not in func_names
     assert "_ADVANCED_ALCHEMY_DOCS_BUILD_VERSION" in source
     comments = [
-        tok.string
-        for tok in tokenize.generate_tokens(io.StringIO(source).readline)
-        if tok.type == tokenize.COMMENT
+        tok.string for tok in tokenize.generate_tokens(io.StringIO(source).readline) if tok.type == tokenize.COMMENT
     ]
     assert comments == []
 
@@ -133,4 +129,3 @@ def test_pyproject_includes_tools_and_docs_in_mypy_and_pyright() -> None:
     assert '"docs"' in pyproject_text
     assert '"docs/conftest.py"' not in pyproject_text
     assert 'include = ["advanced_alchemy", "tools", "docs"]' in pyproject_text
-

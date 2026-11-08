@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import argparse
-from html.parser import HTMLParser
 import importlib
 import inspect
-from pathlib import Path
 import re
 import sys
+from html.parser import HTMLParser
+from pathlib import Path
 from urllib.parse import unquote
 
 import msgspec
@@ -17,11 +17,11 @@ from sphinx.util.inventory import InventoryFile
 from tools.docs.update_inventories import _ByteStream
 
 __all__ = (
+    "LITESTAR_REQUIRED_XREFS",
+    "UNEXPANDED_RST_DIRECTIVES",
     "ArtifactViolation",
     "DocsArtifactVerifier",
     "DocsBudgetConfig",
-    "LITESTAR_REQUIRED_XREFS",
-    "UNEXPANDED_RST_DIRECTIVES",
     "VerificationFinding",
     "main",
 )
@@ -223,15 +223,15 @@ class DocsArtifactVerifier:
         for role, bucket in inv_data.items():
             if role.startswith("py:"):
                 all_py_symbols.update(bucket.keys())
-            for key in bucket:
-                if "advanced_alchemy." in key[len("advanced_alchemy.") :]:
-                    violations.append(
-                        ArtifactViolation(
-                            "objects.inv",
-                            key,
-                            f"Double-prefixed inventory entry in {role}: {key}",
-                        )
-                    )
+            violations.extend(
+                ArtifactViolation(
+                    "objects.inv",
+                    key,
+                    f"Double-prefixed inventory entry in {role}: {key}",
+                )
+                for key in bucket
+                if "advanced_alchemy." in key[len("advanced_alchemy.") :]
+            )
 
         for mod_name in self.config.required_public_modules:
             if mod_name not in py_modules:
@@ -284,51 +284,49 @@ class DocsArtifactVerifier:
                     ArtifactViolation("llms.txt", str(file_path), f"Missing required artifact {file_path.name}")
                 )
             elif file_path.stat().st_size == 0:
-                violations.append(
-                    ArtifactViolation("llms.txt", str(file_path), f"Artifact {file_path.name} is empty")
-                )
+                violations.append(ArtifactViolation("llms.txt", str(file_path), f"Artifact {file_path.name} is empty"))
 
         if llms_path.is_file() and llms_path.stat().st_size > 0:
             llms_text = llms_path.read_text(encoding="utf-8")
-            for required_section in ("## Usage Guides", "## API Reference"):
-                if required_section not in llms_text:
-                    violations.append(
-                        ArtifactViolation(
-                            "llms.txt",
-                            str(llms_path),
-                            f"Missing section heading '{required_section}' in llms.txt",
-                        )
-                    )
-            for directive in UNEXPANDED_RST_DIRECTIVES:
-                if directive in llms_text:
-                    violations.append(
-                        ArtifactViolation(
-                            "llms.txt",
-                            str(llms_path),
-                            f"Unexpanded RST directive '{directive}' leaked into llms.txt",
-                        )
-                    )
+            violations.extend(
+                ArtifactViolation(
+                    "llms.txt",
+                    str(llms_path),
+                    f"Missing section heading '{required_section}' in llms.txt",
+                )
+                for required_section in ("## Usage Guides", "## API Reference")
+                if required_section not in llms_text
+            )
+            violations.extend(
+                ArtifactViolation(
+                    "llms.txt",
+                    str(llms_path),
+                    f"Unexpanded RST directive '{directive}' leaked into llms.txt",
+                )
+                for directive in UNEXPANDED_RST_DIRECTIVES
+                if directive in llms_text
+            )
 
         if llms_full_path.is_file() and llms_full_path.stat().st_size > 0:
             full_text = llms_full_path.read_text(encoding="utf-8")
-            for required_symbol in ("SQLAlchemyAsyncRepository", "SQLAlchemyAsyncRepositoryService", "alchemy"):
-                if required_symbol not in full_text:
-                    violations.append(
-                        ArtifactViolation(
-                            "llms-full.txt",
-                            str(llms_full_path),
-                            f"Missing expanded symbol '{required_symbol}' in llms-full.txt",
-                        )
-                    )
-            for directive in UNEXPANDED_RST_DIRECTIVES:
-                if directive in full_text:
-                    violations.append(
-                        ArtifactViolation(
-                            "llms-full.txt",
-                            str(llms_full_path),
-                            f"Unexpanded RST directive '{directive}' leaked into llms-full.txt",
-                        )
-                    )
+            violations.extend(
+                ArtifactViolation(
+                    "llms-full.txt",
+                    str(llms_full_path),
+                    f"Missing expanded symbol '{required_symbol}' in llms-full.txt",
+                )
+                for required_symbol in ("SQLAlchemyAsyncRepository", "SQLAlchemyAsyncRepositoryService", "alchemy")
+                if required_symbol not in full_text
+            )
+            violations.extend(
+                ArtifactViolation(
+                    "llms-full.txt",
+                    str(llms_full_path),
+                    f"Unexpanded RST directive '{directive}' leaked into llms-full.txt",
+                )
+                for directive in UNEXPANDED_RST_DIRECTIVES
+                if directive in full_text
+            )
 
         manifest_json = self.build_dir / "_static" / "docs" / "manifest.json"
         chunks_dir = self.build_dir / "_static" / "docs" / "chunks"

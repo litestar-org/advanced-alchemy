@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import re
 import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urljoin
 
-from docutils import nodes
 import msgspec
+from docutils import nodes
 from sphinx import addnodes
 from sphinx.application import Sphinx
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
     from sphinx.environment import BuildEnvironment
 
 __all__ = (
@@ -65,9 +66,7 @@ class LlmsConfig(msgspec.Struct, frozen=True, gc=False):
     """Configuration for Sphinx doctree-to-Markdown llms.txt generation."""
 
     site_title: str = "Advanced Alchemy"
-    site_tagline: str = (
-        "A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy."
-    )
+    site_tagline: str = "A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy."
     base_url: str = "https://docs.advanced-alchemy.litestar.dev/latest/"
     excluded_docs: frozenset[str] = frozenset({"genindex", "modindex", "py-modindex", "search"})
 
@@ -113,6 +112,12 @@ DEFAULT_SECTION_GROUPS: tuple[LlmsSectionGroup, ...] = (
         exact_docnames=("changelog", "releases", "contribution-guide"),
     ),
 )
+
+_MIN_SUMMARY_LENGTH = 12
+_MAX_SUMMARY_LENGTH = 220
+_SUMMARY_TRUNCATE_AT = 217
+_TOCTREE_ENTRY_LEN = 2
+_SKIPPED_BLOCK_NODES = (nodes.comment, nodes.substitution_definition, nodes.target, nodes.raw)
 
 
 class SphinxLlmsGenerator:
@@ -180,13 +185,13 @@ class SphinxLlmsGenerator:
             if self._is_inside_admonition_or_table(para):
                 continue
             text = self._clean_whitespace(para.astext())
-            if text and len(text) >= 12:
+            if text and len(text) >= _MIN_SUMMARY_LENGTH:
                 summary = text
                 break
         if not summary:
             summary = f"Documentation for {title}."
-        if len(summary) > 220:
-            summary = summary[:217].rstrip() + "..."
+        if len(summary) > _MAX_SUMMARY_LENGTH:
+            summary = summary[:_SUMMARY_TRUNCATE_AT].rstrip() + "..."
         return title, summary
 
     def render_doctree(self, doctree: nodes.document, docname: str = "") -> str:
@@ -228,7 +233,7 @@ class SphinxLlmsGenerator:
         for docname in self.collect_ordered_docnames(env):
             try:
                 doctree = env.get_and_resolve_doctree(docname, app.builder)
-            except Exception:
+            except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 doctree = env.get_doctree(docname)
             fallback_title = docname.rsplit("/", 1)[-1].replace("-", " ").replace("_", " ").title()
             if docname == "index":
@@ -274,8 +279,7 @@ class SphinxLlmsGenerator:
                 continue
             lines.append(f"## {section_title}")
             lines.append("")
-            for entry in section_entries:
-                lines.append(f"- [{entry.title}]({entry.url}): {entry.summary}")
+            lines.extend(f"- [{entry.title}]({entry.url}): {entry.summary}" for entry in section_entries)
             lines.append("")
         return "\n".join(lines).strip() + "\n"
 
@@ -286,8 +290,7 @@ class SphinxLlmsGenerator:
             "",
             f"> {self.config.site_tagline}",
         ]
-        for entry in entries:
-            chunks.append(f"Source: {entry.url}\n\n{entry.markdown}")
+        chunks.extend(f"Source: {entry.url}\n\n{entry.markdown}" for entry in entries)
         return "\n\n".join(chunks).strip() + "\n"
 
     def write_llms_files(
@@ -308,9 +311,7 @@ class SphinxLlmsGenerator:
     @classmethod
     def from_sphinx_app(cls, app: Sphinx) -> SphinxLlmsGenerator:
         """Construct a SphinxLlmsGenerator configured from a Sphinx application instance."""
-        site_title = getattr(app.config, "html_title", None) or getattr(
-            app.config, "project", "Advanced Alchemy"
-        )
+        site_title = getattr(app.config, "html_title", None) or getattr(app.config, "project", "Advanced Alchemy")
         base_url = getattr(
             app.config,
             "llms_txt_base_url",
@@ -384,18 +385,29 @@ class SphinxLlmsGenerator:
         return blocks
 
     def _render_block_node(self, node: nodes.Node, *, depth: int, docname: str) -> str:
-        if isinstance(node, (nodes.comment, nodes.substitution_definition, nodes.target, nodes.raw)):
+        if isinstance(node, _SKIPPED_BLOCK_NODES):
             return ""
         if isinstance(node, nodes.section):
             return self._render_section(node, depth=depth, docname=docname)
-        if isinstance(node, nodes.title):
-            heading_prefix = "#" * min(max(depth, 1), 6)
-            title_text = self._render_inline_children(node.children, docname=docname).strip()
-            return f"{heading_prefix} {title_text}" if title_text else ""
-        if isinstance(node, nodes.paragraph):
-            return self._render_inline_children(node.children, docname=docname).strip()
+        if isinstance(node, (nodes.title, nodes.paragraph)):
+            return self._render_title_or_paragraph(node, depth=depth, docname=docname)
         if isinstance(node, nodes.literal_block) or type(node).__name__ == "mermaid":
             return self._render_literal_block(node)
+        if isinstance(
+            node,
+            (nodes.bullet_list, nodes.enumerated_list, nodes.definition_list, nodes.field_list, nodes.table),
+        ):
+            return self._render_collection_node(node, docname=docname)
+        return self._render_structural_node(node, depth=depth, docname=docname)
+
+    def _render_title_or_paragraph(self, node: nodes.Node, *, depth: int, docname: str) -> str:
+        text = self._render_inline_children(node.children, docname=docname).strip()
+        if isinstance(node, nodes.title):
+            heading_prefix = "#" * min(max(depth, 1), 6)
+            return f"{heading_prefix} {text}" if text else ""
+        return text
+
+    def _render_collection_node(self, node: nodes.Node, *, docname: str) -> str:
         if isinstance(node, nodes.bullet_list):
             return self._render_list(node, ordered=False, docname=docname)
         if isinstance(node, nodes.enumerated_list):
@@ -406,6 +418,9 @@ class SphinxLlmsGenerator:
             return self._render_field_list(node, docname=docname)
         if isinstance(node, nodes.table):
             return self._render_table(node, docname=docname)
+        return ""
+
+    def _render_structural_node(self, node: nodes.Node, *, depth: int, docname: str) -> str:
         if isinstance(node, addnodes.desc):
             return self._render_desc(node, depth=depth, docname=docname)
         if isinstance(node, addnodes.toctree):
@@ -413,9 +428,7 @@ class SphinxLlmsGenerator:
         if isinstance(node, nodes.Admonition):
             return self._render_admonition(node, depth=depth, docname=docname)
         if isinstance(node, nodes.block_quote):
-            inner = "\n\n".join(
-                self._render_block_children(node.children, depth=depth, docname=docname)
-            )
+            inner = "\n\n".join(self._render_block_children(node.children, depth=depth, docname=docname))
             return self._prefix_blockquote(inner) if inner else ""
         if isinstance(node, (nodes.container, nodes.compound, nodes.Element)):
             return self._render_container(node, depth=depth, docname=docname)
@@ -465,13 +478,9 @@ class SphinxLlmsGenerator:
             nested_lists: list[str] = []
             for child in item.children:
                 if isinstance(child, nodes.bullet_list):
-                    nested_lists.append(
-                        self._render_list(child, ordered=False, docname=docname, indent=indent + 1)
-                    )
+                    nested_lists.append(self._render_list(child, ordered=False, docname=docname, indent=indent + 1))
                 elif isinstance(child, nodes.enumerated_list):
-                    nested_lists.append(
-                        self._render_list(child, ordered=True, docname=docname, indent=indent + 1)
-                    )
+                    nested_lists.append(self._render_list(child, ordered=True, docname=docname, indent=indent + 1))
                 else:
                     rendered = self._render_block_node(child, depth=4, docname=docname)
                     if rendered:
@@ -479,9 +488,7 @@ class SphinxLlmsGenerator:
             first_block = " ".join(block.strip() for block in item_blocks if block.strip())
             if first_block:
                 lines.append(f"{indent_prefix}{marker}{first_block}")
-            for nested in nested_lists:
-                if nested:
-                    lines.append(nested)
+            lines.extend(nested for nested in nested_lists if nested)
         return "\n".join(lines)
 
     def _render_definition_list(self, node: nodes.definition_list, *, docname: str) -> str:
@@ -495,9 +502,7 @@ class SphinxLlmsGenerator:
             defs: list[str] = []
             for child in item.children:
                 if isinstance(child, nodes.definition):
-                    defs.extend(
-                        self._render_block_children(child.children, depth=4, docname=docname)
-                    )
+                    defs.extend(self._render_block_children(child.children, depth=4, docname=docname))
             term_label = ", ".join(t for t in terms if t)
             def_text = " ".join(d for d in defs if d)
             if term_label and def_text:
@@ -527,11 +532,9 @@ class SphinxLlmsGenerator:
         body_rows: list[list[str]] = []
 
         for thead in table.findall(nodes.thead):
-            for row in thead.findall(nodes.row):
-                header_rows.append(self._extract_table_row(row, docname=docname))
+            header_rows.extend(self._extract_table_row(row, docname=docname) for row in thead.findall(nodes.row))
         for tbody in table.findall(nodes.tbody):
-            for row in tbody.findall(nodes.row):
-                body_rows.append(self._extract_table_row(row, docname=docname))
+            body_rows.extend(self._extract_table_row(row, docname=docname) for row in tbody.findall(nodes.row))
 
         if not header_rows and body_rows:
             header_rows = [body_rows.pop(0)]
@@ -561,9 +564,7 @@ class SphinxLlmsGenerator:
         for entry in row.children:
             if not isinstance(entry, nodes.entry):
                 continue
-            rendered = " ".join(
-                self._render_block_children(entry.children, depth=4, docname=docname)
-            )
+            rendered = " ".join(self._render_block_children(entry.children, depth=4, docname=docname))
             cleaned = self._clean_whitespace(rendered).replace("|", r"\|")
             cells.append(cleaned)
         return cells
@@ -657,7 +658,7 @@ class SphinxLlmsGenerator:
             return ""
         lines: list[str] = []
         for item in raw_entries:
-            if not isinstance(item, tuple) or len(item) != 2:
+            if not isinstance(item, tuple) or len(item) != _TOCTREE_ENTRY_LEN:
                 continue
             title, target = item
             target_str = str(target)
@@ -667,9 +668,7 @@ class SphinxLlmsGenerator:
             else:
                 resolved = self.resolve_href(f"{target_str}.html", current_docname=docname)
                 label = (
-                    str(title)
-                    if title
-                    else target_str.rsplit("/", 1)[-1].replace("-", " ").replace("_", " ").title()
+                    str(title) if title else target_str.rsplit("/", 1)[-1].replace("-", " ").replace("_", " ").title()
                 )
                 lines.append(f"- [{label}]({resolved})")
         return "\n".join(lines)
@@ -691,9 +690,7 @@ class SphinxLlmsGenerator:
                     body_children.extend(child.children)
                 else:
                     body_children.append(child)
-            rendered_body = "\n\n".join(
-                self._render_block_children(body_children, depth=depth, docname=docname)
-            )
+            rendered_body = "\n\n".join(self._render_block_children(body_children, depth=depth, docname=docname))
             if label and rendered_body:
                 return f"**{label}**\n\n{rendered_body}"
             return rendered_body
@@ -715,32 +712,31 @@ class SphinxLlmsGenerator:
         if isinstance(node, (nodes.literal, nodes.title_reference)):
             text = self._clean_whitespace(node.astext())
             return f"`{text}`" if text else ""
-        if isinstance(node, nodes.strong):
+        if isinstance(node, (nodes.strong, nodes.emphasis)):
             text = self._render_inline_children(node.children, docname=docname).strip()
-            return f"**{text}**" if text else ""
-        if isinstance(node, nodes.emphasis):
-            text = self._render_inline_children(node.children, docname=docname).strip()
-            return f"*{text}*" if text else ""
+            wrapper = "**" if isinstance(node, nodes.strong) else "*"
+            return f"{wrapper}{text}{wrapper}" if text else ""
         if isinstance(node, nodes.reference):
-            raw_ref_classes: Sequence[str] = node.get("classes", [])
-            classes: set[str] = {str(c) for c in raw_ref_classes}
-            if "headerlink" in classes:
-                return ""
-            label = self._render_inline_children(node.children, docname=docname).strip()
-            if not label:
-                label = self._clean_whitespace(node.astext())
-            refuri = str(node.get("refuri", ""))
-            refid = str(node.get("refid", ""))
-            if refuri:
-                resolved = self.resolve_href(refuri, current_docname=docname)
-                return f"[{label}]({resolved})" if label else resolved
-            if refid:
-                resolved = self.resolve_href(f"#{refid}", current_docname=docname)
-                return f"[{label}]({resolved})" if label else resolved
-            return label
+            return self._render_reference_node(node, docname=docname)
         if isinstance(node, nodes.Element):
             return self._render_inline_children(node.children, docname=docname)
         return self._clean_whitespace(node.astext())
+
+    def _render_reference_node(self, node: nodes.reference, *, docname: str) -> str:
+        raw_ref_classes: Sequence[str] = node.get("classes", [])
+        classes: set[str] = {str(c) for c in raw_ref_classes}
+        if "headerlink" in classes:
+            return ""
+        label = self._render_inline_children(node.children, docname=docname).strip() or self._clean_whitespace(
+            node.astext()
+        )
+        refuri = str(node.get("refuri", ""))
+        refid = str(node.get("refid", ""))
+        target = refuri or (f"#{refid}" if refid else "")
+        if not target:
+            return label
+        resolved = self.resolve_href(target, current_docname=docname)
+        return f"[{label}]({resolved})" if label else resolved
 
     @staticmethod
     def _prefix_blockquote(text: str) -> str:

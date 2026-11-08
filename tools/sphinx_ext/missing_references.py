@@ -37,36 +37,40 @@ __all__ = (
     "setup",
 )
 
-_TYPEVAR_CLASS_NAMES: frozenset[str] = frozenset({
-    "TypeVar",
-    "ParamSpec",
-    "TypeVarTuple",
-    "TypeAliasType",
-    "_TypeAliasForm",
-})
+_TYPEVAR_CLASS_NAMES: frozenset[str] = frozenset(
+    {
+        "TypeVar",
+        "ParamSpec",
+        "TypeVarTuple",
+        "TypeAliasType",
+        "_TypeAliasForm",
+    }
+)
 
-CLASS_ROLE_DATA_SUFFIXES: frozenset[str] = frozenset({
-    "BigIntIdentity",
-    "JsonB",
-    "EngineT",
-    "SessionT",
-    "SessionMakerT",
-    "ConnectionT",
-    "FilterTypes",
-    "EmptyType",
-    "ModelT",
-    "ModelDTOT",
-    "SelectT",
-    "RowT",
-    "StorageBackendT",
-    "CommitStrategy",
-    "RoutingStrategy",
-    "TypeEncodersMap",
-    "TypeDecodersSequence",
-    "ErrorMessages",
-    "FilterMap",
-    "LogicalOperatorMap",
-})
+CLASS_ROLE_DATA_SUFFIXES: frozenset[str] = frozenset(
+    {
+        "BigIntIdentity",
+        "JsonB",
+        "EngineT",
+        "SessionT",
+        "SessionMakerT",
+        "ConnectionT",
+        "FilterTypes",
+        "EmptyType",
+        "ModelT",
+        "ModelDTOT",
+        "SelectT",
+        "RowT",
+        "StorageBackendT",
+        "CommitStrategy",
+        "RoutingStrategy",
+        "TypeEncodersMap",
+        "TypeDecodersSequence",
+        "ErrorMessages",
+        "FilterMap",
+        "LogicalOperatorMap",
+    }
+)
 
 LITESTAR_OBJECT_ALIAS_GROUPS: tuple[tuple[str, ...], ...] = (
     (
@@ -347,6 +351,43 @@ def _get_typevar_assigned_names(nodes: list[ast.stmt]) -> set[str]:
     return names
 
 
+def _append_source_file(source_files: list[str], target_obj: Any) -> None:
+    """Append the source file path of ``target_obj`` to ``source_files`` if available and unique."""
+    if target_obj is None:
+        return
+    try:
+        src_file = inspect.getsourcefile(target_obj)
+    except TypeError:
+        return
+    if src_file and src_file not in source_files:
+        source_files.append(src_file)
+
+
+def _collect_reference_source_files(module: Any, reference_target_source_obj: str) -> list[str]:
+    """Collect module, MRO class, and member source file paths for AST import inspection."""
+    source_files: list[str] = []
+    _append_source_file(source_files, module)
+    if not reference_target_source_obj:
+        return source_files
+
+    parts = reference_target_source_obj.split(".")
+    obj = getattr(module, parts[0], None)
+    if obj is None:
+        return source_files
+
+    for candidate in (obj, *getattr(obj, "__mro__", ())):
+        cand_mod = getattr(candidate, "__module__", "") or ""
+        if not cand_mod or cand_mod.startswith("advanced_alchemy"):
+            _append_source_file(source_files, candidate)
+
+    if len(parts) > 1:
+        member = getattr(obj, parts[1], None)
+        if isinstance(member, property):
+            member = member.fget
+        _append_source_file(source_files, member)
+    return source_files
+
+
 @cache
 def get_module_global_imports(module_import_path: str, reference_target_source_obj: str = "") -> set[str]:
     """Return global and ``if TYPE_CHECKING:`` imported names for ``module_import_path``."""
@@ -355,42 +396,8 @@ def get_module_global_imports(module_import_path: str, reference_target_source_o
     except ImportError:
         return set()
 
-    source_files: list[str] = []
-    try:
-        mod_file = inspect.getsourcefile(module)
-        if mod_file:
-            source_files.append(mod_file)
-    except TypeError:
-        pass
-
-    if reference_target_source_obj:
-        parts = reference_target_source_obj.split(".")
-        obj = getattr(module, parts[0], None)
-        if obj is not None:
-            for candidate in (obj, *getattr(obj, "__mro__", ())):
-                cand_mod = getattr(candidate, "__module__", "") or ""
-                if cand_mod and not cand_mod.startswith("advanced_alchemy"):
-                    continue
-                try:
-                    cand_file = inspect.getsourcefile(candidate)
-                    if cand_file and cand_file not in source_files:
-                        source_files.append(cand_file)
-                except TypeError:
-                    pass
-            if len(parts) > 1:
-                member = getattr(obj, parts[1], None)
-                if isinstance(member, property):
-                    member = member.fget
-                if member is not None:
-                    try:
-                        mem_file = inspect.getsourcefile(member)
-                        if mem_file and mem_file not in source_files:
-                            source_files.append(mem_file)
-                    except TypeError:
-                        pass
-
     imported_names: set[str] = set()
-    for src in source_files:
+    for src in _collect_reference_source_files(module, reference_target_source_obj):
         tree = _get_module_ast(src)
         import_nodes = _get_import_nodes(tree.body)
         imported_names.update(path.asname or path.name for import_node in import_nodes for path in import_node.names)
@@ -459,9 +466,7 @@ def _propagate_member_aliases(
     """Propagate documented class attribute and method entries from ``canonical_name`` to ``alias_name``."""
     prefix = f"{canonical_name}."
     member_entries = [
-        (obj_name[len(prefix) :], entry)
-        for obj_name, entry in list(objects.items())
-        if obj_name.startswith(prefix)
+        (obj_name[len(prefix) :], entry) for obj_name, entry in list(objects.items()) if obj_name.startswith(prefix)
     ]
     for suffix, entry in member_entries:
         alias_member = f"{alias_name}.{suffix}"
@@ -526,50 +531,37 @@ def _register_undocumented_class_members(objects: dict[str, ObjectEntry]) -> Non
             objects[member_fullname] = ObjectEntry(entry.docname, entry.node_id, member_objtype, True)
 
 
-def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
-    """Populate Python domain object aliases for package re-exports and Litestar cross-references."""
-    del app
-    py_domain = env.domains.get("py")
-    objects = cast("dict[str, ObjectEntry] | None", getattr(py_domain, "objects", None))
-    if objects is None:
-        return []
-
-    _register_undocumented_class_members(objects)
-
-    for group in LITESTAR_OBJECT_ALIAS_GROUPS:
-        _register_alias_group(objects, group)
-
+def _collect_reexport_identity_groups() -> dict[tuple[int, str], list[str]]:
+    """Group re-exported symbols across ``PACKAGE_REEXPORT_MODULES`` by runtime object identity."""
     reexport_by_identity: dict[tuple[int, str], list[str]] = {}
     for pkg_name in PACKAGE_REEXPORT_MODULES:
         try:
             pkg = importlib.import_module(pkg_name)
         except ImportError:
             continue
-        exported_names = getattr(pkg, "__all__", ())
-        for sym_name in exported_names:
+        for sym_name in getattr(pkg, "__all__", ()):
             sym = getattr(pkg, sym_name, None)
             if sym is None or inspect.ismodule(sym):
                 continue
-            origin_module = getattr(sym, "__module__", None)
-            identity_key = (id(sym), sym_name)
-            candidates = reexport_by_identity.setdefault(identity_key, [])
-            pkg_full = f"{pkg_name}.{sym_name}"
-            if pkg_full not in candidates:
-                candidates.append(pkg_full)
-            if isinstance(origin_module, str) and origin_module.startswith("advanced_alchemy"):
-                origin_full = f"{origin_module}.{sym_name}"
-                if origin_full not in candidates:
-                    candidates.append(origin_full)
-                parent_mod = origin_module.rsplit(".", 1)[0]
-                parent_full = f"{parent_mod}.{sym_name}"
-                if parent_full not in candidates:
-                    candidates.append(parent_full)
+            candidates = reexport_by_identity.setdefault((id(sym), sym_name), [])
+            for candidate_name in _candidate_reexport_names(pkg_name, sym_name, getattr(sym, "__module__", None)):
+                if candidate_name not in candidates:
+                    candidates.append(candidate_name)
+    return reexport_by_identity
 
-    for candidates in reexport_by_identity.values():
-        if len(candidates) > 1:
-            _register_alias_group(objects, tuple(candidates))
 
-    modules_map = cast("dict[str, Any]", getattr(py_domain, "modules", {}))
+def _candidate_reexport_names(pkg_name: str, sym_name: str, origin_module: Any) -> list[str]:
+    """Build candidate qualified names for a re-exported package symbol."""
+    names = [f"{pkg_name}.{sym_name}"]
+    if isinstance(origin_module, str) and origin_module.startswith("advanced_alchemy"):
+        names.append(f"{origin_module}.{sym_name}")
+        parent_mod = origin_module.rsplit(".", 1)[0]
+        names.append(f"{parent_mod}.{sym_name}")
+    return names
+
+
+def _register_fallback_module_exports(objects: dict[str, ObjectEntry], modules_map: dict[str, Any]) -> None:
+    """Register fallback module-level entries for ``__all__`` exports not yet present in ``objects``."""
     for pkg_name in PACKAGE_REEXPORT_MODULES:
         mod_entry = modules_map.get(pkg_name)
         if mod_entry is None:
@@ -587,6 +579,9 @@ def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
                 fallback_type = "class" if isinstance(sym, type) else ("function" if callable(sym) else "data")
                 objects[pkg_full] = ObjectEntry(mod_entry.docname, mod_entry.node_id, fallback_type, True)
 
+
+def _register_litestar_submodule_aliases(objects: dict[str, ObjectEntry]) -> None:
+    """Mirror core submodule symbols under ``advanced_alchemy.extensions.litestar.<submod>.*``."""
     litestar_submodules = (
         "base",
         "exceptions",
@@ -603,10 +598,31 @@ def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
         dst_prefix = f"advanced_alchemy.extensions.litestar.{submod}."
         for obj_name, entry in list(objects.items()):
             if obj_name.startswith(src_prefix):
-                suffix = obj_name[len(src_prefix) :]
-                alias_name = f"{dst_prefix}{suffix}"
+                alias_name = f"{dst_prefix}{obj_name[len(src_prefix) :]}"
                 if alias_name not in objects:
                     objects[alias_name] = ObjectEntry(entry.docname, entry.node_id, entry.objtype, True)
+
+
+def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
+    """Populate Python domain object aliases for package re-exports and Litestar cross-references."""
+    del app
+    py_domain = env.domains.get("py")
+    objects = cast("dict[str, ObjectEntry] | None", getattr(py_domain, "objects", None))
+    if objects is None:
+        return []
+
+    _register_undocumented_class_members(objects)
+
+    for group in LITESTAR_OBJECT_ALIAS_GROUPS:
+        _register_alias_group(objects, group)
+
+    for candidates in _collect_reexport_identity_groups().values():
+        if len(candidates) > 1:
+            _register_alias_group(objects, tuple(candidates))
+
+    modules_map = cast("dict[str, Any]", getattr(py_domain, "modules", {}))
+    _register_fallback_module_exports(objects, modules_map)
+    _register_litestar_submodule_aliases(objects)
 
     audit_entry = objects.get("advanced_alchemy.mixins.audit.AuditColumns") or objects.get(
         "advanced_alchemy.base.UUIDAuditBase"
@@ -622,6 +638,9 @@ def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
     return []
 
 
+_EXTENSION_MODULE_PARTS = 3
+
+
 def _disambiguate_domain_matches(
     modname: str | None,
     matches: list[tuple[str, ObjectEntry]],
@@ -631,30 +650,22 @@ def _disambiguate_domain_matches(
         return matches
     if modname:
         exact_prefix = f"{modname}."
-        for m_name, m_entry in matches:
-            if m_name.startswith(exact_prefix):
-                return [(m_name, m_entry)]
+        exact_matches = [(m_name, m_entry) for m_name, m_entry in matches if m_name.startswith(exact_prefix)]
+        if exact_matches:
+            return [exact_matches[0]]
         parts = modname.split(".")
-        if len(parts) >= 3 and parts[1] == "extensions":
-            ext_prefix = ".".join(parts[:3]) + "."
-            ext_matches = [(n, e) for n, e in matches if n.startswith(ext_prefix) and not e.aliased]
+        if len(parts) >= _EXTENSION_MODULE_PARTS and parts[1] == "extensions":
+            ext_prefix = ".".join(parts[:_EXTENSION_MODULE_PARTS]) + "."
+            ext_matches = [(n, e) for n, e in matches if n.startswith(ext_prefix) and not e.aliased] or [
+                (n, e) for n, e in matches if n.startswith(ext_prefix)
+            ]
             if ext_matches:
                 return [ext_matches[0]]
-            ext_any = [(n, e) for n, e in matches if n.startswith(ext_prefix)]
-            if ext_any:
-                return [ext_any[0]]
 
     non_aliased = [(n, e) for n, e in matches if not e.aliased]
-    core_non_aliased = [
-        (n, e)
-        for n, e in non_aliased
-        if not n.startswith("advanced_alchemy.extensions.")
-    ]
-    if core_non_aliased:
-        return [core_non_aliased[0]]
-    if non_aliased:
-        return [non_aliased[0]]
-    return [matches[0]]
+    core_non_aliased = [(n, e) for n, e in non_aliased if not n.startswith("advanced_alchemy.extensions.")]
+    preferred = core_non_aliased or non_aliased or matches
+    return [preferred[0]]
 
 
 def _install_python_domain_dual_role_patch() -> None:
@@ -687,10 +698,10 @@ def _install_python_domain_dual_role_patch() -> None:
         modname: str,
         classname: str,
         name: str,
-        type: str | None,
+        objtype: str | None,
         searchmode: int = 0,
     ) -> list[tuple[str, ObjectEntry]]:
-        matches = original_find_obj(self, env, modname, classname, name, type, searchmode)
+        matches = original_find_obj(self, env, modname, classname, name, objtype, searchmode)
         if len(matches) > 1 and "." not in name:
             return _disambiguate_domain_matches(modname, matches)
         return matches
@@ -698,6 +709,38 @@ def _install_python_domain_dual_role_patch() -> None:
     setattr(PythonDomain, "get_objects", _patched_get_objects)
     setattr(PythonDomain, "find_obj", _patched_find_obj)
     setattr(PythonDomain, "_aa_dual_role_patched", True)
+
+
+def _rewrite_recorded_annotation_value(val: str) -> str:
+    """Compact internal SQLAlchemy union strings in recorded autodoc parameter annotations."""
+    if "_AbstractLoad" in val:
+        return "~advanced_alchemy.repository.LoadSpec | None"
+    if "UnaryExpression" in val and "InstrumentedAttribute" in val:
+        return "list[~advanced_alchemy.repository.OrderingPair] | ~advanced_alchemy.repository.OrderingPair | None"
+    if "ForUpdateArg" in val and "sqlalchemy.sql.selectable.ForUpdateArg" not in val:
+        return val.replace("ForUpdateArg", "~sqlalchemy.sql.selectable.ForUpdateArg")
+    return val
+
+
+def _apply_recorded_typehint_rewrites(app: Sphinx, name: str) -> None:
+    """Rewrite verbose internal SQLAlchemy type unions in ``app.env.temp_data['annotations']``."""
+    annotations = app.env.temp_data.get("annotations", {}).get(name)
+    if not isinstance(annotations, dict):
+        return
+    for key, val in list(annotations.items()):
+        if isinstance(val, str):
+            annotations[key] = _rewrite_recorded_annotation_value(val)
+
+
+def _should_skip_class_init_signature(documenter: ClassDocumenter) -> bool:
+    """Return True when a documented class omits its own ``__init__`` and inherited members are hidden."""
+    return (
+        not documenter.options.inherited_members
+        and isinstance(documenter.object, type)
+        and "__init__" not in documenter.object.__dict__
+        and "__new__" not in documenter.object.__dict__
+        and "__dataclass_fields__" not in documenter.object.__dict__
+    )
 
 
 def _install_autodoc_explicit_members_patch() -> None:
@@ -731,18 +774,12 @@ def _install_autodoc_explicit_members_patch() -> None:
             return Documenter.format_signature(self, **kwargs)
         return original_meth_sig(self, **kwargs)
 
-    original_cls_get_sig = ClassDocumenter._get_signature
+    original_cls_get_sig = getattr(ClassDocumenter, "_get_signature", None)
 
     def _compact_cls_get_signature(self: ClassDocumenter) -> tuple[Any | None, str | None, Any | None]:
-        if (
-            not self.options.inherited_members
-            and isinstance(self.object, type)
-            and "__init__" not in self.object.__dict__
-            and "__new__" not in self.object.__dict__
-            and "__dataclass_fields__" not in self.object.__dict__
-        ):
+        if _should_skip_class_init_signature(self) or original_cls_get_sig is None:
             return None, None, None
-        return original_cls_get_sig(self)
+        return cast("tuple[Any | None, str | None, Any | None]", original_cls_get_sig(self))
 
     original_record_typehints = autodoc_typehints.record_typehints
 
@@ -760,21 +797,7 @@ def _install_autodoc_explicit_members_patch() -> None:
             if "Args:" not in doc and "Parameters" not in doc and ":param " not in doc:
                 return
         original_record_typehints(app, objtype, name, obj, options, args, retann)
-        annotations = app.env.temp_data.get("annotations", {}).get(name)
-        if isinstance(annotations, dict):
-            for key, val in list(annotations.items()):
-                if isinstance(val, str):
-                    if "_AbstractLoad" in val:
-                        annotations[key] = "~advanced_alchemy.repository.LoadSpec | None"
-                    elif "UnaryExpression" in val and "InstrumentedAttribute" in val:
-                        annotations[key] = (
-                            "list[~advanced_alchemy.repository.OrderingPair] "
-                            "| ~advanced_alchemy.repository.OrderingPair | None"
-                        )
-                    elif "ForUpdateArg" in val and "sqlalchemy.sql.selectable.ForUpdateArg" not in val:
-                        annotations[key] = val.replace(
-                            "ForUpdateArg", "~sqlalchemy.sql.selectable.ForUpdateArg"
-                        )
+        _apply_recorded_typehint_rewrites(app, name)
 
     setattr(autodoc_directive, "process_documenter_options", _patched_process_documenter_options)
     setattr(FunctionDocumenter, "format_signature", _compact_func_signature)
@@ -857,9 +880,7 @@ def _extract_enclosing_module_and_obj(node: Node) -> tuple[str, str]:
     """Extract py:module and object fullname from ``node`` or its enclosing ``<desc>`` ancestor."""
     attributes = cast("dict[str, Any]", getattr(node, "attributes", {}))
     module = str(attributes.get("py:module", "") or "")
-    obj_name = str(
-        attributes.get("py:class") or attributes.get("py:meth") or attributes.get("py:func") or ""
-    )
+    obj_name = str(attributes.get("py:class") or attributes.get("py:meth") or attributes.get("py:func") or "")
     current: Node | None = getattr(node, "parent", None)
     while current is not None and (not module or not obj_name):
         cur_attrs = cast("dict[str, Any]", getattr(current, "attributes", {}))
@@ -903,10 +924,8 @@ def _should_ignore_offline_reference(
         )
     if "." in clean_target:
         return _resolve_external_runtime_symbol(clean_target)
-    if module:
-        global_names = get_module_global_imports(module, reference_target_source_obj)
-        return clean_target in global_names or hasattr(builtins, clean_target)
-    return hasattr(builtins, clean_target)
+    global_names = get_module_global_imports(module, reference_target_source_obj) if module else set()
+    return clean_target in global_names or hasattr(builtins, clean_target)
 
 
 def _should_ignore_module_typechecking_import(
@@ -949,10 +968,9 @@ def on_warn_missing_reference(app: Sphinx, domain: Any, node: Node) -> bool | No
     ref_type = str(attributes.get("reftype", ""))
     module, reference_target_source_obj = _extract_enclosing_module_and_obj(node)
 
-    if _should_ignore_module_typechecking_import(target, module, reference_target_source_obj):
-        return True
-
-    if _is_offline_mode() and attributes.get("inventory"):
+    if _should_ignore_module_typechecking_import(target, module, reference_target_source_obj) or (
+        _is_offline_mode() and bool(attributes.get("inventory"))
+    ):
         return True
 
     raw_source = get_source_line(node)[0] or ""
@@ -962,12 +980,10 @@ def on_warn_missing_reference(app: Sphinx, domain: Any, node: Node) -> bool | No
         "dict[str | re.Pattern[str], set[str] | list[Any] | re.Pattern[str]]",
         raw_ignore or {},
     )
-    if _matches_ignore_missing_refs(ignore_refs, source, target) or _should_ignore_offline_reference(
+    should_ignore = _matches_ignore_missing_refs(ignore_refs, source, target) or _should_ignore_offline_reference(
         domain, ref_type, target, module, reference_target_source_obj
-    ):
-        return True
-
-    return None
+    )
+    return True if should_ignore else None
 
 
 def on_missing_reference(app: Sphinx, env: BuildEnvironment, node: pending_xref, contnode: Element) -> Element | None:
@@ -1040,7 +1056,9 @@ def _install_sphinx_click_factory_patch() -> None:
     if getattr(sphinx_click_ext.ClickDirective, "_aa_factory_patched", False):
         return
 
-    original_load_module = sphinx_click_ext.ClickDirective._load_module
+    original_load_module = getattr(sphinx_click_ext.ClickDirective, "_load_module", None)
+    if original_load_module is None:
+        return
 
     def _patched_load_module(self: Any, module_path: str) -> Any:
         if module_path == "advanced_alchemy.cli:get_alchemy_group":
@@ -1093,10 +1111,7 @@ def _sanitize_recorded_typehints(
                 annotations[key] = "~advanced_alchemy.repository.LoadSpec | None"
             elif "UnaryExpression" in val and "InstrumentedAttribute" in val:
                 annotations[key] = (
-                    "list[~advanced_alchemy.repository.OrderingPair] "
-                    "| ~advanced_alchemy.repository.OrderingPair | None"
+                    "list[~advanced_alchemy.repository.OrderingPair] | ~advanced_alchemy.repository.OrderingPair | None"
                 )
             elif "ForUpdateArg" in val and "sqlalchemy.sql.selectable.ForUpdateArg" not in val:
-                annotations[key] = val.replace(
-                    "ForUpdateArg", "~sqlalchemy.sql.selectable.ForUpdateArg"
-                )
+                annotations[key] = val.replace("ForUpdateArg", "~sqlalchemy.sql.selectable.ForUpdateArg")

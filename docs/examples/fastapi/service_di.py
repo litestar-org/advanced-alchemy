@@ -1,9 +1,9 @@
 """FastAPI service and filter dependency injection example with Advanced Alchemy."""
 
-from __future__ import annotations
-
-from pathlib import Path
 import tempfile
+from http import HTTPStatus
+from pathlib import Path
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI
@@ -78,10 +78,10 @@ def create_app(db_path: Path) -> FastAPI:
     alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
     router = APIRouter()
 
-    @router.post("/authors", status_code=201)
+    @router.post("/authors", status_code=int(HTTPStatus.CREATED))
     async def create_author(
         data: AuthorCreate,
-        authors_service: AuthorService = Depends(alchemy.provide_service(AuthorService)),
+        authors_service: Annotated[AuthorService, Depends(alchemy.provide_service(AuthorService))],
     ) -> AuthorSchema:
         """Create a new author record."""
         obj = await authors_service.create(data)
@@ -89,16 +89,19 @@ def create_app(db_path: Path) -> FastAPI:
 
     @router.get("/authors")
     async def list_authors(
-        authors_service: AuthorService = Depends(alchemy.provide_service(AuthorService)),
-        parsed_filters: list[filters.FilterTypes] = Depends(
-            alchemy.provide_filters(
-                {
-                    "id_filter": UUID,
-                    "search": "name",
-                    "pagination_type": "limit_offset",
-                },
+        authors_service: Annotated[AuthorService, Depends(alchemy.provide_service(AuthorService))],
+        parsed_filters: Annotated[
+            list[filters.FilterTypes],
+            Depends(
+                alchemy.provide_filters(
+                    {
+                        "id_filter": UUID,
+                        "search": "name",
+                        "pagination_type": "limit_offset",
+                    },
+                ),
             ),
-        ),
+        ],
     ) -> service.OffsetPagination[AuthorSchema]:
         """List authors with limit/offset pagination and search filters."""
         results, total = await authors_service.get_many_and_count(*parsed_filters)
@@ -120,12 +123,19 @@ def main() -> None:
         app = create_app(db_file)
         with TestClient(app=app) as client:
             create_res = client.post("/authors", json={"name": "Grace Hopper"})
-            assert create_res.status_code == 201
+            if create_res.status_code != HTTPStatus.CREATED:
+                msg = f"Unexpected create status: {create_res.status_code}"
+                raise RuntimeError(msg)
             created = create_res.json()
-            assert created["name"] == "Grace Hopper"
+            if created["name"] != "Grace Hopper":
+                msg = f"Unexpected created author name: {created['name']}"
+                raise RuntimeError(msg)
 
             list_res = client.get("/authors?currentPage=1&pageSize=10")
-            assert list_res.status_code == 200
+            if list_res.status_code != HTTPStatus.OK:
+                msg = f"Unexpected list status: {list_res.status_code}"
+                raise RuntimeError(msg)
             payload = list_res.json()
-            assert payload["total"] == 1
-            assert payload["items"][0]["name"] == "Grace Hopper"
+            if payload["total"] != 1 or payload["items"][0]["name"] != "Grace Hopper":
+                msg = f"Unexpected list payload: {payload}"
+                raise RuntimeError(msg)
