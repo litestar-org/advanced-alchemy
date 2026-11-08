@@ -160,6 +160,25 @@ def test_makefile_and_ci_workflow_gates_configured() -> None:
     assert len(LITESTAR_REQUIRED_XREFS) >= 30
 
 
+@pytest.mark.parametrize(
+    ("rel_path", "expected_token"),
+    [
+        (".agents/bundles/knowledge/workflow.md", "verify_docs_artifacts"),
+        (".agents/bundles/knowledge/workflow.md", "scan_public_docstrings"),
+        (".agents/bundles/product/product-guidelines.md", "objects.inv"),
+        (".agents/bundles/product/product-guidelines.md", "llms-full.txt"),
+        ("AGENTS.md", "make docs"),
+    ],
+)
+def test_okf_workflow_and_guidelines_docs_sync(rel_path: str, expected_token: str) -> None:
+    """Verify OKF workflow, product guidelines, and AGENTS.md document the Sphinx artifact gates."""
+    target_path = REPO_ROOT / rel_path
+    if not target_path.is_file():
+        pytest.skip(f"Local-only OKF file not present in checkout: {rel_path}")
+    content = target_path.read_text(encoding="utf-8")
+    assert expected_token in content
+
+
 def test_verify_docs_artifacts_has_zero_inline_comments() -> None:
     """Verify tools/docs/verify_docs_artifacts.py contains zero inline comments."""
     mod_path = REPO_ROOT / "tools" / "docs" / "verify_docs_artifacts.py"
