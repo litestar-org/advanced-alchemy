@@ -86,4 +86,3 @@ Conversion, Pagination & Helpers
     :type: bool
 
     Boolean flag indicating whether ``attrs`` is installed.
-

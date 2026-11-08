@@ -96,4 +96,3 @@ Helpers & Type Definitions
 
 .. autodata:: advanced_alchemy.repository.OrderingPair
     :no-value:
-

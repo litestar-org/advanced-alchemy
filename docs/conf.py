@@ -79,6 +79,7 @@ autodoc_typehints_format = "short"
 autodoc_typehints = "description"
 autodoc_typehints_description_target = "documented_params"
 autodoc_preserve_defaults = True
+autodoc_use_legacy_class_based = True
 python_maximum_signature_line_length = 68
 python_use_unqualified_type_names = True
 python_display_short_literal_types = True

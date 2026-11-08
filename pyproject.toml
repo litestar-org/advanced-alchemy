@@ -545,8 +545,14 @@ ignore_missing_imports = true
 module = ["pytest", "_pytest.*"]
 
 [[tool.mypy.overrides]]
+follow_imports = "skip"
 ignore_missing_imports = true
-module = ["sphinx.*"]
+module = ["sphinx", "sphinx.*"]
+
+[[tool.mypy.overrides]]
+disallow_subclassing_any = false
+module = ["tools.sphinx_ext.*"]
+warn_return_any = false
 
 [[tool.mypy.overrides]]
 follow_imports = "skip"

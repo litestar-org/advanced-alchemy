@@ -15,8 +15,16 @@ from typing import TYPE_CHECKING, Any, cast
 from docutils.utils import get_source_line
 from sphinx.addnodes import pending_xref
 from sphinx.domains.python import ObjectEntry, PythonDomain
-from sphinx.ext.autodoc import ClassDocumenter, Documenter, FunctionDocumenter, MethodDocumenter
+from sphinx.ext.autodoc import (
+    ClassDocumenter,
+    DataDocumenter,
+    Documenter,
+    FunctionDocumenter,
+    GenericAliasMixin,
+    MethodDocumenter,
+)
 from sphinx.ext.autodoc import directive as autodoc_directive
+from sphinx.pycode import ModuleAnalyzer, PycodeError
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
@@ -42,6 +50,7 @@ _TYPEVAR_CLASS_NAMES: frozenset[str] = frozenset(
         "ParamSpec",
         "TypeVarTuple",
         "TypeAliasType",
+        "TypeAliasForwardRef",
         "_TypeAliasForm",
     }
 )
@@ -723,7 +732,10 @@ def _rewrite_recorded_annotation_value(val: str) -> str:
 
 def _apply_recorded_typehint_rewrites(app: Sphinx, name: str) -> None:
     """Rewrite verbose internal SQLAlchemy type unions in ``app.env.temp_data['annotations']``."""
-    annotations = app.env.temp_data.get("annotations", {}).get(name)
+    if app.env is None:
+        return
+    annotations_map = app.env.temp_data.get("annotations")
+    annotations = annotations_map.get(name) if isinstance(annotations_map, dict) else None
     if not isinstance(annotations, dict):
         return
     for key, val in list(annotations.items()):
@@ -740,6 +752,29 @@ def _should_skip_class_init_signature(documenter: ClassDocumenter) -> bool:
         and "__new__" not in documenter.object.__dict__
         and "__dataclass_fields__" not in documenter.object.__dict__
     )
+
+
+def _lookup_reexport_attr_doc(documenter: DataDocumenter, original_get_doc: Any) -> list[list[str]] | None:
+    """Resolve attribute docstrings from ``.typing`` / ``._util`` submodules without falling back to ``TypeVar.__doc__``."""
+    attrname = documenter.objpath[-1] if documenter.objpath else ""
+    comment = documenter.get_module_comment(attrname)
+    if comment:
+        return [comment]
+    for suffix in ("typing", "_util"):
+        candidate_mod = f"{documenter.modname}.{suffix}"
+        try:
+            analyzer = ModuleAnalyzer.for_module(candidate_mod)
+            analyzer.analyze()
+            if ("", attrname) in analyzer.attr_docs:
+                return [list(analyzer.attr_docs["", attrname])]
+        except PycodeError:
+            continue
+    if (
+        getattr(documenter.object, "__class__", None) is not None
+        and documenter.object.__class__.__name__ in _TYPEVAR_CLASS_NAMES
+    ):
+        return []
+    return cast("list[list[str]] | None", original_get_doc(documenter))
 
 
 def _install_autodoc_explicit_members_patch() -> None:
@@ -780,10 +815,24 @@ def _install_autodoc_explicit_members_patch() -> None:
             return None, None, None
         return cast("tuple[Any | None, str | None, Any | None]", original_cls_get_sig(self))
 
+    original_generic_update_content = GenericAliasMixin.update_content
+
+    def _compact_generic_update_content(self: Any, more_content: Any) -> None:
+        if getattr(getattr(self, "options", None), "no_value", False):
+            return
+        original_generic_update_content(self, more_content)
+
+    original_data_get_doc = DataDocumenter.get_doc
+
+    def _reexport_aware_data_get_doc(self: DataDocumenter) -> list[list[str]] | None:
+        return _lookup_reexport_attr_doc(self, original_data_get_doc)
+
     setattr(autodoc_directive, "process_documenter_options", _patched_process_documenter_options)
     setattr(FunctionDocumenter, "format_signature", _compact_func_signature)
     setattr(MethodDocumenter, "format_signature", _compact_meth_signature)
     setattr(ClassDocumenter, "_get_signature", _compact_cls_get_signature)
+    setattr(GenericAliasMixin, "update_content", _compact_generic_update_content)
+    setattr(DataDocumenter, "get_doc", _reexport_aware_data_get_doc)
     setattr(autodoc_directive, "_aa_explicit_members_patched", True)
 
 
@@ -879,6 +928,17 @@ def _extract_enclosing_module_and_obj(node: Node) -> tuple[str, str]:
     return module, obj_name
 
 
+_MIN_QUOTED_LENGTH = 2
+
+
+def _strip_outer_quotes(target: str) -> str:
+    """Return ``target`` with a single pair of outer single or double quotes removed."""
+    stripped = target.strip()
+    if len(stripped) >= _MIN_QUOTED_LENGTH and stripped[0] == stripped[-1] and stripped[0] in {"'", '"'}:
+        return stripped[1:-1].strip()
+    return stripped
+
+
 def _should_ignore_offline_reference(
     domain: Any,
     ref_type: str,
@@ -892,7 +952,7 @@ def _should_ignore_offline_reference(
     domain_name = getattr(domain, "name", str(domain or ""))
     if (domain_name == "std" or ref_type == "doc") and ":" in target:
         return target.split(":", 1)[0] != "advanced-alchemy"
-    clean_target = target.lstrip("~")
+    clean_target = _strip_outer_quotes(target).lstrip("~")
     if clean_target.startswith("advanced_alchemy"):
         return False
     if any(sep in clean_target for sep in ("[", "|", ",")):
@@ -914,7 +974,7 @@ def _should_ignore_module_typechecking_import(
     reference_target_source_obj: str,
 ) -> bool:
     """Return True if ``target`` is a verified module TypeVar or TYPE_CHECKING-only import."""
-    clean_target = target.lstrip("~")
+    clean_target = _strip_outer_quotes(target).lstrip("~")
     if any(sep in clean_target for sep in ("[", "|")) and not clean_target.startswith(":"):
         tokens = [tok for tok in re.split(r"[\s\[\],|]+", clean_target) if tok]
         if len(tokens) > 1 and all(
@@ -944,6 +1004,12 @@ def on_warn_missing_reference(app: Sphinx, domain: Any, node: Node) -> bool | No
         return True
     if not isinstance(target, str):
         return None
+    if (
+        target in _TYPEVAR_CLASS_NAMES
+        or target == "litestar.dto.base_dto.SQLAlchemyDTO"
+        or _strip_outer_quotes(target) != target.strip()
+    ):
+        return True
 
     ref_type = str(attributes.get("reftype", ""))
     module, reference_target_source_obj = _extract_enclosing_module_and_obj(node)
@@ -1077,7 +1143,10 @@ def _sanitize_recorded_typehints(
 ) -> None:
     """Normalize expanded runtime type aliases in recorded autodoc annotations."""
     del options, args, retann
-    annotations = app.env.temp_data.get("annotations", {}).get(name)
+    if app.env is None:
+        return
+    annotations_map = app.env.temp_data.get("annotations")
+    annotations = annotations_map.get(name) if isinstance(annotations_map, dict) else None
     if not isinstance(annotations, dict):
         return
     if objtype == "class" and isinstance(obj, type):
