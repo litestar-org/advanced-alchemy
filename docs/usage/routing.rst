@@ -2,475 +2,140 @@
 Read/Write Routing
 ==================
 
-Advanced Alchemy provides automatic routing of read operations to read replicas while directing
-write operations to the primary database. This enables better scalability by distributing read
-load across multiple replica databases.
+As your app grows, most database traffic is reading data—loading feeds, search pages, and dashboards—while only a fraction is saving changes.
 
-Why Use Read/Write Routing?
-----------------------------
+Read/write routing lets you add **Read Replicas** alongside your main **Primary Database** without rewriting your repository calls:
 
-Read/write routing is essential for scaling read-heavy applications:
+.. raw:: html
 
-- **Scalability**: Distribute read load across multiple replica databases
-- **Performance**: Reduce primary database load by offloading read queries
-- **High Availability**: Continue serving reads even if primary is under maintenance
-- **Cloud-Native**: Leverage managed database replicas (AWS Aurora, Google Cloud SQL, AlloyDB, etc.)
+    <div class="aa-diagram">
+        <img src="../_static/diagrams/routing-topology-light.svg" alt="How Read and Write Routing Works" class="aa-diagram--light" />
+        <img src="../_static/diagrams/routing-topology-dark.svg" alt="How Read and Write Routing Works" class="aa-diagram--dark" />
+    </div>
 
-Quick Start
------------
+How Your Own Changes Stay Fresh
+-------------------------------
 
-Basic configuration with a single replica:
+Replicas take a few milliseconds to copy new data from Primary. What happens if a user creates a new blog post and your code immediately loads that post on the next line?
 
-.. code-block:: python
+Advanced Alchemy solves replica lag automatically: as soon as a session writes data, subsequent reads in that transaction stay pinned to Primary until ``commit()`` or ``rollback()`` finishes:
 
-    from advanced_alchemy.config import SQLAlchemyAsyncConfig
-    from advanced_alchemy.config.routing import RoutingConfig
+.. raw:: html
 
-    config = SQLAlchemyAsyncConfig(
-        routing_config=RoutingConfig(
-            primary_connection_string="postgresql+asyncpg://user:pass@primary:5432/db",
-            read_replicas=[
-                "postgresql+asyncpg://user:pass@replica1:5432/db",
-            ],
-        ),
-    )
+    <div class="aa-diagram">
+        <img src="../_static/diagrams/routing-sticky-light.gif" alt="Reading Your Own Changes Without Stale Data" class="aa-diagram--light" />
+        <img src="../_static/diagrams/routing-sticky-dark.gif" alt="Reading Your Own Changes Without Stale Data" class="aa-diagram--dark" />
+    </div>
 
-    # Create session factory
-    session_maker = config.create_session_maker()
+Setting Up Primary and Replica Pools
+------------------------------------
 
-    # Use with repository - reads automatically go to replica
-    async with session_maker() as session:
-        repo = UserRepository(session=session)
-        users = await repo.get_many()  # Routes to replica
-
-Configuration
--------------
-
-Routing Strategy
-~~~~~~~~~~~~~~~~
-
-Choose how replicas are selected for read operations:
-
-.. code-block:: python
-
-    from advanced_alchemy.config.routing import RoutingConfig, RoutingStrategy
-
-    # Round-robin (default) - distributes load evenly
-    config = RoutingConfig(
-        primary_connection_string="postgresql+asyncpg://...",
-        read_replicas=["postgresql+asyncpg://replica1:5432/db", "..."],
-        routing_strategy=RoutingStrategy.ROUND_ROBIN,
-    )
-
-    # Random - randomly selects replica
-    config = RoutingConfig(
-        primary_connection_string="postgresql+asyncpg://...",
-        read_replicas=["postgresql+asyncpg://replica1:5432/db", "..."],
-        routing_strategy=RoutingStrategy.RANDOM,
-    )
-
-Multiple Replicas
-~~~~~~~~~~~~~~~~~
-
-Configure multiple replicas with custom weights:
-
-.. code-block:: python
-
-    from advanced_alchemy.config.routing import RoutingConfig, ReplicaConfig
-
-    config = RoutingConfig(
-        primary_connection_string="postgresql+asyncpg://user:pass@primary:5432/db",
-        read_replicas=[
-            ReplicaConfig(
-                connection_string="postgresql+asyncpg://user:pass@replica1:5432/db",
-                weight=2,  # Gets 2x traffic
-                name="replica-1-us-east",
-            ),
-            ReplicaConfig(
-                connection_string="postgresql+asyncpg://user:pass@replica2:5432/db",
-                weight=1,
-                name="replica-2-us-west",
-            ),
-        ],
-        routing_strategy=RoutingStrategy.ROUND_ROBIN,
-    )
-
-Sticky-After-Write
-~~~~~~~~~~~~~~~~~~
-
-By default, routing ensures **read-your-writes consistency**. After a write operation,
-all subsequent reads use the primary database until the transaction is committed:
-
-.. code-block:: python
-
-    async with session_maker() as session:
-        repo = UserRepository(session=session)
-
-        # Read routes to replica
-        users = await repo.get_many()
-
-        # Write routes to primary
-        new_user = await repo.add(User(name="Alice"))
-
-        # Read now routes to primary (sticky-after-write)
-        user = await repo.get(new_user.id)
-
-        # Commit resets stickiness
-        await session.commit()
-
-        # Read can use replica again
-        users = await repo.get_many()
-
-To disable sticky-after-write:
-
-.. code-block:: python
-
-    config = RoutingConfig(
-        primary_connection_string="postgresql+asyncpg://...",
-        read_replicas=["..."],
-        sticky_after_write=False,  # Reads may not see recent writes
-    )
-
-Routing Rules
--------------
-
-The routing layer follows these rules:
-
-1. **INSERT/UPDATE/DELETE** → Primary
-2. **SELECT with FOR UPDATE** → Primary
-3. **SELECT after write** (if sticky-after-write enabled) → Primary
-4. **SELECT (no writes)** → Replica (round-robin/random)
-5. **After commit** → Reset stickiness, replicas available again
-
-FOR UPDATE Detection
-~~~~~~~~~~~~~~~~~~~~
-
-Queries with ``FOR UPDATE`` are automatically routed to the primary:
-
-.. code-block:: python
-
-    from sqlalchemy import select
-
-    async with session_maker() as session:
-        # Routes to primary (FOR UPDATE detected)
-        stmt = select(User).where(User.id == user_id).with_for_update()
-        result = await session.execute(stmt)
-        user = result.scalar_one()
-
-Advanced Routing with Bind Groups
----------------------------------
-
-While the primary/read-replica pattern is common, you might need more complex routing scenarios, such as:
-
-- Dedicated analytics database
-- Region-specific replicas
-- Separate reporting databases
-- Multiple primary databases (sharding)
-
-You can achieve this by defining **Bind Groups** in your configuration.
-
-Configuration
-~~~~~~~~~~~~~
-
-Use the ``engines`` dictionary to define named groups of engines:
-
-.. code-block:: python
-
-    from advanced_alchemy.config import SQLAlchemyAsyncConfig
-    from advanced_alchemy.config.routing import RoutingConfig
-
-    config = SQLAlchemyAsyncConfig(
-        routing_config=RoutingConfig(
-            # Define multiple engine groups
-            engines={
-                "default": ["postgresql+asyncpg://primary:5432/db"],
-                "read": ["postgresql+asyncpg://replica1:5432/db"],
-                "analytics": ["postgresql+asyncpg://analytics:5432/db"],
-                "reporting": [
-                    "postgresql+asyncpg://report-1:5432/db",
-                    "postgresql+asyncpg://report-2:5432/db",
-                ],
-            },
-            default_group="default",
-            read_group="read",
-        ),
-    )
-
-Using Bind Groups
-~~~~~~~~~~~~~~~~~
-
-You can route operations to specific groups using context managers or explicit parameters.
-
-**Context Manager**
-
-Use ``use_bind_group`` to route all operations within a block to a specific group:
-
-.. code-block:: python
-
-    from advanced_alchemy.routing import use_bind_group
-
-    async with session_maker() as session:
-        repo = UserRepository(session=session)
-
-        # Route to analytics database
-        with use_bind_group("analytics"):
-            stats = await repo.count()
-
-        # Route to reporting group (load balanced if multiple engines)
-        with use_bind_group("reporting"):
-            report = await repo.get_many()
-
-**Explicit Parameter**
-
-All repository methods accept a ``bind_group`` parameter:
-
-.. code-block:: python
-
-    # Query directly from analytics group
-    users = await repo.get_many(bind_group="analytics")
-
-    # Count from reporting group
-    count = await repo.count(bind_group="reporting")
-
-Context Managers
-----------------
-
-Use context managers for explicit control over routing:
-
-Primary Context
-~~~~~~~~~~~~~~~
-
-Force operations to use the default (primary) group. This is an alias for ``use_bind_group("default")``:
-
-.. code-block:: python
-
-    from advanced_alchemy.routing import primary_context
-
-    async with session_maker() as session:
-        repo = UserRepository(session=session)
-
-        # Force this read to use primary (e.g. for critical consistency)
-        with primary_context():
-            critical_user = await repo.get(user_id)
-
-Replica Context
-~~~~~~~~~~~~~~~
-
-Force operations to use the read group. This is an alias for ``use_bind_group("read")``:
-
-.. code-block:: python
-
-    from advanced_alchemy.routing import replica_context
-
-    async with session_maker() as session:
-        repo = UserRepository(session=session)
-
-        # Force read from replica (even if sticky-primary is active)
-        with replica_context():
-            users = await repo.get_many()
-
-Temporarily Disable Routing
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Disable routing to send all traffic to the default primary engine:
-
-.. code-block:: python
-
-    config = RoutingConfig(
-        engines={"default": ["..."], "read": ["..."]},
-        enabled=False,  # All traffic to default group's first engine
-    )
-
-Framework Integration
----------------------
-
-Routing automatically integrates with all supported frameworks.
-
-Litestar
-~~~~~~~~
-
-.. code-block:: python
-
-    from litestar import Litestar
-    from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
-    from advanced_alchemy.config.routing import RoutingConfig
-
-    config = SQLAlchemyAsyncConfig(
-        routing_config=RoutingConfig(
-            primary_connection_string="postgresql+asyncpg://primary:5432/db",
-            read_replicas=["postgresql+asyncpg://replica1:5432/db"],
-        ),
-    )
-
-    app = Litestar(plugins=[SQLAlchemyPlugin(config=config)])
-
-Routing context is automatically reset per request.
-
-FastAPI
-~~~~~~~
-
-.. code-block:: python
-
-    from typing import Annotated
-
-    from fastapi import Depends, FastAPI
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    from advanced_alchemy.config.routing import RoutingConfig
-    from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemyAsyncConfig
-
-    config = SQLAlchemyAsyncConfig(
-        routing_config=RoutingConfig(
-            primary_connection_string="postgresql+asyncpg://primary:5432/db",
-            read_replicas=["postgresql+asyncpg://replica1:5432/db"],
-        ),
-    )
-
-    app = FastAPI()
-    alchemy = AdvancedAlchemy(config=config, app=app)
-
-    @app.get("/users")
-    async def list_users(
-        session: Annotated[AsyncSession, Depends(alchemy.provide_session())],
-    ):
-        repo = UserRepository(session=session)
-        return await repo.get_many()  # Routes to replica
-
-Flask
-~~~~~
-
-.. code-block:: python
-
-    from flask import Flask
-    from advanced_alchemy.extensions.flask import SQLAlchemyExtension
-    from advanced_alchemy.config.routing import RoutingConfig
-
-    app = Flask(__name__)
-    app.config["SQLALCHEMY_ROUTING_CONFIG"] = RoutingConfig(
-        primary_connection_string="postgresql://primary:5432/db",
-        read_replicas=["postgresql://replica1:5432/db"],
-    )
-
-    db = SQLAlchemyExtension(app=app)
-
-Managed PostgreSQL Examples
----------------------------
-
-Managed PostgreSQL providers expose primary and read endpoints differently. Advanced Alchemy's routing config stays the same:
-put the writer endpoint in ``primary_connection_string`` and the replica or read-pool endpoints in ``read_replicas``.
+Define your ``"default"`` writer and ``"read"`` replica pools in ``RoutingConfig`` and pass it to ``SQLAlchemyAsyncConfig`` (or ``SQLAlchemySyncConfig``):
 
 .. tab-set::
 
-    .. tab-item:: Google Cloud SQL for PostgreSQL
-
-        Cloud SQL typically gives you one primary instance endpoint plus one endpoint per read replica.
-        Use the primary instance IP or DNS name as the writer and list each replica explicitly.
+    .. tab-item:: Weighted Replicas
 
         .. code-block:: python
 
-            config = RoutingConfig(
-                primary_connection_string="postgresql+asyncpg://user:pass@primary-instance-ip:5432/mydb",
-                read_replicas=[
-                    "postgresql+asyncpg://user:pass@replica-1-ip:5432/mydb",
-                    "postgresql+asyncpg://user:pass@replica-2-ip:5432/mydb",
-                ],
-            )
+            from advanced_alchemy.config import SQLAlchemyAsyncConfig
+            from advanced_alchemy.config.routing import EngineConfig, RoutingConfig, RoutingStrategy
 
-    .. tab-item:: Google AlloyDB for PostgreSQL
-
-        AlloyDB exposes a primary instance endpoint and one or more read-pool or read replica endpoints.
-        Point writes at the primary instance and route reads to the read pool.
-
-        .. code-block:: python
-
-            config = RoutingConfig(
-                primary_connection_string=(
-                    "postgresql+asyncpg://user:pass@my-primary.alloydb-xxx.gcp.cloudprovider.example:5432/mydb"
+            config = SQLAlchemyAsyncConfig(
+                routing_config=RoutingConfig(
+                    engines={
+                        "default": ["postgresql+asyncpg://user:pass@primary:5432/db"],
+                        "read": [
+                            EngineConfig(
+                                connection_string="postgresql+asyncpg://user:pass@replica-1:5432/db",
+                                weight=2,
+                                name="replica-east",
+                            ),
+                            EngineConfig(
+                                connection_string="postgresql+asyncpg://user:pass@replica-2:5432/db",
+                                weight=1,
+                                name="replica-west",
+                            ),
+                        ],
+                        "analytics": ["postgresql+asyncpg://user:pass@analytics:5432/db"],
+                    },
+                    routing_strategy=RoutingStrategy.ROUND_ROBIN,
+                    sticky_after_write=True,
                 ),
-                read_replicas=[
-                    "postgresql+asyncpg://user:pass@my-read-pool.alloydb-xxx.gcp.cloudprovider.example:5432/mydb",
-                ],
             )
 
-    .. tab-item:: AWS Aurora PostgreSQL
-
-        Aurora provides a cluster writer endpoint plus a reader endpoint that load-balances across replicas.
+    .. tab-item:: Cloud SQL
 
         .. code-block:: python
 
-            config = RoutingConfig(
-                primary_connection_string=(
-                    "postgresql+asyncpg://user:pass@mydb-cluster.cluster-xxx.us-east-1.rds.amazonaws.com:5432/mydb"
-                ),
-                read_replicas=[
-                    "postgresql+asyncpg://user:pass@mydb-cluster.cluster-ro-xxx.us-east-1.rds.amazonaws.com:5432/mydb",
-                ],
+            from advanced_alchemy.config.routing import RoutingConfig
+
+            cloud_sql_routing = RoutingConfig(
+                engines={
+                    "default": ["postgresql+asyncpg://user:pass@primary-ip:5432/mydb"],
+                    "read": [
+                        "postgresql+asyncpg://user:pass@replica-1-ip:5432/mydb",
+                        "postgresql+asyncpg://user:pass@replica-2-ip:5432/mydb",
+                    ],
+                },
             )
 
-Best Practices
---------------
+    .. tab-item:: AlloyDB & Aurora
 
-1. **Use Sticky-After-Write**: Keep ``sticky_after_write=True`` (default) to avoid read-after-write inconsistency
-2. **Monitor Replica Lag**: Ensure replicas stay close to primary (< 1 second lag)
-3. **Test Failover**: Verify behavior when replicas are unavailable
-4. **Use Context Managers**: Use ``primary_context()`` for critical reads that must be up-to-date
-5. **Connection Pooling**: Configure appropriate pool sizes for primary and replicas
-6. **Health Checks**: Implement health checks to detect unhealthy replicas (future feature)
+        .. code-block:: python
 
-Troubleshooting
----------------
+            from advanced_alchemy.config.routing import RoutingConfig
 
-Reads Not Using Replicas
-~~~~~~~~~~~~~~~~~~~~~~~~~
+            pool_endpoint_routing = RoutingConfig(
+                engines={
+                    "default": ["postgresql+asyncpg://user:pass@writer.db.internal:5432/mydb"],
+                    "read": ["postgresql+asyncpg://user:pass@reader-pool.db.internal:5432/mydb"],
+                },
+            )
 
-Check if sticky-after-write is active:
+    .. tab-item:: Turn Off in Local Dev
 
-.. code-block:: python
+        .. code-block:: python
 
-    from advanced_alchemy.routing import stick_to_primary_var
+            from advanced_alchemy.config.routing import RoutingConfig
 
-    # Check current state
-    if stick_to_primary_var.get():
-        print("Currently stuck to primary")
+            local_routing = RoutingConfig(
+                engines={
+                    "default": ["postgresql+asyncpg://user:pass@localhost:5432/mydb"],
+                },
+                enabled=False,
+            )
 
-Reset routing context manually:
+Choosing a Pool Manually
+------------------------
 
-.. code-block:: python
-
-    from advanced_alchemy.routing import reset_routing_context
-
-    reset_routing_context()
-
-Stale Reads from Replicas
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-If replicas have significant lag, use ``primary_context()`` for critical reads:
+Most routes never need manual overrides. When a critical checkout check must read from Primary—or a slow report should run on an ``"analytics"`` replica—wrap the call in a context manager or pass ``bind_group``:
 
 .. code-block:: python
 
-    from advanced_alchemy.routing import primary_context
+    from typing import Any
+    from advanced_alchemy.routing import primary_context, replica_context, use_bind_group
 
-    # Force primary for latest data
-    with primary_context():
-        user = await repo.get(user_id)
 
-Temporarily Disable Routing
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    async def run_targeted_queries(repo: Any, item_id: Any) -> tuple[Any, list[Any], int]:
+        with primary_context():
+            fresh_row = await repo.get(item_id)
 
-For debugging, disable routing to send all traffic to primary:
+        with replica_context():
+            feed_rows = await repo.get_many()
 
-.. code-block:: python
+        with use_bind_group("analytics"):
+            report_count = await repo.count()
 
-    config = RoutingConfig(
-        primary_connection_string="postgresql+asyncpg://...",
-        read_replicas=["..."],
-        enabled=False,  # All to primary
-    )
+        return fresh_row, feed_rows, report_count
 
-See Also
---------
+Complete Runnable Example
+-------------------------
 
-- :doc:`/reference/routing` - API Reference
-- :doc:`/usage/repositories/index` - Repository Pattern
-- :doc:`/usage/services` - Service Layer
-- :doc:`/reference/config/asyncio` - Async Configuration
+.. dropdown:: View Complete SQLite Primary & Replica Script
+    :icon: code
+
+    .. literalinclude:: /examples/routing/read_write_routing.py
+        :language: python
+
+See :doc:`/reference/routing` for the full routing API reference.

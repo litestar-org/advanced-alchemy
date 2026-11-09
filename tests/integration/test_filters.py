@@ -43,7 +43,6 @@ pytestmark = [
 ]
 
 
-# Module-level cache for Movie model and counter for unique names
 _movie_model_cache: dict[str, type] = {}
 _movie_class_counter = 0
 
@@ -54,7 +53,7 @@ def get_movie_model_for_engine(engine_dialect_name: str, worker_id: str) -> type
     cache_key = f"movie_{worker_id}_{engine_dialect_name}"
 
     if cache_key not in _movie_model_cache:
-        # Create unique base class with its own metadata for each engine
+
         class TestBase(DeclarativeBase):
             pass
 
@@ -111,44 +110,36 @@ def movie_model_sync(
     worker_id = get_worker_id(request)
     engine_dialect_name = getattr(engine.dialect, "name", "mock")
 
-    # Skip Spanner, CockroachDB, and MSSQL due to database-specific issues
     if engine_dialect_name.startswith(("spanner", "cockroach", "mssql")):
         pytest.skip(f"Filter tests are not supported on {engine_dialect_name}")
 
-    # Get the appropriate model for this engine type
     movie_model = get_movie_model_for_engine(engine_dialect_name, worker_id)
 
-    # Skip for mock engines
     if engine_dialect_name != "mock":
-        # Create table once per engine type
         movie_model.metadata.create_all(engine)
+        request.node._movie_model_metadata = movie_model.metadata
 
     yield movie_model
-
-    # Cleanup is handled by _auto_clean_sync_db fixture
 
 
 @pytest.fixture
 async def movie_model_async(
     cached_movie_model: type[DeclarativeBase],
     async_engine: AsyncEngine,
+    request: FixtureRequest,
 ) -> AsyncGenerator[type[DeclarativeBase], None]:
     """Setup movie table for async engines."""
     engine_dialect_name = getattr(async_engine.dialect, "name", "mock")
 
-    # Skip Spanner, CockroachDB, and MSSQL due to database-specific issues
     if engine_dialect_name.startswith(("spanner", "cockroach", "mssql")):
         pytest.skip(f"Filter tests are not supported on {engine_dialect_name}")
 
-    # Skip for mock engines
     if engine_dialect_name != "mock":
-        # Create table once per engine type
         async with async_engine.begin() as conn:
             await conn.run_sync(cached_movie_model.metadata.create_all)
+        request.node._movie_model_metadata = cached_movie_model.metadata
 
     yield cached_movie_model
-
-    # Cleanup is handled by _auto_clean_async_db fixture
 
 
 def setup_movie_data(session: Session, movie_model: type[DeclarativeBase]) -> None:

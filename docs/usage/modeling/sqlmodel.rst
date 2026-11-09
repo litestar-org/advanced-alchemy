@@ -1,19 +1,21 @@
-=====================
+====================
 SQLModel Integration
-=====================
+====================
 
-Advanced Alchemy provides built-in compatibility for `SQLModel <https://sqlmodel.tiangolo.com/>`_, allowing you to use SQLModel's elegant syntax for defining models while leveraging Advanced Alchemy's powerful repositories and services.
+If your team already writes tables with `SQLModel <https://sqlmodel.tiangolo.com/>`_, you can plug those models straight into Advanced Alchemy repositories without rewriting your model classes.
 
-Basic Setup
------------
+Defining and Querying a SQLModel Table
+--------------------------------------
 
-To use SQLModel with Advanced Alchemy, ensure your models are defined with ``table=True``.
+Mark your SQLModel class with ``table=True`` and point a repository at it just like any SQLAlchemy model:
 
 .. code-block:: python
 
     from typing import Optional
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
     from sqlmodel import Field, SQLModel
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+
 
     class Hero(SQLModel, table=True):
         id: Optional[int] = Field(default=None, primary_key=True)
@@ -21,38 +23,28 @@ To use SQLModel with Advanced Alchemy, ensure your models are defined with ``tab
         secret_name: str
         age: Optional[int] = None
 
+
     class HeroRepository(SQLAlchemyAsyncRepository[Hero]):
         model_type = Hero
 
-Usage with Repositories
------------------------
-
-Repositories automatically detect SQLModel classes and handle them correctly during CRUD operations.
-
-.. code-block:: python
-
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
     async def create_and_list_heroes() -> list[Hero]:
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-        async_session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
         async with engine.begin() as conn:
             await conn.run_sync(SQLModel.metadata.create_all)
 
         try:
-            async with async_session_factory() as session:
+            async with session_factory() as session:
                 repo = HeroRepository(session=session)
-
-                hero = Hero(name="Deadpool", secret_name="Dive Wilson")
-                await repo.add(hero)
+                await repo.add(Hero(name="Spider-Man", secret_name="Peter Parker"))
                 await session.commit()
-
                 return await repo.get_many()
         finally:
             await engine.dispose()
 
-Limitations
------------
+Good to Know
+------------
 
-While SQLModel is supported, some Advanced Alchemy features that rely on specific SQLAlchemy base class behaviors (like some automated mixin detections) may require explicit configuration when used with SQLModel.
+SQLModel uses its own ``SQLModel.metadata`` registry instead of Advanced Alchemy's ``orm_registry``. Pass ``metadata=SQLModel.metadata`` in your framework config so migrations and table creation helpers target your SQLModel tables.

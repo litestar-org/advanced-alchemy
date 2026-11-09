@@ -91,8 +91,11 @@ def test_pgcrypto_round_trip(engine: Engine, encrypted_test_tables: None) -> Non
     if engine.dialect.name != "postgresql":
         pytest.skip("pgcrypto requires a real PostgreSQL backend")
 
-    with engine.begin() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
+    except Exception as exc:
+        pytest.skip(f"pgcrypto extension not available on this PostgreSQL instance: {exc}")
 
     session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
     with session_factory() as db_session:
@@ -113,8 +116,11 @@ def test_backends_are_interchangeable(engine: Engine, model: "type[BigIntBase]",
     if engine.dialect.name != "postgresql":
         pytest.skip("comparing both backends on PostgreSQL (pgcrypto is PostgreSQL-only)")
 
-    with engine.begin() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
+    except Exception as exc:
+        pytest.skip(f"pgcrypto extension not available on this PostgreSQL instance: {exc}")
 
     session_factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
     with session_factory() as db_session:

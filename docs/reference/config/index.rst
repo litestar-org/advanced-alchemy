@@ -1,6 +1,8 @@
-======
-config
-======
+=============
+Configuration
+=============
+
+.. py:module:: advanced_alchemy.config
 
 API Reference for the ``Config`` module
 

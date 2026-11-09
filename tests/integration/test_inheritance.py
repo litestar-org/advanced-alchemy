@@ -16,6 +16,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from advanced_alchemy import base
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.xdist_group("sqlite"),
+]
+
 # ============================================================================
 # Single Table Inheritance (STI) Tests
 # ============================================================================

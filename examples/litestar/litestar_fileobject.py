@@ -4,8 +4,9 @@ from uuid import UUID
 import uvicorn
 from litestar import Controller, Litestar, delete, get, patch, post
 from litestar.datastructures import UploadFile
+from litestar.di import NamedDependency
 from litestar.enums import RequestEncodingType
-from litestar.params import Body, Dependency
+from litestar.params import Body, FromPath, SkipValidation
 from pydantic import BaseModel, Field, computed_field
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -23,9 +24,6 @@ from advanced_alchemy.types import FileObject, storages
 from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
 from advanced_alchemy.types.file_object.data_type import StoredObject
 
-# Object storage backend
-# For local development, run an S3-compatible storage service (e.g., RustFS or MinIO) on port 9000 and create the 'static-files' bucket first.
-# Defaults below match pytest-databases >=0.19.0 RustFS fixture credentials; override via env when running real services.
 s3_backend = ObstoreBackend(
     key="local",
     fs="s3://static-files/",
@@ -38,7 +36,6 @@ s3_backend = ObstoreBackend(
 storages.register_backend(s3_backend)
 
 
-# SQLAlchemy Model
 class DocumentModel(base.UUIDBase):
     __tablename__ = "document"
 
@@ -46,7 +43,6 @@ class DocumentModel(base.UUIDBase):
     file: Mapped[FileObject] = mapped_column(StoredObject(backend="local"))
 
 
-# Pydantic Schema
 class Document(BaseModel):
     id: Optional[UUID]
     name: str
@@ -73,7 +69,6 @@ class PatchDocument(BaseModel):
     file: Optional[UploadFile] = None
 
 
-# Advanced Alchemy Service
 class DocumentService(service.SQLAlchemyAsyncRepositoryService[DocumentModel]):
     """Document repository."""
 
@@ -85,7 +80,6 @@ class DocumentService(service.SQLAlchemyAsyncRepositoryService[DocumentModel]):
     repository_type = Repo
 
 
-# Litestar Controller
 class DocumentController(Controller):
     path = "/documents"
     dependencies = providers.create_service_dependencies(
@@ -98,8 +92,8 @@ class DocumentController(Controller):
     @get(path="/", response_model=service.OffsetPagination[Document])
     async def list_documents(
         self,
-        documents_service: DocumentService,
-        filters: Annotated[list[filters.FilterTypes], Dependency(skip_validation=True)],
+        documents_service: NamedDependency[DocumentService],
+        filters: NamedDependency[SkipValidation[list[filters.FilterTypes]]],
     ) -> service.OffsetPagination[Document]:
         results, total = await documents_service.get_many_and_count(*filters)
         return documents_service.to_schema(results, total, filters=filters, schema_type=Document)
@@ -108,7 +102,7 @@ class DocumentController(Controller):
     async def create_document(
         self,
         data: Annotated[CreateDocument, Body(media_type=RequestEncodingType.MULTI_PART)],
-        documents_service: DocumentService,
+        documents_service: NamedDependency[DocumentService],
     ) -> Document:
         obj = await documents_service.create(
             DocumentModel(
@@ -128,8 +122,8 @@ class DocumentController(Controller):
     @get(path="/{document_id:uuid}")
     async def get_document(
         self,
-        documents_service: DocumentService,
-        document_id: UUID,
+        documents_service: NamedDependency[DocumentService],
+        document_id: FromPath[UUID],
     ) -> Document:
         obj = await documents_service.get(document_id)
         return documents_service.to_schema(obj, schema_type=Document)
@@ -137,9 +131,9 @@ class DocumentController(Controller):
     @patch(path="/{document_id:uuid}")
     async def update_document(
         self,
-        document_id: UUID,
+        document_id: FromPath[UUID],
         data: Annotated[PatchDocument, Body(media_type=RequestEncodingType.MULTI_PART)],
-        documents_service: DocumentService,
+        documents_service: NamedDependency[DocumentService],
     ) -> Document:
         update_data: dict[str, Any] = {}
         if data.name:
@@ -158,8 +152,8 @@ class DocumentController(Controller):
     @delete(path="/{document_id:uuid}")
     async def delete_document(
         self,
-        documents_service: DocumentService,
-        document_id: UUID,
+        documents_service: NamedDependency[DocumentService],
+        document_id: FromPath[UUID],
     ) -> None:
         _ = await documents_service.delete(document_id)
 

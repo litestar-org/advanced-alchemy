@@ -38,21 +38,21 @@ ConnectionT = TypeVar("ConnectionT", bound="Union[Connection, AsyncConnection]")
 """Type variable for SQLAlchemy connection types.
 
 .. seealso::
-    :class:`sqlalchemy.Connection`
+    :class:`sqlalchemy.engine.Connection`
     :class:`sqlalchemy.ext.asyncio.AsyncConnection`
 """
 EngineT = TypeVar("EngineT", bound="Union[Engine, AsyncEngine]")
 """Type variable for a SQLAlchemy engine.
 
 .. seealso::
-    :class:`sqlalchemy.Engine`
+    :class:`sqlalchemy.engine.Engine`
     :class:`sqlalchemy.ext.asyncio.AsyncEngine`
 """
 SessionT = TypeVar("SessionT", bound="Union[Session, AsyncSession]")
 """Type variable for a SQLAlchemy session.
 
 .. seealso::
-    :class:`sqlalchemy.Session`
+    :class:`sqlalchemy.orm.Session`
     :class:`sqlalchemy.ext.asyncio.AsyncSession`
 """
 SessionMakerT = TypeVar("SessionMakerT", bound="Union[sessionmaker[Session], async_sessionmaker[AsyncSession]]")
@@ -69,9 +69,9 @@ class GenericSessionConfig(Generic[ConnectionT, EngineT, SessionT]):
     """SQLAlchemy async session config.
 
     Types:
-        ConnectionT: :class:`sqlalchemy.Connection` | :class:`sqlalchemy.ext.asyncio.AsyncConnection`
-        EngineT: :class:`sqlalchemy.Engine` | :class:`sqlalchemy.ext.asyncio.AsyncEngine`
-        SessionT: :class:`sqlalchemy.Session` | :class:`sqlalchemy.ext.asyncio.AsyncSession`
+        ConnectionT: :class:`sqlalchemy.engine.Connection` | :class:`sqlalchemy.ext.asyncio.AsyncConnection`
+        EngineT: :class:`sqlalchemy.engine.Engine` | :class:`sqlalchemy.ext.asyncio.AsyncEngine`
+        SessionT: :class:`sqlalchemy.orm.Session` | :class:`sqlalchemy.ext.asyncio.AsyncSession`
     """
 
     autobegin: "Union[bool, EmptyType]" = Empty
@@ -102,7 +102,7 @@ class GenericSessionConfig(Generic[ConnectionT, EngineT, SessionT]):
     join_transaction_mode: "Union[JoinTransactionMode, EmptyType]" = Empty
     """Describes the transactional behavior to take when a given bind is a Connection that has already begun a
     transaction outside the scope of this Session; in other words the
-    :attr:`Connection.in_transaction() <sqlalchemy.Connection.in_transaction>` method returns True."""
+    :meth:`sqlalchemy.engine.Connection.in_transaction` method returns True."""
     query_cls: "Optional[Union[type[Query], EmptyType]]" = Empty  # pyright: ignore[reportMissingTypeArgument]
     """Class which should be used to create new Query objects, as returned by the
     :attr:`Session.query() <sqlalchemy.orm.Session.query>` method."""
@@ -120,8 +120,8 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     """Common SQLAlchemy Configuration.
 
     Types:
-        EngineT: :class:`sqlalchemy.Engine` or :class:`sqlalchemy.ext.asyncio.AsyncEngine`
-        SessionT: :class:`sqlalchemy.Session` or :class:`sqlalchemy.ext.asyncio.AsyncSession`
+        EngineT: :class:`sqlalchemy.engine.Engine` or :class:`sqlalchemy.ext.asyncio.AsyncEngine`
+        SessionT: :class:`sqlalchemy.orm.Session` or :class:`sqlalchemy.ext.asyncio.AsyncSession`
         SessionMakerT: :class:`sqlalchemy.orm.sessionmaker` or :class:`sqlalchemy.ext.asyncio.async_sessionmaker`
     """
 
@@ -193,11 +193,11 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     """Optional :class:`CacheConfig <advanced_alchemy.cache.CacheConfig>` for dogpile.cache integration.
 
     When set, a :class:`CacheManager <advanced_alchemy.cache.CacheManager>` is instantiated during
-    :meth:`__post_init__` and stored in ``session_config.info["cache_manager"]``. Repositories
+    ``__post_init__`` and stored in ``session_config.info["cache_manager"]``. Repositories
     created against sessions produced by this config will pick the manager up automatically.
 
     Requires the optional ``dogpile.cache`` dependency (``pip install advanced-alchemy[dogpile]``);
-    without it the manager falls back to a no-op :class:`NullRegion`.
+    without it the manager falls back to a no-op ``NullRegion``.
 
     .. seealso::
         :doc:`/usage/caching`
@@ -224,8 +224,6 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         else:
             metadata_registry.set(self.bind_key, self.metadata)
 
-        # Detach session_config and normalize info to a private dict so config writes
-        # don't bleed between configs that share the same session_config object.
         self.session_config = copy.copy(self.session_config)
         configured_info = self.session_config.info
         session_info: dict[str, Any] = (
@@ -234,8 +232,6 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         session_info["file_object_raise_on_error"] = self.file_object_raise_on_error
         self.session_config.info = session_info
 
-        # Build a CacheManager from cache_config if one wasn't supplied explicitly,
-        # then propagate it to sessions via session_config.info["cache_manager"].
         if self.cache_manager is None and self.cache_config is not None:
             from advanced_alchemy.cache import CacheManager
 
@@ -262,7 +258,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         """Return the engine configuration as a dict.
 
         Returns:
-            A string keyed dict of config kwargs for the SQLAlchemy :func:`sqlalchemy.get_engine`
+            A string keyed dict of config kwargs for the SQLAlchemy :func:`sqlalchemy.create_engine`
             function.
         """
         return simple_asdict(self.engine_config, exclude_empty=True)
@@ -284,7 +280,7 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
             ImproperConfigurationError: if neither `connection_string` nor `engine_instance` are provided.
 
         Returns:
-            :class:`sqlalchemy.Engine` or :class:`sqlalchemy.ext.asyncio.AsyncEngine` instance used by the plugin.
+            :class:`sqlalchemy.engine.Engine` or :class:`sqlalchemy.ext.asyncio.AsyncEngine` instance used by the plugin.
         """
         if self.engine_instance:
             return self.engine_instance
@@ -297,7 +293,6 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
         try:
             self.engine_instance = self.create_engine_callable(self.connection_string, **engine_config)
         except TypeError:
-            # likely due to a dialect that doesn't support json type
             del engine_config["json_deserializer"]
             del engine_config["json_serializer"]
             self.engine_instance = self.create_engine_callable(self.connection_string, **engine_config)

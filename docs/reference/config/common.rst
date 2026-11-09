@@ -1,5 +1,5 @@
 ======
-common
+Common
 ======
 
 .. automodule:: advanced_alchemy.config.common

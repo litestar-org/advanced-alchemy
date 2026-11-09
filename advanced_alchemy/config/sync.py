@@ -167,7 +167,7 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
         """Get a session context manager.
 
         Yields:
-            Generator[sqlalchemy.orm.Session, None, None]: A context manager yielding an active SQLAlchemy Session.
+            A context manager yielding an active SQLAlchemy :class:`~sqlalchemy.orm.Session`.
 
         Examples:
             Using the session context manager:

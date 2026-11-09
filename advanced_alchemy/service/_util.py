@@ -220,14 +220,14 @@ class ResultConverter:
             data: The return from one of the service calls.
               Type: :class:`~advanced_alchemy.repository.typing.ModelOrRowMappingT`
             total: The total number of rows in the data.
-            filters: :class:`~advanced_alchemy.filters.StatementFilter`| :class:`sqlalchemy.sql.expression.ColumnElement` Collection of route filters.
+            filters: :class:`~advanced_alchemy.filters.StatementFilter` | :class:`~sqlalchemy.sql.expression.ColumnElement` collection of route filters.
             schema_type: :class:`~advanced_alchemy.utils.serialization.ModelDTOT` Optional schema type to convert the data to
 
         Raises:
             AdvancedAlchemyError: If `schema_type` is not a valid Pydantic, Msgspec, or attrs schema and all libraries are not installed.
 
         Returns:
-            :class:`~advanced_alchemy.base.ModelProtocol` | :class:`sqlalchemy.orm.RowMapping` | :class:`~advanced_alchemy.service.pagination.OffsetPagination` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel` | :class:`attrs class`
+            :class:`~advanced_alchemy.base.ModelProtocol` | :class:`~sqlalchemy.engine.RowMapping` | :class:`~advanced_alchemy.service.pagination.OffsetPagination` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel` | ``attrs`` class
         """
         if filters is None:
             filters = []

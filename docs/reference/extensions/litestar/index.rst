@@ -1,59 +1,56 @@
 ========
-litestar
+Litestar
 ========
 
-API Reference for the ``Litestar`` extensions module
+.. py:module:: advanced_alchemy.extensions.litestar
 
-.. note:: Private methods and attributes are not included in the API reference.
+Litestar framework integration providing plugins, session lifecycle handlers,
+dependency injection providers, DTOs, server-side session backends, and CLI commands.
 
+Session Lifecycle Handlers
+--------------------------
+
+.. autofunction:: advanced_alchemy.extensions.litestar.async_autocommit_before_send_handler
+
+.. autofunction:: advanced_alchemy.extensions.litestar.async_autocommit_handler_maker
+
+.. autofunction:: advanced_alchemy.extensions.litestar.async_default_before_send_handler
+
+.. autofunction:: advanced_alchemy.extensions.litestar.async_default_handler_maker
+
+.. autofunction:: advanced_alchemy.extensions.litestar.sync_autocommit_before_send_handler
+
+.. autofunction:: advanced_alchemy.extensions.litestar.sync_autocommit_handler_maker
+
+.. autofunction:: advanced_alchemy.extensions.litestar.sync_default_before_send_handler
+
+.. autofunction:: advanced_alchemy.extensions.litestar.sync_default_handler_maker
+
+Dependency Injection & CLI Plugin Helpers
+-----------------------------------------
+
+.. autofunction:: advanced_alchemy.extensions.litestar.get_database_migration_plugin
+
+.. py:module:: advanced_alchemy.extensions.litestar.providers
+    :no-typesetting:
+
+.. autofunction:: advanced_alchemy.extensions.litestar.providers.create_service_dependencies
+
+.. autofunction:: advanced_alchemy.extensions.litestar.providers.create_service_provider
+
+.. autoclass:: advanced_alchemy.extensions.litestar.providers.FilterConfig
+    :no-members:
+    :no-inherited-members:
+    :show-inheritance:
+
+Component API References
 ------------------------
-
-.. automodule:: advanced_alchemy.extensions.litestar
-    :imported-members:
-        advanced_alchemy.utils
-        advanced_alchemy.base
-        advanced_alchemy.exceptions
-        advanced_alchemy.filters
-        advanced_alchemy.mixins
-        advanced_alchemy.operations
-        advanced_alchemy.repository
-        advanced_alchemy.service
-        advanced_alchemy.types
-        advanced_alchemy.alembic.commands.AlembicCommands
-        advanced_alchemy.extensions.litestar.plugins.init.plugin.SQLAlchemyPlugin
-        advanced_alchemy.extensions.litestar.plugins.init.plugin.SQLAlchemySerializationPlugin
-        advanced_alchemy.extensions.litestar.dto.SQLAlchemyDTO
-        advanced_alchemy.extensions.litestar.dto.SQLAlchemyDTOConfig
-    :members:
-        AlembicAsyncConfig
-        AlembicSyncConfig
-        AsyncSessionConfig
-        EngineConfig
-        SQLAlchemyAsyncConfig
-        SQLAlchemyInitPlugin
-        SQLAlchemyPlugin
-        SQLAlchemySerializationPlugin
-        SQLAlchemySyncConfig
-        SyncSessionConfig
-        async_autocommit_before_send_handler
-        async_autocommit_handler_maker
-        async_default_before_send_handler
-        async_default_handler_maker
-        sync_autocommit_before_send_handler
-        sync_autocommit_handler_maker
-        sync_default_before_send_handler
-        sync_default_handler_maker
-
-
-
-Additional API References
--------------------------
 
 .. toctree::
     :titlesonly:
 
-    dto
     plugins
-    cli
+    dto
     session
     store
+    cli

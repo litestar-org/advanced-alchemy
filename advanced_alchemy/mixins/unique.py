@@ -60,12 +60,12 @@ class UniqueMixin:
         If an object with the same unique identifier already exists in the session, it is returned from the cache.
 
         Args:
-            session (AsyncSession | async_scoped_session[AsyncSession]): SQLAlchemy async session
-            *args (Any): Values used to instantiate the instance if no duplicate exists
-            **kwargs (Any): Values used to instantiate the instance if no duplicate exists
+            session: SQLAlchemy async session
+            *args: Values used to instantiate the instance if no duplicate exists
+            **kwargs: Values used to instantiate the instance if no duplicate exists
 
         Returns:
-            Self: The unique object instance.
+            The unique object instance.
         """
         key = cls, cls.unique_hash(*args, **kwargs)
         cache, statement, obj = cls._check_uniqueness(
@@ -95,12 +95,12 @@ class UniqueMixin:
         If an object with the same unique identifier already exists in the session, it is returned from the cache.
 
         Args:
-            session (Session | scoped_session[Session]): SQLAlchemy sync session
-            *args (Any): Values used to instantiate the instance if no duplicate exists
-            **kwargs (Any): Values used to instantiate the instance if no duplicate exists
+            session: SQLAlchemy sync session
+            *args: Values used to instantiate the instance if no duplicate exists
+            **kwargs: Values used to instantiate the instance if no duplicate exists
 
         Returns:
-            Self: The unique object instance.
+            The unique object instance.
         """
         key = cls, cls.unique_hash(*args, **kwargs)
         cache, statement, obj = cls._check_uniqueness(
@@ -126,14 +126,14 @@ class UniqueMixin:
 
 
         Args:
-            *args (Any): Values passed to the alternate classmethod constructors
-            **kwargs (Any): Values passed to the alternate classmethod constructors
+            *args: Values passed to the alternate classmethod constructors
+            **kwargs: Values passed to the alternate classmethod constructors
 
         Raises:
             NotImplementedError: If not implemented in the subclass.
 
         Returns:
-            Hashable: Any hashable object.
+            Any hashable object.
         """
         msg = "Implement this in subclass"
         raise NotImplementedError(msg)
@@ -146,14 +146,14 @@ class UniqueMixin:
 
 
         Args:
-            *args (Any): Values passed to the alternate classmethod constructors
-            **kwargs (Any): Values passed to the alternate classmethod constructors
+            *args: Values passed to the alternate classmethod constructors
+            **kwargs: Values passed to the alternate classmethod constructors
 
         Raises:
             NotImplementedError: If not implemented in the subclass.
 
         Returns:
-            ColumnElement[bool]: Filter condition to establish the uniqueness.
+            Filter condition to establish the uniqueness.
         """
         msg = "Implement this in subclass"
         raise NotImplementedError(msg)

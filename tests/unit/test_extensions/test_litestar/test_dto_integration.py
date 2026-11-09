@@ -8,7 +8,7 @@ from uuid import UUID
 
 import pytest
 from litestar import get, post
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 from litestar.dto import DTOField, Mark
 from litestar.dto._backend import _camelize  # type: ignore
 from litestar.dto.field import DTO_FIELD_META_KEY
@@ -739,10 +739,10 @@ async def test_disable_implicitly_mapped_columns_using_annotated_notation() -> N
     @get(
         dto=None,
         return_dto=dto_type,
-        signature_namespace={"Model": Model},
+        signature_namespace={"Model": Model, "NamedDependency": NamedDependency},
         dependencies={"model": Provide(lambda: Model(id=123, field="hi"), sync_to_thread=False)},
     )
-    async def post_handler(model: Model) -> Model:
+    async def post_handler(model: NamedDependency[Model]) -> Model:
         return model
 
     with create_test_client(route_handlers=[post_handler]) as client:
@@ -776,10 +776,10 @@ async def test_disable_implicitly_mapped_columns_special() -> None:
     @get(
         dto=None,
         return_dto=dto_type,
-        signature_namespace={"Model": Model},
+        signature_namespace={"Model": Model, "NamedDependency": NamedDependency},
         dependencies={"model": Provide(lambda: Model(id=123, field="hi"), sync_to_thread=False)},
     )
-    async def post_handler(model: Model) -> Model:
+    async def post_handler(model: NamedDependency[Model]) -> Model:
         return model
 
     with create_test_client(route_handlers=[post_handler]) as client:
@@ -826,7 +826,7 @@ async def test_disable_implicitly_mapped_columns_with_hybrid_properties_and_Mark
     @get(
         dto=None,
         return_dto=dto_type,
-        signature_namespace={"Model": Model},
+        signature_namespace={"Model": Model, "NamedDependency": NamedDependency},
         dependencies={
             "model": Provide(
                 lambda: Model(id=12, field="hi", field2="bye2", field3="bye3", field4="bye4"),
@@ -834,7 +834,7 @@ async def test_disable_implicitly_mapped_columns_with_hybrid_properties_and_Mark
             ),
         },
     )
-    async def post_handler(model: Model) -> Model:
+    async def post_handler(model: NamedDependency[Model]) -> Model:
         return model
 
     with create_test_client(route_handlers=[post_handler]) as client:
@@ -858,7 +858,7 @@ from __future__ import annotations
 from typing import Dict, List, Set, Tuple, Type, Generator
 
 from litestar import post
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 from litestar.dto import DTOData
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Mapped, sessionmaker
@@ -890,7 +890,7 @@ def provide_service( ) -> Generator[ModelService, None, None]:
 
 
 @post("/", dependencies={"service": Provide(provide_service)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO)
-def post_handler(data: DTOData[Model], service: ModelService) -> Model:
+def post_handler(data: DTOData[Model], service: NamedDependency[ModelService]) -> Model:
     return service.create(data, auto_commit=True)
 
     """,
@@ -908,7 +908,7 @@ from __future__ import annotations
 from typing import Dict, List, Set, Tuple, Type, AsyncGenerator
 
 from litestar import post
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 from litestar.dto import DTOData  # noqa: TCH002
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Mapped  # noqa: TCH002
@@ -941,7 +941,7 @@ async def provide_service( ) -> AsyncGenerator[ModelService, None]:
         await conn.run_sync(AModel.metadata.create_all)
 
 @post("/", dependencies={"service": Provide(provide_service)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO)
-async def post_handler(data: DTOData[AModel], service: ModelService) -> AModel:
+async def post_handler(data: DTOData[AModel], service: NamedDependency[ModelService]) -> AModel:
     return await service.create(data, auto_commit=True)
 
     """,
@@ -959,7 +959,7 @@ from __future__ import annotations
 from typing import Dict, List, Set, Tuple, Type, Union
 
 from litestar import post
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 from litestar.dto import DTOData, DTOField, Mark
 from litestar.dto.field import DTO_FIELD_META_KEY
 from sqlalchemy import create_engine
@@ -996,7 +996,7 @@ def provide_service( ) -> Generator[ModelService, None, None]:
     Model.metadata.drop_all(engine)
 
 @post("/", dependencies={"service": Provide(provide_service)}, dto=ModelCreateDTO, return_dto=ModelReturnDTO)
-def post_handler(data: DTOData[Model], service: ModelService) -> Model:
+def post_handler(data: DTOData[Model], service: NamedDependency[ModelService]) -> Model:
     return service.create(data, auto_commit=True)
 
 """,

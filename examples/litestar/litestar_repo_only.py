@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import datetime  # noqa: TC003
-from typing import TYPE_CHECKING, Annotated, Optional
+from typing import Annotated, Optional
 from uuid import UUID  # noqa: TC003
 
 from litestar import Litestar
 from litestar.controller import Controller
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 from litestar.handlers.http_handlers.decorators import delete, get, patch, post
 from litestar.pagination import OffsetPagination
+from litestar.params import PathParameter, QueryParameter
 from pydantic import BaseModel as _BaseModel
 from pydantic import TypeAdapter
 from sqlalchemy import ForeignKey
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
@@ -20,10 +22,6 @@ from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, 
 from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
-if TYPE_CHECKING:
-    from litestar.params import PathParameter, QueryParameter
-    from sqlalchemy.ext.asyncio import AsyncSession
-
 
 class BaseModel(_BaseModel):
     """Extend Pydantic's BaseModel to enable ORM mode"""
@@ -31,27 +29,18 @@ class BaseModel(_BaseModel):
     model_config = {"from_attributes": True}
 
 
-# the SQLAlchemy base includes a declarative model for you to use in your models.
-# The `Base` class includes a `UUID` based primary key (`id`)
 class AuthorModel(UUIDBase):
-    # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
     dob: Mapped[Optional[datetime.date]]  # noqa: UP045
     books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
 
 
-# The `AuditBase` class includes the same UUID` based primary key (`id`) and 2
-# additional columns: `created` and `updated`. `created` is a timestamp of when the
-# record created, and `updated` is the last time the record was modified.
 class BookModel(UUIDAuditBase):
     __tablename__ = "book"
     title: Mapped[str]
     author_id: Mapped[UUID] = mapped_column(ForeignKey("author.id"))
     author: Mapped[AuthorModel] = relationship(lazy="joined", innerjoin=True, viewonly=True)
-
-
-# we will explicitly define the schema instead of using DTO objects for clarity.
 
 
 class Author(BaseModel):
@@ -76,14 +65,12 @@ class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):
     model_type = AuthorModel
 
 
-async def provide_authors_repo(db_session: AsyncSession) -> AuthorRepository:
+async def provide_authors_repo(db_session: NamedDependency[AsyncSession]) -> AuthorRepository:
     """This provides the default Authors repository."""
     return AuthorRepository(session=db_session)
 
 
-# we can optionally override the default `select` used for the repository to pass in
-# specific SQL options such as join details
-async def provide_author_details_repo(db_session: AsyncSession) -> AuthorRepository:
+async def provide_author_details_repo(db_session: NamedDependency[AsyncSession]) -> AuthorRepository:
     """This provides a simple example demonstrating how to override the join options for the repository."""
     return AuthorRepository(load=[AuthorModel.books], session=db_session)
 
@@ -114,8 +101,8 @@ class AuthorController(Controller):
     @get(path="/authors")
     async def list_authors(
         self,
-        authors_repo: AuthorRepository,
-        limit_offset: LimitOffset,
+        authors_repo: NamedDependency[AuthorRepository],
+        limit_offset: NamedDependency[LimitOffset],
     ) -> OffsetPagination[Author]:
         """List authors."""
         results, total = await authors_repo.get_many_and_count(limit_offset)
@@ -130,7 +117,7 @@ class AuthorController(Controller):
     @post(path="/authors")
     async def create_author(
         self,
-        authors_repo: AuthorRepository,
+        authors_repo: NamedDependency[AuthorRepository],
         data: AuthorCreate,
     ) -> Author:
         """Create a new author."""
@@ -140,11 +127,10 @@ class AuthorController(Controller):
         await authors_repo.session.commit()
         return Author.model_validate(obj)
 
-    # we override the authors_repo to use the version that joins the Books in
     @get(path="/authors/{author_id:uuid}", dependencies={"authors_repo": Provide(provide_author_details_repo)})
     async def get_author(
         self,
-        authors_repo: AuthorRepository,
+        authors_repo: NamedDependency[AuthorRepository],
         author_id: Annotated[
             UUID,
             PathParameter(
@@ -163,7 +149,7 @@ class AuthorController(Controller):
     )
     async def update_author(
         self,
-        authors_repo: AuthorRepository,
+        authors_repo: NamedDependency[AuthorRepository],
         data: AuthorUpdate,
         author_id: Annotated[
             UUID,
@@ -183,7 +169,7 @@ class AuthorController(Controller):
     @delete(path="/authors/{author_id:uuid}")
     async def delete_author(
         self,
-        authors_repo: AuthorRepository,
+        authors_repo: NamedDependency[AuthorRepository],
         author_id: Annotated[
             UUID,
             PathParameter(
@@ -202,7 +188,7 @@ alchemy_config = SQLAlchemyAsyncConfig(
     connection_string="sqlite+aiosqlite:///test.sqlite",
     session_config=session_config,
     create_all=True,
-)  # Auto creates 'db_session' dependency.
+)
 
 
 app = Litestar(

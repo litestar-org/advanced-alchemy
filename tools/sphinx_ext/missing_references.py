@@ -1,28 +1,338 @@
-"""Sphinx extension for changelog and change directives."""
+"""Sphinx extension for resolving cross-references and registering objects.inv aliases."""
 
-# ruff: noqa: PLR0911, ARG001
 from __future__ import annotations
 
 import ast
+import builtins
 import importlib
 import inspect
+import os
+import re
+from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
+
+from docutils.utils import get_source_line
+from sphinx.addnodes import pending_xref
+from sphinx.domains.python import ObjectEntry, PythonDomain
+from sphinx.ext.autodoc import (
+    ClassDocumenter,
+    DataDocumenter,
+    Documenter,
+    FunctionDocumenter,
+    GenericAliasMixin,
+    MethodDocumenter,
+)
+from sphinx.ext.autodoc import directive as autodoc_directive
+from sphinx.pycode import ModuleAnalyzer, PycodeError
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Iterator
 
     from docutils.nodes import Element, Node
-    from sphinx.addnodes import pending_xref
     from sphinx.application import Sphinx
     from sphinx.environment import BuildEnvironment
 
+__all__ = (
+    "CLASS_ROLE_DATA_SUFFIXES",
+    "LITESTAR_OBJECT_ALIAS_GROUPS",
+    "PACKAGE_REEXPORT_MODULES",
+    "get_module_global_imports",
+    "on_missing_reference",
+    "on_warn_missing_reference",
+    "register_inventory_aliases",
+    "setup",
+)
 
-def _get_module_ast(source_file: str) -> ast.AST | ast.Module:
+_TYPEVAR_CLASS_NAMES: frozenset[str] = frozenset(
+    {
+        "TypeVar",
+        "ParamSpec",
+        "TypeVarTuple",
+        "TypeAliasType",
+        "TypeAliasForwardRef",
+        "_TypeAliasForm",
+    }
+)
+
+CLASS_ROLE_DATA_SUFFIXES: frozenset[str] = frozenset(
+    {
+        "BigIntIdentity",
+        "JsonB",
+        "EngineT",
+        "SessionT",
+        "SessionMakerT",
+        "ConnectionT",
+        "FilterTypes",
+        "EmptyType",
+        "ModelT",
+        "ModelDTOT",
+        "SelectT",
+        "RowT",
+        "StorageBackendT",
+        "CommitStrategy",
+        "RoutingStrategy",
+        "TypeEncodersMap",
+        "TypeDecodersSequence",
+        "ErrorMessages",
+        "FilterMap",
+        "LogicalOperatorMap",
+    }
+)
+
+LITESTAR_OBJECT_ALIAS_GROUPS: tuple[tuple[str, ...], ...] = (
+    (
+        "advanced_alchemy.extensions.litestar.SQLAlchemyPlugin",
+        "advanced_alchemy.extensions.litestar.plugins.SQLAlchemyPlugin",
+        "advanced_alchemy.extensions.litestar.plugins.init.plugin.SQLAlchemyPlugin",
+    ),
+    (
+        "advanced_alchemy.extensions.litestar.SQLAlchemyInitPlugin",
+        "advanced_alchemy.extensions.litestar.plugins.SQLAlchemyInitPlugin",
+        "advanced_alchemy.extensions.litestar.plugins.init.plugin.SQLAlchemyInitPlugin",
+    ),
+    (
+        "advanced_alchemy.extensions.litestar.SQLAlchemySerializationPlugin",
+        "advanced_alchemy.extensions.litestar.plugins.SQLAlchemySerializationPlugin",
+        "advanced_alchemy.extensions.litestar.plugins.serialization.SQLAlchemySerializationPlugin",
+    ),
+    (
+        "advanced_alchemy.extensions.litestar.SQLAlchemyAsyncConfig",
+        "advanced_alchemy.extensions.litestar.plugins.SQLAlchemyAsyncConfig",
+        "advanced_alchemy.extensions.litestar.plugins.init.config.SQLAlchemyAsyncConfig",
+        "advanced_alchemy.extensions.litestar.plugins.init.config.asyncio.SQLAlchemyAsyncConfig",
+    ),
+    (
+        "advanced_alchemy.extensions.litestar.SQLAlchemySyncConfig",
+        "advanced_alchemy.extensions.litestar.plugins.SQLAlchemySyncConfig",
+        "advanced_alchemy.extensions.litestar.plugins.init.config.SQLAlchemySyncConfig",
+        "advanced_alchemy.extensions.litestar.plugins.init.config.sync.SQLAlchemySyncConfig",
+    ),
+    (
+        "advanced_alchemy.extensions.litestar.EngineConfig",
+        "advanced_alchemy.extensions.litestar.plugins.EngineConfig",
+        "advanced_alchemy.extensions.litestar.plugins.init.config.EngineConfig",
+        "advanced_alchemy.extensions.litestar.plugins.init.config.engine.EngineConfig",
+    ),
+    (
+        "advanced_alchemy.extensions.litestar.AsyncSessionConfig",
+        "advanced_alchemy.config.AsyncSessionConfig",
+        "advanced_alchemy.config.asyncio.AsyncSessionConfig",
+    ),
+    (
+        "advanced_alchemy.extensions.litestar.SyncSessionConfig",
+        "advanced_alchemy.config.SyncSessionConfig",
+        "advanced_alchemy.config.sync.SyncSessionConfig",
+    ),
+    (
+        "advanced_alchemy.extensions.litestar.AlembicAsyncConfig",
+        "advanced_alchemy.config.AlembicAsyncConfig",
+        "advanced_alchemy.config.asyncio.AlembicAsyncConfig",
+    ),
+    (
+        "advanced_alchemy.extensions.litestar.AlembicSyncConfig",
+        "advanced_alchemy.config.AlembicSyncConfig",
+        "advanced_alchemy.config.sync.AlembicSyncConfig",
+    ),
+    (
+        "advanced_alchemy.extensions.litestar.AlembicCommands",
+        "advanced_alchemy.alembic.commands.AlembicCommands",
+    ),
+    (
+        "advanced_alchemy.extensions.litestar.dto.SQLAlchemyDTO",
+        "advanced_alchemy.extensions.litestar.SQLAlchemyDTO",
+        "advanced_alchemy.dto.SQLAlchemyDTO",
+    ),
+    (
+        "advanced_alchemy.extensions.litestar.dto.SQLAlchemyDTOConfig",
+        "advanced_alchemy.extensions.litestar.SQLAlchemyDTOConfig",
+        "advanced_alchemy.dto.SQLAlchemyDTOConfig",
+    ),
+    (
+        "advanced_alchemy.utils.dataclass.Empty",
+        "advanced_alchemy.config.types.Empty",
+        "advanced_alchemy.base.Empty",
+        "advanced_alchemy.utils.Empty",
+    ),
+    (
+        "advanced_alchemy.utils.dataclass.EmptyType",
+        "advanced_alchemy.config.types.EmptyType",
+        "advanced_alchemy.utils.EmptyType",
+    ),
+    (
+        "advanced_alchemy._listeners.touch_updated_timestamp",
+        "advanced_alchemy.base.touch_updated_timestamp",
+    ),
+    (
+        "advanced_alchemy.utils.serialization.decode_json",
+        "advanced_alchemy.decode_json",
+        "advanced_alchemy._serialization.decode_json",
+    ),
+    (
+        "advanced_alchemy.utils.serialization.encode_json",
+        "advanced_alchemy.encode_json",
+        "advanced_alchemy._serialization.encode_json",
+    ),
+    (
+        "advanced_alchemy.config.common.EngineT",
+        "advanced_alchemy.config.EngineT",
+    ),
+    (
+        "advanced_alchemy.config.common.SessionT",
+        "advanced_alchemy.config.SessionT",
+    ),
+    (
+        "advanced_alchemy.config.common.SessionMakerT",
+        "advanced_alchemy.config.SessionMakerT",
+    ),
+    (
+        "advanced_alchemy.config.common.ConnectionT",
+        "advanced_alchemy.config.ConnectionT",
+    ),
+    (
+        "advanced_alchemy.config.common.GenericSessionConfig",
+        "advanced_alchemy.config.GenericSessionConfig",
+    ),
+    (
+        "advanced_alchemy.config.common.GenericSQLAlchemyConfig",
+        "advanced_alchemy.config.GenericSQLAlchemyConfig",
+    ),
+    (
+        "advanced_alchemy.config.common.GenericAlembicConfig",
+        "advanced_alchemy.config.GenericAlembicConfig",
+    ),
+    (
+        "advanced_alchemy.config.engine.EngineConfig",
+        "advanced_alchemy.config.EngineConfig",
+        "advanced_alchemy.config.routing.EngineConfig",
+    ),
+    (
+        "advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig",
+        "advanced_alchemy.config.SQLAlchemyAsyncConfig",
+    ),
+    (
+        "advanced_alchemy.config.sync.SQLAlchemySyncConfig",
+        "advanced_alchemy.config.SQLAlchemySyncConfig",
+    ),
+    (
+        "advanced_alchemy.config.routing.RoutingConfig",
+        "advanced_alchemy.config.RoutingConfig",
+        "advanced_alchemy.routing.RoutingConfig",
+    ),
+    (
+        "advanced_alchemy.config.routing.ReplicaConfig",
+        "advanced_alchemy.config.ReplicaConfig",
+        "advanced_alchemy.routing.ReplicaConfig",
+    ),
+    (
+        "advanced_alchemy.config.routing.RoutingStrategy",
+        "advanced_alchemy.config.RoutingStrategy",
+        "advanced_alchemy.routing.RoutingStrategy",
+    ),
+    (
+        "advanced_alchemy.repository.SQLAlchemyAsyncRepository",
+        "advanced_alchemy.repository._async.SQLAlchemyAsyncRepository",
+        "advanced_alchemy.extensions.litestar.repository.SQLAlchemyAsyncRepository",
+    ),
+    (
+        "advanced_alchemy.repository.SQLAlchemySyncRepository",
+        "advanced_alchemy.repository._sync.SQLAlchemySyncRepository",
+        "advanced_alchemy.extensions.litestar.repository.SQLAlchemySyncRepository",
+    ),
+    (
+        "advanced_alchemy.repository.SQLAlchemyAsyncSlugRepository",
+        "advanced_alchemy.repository._async.SQLAlchemyAsyncSlugRepository",
+        "advanced_alchemy.extensions.litestar.repository.SQLAlchemyAsyncSlugRepository",
+    ),
+    (
+        "advanced_alchemy.repository.SQLAlchemySyncSlugRepository",
+        "advanced_alchemy.repository._sync.SQLAlchemySyncSlugRepository",
+        "advanced_alchemy.extensions.litestar.repository.SQLAlchemySyncSlugRepository",
+    ),
+    (
+        "advanced_alchemy.repository.SQLAlchemyAsyncQueryRepository",
+        "advanced_alchemy.repository._async.SQLAlchemyAsyncQueryRepository",
+        "advanced_alchemy.extensions.litestar.repository.SQLAlchemyAsyncQueryRepository",
+    ),
+    (
+        "advanced_alchemy.repository.SQLAlchemySyncQueryRepository",
+        "advanced_alchemy.repository._sync.SQLAlchemySyncQueryRepository",
+        "advanced_alchemy.extensions.litestar.repository.SQLAlchemySyncQueryRepository",
+    ),
+    (
+        "advanced_alchemy.repository.memory.SQLAlchemyAsyncMockRepository",
+        "advanced_alchemy.repository.SQLAlchemyAsyncMockRepository",
+        "advanced_alchemy.repository.memory._async.SQLAlchemyAsyncMockRepository",
+    ),
+    (
+        "advanced_alchemy.repository.memory.SQLAlchemySyncMockRepository",
+        "advanced_alchemy.repository.SQLAlchemySyncMockRepository",
+        "advanced_alchemy.repository.memory._sync.SQLAlchemySyncMockRepository",
+    ),
+    (
+        "advanced_alchemy.repository.memory.SQLAlchemyAsyncMockSlugRepository",
+        "advanced_alchemy.repository.SQLAlchemyAsyncMockSlugRepository",
+        "advanced_alchemy.repository.memory._async.SQLAlchemyAsyncMockSlugRepository",
+    ),
+    (
+        "advanced_alchemy.repository.memory.SQLAlchemySyncMockSlugRepository",
+        "advanced_alchemy.repository.SQLAlchemySyncMockSlugRepository",
+        "advanced_alchemy.repository.memory._sync.SQLAlchemySyncMockSlugRepository",
+    ),
+    (
+        "advanced_alchemy.filters.FilterTypes",
+        "advanced_alchemy.service.FilterTypes",
+        "advanced_alchemy.service.typing.FilterTypes",
+        "advanced_alchemy.extensions.litestar.filters.FilterTypes",
+    ),
+    (
+        "advanced_alchemy.repository.typing.ModelT",
+        "advanced_alchemy.repository.ModelT",
+        "advanced_alchemy.service.ModelT",
+    ),
+)
+
+PACKAGE_REEXPORT_MODULES: tuple[str, ...] = (
+    "advanced_alchemy",
+    "advanced_alchemy.alembic.commands",
+    "advanced_alchemy.base",
+    "advanced_alchemy.cache",
+    "advanced_alchemy.cli",
+    "advanced_alchemy.config",
+    "advanced_alchemy.exceptions",
+    "advanced_alchemy.filters",
+    "advanced_alchemy.mixins",
+    "advanced_alchemy.operations",
+    "advanced_alchemy.repository",
+    "advanced_alchemy.repository.memory",
+    "advanced_alchemy.routing",
+    "advanced_alchemy.routing.selectors",
+    "advanced_alchemy.service",
+    "advanced_alchemy.types",
+    "advanced_alchemy.utils",
+    "advanced_alchemy.utils.dataclass",
+    "advanced_alchemy.extensions",
+    "advanced_alchemy.extensions.litestar",
+    "advanced_alchemy.extensions.litestar.cli",
+    "advanced_alchemy.extensions.litestar.dto",
+    "advanced_alchemy.extensions.litestar.plugins",
+    "advanced_alchemy.extensions.litestar.session",
+    "advanced_alchemy.extensions.litestar.store",
+    "advanced_alchemy.extensions.fastapi",
+    "advanced_alchemy.extensions.flask",
+    "advanced_alchemy.extensions.sanic",
+    "advanced_alchemy.extensions.starlette",
+)
+
+
+@cache
+def _get_module_ast(source_file: str) -> ast.Module:
+    """Parse and cache the AST for a Python source file."""
     return ast.parse(Path(source_file).read_text(encoding="utf-8"))
 
 
 def _get_import_nodes(nodes: list[ast.stmt]) -> Generator[ast.Import | ast.ImportFrom, None, None]:
+    """Yield import statements from top-level and ``if TYPE_CHECKING:`` blocks."""
     for node in nodes:
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             yield node
@@ -30,334 +340,818 @@ def _get_import_nodes(nodes: list[ast.stmt]) -> Generator[ast.Import | ast.Impor
             yield from _get_import_nodes(node.body)
 
 
-def get_module_global_imports(module_import_path: str, reference_target_source_obj: str) -> set[str]:
-    """Return a set of names that are imported globally within the containing module of ``reference_target_source_obj``,
-    including imports in ``if TYPE_CHECKING`` blocks.
-    """
-    module = importlib.import_module(module_import_path)
-    obj = getattr(module, reference_target_source_obj)
-    tree = _get_module_ast(inspect.getsourcefile(obj))  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+def _get_typevar_assigned_names(nodes: list[ast.stmt]) -> set[str]:
+    """Extract module-level TypeVar, ParamSpec, and TypeAlias names from AST statements."""
+    names: set[str] = set()
+    for node in nodes:
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
+            func_name = getattr(node.value.func, "id", None) or getattr(node.value.func, "attr", None)
+            if func_name in {"TypeVar", "ParamSpec", "TypeVarTuple", "TypeAliasType", "NewType"}:
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        names.add(target.id)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            ann_name = getattr(node.annotation, "id", None) or getattr(node.annotation, "attr", None)
+            if ann_name == "TypeAlias":
+                names.add(node.target.id)
+        elif isinstance(node, ast.If) and getattr(node.test, "id", None) == "TYPE_CHECKING":
+            names.update(_get_typevar_assigned_names(node.body))
+    return names
 
-    import_nodes = _get_import_nodes(tree.body)  # type: ignore[attr-defined]
-    return {path.asname or path.name for import_node in import_nodes for path in import_node.names}
 
-
-def _resolve_local_reference(module_path: str, target: str) -> bool:
-    """Attempt to resolve a reference within the local codebase.
-
-    Args:
-        module_path: The module path (e.g., 'advanced_alchemy.base')
-        target: The target class/attribute name
-
-    Returns:
-        bool: True if reference exists, False otherwise
-    """
+def _append_source_file(source_files: list[str], target_obj: Any) -> None:
+    """Append the source file path of ``target_obj`` to ``source_files`` if available and unique."""
+    if target_obj is None:
+        return
     try:
-        module = importlib.import_module(module_path)
-        if "." in target:
-            # Handle fully qualified names (e.g., advanced_alchemy.base.BasicAttributes)
-            parts = target.split(".")
-            current = module
-            for part in parts:
-                current = getattr(current, part)
-            return True
-        return hasattr(module, target)
-    except (ImportError, AttributeError):
-        return False
+        src_file = inspect.getsourcefile(target_obj)
+    except TypeError:
+        return
+    if src_file and src_file not in source_files:
+        source_files.append(src_file)
 
 
-def _resolve_sqlalchemy_reference(target: str) -> bool:
-    """Attempt to resolve SQLAlchemy references.
+def _collect_reference_source_files(module: Any, reference_target_source_obj: str) -> list[str]:
+    """Collect module, MRO class, and member source file paths for AST import inspection."""
+    source_files: list[str] = []
+    _append_source_file(source_files, module)
+    if not reference_target_source_obj:
+        return source_files
 
-    Args:
-        target: The target class/attribute name
+    parts = reference_target_source_obj.split(".")
+    obj = getattr(module, parts[0], None)
+    if obj is None:
+        return source_files
 
-    Returns:
-        bool: True if reference exists, False otherwise
-    """
+    for candidate in (obj, *getattr(obj, "__mro__", ())):
+        cand_mod = getattr(candidate, "__module__", "") or ""
+        if not cand_mod or cand_mod.startswith("advanced_alchemy"):
+            _append_source_file(source_files, candidate)
+
+    if len(parts) > 1:
+        member = getattr(obj, parts[1], None)
+        if isinstance(member, property):
+            member = member.fget
+        _append_source_file(source_files, member)
+    return source_files
+
+
+@cache
+def get_module_global_imports(module_import_path: str, reference_target_source_obj: str = "") -> set[str]:
+    """Return global and ``if TYPE_CHECKING:`` imported names for ``module_import_path``."""
     try:
-        import sqlalchemy
-
-        if "." in target:
-            # Handle nested attributes (e.g., Connection.in_transaction)
-            obj_name, attr_name = target.rsplit(".", 1)
-            obj = getattr(sqlalchemy, obj_name)
-            return hasattr(obj, attr_name)
-        return hasattr(sqlalchemy, target)
-    except (ImportError, AttributeError):
-        return False
-
-
-def _resolve_litestar_reference(target: str) -> bool:
-    """Attempt to resolve Litestar references.
-
-    Args:
-        target: The target class/attribute name
-
-    Returns:
-        bool: True if reference exists, False otherwise
-    """
-    try:
-        import litestar
-        from litestar import datastructures
-
-        # Handle common Litestar classes
-        if target in {"Litestar", "State", "Scope", "Message", "AppConfig", "BeforeMessageSendHookHandler"}:
-            return True
-        if target.startswith("datastructures."):
-            _, attr = target.split(".")
-            return hasattr(datastructures, attr)
-        if target.startswith("config.app."):
-            return True  # These are valid Litestar config references
-        return hasattr(litestar, target)
+        module = importlib.import_module(module_import_path)
     except ImportError:
+        return set()
+
+    imported_names: set[str] = set()
+    for src in _collect_reference_source_files(module, reference_target_source_obj):
+        tree = _get_module_ast(src)
+        import_nodes = _get_import_nodes(tree.body)
+        imported_names.update(path.asname or path.name for import_node in import_nodes for path in import_node.names)
+        imported_names.update(_get_typevar_assigned_names(tree.body))
+    return imported_names
+
+
+def _is_runtime_typevar_or_alias(obj: Any) -> bool:
+    """Return True if ``obj`` is a runtime TypeVar, ParamSpec, or typing alias."""
+    if obj is None:
         return False
-
-
-def _resolve_sqlalchemy_type_reference(target: str) -> bool:
-    """Attempt to resolve SQLAlchemy type references.
-
-    Args:
-        target: The target class/attribute name
-
-    Returns:
-        bool: True if reference exists, False otherwise
-    """
-    try:
-        from sqlalchemy import types as sa_types
-
-        type_classes = {
-            "TypeEngine",
-            "TypeDecorator",
-            "UserDefinedType",
-            "ExternalType",
-            "Dialect",
-            "_types.TypeDecorator",
-        }
-
-        if target in type_classes:
-            return True
-        if target.startswith("_types."):
-            _, attr = target.split(".")
-            return hasattr(sa_types, attr)
-        return hasattr(sa_types, target)
-    except ImportError:
-        return False
+    cls_name = getattr(obj, "__class__", type(obj)).__name__
+    if cls_name in _TYPEVAR_CLASS_NAMES:
+        return True
+    return getattr(type(obj), "__module__", "") == "typing" and not isinstance(obj, type)
 
 
 def _resolve_advanced_alchemy_reference(target: str, module: str) -> bool:
-    """Attempt to resolve Advanced Alchemy references.
+    """Verify whether ``target`` is a valid TYPE_CHECKING import or TypeVar in ``module``.
 
-    Args:
-        target: The target class/attribute name
-        module: The current module context
-
-    Returns:
-        bool: True if reference exists, False otherwise
+    Broken references to non-existent ``advanced_alchemy`` symbols or external libraries
+    always return ``False`` so Sphinx surfaces the warning.
     """
-    # Handle base module references
-    base_classes = {
-        "BasicAttributes",
-        "CommonTableAttributes",
-        "AuditColumns",
-        "BigIntPrimaryKey",
-        "UUIDPrimaryKey",
-        "UUIDv6PrimaryKey",
-        "UUIDv7PrimaryKey",
-        "NanoIDPrimaryKey",
-        "Empty",
-        "TableArgsType",
-        "DeclarativeBase",
-    }
-
-    # Handle config module references
-    config_classes = {
-        "EngineT",
-        "SessionT",
-        "SessionMakerT",
-        "ConnectionT",
-        "GenericSessionConfig",
-        "GenericAlembicConfig",
-    }
-
-    func_references = {
-        "repository.SQLAlchemyAsyncRepositoryProtocol.add_many",
-        "create_registry",
-        "merge_table_arguments",
-        "model_to_dict",
-    }
-
-    type_classes = {"DateTimeUTC", "ORA_JSONB", "GUID", "EncryptedString", "EncryptedText"}
-
-    if target in base_classes or target in config_classes or target in type_classes or target in func_references:
-        return True
-
-    # Handle fully qualified references
-    if target.startswith("advanced_alchemy."):
-        parts = target.split(".")
-        if parts[-1] in base_classes | config_classes | type_classes | func_references:
-            return True
-
-    # Handle module-relative references
-    return bool(module.startswith("advanced_alchemy."))
-
-
-def _resolve_serialization_reference(target: str) -> bool:
-    """Attempt to resolve serialization-related references.
-
-    Args:
-        target: The target class/attribute name
-
-    Returns:
-        bool: True if reference exists, False otherwise
-    """
-    serialization_attrs = {"decode_json", "encode_json", "serialization.decode_json", "serialization.encode_json"}
-    return target in serialization_attrs
-
-
-def _resolve_click_reference(target: str) -> bool:
-    """Attempt to resolve Click references.
-
-    Args:
-        target: The target class/attribute name
-
-    Returns:
-        bool: True if reference exists, False otherwise
-    """
-    try:
-        import click
-
-        if target == "Group":
-            return True
-        return hasattr(click, target)
-    except ImportError:
+    external_prefixes = ("sqlalchemy.", "alembic.", "litestar.", "click.", "msgspec.", "pydantic.")
+    if target.startswith(external_prefixes):
+        return False
+    if not module.startswith("advanced_alchemy") and not target.startswith("advanced_alchemy."):
         return False
 
+    resolved = False
+    if "." not in target:
+        try:
+            mod = importlib.import_module(module)
+        except ImportError:
+            return False
+        if hasattr(mod, target):
+            runtime_obj = getattr(mod, target)
+            resolved = _is_runtime_typevar_or_alias(runtime_obj) or target in CLASS_ROLE_DATA_SUFFIXES
+        else:
+            resolved = target in get_module_global_imports(module)
+    elif target.startswith("advanced_alchemy."):
+        mod_path, _, attr_name = target.rpartition(".")
+        try:
+            target_mod = importlib.import_module(mod_path)
+        except ImportError:
+            return False
+        has_private_segment = any(seg.startswith("_") for seg in target.split("."))
+        if hasattr(target_mod, attr_name):
+            runtime_obj = getattr(target_mod, attr_name)
+            resolved = (
+                _is_runtime_typevar_or_alias(runtime_obj)
+                or attr_name in CLASS_ROLE_DATA_SUFFIXES
+                or has_private_segment
+            )
+        else:
+            resolved = attr_name in get_module_global_imports(mod_path)
 
-def on_warn_missing_reference(app: Sphinx, domain: str, node: Node) -> bool | None:
-    if node.tagname != "pending_xref":  # type: ignore[attr-defined]
+    return resolved
+
+
+def _propagate_member_aliases(
+    objects: dict[str, ObjectEntry],
+    canonical_name: str,
+    alias_name: str,
+) -> None:
+    """Propagate documented class attribute and method entries from ``canonical_name`` to ``alias_name``."""
+    prefix = f"{canonical_name}."
+    member_entries = [
+        (obj_name[len(prefix) :], entry) for obj_name, entry in list(objects.items()) if obj_name.startswith(prefix)
+    ]
+    for suffix, entry in member_entries:
+        alias_member = f"{alias_name}.{suffix}"
+        if alias_member not in objects:
+            objects[alias_member] = ObjectEntry(entry.docname, entry.node_id, entry.objtype, True)
+
+
+def _register_alias_group(objects: dict[str, ObjectEntry], group: tuple[str, ...]) -> None:
+    """Register aliased ObjectEntry records for all members of an equivalence ``group``."""
+    canonical_name: str | None = None
+    canonical_entry: ObjectEntry | None = None
+    for candidate in group:
+        entry = objects.get(candidate)
+        if entry is not None and not entry.aliased:
+            canonical_name = candidate
+            canonical_entry = entry
+            break
+    if canonical_entry is None:
+        for candidate in group:
+            entry = objects.get(candidate)
+            if entry is not None:
+                canonical_name = candidate
+                canonical_entry = entry
+                break
+    if canonical_name is None or canonical_entry is None:
+        return
+
+    for alias_name in group:
+        if alias_name not in objects:
+            objects[alias_name] = ObjectEntry(
+                canonical_entry.docname,
+                canonical_entry.node_id,
+                canonical_entry.objtype,
+                True,
+            )
+        if canonical_entry.objtype == "class" and alias_name != canonical_name:
+            _propagate_member_aliases(objects, canonical_name, alias_name)
+
+
+def _register_undocumented_class_members(objects: dict[str, ObjectEntry]) -> None:
+    """Register public methods and attributes of documented classes onto their class anchor."""
+    for fullname, entry in list(objects.items()):
+        if entry.objtype != "class" or entry.aliased or not fullname.startswith("advanced_alchemy."):
+            continue
+        mod_name, _, cls_name = fullname.rpartition(".")
+        try:
+            mod = importlib.import_module(mod_name)
+        except ImportError:
+            continue
+        cls = getattr(mod, cls_name, None)
+        if not isinstance(cls, type):
+            continue
+        for attr_name in dir(cls):
+            if attr_name.startswith("_"):
+                continue
+            member_fullname = f"{fullname}.{attr_name}"
+            if member_fullname in objects:
+                continue
+            static_attr = inspect.getattr_static(cls, attr_name, None)
+            is_callable = callable(static_attr) or isinstance(static_attr, (classmethod, staticmethod))
+            member_objtype = "method" if is_callable else "attribute"
+            objects[member_fullname] = ObjectEntry(entry.docname, entry.node_id, member_objtype, True)
+
+
+def _collect_reexport_identity_groups() -> dict[tuple[int, str], list[str]]:
+    """Group re-exported symbols across ``PACKAGE_REEXPORT_MODULES`` by runtime object identity."""
+    reexport_by_identity: dict[tuple[int, str], list[str]] = {}
+    for pkg_name in PACKAGE_REEXPORT_MODULES:
+        try:
+            pkg = importlib.import_module(pkg_name)
+        except ImportError:
+            continue
+        for sym_name in getattr(pkg, "__all__", ()):
+            sym = getattr(pkg, sym_name, None)
+            if sym is None or inspect.ismodule(sym):
+                continue
+            candidates = reexport_by_identity.setdefault((id(sym), sym_name), [])
+            for candidate_name in _candidate_reexport_names(pkg_name, sym_name, getattr(sym, "__module__", None)):
+                if candidate_name not in candidates:
+                    candidates.append(candidate_name)
+    return reexport_by_identity
+
+
+def _candidate_reexport_names(pkg_name: str, sym_name: str, origin_module: Any) -> list[str]:
+    """Build candidate qualified names for a re-exported package symbol."""
+    names = [f"{pkg_name}.{sym_name}"]
+    if isinstance(origin_module, str) and origin_module.startswith("advanced_alchemy"):
+        names.append(f"{origin_module}.{sym_name}")
+        parent_mod = origin_module.rsplit(".", 1)[0]
+        names.append(f"{parent_mod}.{sym_name}")
+    return names
+
+
+def _register_fallback_module_exports(objects: dict[str, ObjectEntry], modules_map: dict[str, Any]) -> None:
+    """Register fallback module-level entries for ``__all__`` exports not yet present in ``objects``."""
+    for pkg_name in PACKAGE_REEXPORT_MODULES:
+        mod_entry = modules_map.get(pkg_name)
+        if mod_entry is None:
+            continue
+        try:
+            pkg = importlib.import_module(pkg_name)
+        except ImportError:
+            continue
+        for sym_name in getattr(pkg, "__all__", ()):
+            sym = getattr(pkg, sym_name, None)
+            if sym is None or inspect.ismodule(sym):
+                continue
+            pkg_full = f"{pkg_name}.{sym_name}"
+            if pkg_full not in objects:
+                fallback_type = "class" if isinstance(sym, type) else ("function" if callable(sym) else "data")
+                objects[pkg_full] = ObjectEntry(mod_entry.docname, mod_entry.node_id, fallback_type, True)
+
+
+def _register_litestar_submodule_aliases(objects: dict[str, ObjectEntry]) -> None:
+    """Mirror core submodule symbols under ``advanced_alchemy.extensions.litestar.<submod>.*``."""
+    litestar_submodules = (
+        "base",
+        "exceptions",
+        "filters",
+        "mixins",
+        "operations",
+        "repository",
+        "service",
+        "types",
+        "utils",
+    )
+    for submod in litestar_submodules:
+        src_prefix = f"advanced_alchemy.{submod}."
+        dst_prefix = f"advanced_alchemy.extensions.litestar.{submod}."
+        for obj_name, entry in list(objects.items()):
+            if obj_name.startswith(src_prefix):
+                alias_name = f"{dst_prefix}{obj_name[len(src_prefix) :]}"
+                if alias_name not in objects:
+                    objects[alias_name] = ObjectEntry(entry.docname, entry.node_id, entry.objtype, True)
+
+
+def register_inventory_aliases(app: Sphinx, env: BuildEnvironment) -> list[str]:
+    """Populate Python domain object aliases for package re-exports and Litestar cross-references."""
+    del app
+    py_domain = env.domains.get("py")
+    objects = cast("dict[str, ObjectEntry] | None", getattr(py_domain, "objects", None))
+    if objects is None:
+        return []
+
+    _register_undocumented_class_members(objects)
+
+    for group in LITESTAR_OBJECT_ALIAS_GROUPS:
+        _register_alias_group(objects, group)
+
+    for candidates in _collect_reexport_identity_groups().values():
+        if len(candidates) > 1:
+            _register_alias_group(objects, tuple(candidates))
+
+    modules_map = cast("dict[str, Any]", getattr(py_domain, "modules", {}))
+    _register_fallback_module_exports(objects, modules_map)
+    _register_litestar_submodule_aliases(objects)
+
+    audit_entry = objects.get("advanced_alchemy.mixins.audit.AuditColumns") or objects.get(
+        "advanced_alchemy.base.UUIDAuditBase"
+    )
+    if audit_entry is not None:
+        for touch_alias in (
+            "advanced_alchemy._listeners.touch_updated_timestamp",
+            "advanced_alchemy.base.touch_updated_timestamp",
+        ):
+            if touch_alias not in objects:
+                objects[touch_alias] = ObjectEntry(audit_entry.docname, audit_entry.node_id, "function", True)
+
+    return []
+
+
+_EXTENSION_MODULE_PARTS = 3
+
+
+def _disambiguate_domain_matches(
+    modname: str | None,
+    matches: list[tuple[str, ObjectEntry]],
+) -> list[tuple[str, ObjectEntry]]:
+    """Select the single best match when an unqualified Python domain lookup matches multiple entries."""
+    if len(matches) <= 1:
+        return matches
+    if modname:
+        exact_prefix = f"{modname}."
+        exact_matches = [(m_name, m_entry) for m_name, m_entry in matches if m_name.startswith(exact_prefix)]
+        if exact_matches:
+            return [exact_matches[0]]
+        parts = modname.split(".")
+        if len(parts) >= _EXTENSION_MODULE_PARTS and parts[1] == "extensions":
+            ext_prefix = ".".join(parts[:_EXTENSION_MODULE_PARTS]) + "."
+            ext_matches = [(n, e) for n, e in matches if n.startswith(ext_prefix) and not e.aliased] or [
+                (n, e) for n, e in matches if n.startswith(ext_prefix)
+            ]
+            if ext_matches:
+                return [ext_matches[0]]
+
+    non_aliased = [(n, e) for n, e in matches if not e.aliased]
+    core_non_aliased = [(n, e) for n, e in non_aliased if not n.startswith("advanced_alchemy.extensions.")]
+    preferred = core_non_aliased or non_aliased or matches
+    return [preferred[0]]
+
+
+def _install_python_domain_dual_role_patch() -> None:
+    """Ensure PythonDomain.get_objects yields py:class aliases for data/type-alias inventory entries."""
+    if getattr(PythonDomain, "_aa_dual_role_patched", False):
+        return
+
+    original_get_objects = PythonDomain.get_objects
+    original_find_obj = PythonDomain.find_obj
+
+    def _patched_get_objects(self: PythonDomain) -> Iterator[tuple[str, str, str, str, str, int]]:
+        emitted_classes: set[str] = set()
+        buffered: list[tuple[str, str, str, str, str, int]] = []
+        for item in original_get_objects(self):
+            buffered.append(item)
+            if item[2] == "class":
+                emitted_classes.add(item[0])
+            yield item
+
+        for fullname, dispname, objtype, docname, anchor, _prio in buffered:
+            if objtype in {"data", "attribute"} and fullname not in emitted_classes:
+                short_name = fullname.rsplit(".", 1)[-1]
+                if short_name in CLASS_ROLE_DATA_SUFFIXES:
+                    emitted_classes.add(fullname)
+                    yield (fullname, dispname, "class", docname, anchor, -1)
+
+    def _patched_find_obj(
+        self: PythonDomain,
+        env: BuildEnvironment,
+        modname: str,
+        classname: str,
+        name: str,
+        objtype: str | None,
+        searchmode: int = 0,
+    ) -> list[tuple[str, ObjectEntry]]:
+        matches = original_find_obj(self, env, modname, classname, name, objtype, searchmode)
+        if len(matches) > 1 and "." not in name:
+            return _disambiguate_domain_matches(modname, matches)
+        return matches
+
+    setattr(PythonDomain, "get_objects", _patched_get_objects)
+    setattr(PythonDomain, "find_obj", _patched_find_obj)
+    setattr(PythonDomain, "_aa_dual_role_patched", True)
+
+
+def _rewrite_recorded_annotation_value(val: str) -> str:
+    """Compact internal SQLAlchemy union strings in recorded autodoc parameter annotations."""
+    if "_AbstractLoad" in val:
+        return "~advanced_alchemy.repository.LoadSpec | None"
+    if "UnaryExpression" in val and "InstrumentedAttribute" in val:
+        return "list[~advanced_alchemy.repository.OrderingPair] | ~advanced_alchemy.repository.OrderingPair | None"
+    if "ForUpdateArg" in val and "sqlalchemy.sql.selectable.ForUpdateArg" not in val:
+        return val.replace("ForUpdateArg", "~sqlalchemy.sql.selectable.ForUpdateArg")
+    return val
+
+
+def _apply_recorded_typehint_rewrites(app: Sphinx, name: str) -> None:
+    """Rewrite verbose internal SQLAlchemy type unions in ``app.env.temp_data['annotations']``."""
+    if app.env is None:
+        return
+    annotations_map = app.env.temp_data.get("annotations")
+    annotations = annotations_map.get(name) if isinstance(annotations_map, dict) else None
+    if not isinstance(annotations, dict):
+        return
+    for key, val in list(annotations.items()):
+        if isinstance(val, str):
+            annotations[key] = _rewrite_recorded_annotation_value(val)
+
+
+def _should_skip_class_init_signature(documenter: ClassDocumenter) -> bool:
+    """Return True when a documented class omits its own ``__init__`` and inherited members are hidden."""
+    return (
+        not documenter.options.inherited_members
+        and isinstance(documenter.object, type)
+        and "__init__" not in documenter.object.__dict__
+        and "__new__" not in documenter.object.__dict__
+        and "__dataclass_fields__" not in documenter.object.__dict__
+    )
+
+
+def _lookup_reexport_attr_doc(documenter: DataDocumenter, original_get_doc: Any) -> list[list[str]] | None:
+    """Resolve attribute docstrings from ``.typing`` / ``._util`` submodules without falling back to ``TypeVar.__doc__``."""
+    attrname = documenter.objpath[-1] if documenter.objpath else ""
+    comment = documenter.get_module_comment(attrname)
+    if comment:
+        return [comment]
+    for suffix in ("typing", "_util"):
+        candidate_mod = f"{documenter.modname}.{suffix}"
+        try:
+            analyzer = ModuleAnalyzer.for_module(candidate_mod)
+            analyzer.analyze()
+            if ("", attrname) in analyzer.attr_docs:
+                return [list(analyzer.attr_docs["", attrname])]
+        except PycodeError:
+            continue
+    if (
+        getattr(documenter.object, "__class__", None) is not None
+        and documenter.object.__class__.__name__ in _TYPEVAR_CLASS_NAMES
+    ):
+        return []
+    return cast("list[list[str]] | None", original_get_doc(documenter))
+
+
+def _install_autodoc_explicit_members_patch() -> None:
+    """Preserve explicit ``:members:`` allowlists and compact description-mode overload signatures."""
+    if getattr(autodoc_directive, "_aa_explicit_members_patched", False):
+        return
+
+    original_process = autodoc_directive.process_documenter_options
+
+    def _patched_process_documenter_options(
+        documenter: Any,
+        config: Any,
+        options: dict[str, str],
+    ) -> Any:
+        explicit_members = options.get("members")
+        resolved = original_process(documenter, config, options)
+        if isinstance(explicit_members, str) and explicit_members.strip():
+            resolved["members"] = [item.strip() for item in explicit_members.split(",") if item.strip()]
+        return resolved
+
+    original_func_sig = FunctionDocumenter.format_signature
+    original_meth_sig = MethodDocumenter.format_signature
+
+    def _compact_func_signature(self: FunctionDocumenter, **kwargs: Any) -> str:
+        if self.config.autodoc_typehints == "description":
+            return Documenter.format_signature(self, **kwargs)
+        return original_func_sig(self, **kwargs)
+
+    def _compact_meth_signature(self: MethodDocumenter, **kwargs: Any) -> str:
+        if self.config.autodoc_typehints == "description":
+            return Documenter.format_signature(self, **kwargs)
+        return original_meth_sig(self, **kwargs)
+
+    original_cls_get_sig = getattr(ClassDocumenter, "_get_signature", None)
+
+    def _compact_cls_get_signature(self: ClassDocumenter) -> tuple[Any | None, str | None, Any | None]:
+        if _should_skip_class_init_signature(self) or original_cls_get_sig is None:
+            return None, None, None
+        return cast("tuple[Any | None, str | None, Any | None]", original_cls_get_sig(self))
+
+    original_generic_update_content = GenericAliasMixin.update_content
+
+    def _compact_generic_update_content(self: Any, more_content: Any) -> None:
+        if getattr(getattr(self, "options", None), "no_value", False):
+            return
+        original_generic_update_content(self, more_content)
+
+    original_data_get_doc = DataDocumenter.get_doc
+
+    def _reexport_aware_data_get_doc(self: DataDocumenter) -> list[list[str]] | None:
+        return _lookup_reexport_attr_doc(self, original_data_get_doc)
+
+    setattr(autodoc_directive, "process_documenter_options", _patched_process_documenter_options)
+    setattr(FunctionDocumenter, "format_signature", _compact_func_signature)
+    setattr(MethodDocumenter, "format_signature", _compact_meth_signature)
+    setattr(ClassDocumenter, "_get_signature", _compact_cls_get_signature)
+    setattr(GenericAliasMixin, "update_content", _compact_generic_update_content)
+    setattr(DataDocumenter, "get_doc", _reexport_aware_data_get_doc)
+    setattr(autodoc_directive, "_aa_explicit_members_patched", True)
+
+
+def _is_offline_mode() -> bool:
+    """Return True when offline documentation build mode is active."""
+    env_flag = os.getenv("_ADVANCED_ALCHEMY_DOCS_OFFLINE", "").strip().lower()
+    if env_flag in {"1", "true", "yes"}:
+        return True
+    if env_flag in {"0", "false", "no"}:
+        return False
+    inv_dir = Path(__file__).resolve().parents[2] / "docs" / "_inv"
+    return not inv_dir.is_dir() or not any(inv_dir.glob("*.inv"))
+
+
+def _resolve_external_runtime_symbol(target: str) -> bool:
+    """Check if an external dotted reference resolves to a real attribute on an installed package."""
+    if target.startswith("advanced_alchemy"):
+        return False
+    if hasattr(builtins, target):
+        return True
+    parts = target.split(".")
+    for split_idx in range(len(parts) - 1, 0, -1):
+        mod_name = ".".join(parts[:split_idx])
+        try:
+            current: Any = importlib.import_module(mod_name)
+        except ImportError:
+            continue
+        found = True
+        for attr in parts[split_idx:]:
+            if not hasattr(current, attr):
+                found = False
+                break
+            current = getattr(current, attr)
+        if found:
+            return True
+    return False
+
+
+def _matches_ignore_missing_refs(
+    ignore_refs: dict[str | re.Pattern[str], set[str] | list[Any] | re.Pattern[str]],
+    source: str,
+    target: str,
+) -> bool:
+    """Return True if ``(source, target)`` matches ``app.config.ignore_missing_refs``."""
+    direct_targets = ignore_refs.get(source)
+    if direct_targets is not None and _target_matches(direct_targets, target):
+        return True
+
+    for key, targets in ignore_refs.items():
+        if isinstance(key, re.Pattern) and key.search(source) and _target_matches(targets, target):
+            return True
+        if isinstance(key, str) and key != source:
+            try:
+                if re.fullmatch(key, source) and _target_matches(targets, target):
+                    return True
+            except re.error:
+                continue
+    return False
+
+
+def _target_matches(targets: set[str] | list[Any] | re.Pattern[str], target: str) -> bool:
+    """Return True if ``target`` matches a configured target set, list, or compiled regex."""
+    if isinstance(targets, re.Pattern):
+        return bool(targets.search(target))
+    for item in targets:
+        if isinstance(item, re.Pattern) and item.search(target):
+            return True
+        if item == target:
+            return True
+    return False
+
+
+def _extract_enclosing_module_and_obj(node: Node) -> tuple[str, str]:
+    """Extract py:module and object fullname from ``node`` or its enclosing ``<desc>`` ancestor."""
+    attributes = cast("dict[str, Any]", getattr(node, "attributes", {}))
+    module = str(attributes.get("py:module", "") or "")
+    obj_name = str(attributes.get("py:class") or attributes.get("py:meth") or attributes.get("py:func") or "")
+    current: Node | None = getattr(node, "parent", None)
+    while current is not None and (not module or not obj_name):
+        cur_attrs = cast("dict[str, Any]", getattr(current, "attributes", {}))
+        if not module and cur_attrs.get("module"):
+            module = str(cur_attrs["module"])
+        if not obj_name and cur_attrs.get("fullname"):
+            obj_name = str(cur_attrs["fullname"])
+        children = getattr(current, "children", None)
+        if (not module or not obj_name) and getattr(current, "tagname", None) == "desc" and children:
+            sig_attrs = cast("dict[str, Any]", getattr(children[0], "attributes", {}))
+            if not module and sig_attrs.get("module"):
+                module = str(sig_attrs["module"])
+            if not obj_name and sig_attrs.get("fullname"):
+                obj_name = str(sig_attrs["fullname"])
+        current = getattr(current, "parent", None)
+    return module, obj_name
+
+
+_MIN_QUOTED_LENGTH = 2
+
+
+def _strip_outer_quotes(target: str) -> str:
+    """Return ``target`` with a single pair of outer single or double quotes removed."""
+    stripped = target.strip()
+    if len(stripped) >= _MIN_QUOTED_LENGTH and stripped[0] == stripped[-1] and stripped[0] in {"'", '"'}:
+        return stripped[1:-1].strip()
+    return stripped
+
+
+def _should_ignore_offline_reference(
+    domain: Any,
+    ref_type: str,
+    target: str,
+    module: str,
+    reference_target_source_obj: str,
+) -> bool:
+    """Return True if an external reference should be suppressed in offline mode."""
+    if not _is_offline_mode():
+        return False
+    domain_name = getattr(domain, "name", str(domain or ""))
+    if (domain_name == "std" or ref_type == "doc") and ":" in target:
+        return target.split(":", 1)[0] != "advanced-alchemy"
+    clean_target = _strip_outer_quotes(target).lstrip("~")
+    if clean_target.startswith("advanced_alchemy"):
+        return False
+    if any(sep in clean_target for sep in ("[", "|", ",")):
+        tokens = [tok for tok in re.split(r"[\s\[\],|]+", clean_target) if tok and tok != "optional"]
+        return bool(tokens) and all(
+            _should_ignore_offline_reference(domain_name, ref_type, tok, module, reference_target_source_obj)
+            or _should_ignore_module_typechecking_import(tok, module, reference_target_source_obj)
+            for tok in tokens
+        )
+    if "." in clean_target:
+        return _resolve_external_runtime_symbol(clean_target)
+    global_names = get_module_global_imports(module, reference_target_source_obj) if module else set()
+    return clean_target in global_names or hasattr(builtins, clean_target)
+
+
+def _should_ignore_module_typechecking_import(
+    target: str,
+    module: str,
+    reference_target_source_obj: str,
+) -> bool:
+    """Return True if ``target`` is a verified module TypeVar or TYPE_CHECKING-only import."""
+    clean_target = _strip_outer_quotes(target).lstrip("~")
+    if any(sep in clean_target for sep in ("[", "|")) and not clean_target.startswith(":"):
+        tokens = [tok for tok in re.split(r"[\s\[\],|]+", clean_target) if tok]
+        if len(tokens) > 1 and all(
+            _should_ignore_module_typechecking_import(tok, module, reference_target_source_obj)
+            or hasattr(builtins, tok)
+            for tok in tokens
+        ):
+            return True
+    if _resolve_advanced_alchemy_reference(clean_target, module):
+        return True
+    if not module or clean_target.startswith("advanced_alchemy."):
+        return False
+    if reference_target_source_obj and "." not in clean_target:
+        global_names = get_module_global_imports(module, reference_target_source_obj)
+        return clean_target in global_names and not hasattr(importlib.import_module(module), clean_target)
+    return False
+
+
+def on_warn_missing_reference(app: Sphinx, domain: Any, node: Node) -> bool | None:
+    """Evaluate unresolved pending_xref nodes against AST imports, ignore rules, and offline mode."""
+    if getattr(node, "tagname", None) != "pending_xref" or not hasattr(node, "attributes"):
         return None
 
-    if not hasattr(node, "attributes"):
+    attributes = cast("dict[str, Any]", getattr(node, "attributes", {}))
+    target = attributes.get("reftarget")
+    if hasattr(target, "__class__") and target.__class__.__name__ in _TYPEVAR_CLASS_NAMES:
+        return True
+    if not isinstance(target, str):
         return None
+    if (
+        target in _TYPEVAR_CLASS_NAMES
+        or target == "litestar.dto.base_dto.SQLAlchemyDTO"
+        or _strip_outer_quotes(target) != target.strip()
+    ):
+        return True
 
-    # Wrap the main logic in a try-except to catch potential AttributeErrors (e.g., startswith on None)
-    try:
-        attributes = node.attributes  # type: ignore[attr-defined,unused-ignore]
-        target = attributes["reftarget"]  # pyright: ignore
-        ref_type = attributes.get("reftype")  # pyright: ignore
-        module = attributes.get("py:module", "")  # pyright: ignore
+    ref_type = str(attributes.get("reftype", ""))
+    module, reference_target_source_obj = _extract_enclosing_module_and_obj(node)
 
-        # Handle TypeVar references
-        if hasattr(target, "__class__") and target.__class__.__name__ == "TypeVar":  # pyright: ignore
-            return True
+    if _should_ignore_module_typechecking_import(target, module, reference_target_source_obj) or (
+        _is_offline_mode() and bool(attributes.get("inventory"))
+    ):
+        return True
 
-        # Handle Advanced Alchemy references
-        if _resolve_advanced_alchemy_reference(target, module):  # pyright: ignore
-            return True
-
-        # Handle SQLAlchemy type system references
-        if ref_type in {"class", "meth", "attr"} and any(
-            x in target for x in ["TypeDecorator", "TypeEngine", "Dialect", "ExternalType", "UserDefinedType"]
-        ):
-            return _resolve_sqlalchemy_type_reference(target)  # pyright: ignore
-
-        # Handle SQLAlchemy core references
-        if (isinstance(target, str) and target.startswith("sqlalchemy.")) or (
-            ref_type in {"class", "attr", "obj", "meth"}
-            and target
-            in {
-                "Engine",
-                "Session",
-                "Connection",
-                "MetaData",
-                "AsyncSession",
-                "AsyncEngine",
-                "AsyncConnection",
-                "sessionmaker",
-                "async_sessionmaker",
-            }
-        ):
-            # Ensure target is string before replace
-            clean_target = target.replace("sqlalchemy.", "") if isinstance(target, str) else ""
-            if clean_target and _resolve_sqlalchemy_reference(clean_target):
-                return True
-
-        # Handle Litestar references
-        if ref_type in {"class", "obj"} and (
-            (isinstance(target, str) and target.startswith(("datastructures.", "config.app.")))
-            or target
-            in {
-                "Litestar",
-                "State",
-                "Scope",
-                "Message",
-                "AppConfig",
-                "BeforeMessageSendHookHandler",
-                "FieldDefinition",
-                "ImproperConfigurationError",
-            }
-        ):
-            return _resolve_litestar_reference(target)  # pyright: ignore
-
-        # Handle serialization references
-        if ref_type in {"attr", "meth"} and _resolve_serialization_reference(target):  # pyright: ignore
-            return True
-
-        # Handle Click references
-        if ref_type == "class" and _resolve_click_reference(target):  # pyright: ignore
-            return True
-
-    except AttributeError:
-        # Catch the specific error (likely startswith on None) and allow Sphinx to handle the warning normally
-        return None
-
-    return None
+    raw_source = get_source_line(node)[0] or ""
+    source = raw_source.split(" ")[-1] if raw_source else ""
+    raw_ignore = getattr(app.config, "ignore_missing_refs", None)
+    ignore_refs = cast(
+        "dict[str | re.Pattern[str], set[str] | list[Any] | re.Pattern[str]]",
+        raw_ignore or {},
+    )
+    should_ignore = _matches_ignore_missing_refs(ignore_refs, source, target) or _should_ignore_offline_reference(
+        domain, ref_type, target, module, reference_target_source_obj
+    )
+    return True if should_ignore else None
 
 
 def on_missing_reference(app: Sphinx, env: BuildEnvironment, node: pending_xref, contnode: Element) -> Element | None:
-    """Handle missing references by attempting to resolve them through different methods.
-
-    Args:
-        app: The Sphinx application instance
-        env: The Sphinx build environment
-        node: The pending cross-reference node
-        contnode: The content node
-
-    Returns:
-        Element | None: The resolved reference node if found, None otherwise
-    """
+    """Resolve missing references across Python domain object types and module-relative aliases."""
     if not hasattr(node, "attributes"):
         return None
 
-    attributes = node.attributes  # type: ignore[attr-defined,unused-ignore]
-    target = attributes["reftarget"]
-
-    # Remove this check since it's causing issues
+    attributes: dict[str, Any] = node.attributes
+    if _is_offline_mode() and attributes.get("inventory"):
+        return contnode
+    target = attributes.get("reftarget")
     if not isinstance(target, str):
         return None
 
     py_domain = env.domains["py"]
+    refdoc = node.get("refdoc", env.docname)
 
-    # autodoc sometimes incorrectly resolves these types, so we try to resolve them as py:data first and fall back to any
-    new_node = py_domain.resolve_xref(env, node["refdoc"], app.builder, "data", target, node, contnode)
-    if new_node is None:
-        resolved_xrefs = py_domain.resolve_any_xref(env, node["refdoc"], app.builder, target, node, contnode)
+    candidate_targets: list[str] = [target]
+    module, _ = _extract_enclosing_module_and_obj(node)
+    if module and "." not in target:
+        candidate_targets.append(f"{module}.{target}")
+
+    for candidate in candidate_targets:
+        new_node = py_domain.resolve_xref(env, refdoc, app.builder, "data", candidate, node, contnode)
+        if new_node is not None:
+            return new_node
+        resolved_xrefs = py_domain.resolve_any_xref(env, refdoc, app.builder, candidate, node, contnode)
         for ref in resolved_xrefs:
             if ref:
                 return ref[1]
-    return new_node
+
+    return None
 
 
-def on_env_before_read_docs(app: Sphinx, env: BuildEnvironment, docnames: set[str]) -> None:
-    tmp_examples_path = Path.cwd() / "docs/_build/_tmp_examples"
-    tmp_examples_path.mkdir(exist_ok=True, parents=True)
-    env.tmp_examples_path = tmp_examples_path  # type: ignore[attr-defined] # pyright: ignore[reportAttributeAccessIssue]
+def _resolve_offline_intersphinx_roles(app: Sphinx, doctree: Node) -> None:
+    """Replace explicit :external: pending_xref nodes with inline text when building offline."""
+    del app
+    if not _is_offline_mode():
+        return
+    for node in list(doctree.findall(pending_xref)):
+        if "intersphinx" in node and node.children:
+            node.replace_self(node.children[0].deepcopy())
+
+
+def _purge_aliased_inventory_entries(app: Sphinx, env: BuildEnvironment, docnames: list[str]) -> None:
+    """Remove synthetic aliased ObjectEntry records before incremental document reading."""
+    del app, docnames
+    if _is_offline_mode():
+        from tools.docs.update_inventories import UPSTREAM_INVENTORIES
+
+        named_inv = getattr(env, "intersphinx_named_inventory", None)
+        if isinstance(named_inv, dict):
+            for target in UPSTREAM_INVENTORIES:
+                named_inv.setdefault(target.name, {})
+    py_domain = env.domains.get("py")
+    objects = cast("dict[str, ObjectEntry] | None", getattr(py_domain, "objects", None))
+    if objects is None:
+        return
+    for name, entry in list(objects.items()):
+        if entry.aliased:
+            del objects[name]
+
+
+def _install_sphinx_click_factory_patch() -> None:
+    """Allow sphinx-click ``.. click::`` directives to resolve callable group factories."""
+    try:
+        sphinx_click_ext: Any = importlib.import_module("sphinx_click.ext")
+    except ImportError:
+        return
+    if getattr(sphinx_click_ext.ClickDirective, "_aa_factory_patched", False):
+        return
+
+    original_load_module = getattr(sphinx_click_ext.ClickDirective, "_load_module", None)
+    if original_load_module is None:
+        return
+
+    def _patched_load_module(self: Any, module_path: str) -> Any:
+        if module_path == "advanced_alchemy.cli:get_alchemy_group":
+            from advanced_alchemy.cli import add_migration_commands
+
+            return add_migration_commands()
+        return original_load_module(self, module_path)
+
+    setattr(sphinx_click_ext.ClickDirective, "_load_module", _patched_load_module)
+    setattr(sphinx_click_ext.ClickDirective, "_aa_factory_patched", True)
 
 
 def setup(app: Sphinx) -> dict[str, bool]:
-    app.connect("env-before-read-docs", on_env_before_read_docs)
-    app.connect("missing-reference", on_missing_reference)
+    """Register Sphinx missing-reference and inventory-alias hooks."""
+    _install_python_domain_dual_role_patch()
+    _install_autodoc_explicit_members_patch()
+    _install_sphinx_click_factory_patch()
+    app.connect("env-before-read-docs", _purge_aliased_inventory_entries)
+    app.connect("doctree-read", _resolve_offline_intersphinx_roles)
+    app.connect("autodoc-process-signature", _sanitize_recorded_typehints, priority=600)
+    app.connect("env-updated", register_inventory_aliases)
+    app.connect("missing-reference", on_missing_reference, priority=400)
     app.connect("warn-missing-reference", on_warn_missing_reference)
-    app.add_config_value("ignore_missing_refs", default={}, rebuild="")
+    app.add_config_value("ignore_missing_refs", default={}, rebuild="env")
     return {"parallel_read_safe": True, "parallel_write_safe": True}
+
+
+def _sanitize_recorded_typehints(
+    app: Sphinx,
+    objtype: str,
+    name: str,
+    obj: Any,
+    options: Any,
+    args: str,
+    retann: str,
+) -> None:
+    """Normalize expanded runtime type aliases in recorded autodoc annotations."""
+    del options, args, retann
+    if app.env is None:
+        return
+    annotations_map = app.env.temp_data.get("annotations")
+    annotations = annotations_map.get(name) if isinstance(annotations_map, dict) else None
+    if not isinstance(annotations, dict):
+        return
+    if objtype == "class" and isinstance(obj, type):
+        doc = getattr(obj, "__doc__", "") or ""
+        if "Args:" not in doc and "Parameters" not in doc and ":param " not in doc:
+            annotations.clear()
+            return
+    _apply_recorded_typehint_rewrites(app, name)

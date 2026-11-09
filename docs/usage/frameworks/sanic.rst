@@ -1,82 +1,151 @@
-==================
+=================
 Sanic Integration
-==================
+=================
 
-Advanced Alchemy integrates with Sanic through an extension that manages engines, request-scoped sessions,
-and bind-key lookups for both async and sync SQLAlchemy configurations.
+Advanced Alchemy integrates with Sanic through ``sanic-ext``, managing engines on ``app.ctx``, creating lazy per-request sessions on ``request.ctx``, and injecting ``AsyncSession`` straight into route handlers.
 
-Basic Setup
------------
+What's Included for Sanic
+-------------------------
 
-Configure a Sanic app with ``SQLAlchemyAsyncConfig`` or ``SQLAlchemySyncConfig`` and register the extension:
+.. list-table::
+   :header-rows: 1
+   :widths: 28 46 26
 
-.. code-block:: python
+   * - Feature
+     - What It Gives You
+     - Reference
+   * - **sanic-ext Injection**
+     - Injects ``AsyncSession`` or ``Session`` directly into route parameters with ``add_session_dependency``.
+     - :doc:`API </reference/extensions/sanic/index>`
+   * - **Request Context Sessions**
+     - Lazily opens one session per request on ``request.ctx`` and cleans it up when the response finishes.
+     - :doc:`API </reference/extensions/sanic/index>`
+   * - **Multiple Databases**
+     - Supports multiple sync or async databases side by side using named ``bind_key`` configs.
+     - :doc:`API </reference/extensions/sanic/index>`
 
-    from sanic import Sanic
+Installation
+------------
 
-    from advanced_alchemy.extensions.sanic import (
-        AdvancedAlchemy,
-        AsyncSessionConfig,
-        SQLAlchemyAsyncConfig,
-    )
+.. tab-set::
+    :sync-group: pkg
 
-    alchemy_config = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:",
-        session_config=AsyncSessionConfig(expire_on_commit=False),
-        create_all=True,
-    )
+    .. tab-item:: uv
+        :sync: uv
 
-    app = Sanic("advanced-alchemy-example")
-    alchemy = AdvancedAlchemy(sqlalchemy_config=alchemy_config)
-    alchemy.register(app)
+        .. code-block:: bash
 
-Accessing the Engine and Session
---------------------------------
+            uv add "advanced-alchemy[sanic,aiosqlite]"
 
-The extension stores configured engines on ``app.ctx`` and provides helpers for request-scoped sessions:
+    .. tab-item:: pip
+        :sync: pip
 
-.. code-block:: python
+        .. code-block:: bash
 
-    from sanic import HTTPResponse, Request
-    from sqlalchemy import text
+            pip install "advanced-alchemy[sanic,aiosqlite]"
 
-    @app.get("/health")
-    async def healthcheck(request: Request) -> HTTPResponse:
-        engine = getattr(request.app.ctx, alchemy.get_config().engine_key)
-        session = alchemy.get_async_session(request)
+    .. tab-item:: pdm
+        :sync: pdm
 
-        await session.execute(text("SELECT 1"))
-        assert engine is alchemy.get_async_engine()
-        return HTTPResponse(status=200)
+        .. code-block:: bash
 
-Use ``alchemy.get_session(request)`` when you want the same code path to support either sync or async configs.
+            pdm add "advanced-alchemy[sanic,aiosqlite]"
 
-Multiple Binds
---------------
+    .. tab-item:: poetry
+        :sync: poetry
 
-You can register more than one SQLAlchemy configuration and select them by bind key:
+        .. code-block:: bash
 
-.. code-block:: python
+            poetry add "advanced-alchemy[sanic,aiosqlite]"
 
-    from advanced_alchemy.extensions.sanic import SQLAlchemySyncConfig
+Setup and Route Handlers
+------------------------
 
-    alchemy = AdvancedAlchemy(
-        sqlalchemy_config=[
-            SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:"),
-            SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:", bind_key="reporting"),
-        ],
-        sanic_app=app,
-    )
+.. tab-set::
 
-    default_config = alchemy.get_config()
-    reporting_config = alchemy.get_config("reporting")
+    .. tab-item:: 1. Register Extension
 
-    assert default_config.bind_key == "default"
-    assert reporting_config.bind_key == "reporting"
+        .. code-block:: python
 
-Notes
------
+            from sanic import Sanic
+            from sqlalchemy.ext.asyncio import AsyncSession
+            from advanced_alchemy.extensions.sanic import (
+                AdvancedAlchemy,
+                AsyncSessionConfig,
+                SQLAlchemyAsyncConfig,
+            )
 
-- Register the extension once per application with ``alchemy.register(app)`` or by passing ``sanic_app=app``.
-- Request sessions are created lazily through ``get_session()`` / ``get_async_session()`` and tracked on ``request.ctx``.
-- Engine objects are stored on ``app.ctx`` using each config's ``engine_key``.
+            alchemy_config = SQLAlchemyAsyncConfig(
+                connection_string="sqlite+aiosqlite:///:memory:",
+                session_config=AsyncSessionConfig(expire_on_commit=False),
+                create_all=True,
+            )
+
+            app = Sanic("AlchemySanicApp")
+            alchemy = AdvancedAlchemy(sqlalchemy_config=alchemy_config)
+            alchemy.register(app)
+            alchemy.add_session_dependency(AsyncSession)
+
+    .. tab-item:: 2. Service & Route
+
+        .. code-block:: python
+
+            from uuid import UUID
+            import msgspec
+            from sanic import HTTPResponse, Request, raw
+            from sqlalchemy.orm import Mapped
+            from advanced_alchemy.extensions.sanic import base, filters, repository, service
+
+
+            class AuthorModel(base.UUIDBase):
+                __tablename__ = "sanic_author"
+                name: Mapped[str]
+
+
+            class AuthorSchema(msgspec.Struct):
+                id: UUID
+                name: str
+
+
+            class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
+                class Repo(repository.SQLAlchemyAsyncRepository[AuthorModel]):
+                    model_type = AuthorModel
+
+                repository_type = Repo
+
+
+            @app.get("/authors")
+            async def list_authors(request: Request, db_session: AsyncSession) -> HTTPResponse:
+                page = int(request.args.get("currentPage", 1))
+                size = int(request.args.get("pageSize", 10))
+                limit_offset = filters.LimitOffset(limit=size, offset=size * (page - 1))
+
+                authors_service = AuthorService(session=db_session)
+                results, total = await authors_service.get_many_and_count(limit_offset)
+                payload = authors_service.to_schema(
+                    results,
+                    total,
+                    filters=[limit_offset],
+                    schema_type=AuthorSchema,
+                )
+                return raw(msgspec.json.encode(payload), content_type="application/json")
+
+    .. tab-item:: 3. Multiple Databases
+
+        .. code-block:: python
+
+            from advanced_alchemy.extensions.sanic import SQLAlchemySyncConfig
+
+            reporting_app = Sanic("AlchemySanicMultiBindApp")
+            reporting_alchemy = AdvancedAlchemy(
+                sqlalchemy_config=[
+                    SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+                    SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:", bind_key="reporting"),
+                ],
+                sanic_app=reporting_app,
+            )
+
+            assert reporting_alchemy.get_config().bind_key == "default"
+            assert reporting_alchemy.get_config("reporting").bind_key == "reporting"
+
+See :doc:`/reference/extensions/sanic/index` for full API signatures.

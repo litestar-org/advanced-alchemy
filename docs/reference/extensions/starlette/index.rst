@@ -1,31 +1,37 @@
 =========
-starlette
+Starlette
 =========
 
-API Reference for the ``Starlette`` extensions module
+API Reference for the ``Starlette`` extensions module.
 
-.. note:: Private methods and attributes are not included in the API reference.
+.. py:module:: advanced_alchemy.extensions.starlette
 
-------------------------
+Extension & Middleware
+----------------------
 
-.. automodule:: advanced_alchemy.extensions.starlette
-    :imported-members:
-        advanced_alchemy.utils
-        advanced_alchemy.base
-        advanced_alchemy.exceptions
-        advanced_alchemy.filters
-        advanced_alchemy.mixins
-        advanced_alchemy.operations
-        advanced_alchemy.repository
-        advanced_alchemy.service
-        advanced_alchemy.types
-        advanced_alchemy.alembic.commands.AlembicCommands
+.. autoclass:: AdvancedAlchemy
     :members:
-        AlembicAsyncConfig
-        AlembicSyncConfig
-        AsyncSessionConfig
-        EngineConfig
-        SQLAlchemyAsyncConfig
-        SQLAlchemySyncConfig
-        SyncSessionConfig
-    :noindex:
+    :no-inherited-members:
+    :show-inheritance:
+
+.. autoclass:: advanced_alchemy.extensions.starlette.config.SessionMiddleware
+    :members:
+    :no-inherited-members:
+
+Configuration
+-------------
+
+.. autoclass:: SQLAlchemyAsyncConfig
+    :members:
+    :no-inherited-members:
+    :show-inheritance:
+
+.. autoclass:: SQLAlchemySyncConfig
+    :members:
+    :no-inherited-members:
+    :show-inheritance:
+
+.. autoclass:: EngineConfig
+    :members:
+    :no-inherited-members:
+    :show-inheritance:

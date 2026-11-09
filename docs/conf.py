@@ -1,39 +1,31 @@
-# Configuration file for the Sphinx documentation builder.
-# ruff: noqa: FIX002
+"""Sphinx documentation configuration for Advanced Alchemy."""
+
 from __future__ import annotations
 
 import datetime
 import os
 import warnings
-from functools import partial
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sqlalchemy.exc import SAWarning
 
-from advanced_alchemy.__metadata__ import __project__, __version__
+from advanced_alchemy.__metadata__ import __version__
+from tools.docs.update_inventories import InventoryUpdater
 
 if TYPE_CHECKING:
-    from typing import Any
-
-    from sphinx.addnodes import document  # type: ignore[attr-defined,unused-ignore]
     from sphinx.application import Sphinx
 
-# -- Environmental Data ------------------------------------------------------
 warnings.filterwarnings("ignore", category=SAWarning)
 
-# -- Project information -----------------------------------------------------
-current_year = datetime.datetime.now().year  # noqa: DTZ005
-project = __project__
-copyright = f"{current_year}, Litestar Organization"  # noqa: A001
-release = os.getenv("_ADVANCED-ALCHEMY_DOCS_BUILD_VERSION", __version__.rsplit(".")[0])
-suppress_warnings = [
-    "autosectionlabel.*",
-    "ref.python",  # TODO: remove when https://github.com/sphinx-doc/sphinx/issues/4961 is fixed
-]
+DOCS_DIR = Path(__file__).resolve().parent
+current_year = datetime.datetime.now(tz=datetime.timezone.utc).year
+project = "Advanced Alchemy"
+copyright = f"{current_year}, Litestar Organization"
+release = os.getenv("_ADVANCED_ALCHEMY_DOCS_BUILD_VERSION", __version__.rsplit(".")[0])
+suppress_warnings: list[str] = []
 
-# -- General configuration ---------------------------------------------------
 extensions = [
-    # Sphinx core extensions
     "sphinx.ext.autodoc",
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.githubpages",
@@ -41,58 +33,58 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",
-    # Custom extensions
     "tools.sphinx_ext.missing_references",
     "tools.sphinx_ext.changelog",
-    # Third-party extensions
-    "sphinx_autodoc_typehints",
+    "tools.sphinx_ext.llms_txt",
     "myst_parser",
     "auto_pytabs.sphinx_ext",
     "sphinx_copybutton",
     "sphinx_click",
     "sphinx_design",
+    "sphinxcontrib.mermaid",
     "sphinx_togglebutton",
-    "sphinx_paramlinks",
 ]
 
-intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", None),
-    "msgspec": ("https://msgspec.dev/", None),
-    "sqlalchemy": ("https://docs.sqlalchemy.org/en/20/", None),
-    "alembic": ("https://alembic.sqlalchemy.org/en/latest/", None),
-    "litestar": ("https://docs.litestar.dev/latest/", None),
-    "click": ("https://click.palletsprojects.com/en/stable/", None),
-    "anyio": ("https://anyio.readthedocs.io/en/stable/", None),
-    "multidict": ("https://multidict.aio-libs.org/en/stable/", None),
-    "cryptography": ("https://cryptography.io/en/latest/", None),
-    "pydantic": ("https://docs.pydantic.dev/latest/", None),
-    "sanic": ("https://sanic.readthedocs.io/en/latest/", None),
-    "flask": ("https://flask.palletsprojects.com/en/stable/", None),
-    "typing_extensions": ("https://typing-extensions.readthedocs.io/en/stable/", None),
-    "attrs": ("https://www.attrs.org/en/stable/", None),
-    "pytest": ("https://docs.pytest.org/en/stable/", None),
-}
+intersphinx_mapping = InventoryUpdater.build_intersphinx_mapping(DOCS_DIR)
 nitpicky = True
-nitpick_ignore: list[str] = []
-nitpick_ignore_regex: list[str] = []
+nitpick_ignore: list[tuple[str, str]] = [
+    ("py:class", "alembic.ddl.impl.DefaultImpl"),
+]
+nitpick_ignore_regex: list[tuple[str, str]] = []
 
 auto_pytabs_min_version = (3, 9)
 auto_pytabs_max_version = (3, 13)
 
 napoleon_google_docstring = True
-napoleon_include_special_with_doc = True
+napoleon_numpy_docstring = False
+napoleon_include_special_with_doc = False
 napoleon_use_admonition_for_examples = True
 napoleon_use_admonition_for_notes = True
 napoleon_use_admonition_for_references = False
 napoleon_attr_annotations = True
+napoleon_use_ivar = True
+napoleon_use_param = True
+napoleon_use_rtype = True
+napoleon_preprocess_types = True
 
 autoclass_content = "class"
-autodoc_class_signature = "separated"
-autodoc_default_options = {"special-members": "__init__", "show-inheritance": True, "members": True}
+autodoc_class_signature = "mixed"
+autodoc_default_options = {
+    "members": True,
+    "show-inheritance": True,
+    "special-members": False,
+}
 autodoc_member_order = "bysource"
 autodoc_typehints_format = "short"
-autodoc_typehints = "both"
+autodoc_typehints = "description"
+autodoc_typehints_description_target = "documented_params"
 autodoc_preserve_defaults = True
+autodoc_use_legacy_class_based = True
+python_maximum_signature_line_length = 68
+python_use_unqualified_type_names = True
+python_display_short_literal_types = True
+toc_object_entries = False
+
 autodoc_type_aliases = {
     "ModelT": "advanced_alchemy.repository.typing.ModelT",
     "FilterTypeT": "advanced_alchemy.filters.FilterTypeT",
@@ -144,8 +136,8 @@ autodoc_type_aliases = {
     "EmptyType": "advanced_alchemy.utils.dataclass.EmptyType",
     "async_sessionmaker": "sqlalchemy.ext.asyncio.async_sessionmaker",
     "sessionmaker": "sqlalchemy.orm.sessionmaker",
-    "SlugMixin": "advanced_alchemy.mixins.slug.SlugKey",
-    "UniqueMixin": "advanced_alchemy.mixins.unique.UniqueMixin",
+    "SlugMixin": "advanced_alchemy.mixins.SlugKey",
+    "UniqueMixin": "advanced_alchemy.mixins.UniqueMixin",
     "AsyncEngine": "sqlalchemy.ext.asyncio.AsyncEngine",
     "Engine": "sqlalchemy.engine.Engine",
     "sqlalchemy": "sqlalchemy",
@@ -161,60 +153,60 @@ autodoc_type_aliases = {
     "advanced_alchemy.types.password_hash.bcrypt.BcryptHasher": "advanced_alchemy.types.password_hash.bcrypt.BcryptHasher",
     "advanced_alchemy.types.password_hash.passlib.PasslibHasher": "advanced_alchemy.types.password_hash.passlib.PasslibHasher",
     "ForUpdateArg": "sqlalchemy.sql.selectable.ForUpdateArg",
+    "LoadSpec": "advanced_alchemy.repository.LoadSpec",
+    "OrderingPair": "advanced_alchemy.repository.OrderingPair",
 }
-autodoc_mock_imports = [
-    "alembic",
-    "sanic_ext.Extend",
-    "sanic",
-    "sqlalchemy.ext.asyncio.engine.create_async_engine",
-    "_sa.create_engine._sphinx_paramlinks_creator",
-    "sqlalchemy.Dialect",
-    "sqlalchemy.orm.MetaData",
-    "advanced_alchemy.config.engine.EngineConfig",
-    "advanced_alchemy.config.asyncio.AsyncSessionConfig",
-    "advanced_alchemy.config.sync.SyncSessionConfig",
-    "advanced_alchemy.utils.dataclass.EmptyType",
-    "advanced_alchemy.extensions.litestar.plugins.init.config.engine.EngineConfig",
-    "sqlalchemy.ext.asyncio",
-    "sqlalchemy.engine",
-    "sqlalchemy.orm",
-    "advanced_alchemy.types.encrypted_string.PGCryptoBackend",
-    "advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher",
-    "advanced_alchemy.types.password_hash.argon2.Argon2Hasher",
-    "advanced_alchemy.types.password_hash.bcrypt.BcryptHasher",
-    "advanced_alchemy.types.password_hash.passlib.PasslibHasher",
-]
-
+autodoc_mock_imports: list[str] = []
 
 autosectionlabel_prefix_document = True
+autosectionlabel_maxdepth = 2
+viewcode_follow_imported_members = False
 
-# Strip the dollar prompt when copying code
-# https://sphinx-copybutton.readthedocs.io/en/latest/use.html#strip-and-configure-input-prompts-for-code-cells
 copybutton_prompt_text = "$ "
 
-# -- Style configuration -----------------------------------------------------
+mermaid_version = "11.4.1"
+mermaid_init_js = """
+mermaid.initialize({
+    startOnLoad: true,
+    theme: "base",
+    flowchart: { curve: "basis", padding: 14, nodeSpacing: 42, rankSpacing: 48 },
+    themeVariables: {
+        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif",
+        fontSize: "14px",
+        primaryColor: "#fef9ec",
+        primaryTextColor: "#202235",
+        primaryBorderColor: "#edb641",
+        lineColor: "#64748b",
+        secondaryColor: "#eff6ff",
+        secondaryTextColor: "#202235",
+        secondaryBorderColor: "#93c5fd",
+        tertiaryColor: "#ecfdf5",
+        tertiaryTextColor: "#202235",
+        tertiaryBorderColor: "#86efac",
+        clusterBkg: "#f8fafc",
+        clusterBorder: "#cbd5e1",
+        edgeLabelBackground: "#ffffff"
+    }
+});
+"""
+
 html_theme = "shibuya"
 html_title = "Advanced Alchemy"
 html_short_title = "AA"
+llms_txt_base_url = "https://docs.advanced-alchemy.litestar.dev/latest/"
 
-# Pygments syntax highlighting configuration
-# Using accessible-pygments for WCAG AA/AAA compliant syntax highlighting
-# Light mode: a11y-light provides excellent readability on light backgrounds (WCAG AA)
-# Dark mode: a11y-high-contrast-dark provides maximum readability on dark backgrounds (WCAG AAA)
-pygments_style = "a11y-light"
-pygments_dark_style = "a11y-high-contrast-dark"
+pygments_style = "default"
 
 todo_include_todos = True
 
 html_static_path = ["_static"]
-html_favicon = "_static/favicon.png"
+html_favicon = "_static/favicon.svg"
 templates_path = ["_templates"]
 html_css_files = ["custom.css", "syntax-highlighting.css"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "PYPI_README.md", "guides/**"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "PYPI_README.md", "guides/**", "examples/**"]
 html_show_sourcelink = True
 html_copy_source = True
 
-# Add SEO-friendly meta tags
 html_meta = {
     "description": "Advanced Alchemy - A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy",
     "keywords": "sqlalchemy, orm, alembic, python, database, litestar, repository-pattern, fastapi, starlette",
@@ -223,7 +215,7 @@ html_meta = {
     "og:type": "website",
     "og:description": "Advanced Alchemy - A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy",
     "og:site_name": "Advanced Alchemy",
-    "twitter:card": "summary",
+    "twitter:card": "summary_large_image",
 }
 
 html_context = {
@@ -241,11 +233,68 @@ html_theme_options = {
     "discord_url": "https://discord.gg/dSDXd4mKhp",
     "navigation_with_keys": True,
     "globaltoc_expand_depth": 2,
-    "light_logo": "_static/logo-default.png",
-    "dark_logo": "_static/logo-default.png",
-    "discussion_url": "https://discord.gg/dSDXd4mKhp",
+    "light_logo": "_static/logo.svg",
+    "dark_logo": "_static/logo.svg",
+    "og_image_url": "https://docs.advanced-alchemy.litestar.dev/latest/_static/og-social-dark.png",
     "nav_links": [
-        {"title": "Home", "url": "index"},
+        {
+            "title": "Learn",
+            "url": "usage/index",
+            "children": [
+                {
+                    "title": "Getting Started",
+                    "url": "getting-started",
+                    "summary": "Install and configure Advanced Alchemy",
+                },
+                {
+                    "title": "Data Modeling",
+                    "url": "usage/modeling/index",
+                    "summary": "Declarative bases, mixins, and custom types",
+                },
+                {
+                    "title": "Repositories",
+                    "url": "usage/repositories/index",
+                    "summary": "Async and sync data access and filtering",
+                },
+                {"title": "Services", "url": "usage/services", "summary": "Business logic and schema/DTO hydration"},
+                {"title": "Replica Routing", "url": "usage/routing", "summary": "Read/write replica session routing"},
+                {"title": "Caching", "url": "usage/caching", "summary": "Dogpile L2 query and entity caching"},
+                {"title": "CLI & Migrations", "url": "usage/cli", "summary": "Alembic CLI and database workflows"},
+            ],
+        },
+        {
+            "title": "Frameworks",
+            "url": "usage/frameworks/index",
+            "children": [
+                {
+                    "title": "Overview",
+                    "url": "usage/frameworks/index",
+                    "summary": "Capabilities and components across all supported frameworks",
+                },
+                {
+                    "title": "Litestar",
+                    "url": "usage/frameworks/litestar",
+                    "summary": "Plugin, DI providers, DTOs, storage, and session stores",
+                },
+                {
+                    "title": "FastAPI",
+                    "url": "usage/frameworks/fastapi",
+                    "summary": "Extension, lifespan, Annotated dependencies, and storage",
+                },
+                {
+                    "title": "Starlette",
+                    "url": "usage/frameworks/starlette",
+                    "summary": "ASGI middleware and request-scoped sessions",
+                },
+                {"title": "Flask", "url": "usage/frameworks/flask", "summary": "WSGI and async Flask integration"},
+                {
+                    "title": "Sanic",
+                    "url": "usage/frameworks/sanic",
+                    "summary": "Sanic extension and dependency injection",
+                },
+            ],
+        },
+        {"title": "Reference", "url": "reference/index"},
         {
             "title": "About",
             "children": [
@@ -284,40 +333,26 @@ html_theme_options = {
                     "url": "https://github.com/litestar-org/.github?tab=coc-ov-file#security-ov-file",
                     "icon": "coc",
                 },
-                {"title": "Sponsor", "url": "https://github.com/sponsors/Litestar-Org", "icon": "heart"},
-            ],
-        },
-        {
-            "title": "Help",
-            "children": [
                 {
                     "title": "Discord Help Forum",
-                    "summary": "Dedicated Discord help forum",
+                    "summary": "Ask questions and get help in Discord",
                     "url": "https://discord.gg/dSDXd4mKhp",
                     "icon": "coc",
                 },
                 {
                     "title": "GitHub Discussions",
-                    "summary": "GitHub Discussions",
+                    "summary": "Discuss ideas and patterns with the community",
                     "url": "https://github.com/litestar-org/advanced-alchemy/discussions",
                     "icon": "coc",
                 },
+                {"title": "Sponsor", "url": "https://github.com/sponsors/Litestar-Org", "icon": "heart"},
             ],
         },
     ],
 }
 
 
-def update_html_context(
-    _app: Sphinx,
-    _pagename: str,
-    _templatename: str,
-    context: dict[str, Any],
-    _doctree: document,
-) -> None:
-    context["generate_toctree_html"] = partial(context["generate_toctree_html"], startdepth=0)
-
-
 def setup(app: Sphinx) -> dict[str, bool]:
+    """Initialize Sphinx theme extension."""
     app.setup_extension("shibuya")
     return {"parallel_read_safe": True, "parallel_write_safe": True}

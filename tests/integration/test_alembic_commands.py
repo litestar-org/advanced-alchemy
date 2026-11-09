@@ -23,14 +23,7 @@ from advanced_alchemy.config.asyncio import AlembicAsyncConfig
 from advanced_alchemy.config.sync import AlembicSyncConfig
 from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from advanced_alchemy.utils.sync_tools import async_
-from tests.fixtures.uuid import models as models_uuid
 from tests.helpers import maybe_async
-
-AuthorModel = type[models_uuid.UUIDAuthor]
-RuleModel = type[models_uuid.UUIDRule]
-ModelWithFetchedValue = type[models_uuid.UUIDModelWithFetchedValue]
-ItemModel = type[models_uuid.UUIDItem]
-TagModel = type[models_uuid.UUIDTag]
 
 pytestmark = [
     pytest.mark.integration,
@@ -38,7 +31,6 @@ pytestmark = [
 
 
 @pytest.fixture(
-    scope="session",
     params=[
         pytest.param(
             "sqlite_engine",
@@ -117,7 +109,6 @@ def sync_sqlalchemy_config(request: FixtureRequest) -> Generator[SQLAlchemySyncC
 
 
 @pytest.fixture(
-    scope="session",
     params=[
         pytest.param(
             "aiosqlite_engine",
@@ -198,16 +189,17 @@ def async_sqlalchemy_config(
 
 
 @pytest.fixture(
-    scope="session",
     params=[lf("sync_sqlalchemy_config"), lf("async_sqlalchemy_config")],
     ids=["sync", "async"],
 )
 def any_config(request: FixtureRequest) -> Generator[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig, None, None]:
-    """Return a session for the current session"""
+    """Return a config for the current test."""
     if isinstance(request.param, SQLAlchemyAsyncConfig):
         request.getfixturevalue("async_sqlalchemy_config")
     else:
         request.getfixturevalue("sync_sqlalchemy_config")
+    if request.param.metadata is not None:
+        base.metadata_registry.set(request.param.bind_key, request.param.metadata)
     yield request.param  # type: ignore[no-any-return]
 
 
@@ -215,6 +207,8 @@ def any_config(request: FixtureRequest) -> Generator[SQLAlchemySyncConfig | SQLA
 def alembic_commands(
     any_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
 ) -> Generator[commands.AlembicCommands, None, None]:
+    if any_config.metadata is not None:
+        base.metadata_registry.set(any_config.bind_key, any_config.metadata)
     yield commands.AlembicCommands(
         sqlalchemy_config=any_config,
     )
@@ -252,6 +246,8 @@ def test_alembic_command_config_propagates_alembic_options() -> None:
     assert command_config.user_module_prefix == "sqlalchemy."
 
 
+@pytest.mark.sqlite
+@pytest.mark.xdist_group("sqlite")
 @pytest.mark.parametrize("async_mode", [False, True], ids=["sync", "async"])
 @pytest.mark.parametrize("offline", [False, True], ids=["online", "offline"])
 @pytest.mark.parametrize("schema", [None, "custom_schema"], ids=["default_schema", "custom_schema"])

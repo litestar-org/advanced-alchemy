@@ -1,6 +1,8 @@
 ======
-mixins
+Mixins
 ======
+
+.. py:module:: advanced_alchemy.mixins
 
 Mixins that provide common columns and behavior for SQLAlchemy models.
 

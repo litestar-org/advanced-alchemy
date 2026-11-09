@@ -192,7 +192,7 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
         """Get a session from the session maker.
 
         Yields:
-            AsyncGenerator[AsyncSession, None]: An async context manager that yields an AsyncSession.
+            An async context manager that yields an :class:`~sqlalchemy.ext.asyncio.AsyncSession`.
         """
         session_maker = self.create_session_maker()
         async with session_maker() as session:

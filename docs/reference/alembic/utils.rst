@@ -1,6 +1,6 @@
-=====
-utils
-=====
+=========
+Utilities
+=========
 
 .. automodule:: advanced_alchemy.alembic.utils
     :members:

@@ -55,11 +55,11 @@ def _make_unique_state_key(app: "Starlette", key: str) -> str:  # pragma: no cov
     Ensures that the key does not already exist in the application's state.
 
     Args:
-        app (starlette.applications.Starlette): The Starlette application instance.
-        key (str): The base key name.
+        app: The Starlette application instance.
+        key: The base key name.
 
     Returns:
-        str: A unique key name.
+        A unique key name.
     """
     i = 0
     while True:
@@ -265,12 +265,9 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         Applies the commit strategy and ensures the session is closed.
 
         Args:
-            session (sqlalchemy.ext.asyncio.AsyncSession):
-                The database session.
-            request (starlette.requests.Request):
-                The incoming HTTP request.
-            response (starlette.responses.Response):
-                The outgoing HTTP response.
+            session: The database session.
+            request: The incoming HTTP request.
+            response: The outgoing HTTP response.
         """
         try:
             if (self.commit_mode == "autocommit" and 200 <= response.status_code < 300) or (  # noqa: PLR2004
@@ -302,12 +299,11 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         commit/rollback/close operations properly.
 
         Args:
-            request (starlette.requests.Request): The incoming HTTP request.
-            call_next (starlette.middleware.base.RequestResponseEndpoint):
-                The next middleware or route handler.
+            request: The incoming HTTP request.
+            call_next: The next middleware or route handler.
 
         Returns:
-            starlette.responses.Response: The HTTP response.
+            The HTTP response.
         """
         # Reset routing context for request-scoped isolation
         reset_routing_context()
@@ -428,12 +424,9 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         Applies the commit strategy and ensures the session is closed.
 
         Args:
-            session (sqlalchemy.orm.Session | sqlalchemy.ext.asyncio.AsyncSession):
-                The database session.
-            request (starlette.requests.Request):
-                The incoming HTTP request.
-            response (starlette.responses.Response):
-                The outgoing HTTP response.
+            session: The database session.
+            request: The incoming HTTP request.
+            response: The outgoing HTTP response.
         """
         try:
             if (self.commit_mode == "autocommit" and 200 <= response.status_code < 300) or (  # noqa: PLR2004
@@ -465,12 +458,11 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         commit/rollback/close operations properly.
 
         Args:
-            request (starlette.requests.Request): The incoming HTTP request.
-            call_next (starlette.middleware.base.RequestResponseEndpoint):
-                The next middleware or route handler.
+            request: The incoming HTTP request.
+            call_next: The next middleware or route handler.
 
         Returns:
-            starlette.responses.Response: The HTTP response.
+            The HTTP response.
         """
         # Reset routing context for request-scoped isolation
         reset_routing_context()

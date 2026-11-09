@@ -54,9 +54,20 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - name: Set up Python
         run: uv python install ${{ inputs.python-version }}
+
+      - name: Cache uv-managed virtualenv
+        uses: actions/cache@v5
+        with:
+          path: .venv
+          key: venv-test-${{ runner.os }}-py${{ inputs.python-version }}-${{ hashFiles('uv.lock', 'pyproject.toml') }}
+          restore-keys: |
+            venv-test-${{ runner.os }}-py${{ inputs.python-version }}-
 
       - name: Install dependencies
         continue-on-error: ${{ inputs.experimental }}

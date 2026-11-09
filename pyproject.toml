@@ -124,7 +124,6 @@ doc = [
   "sphinx-paramlinks>=0.6.0",
   "sphinx-togglebutton>=0.3.2",
   "myst-parser",
-  "sphinx-autodoc-typehints",
   "sybil",
 ]
 duckdb = ["duckdb>=1.1.2", "duckdb-engine>=0.13.4", "pytz>=2024.2"]
@@ -200,7 +199,8 @@ test = [
   "pytest>=7.4.4",
   "pytest-asyncio>=0.23.8",
   "pytest-cov>=5.0.0",
-  "pytest-databases[postgres,oracle,cockroachdb,bigquery,spanner]>=0.19.0",
+  "pytest-databases[postgres,oracle,cockroachdb,bigquery,spanner]>=0.19.0 ; python_version < \"3.11\"",
+  "pytest-databases[embedded-postgres]>=0.20.0b1 ; python_version >= \"3.11\"",
   "pytest-lazy-fixtures>=1.1.1",
   "pytest-rerunfailures",
   "pytest-mock>=3.14.0",
@@ -325,6 +325,7 @@ markers = [
   "mock_sync: SQLAlchemy sync mock Tests",
   "cockroachdb_sync: SQLAlchemy CockroachDB (psycopg2) Tests",
   "cockroachdb_async: SQLAlchemy CockroachDB (asyncpg) Tests",
+  "rustfs: S3-compatible RustFS object storage integration tests",
 ]
 testpaths = ["tests", "docs"]
 
@@ -433,6 +434,7 @@ classmethod-decorators = [
 
 [tool.ruff.lint.per-file-ignores]
 "advanced_alchemy/alembic/templates/*/env.py" = ["INP001"]
+"docs/conf.py" = ["A001"]
 "advanced_alchemy/repository/*.py" = ['C901', 'UP006', 'UP035']
 "advanced_alchemy/repository/memory/*.py" = ['UP006', 'UP035']
 "advanced_alchemy/service/*.py" = ["PLR0911", "UP006", "UP035"]
@@ -477,7 +479,7 @@ classmethod-decorators = [
 ban-relative-imports = "all"
 
 [tool.ruff.lint.isort]
-known-first-party = ["advanced_alchemy", "tests"]
+known-first-party = ["advanced_alchemy", "tests", "tools", "docs"]
 
 [tool.slotscheck]
 exclude-modules = '''
@@ -501,9 +503,9 @@ strict-imports = true
 [tool.mypy]
 disallow_any_generics = false
 disallow_untyped_decorators = true
-exclude = ["docs/conftest.py"]
+exclude = []
 implicit_reexport = false
-packages = ["advanced_alchemy", "tests", "docs", "examples"]
+packages = ["advanced_alchemy", "tests", "tools", "docs", "examples"]
 python_version = "3.9"
 show_error_codes = true
 strict = true
@@ -516,7 +518,7 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 disable_error_code = "attr-defined,type-var,union-attr"
 disallow_untyped_decorators = false
-module = "tests.*"
+module = ["tests.*", "docs.conftest"]
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
@@ -547,7 +549,12 @@ module = ["pytest", "_pytest.*"]
 [[tool.mypy.overrides]]
 follow_imports = "skip"
 ignore_missing_imports = true
-module = ["sphinx.*"]
+module = ["sphinx", "sphinx.*"]
+
+[[tool.mypy.overrides]]
+disallow_subclassing_any = false
+module = ["tools.sphinx_ext.*"]
+warn_return_any = false
 
 [[tool.mypy.overrides]]
 follow_imports = "skip"
@@ -606,14 +613,12 @@ warn_unreachable = false
 [tool.pyright]
 disableBytesTypePromotions = true
 exclude = [
-  "docs",
   "tests/unit/test_extensions",
   "tests/unit/test_repository.py",
   "tests/helpers.py",
-  "tests/docker_service_fixtures.py",
   "examples/flask/flask_services.py",
 ]
-include = ["advanced_alchemy"]
+include = ["advanced_alchemy", "tools", "docs"]
 pythonVersion = "3.9"
 reportMissingTypeStubs = false
 reportPrivateImportUsage = false

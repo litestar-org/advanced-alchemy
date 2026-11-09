@@ -1,55 +1,35 @@
-=====
-Cache
-=====
+=======
+Caching
+=======
 
-.. module:: advanced_alchemy.cache
+.. py:module:: advanced_alchemy.cache
 
-The cache module provides optional integration with `dogpile.cache`_ for caching
-SQLAlchemy model instances. It supports multiple backends and provides automatic
-cache invalidation when models are modified.
+Dogpile L2 caching integration for SQLAlchemy repositories with commit-aware
+invalidation and per-process singleflight protection.
 
-.. _dogpile.cache: https://dogpilecache.sqlalchemy.org/
-
-Installation
-------------
-
-The cache module requires the optional ``dogpile.cache`` dependency:
-
-.. code-block:: bash
-
-    pip install advanced-alchemy[dogpile]
-
-Without this dependency, the cache manager will use a ``NullRegion`` that provides
-the same interface but doesn't actually cache anything.
-
-Configuration
--------------
+Configuration & Region Management
+---------------------------------
 
 .. autoclass:: advanced_alchemy.cache.CacheConfig
-    :members:
+    :members: backend, expiration_time, key_prefix, enabled
+    :no-inherited-members:
     :show-inheritance:
-
-Cache Manager
--------------
 
 .. autoclass:: advanced_alchemy.cache.CacheManager
-    :members:
+    :members: region, config, get_async, set_async, delete_async, get_entity_async, set_entity_async, invalidate_entity_async, invalidate_all_async, get_sync, set_sync, delete_sync
+    :no-inherited-members:
     :show-inheritance:
 
-Serialization
--------------
+Serialization & Listeners
+-------------------------
 
 .. autofunction:: advanced_alchemy.cache.default_serializer
 
 .. autofunction:: advanced_alchemy.cache.default_deserializer
 
-Setup
------
+.. autofunction:: advanced_alchemy.cache.setup_cache_listeners
 
-.. autofunction:: advanced_alchemy._listeners.setup_cache_listeners
+.. py:data:: DOGPILE_CACHE_INSTALLED
+    :type: bool
 
-Constants
----------
-
-.. autodata:: advanced_alchemy.cache.DOGPILE_CACHE_INSTALLED
-    :annotation:
+    Boolean flag indicating whether ``dogpile.cache`` is installed.

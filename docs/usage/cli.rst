@@ -1,712 +1,130 @@
 =================
-Command Line Tool
+CLI & Migrations
 =================
 
-Advanced Alchemy provides a command-line interface (CLI) for common database operations and project management tasks.
+Whenever you add a column or create a new table in Python, your SQL database needs a migration script to apply that change safely.
+
+Advanced Alchemy includes a terminal tool called ``alchemy`` (plus ``litestar database`` and ``flask database`` when using web frameworks) that wraps Alembic so you can create migrations, upgrade databases, and export seed data with one command.
 
 Installation
 ------------
 
-The CLI is installed with Advanced Alchemy with the extra ``cli``:
+.. tab-set::
+    :sync-group: pkg
+
+    .. tab-item:: uv
+        :sync: uv
+
+        .. code-block:: bash
+
+            uv add "advanced-alchemy[cli]"
+
+    .. tab-item:: pip
+        :sync: pip
+
+        .. code-block:: bash
+
+            pip install "advanced-alchemy[cli]"
+
+    .. tab-item:: pdm
+        :sync: pdm
+
+        .. code-block:: bash
+
+            pdm add "advanced-alchemy[cli]"
+
+    .. tab-item:: poetry
+        :sync: poetry
+
+        .. code-block:: bash
+
+            poetry add "advanced-alchemy[cli]"
+
+Pointing the CLI at Your Database Config
+----------------------------------------
+
+Tell ``alchemy`` where your database config lives once in ``pyproject.toml`` (recommended), with an environment variable, or with ``--config`` on the command line:
 
 .. tab-set::
 
-    .. tab-item:: pip
-        :sync: key1
+    .. tab-item:: pyproject.toml (Recommended)
+
+        .. code-block:: toml
+
+            [tool.advanced-alchemy]
+            config = "myapp.db:alchemy_config"
+
+    .. tab-item:: Environment Variable
 
         .. code-block:: bash
-            :caption: Using pip
 
-            python3 -m pip install advanced-alchemy[cli]
+            export ALCHEMY_CONFIG="myapp.db:alchemy_config"
+            alchemy upgrade head
 
-    .. tab-item:: uv
-
-        .. code-block:: bash
-            :caption: Using `UV <https://docs.astral.sh/uv/>`_
-
-            uv add advanced-alchemy[cli]
-
-    .. tab-item:: pipx
-        :sync: key2
+    .. tab-item:: Command Flag
 
         .. code-block:: bash
-            :caption: Using `pipx <https://pypa.github.io/pipx/>`_
 
-            pipx install advanced-alchemy[cli]
+            alchemy --config myapp.db:alchemy_config upgrade head
 
-
-    .. tab-item:: pdm
-
-        .. code-block:: bash
-            :caption: Using `PDM <https://pdm.fming.dev/>`_
-
-            pdm add advanced-alchemy[cli]
-
-    .. tab-item:: Poetry
-
-        .. code-block:: bash
-            :caption: Using `Poetry <https://python-poetry.org/>`_
-
-            poetry add advanced-alchemy[cli]
-
-
-Basic Usage
------------
-
-The CLI can be invoked using the ``alchemy`` command:
-
-.. code-block:: bash
-
-    alchemy --help
-
-Global Options
---------------
-
-The following options are available for all commands (and ``--config`` / ``-c`` and ``--validate-config`` can be placed either before or after the subcommand name):
-
-.. list-table:: Global options
-   :header-rows: 1
-   :widths: 20 80
-
-   * - Option
-     - Explanation
-   * - ``-c``, ``--config`` TEXT
-     - Dotted (``module.attr``) or colon (``module:attr``) path to SQLAlchemy config(s) or a factory callable (sync or async). Can also be set via ``ALCHEMY_CONFIG`` or ``pyproject.toml`` ``[tool.advanced-alchemy]``.
-   * - ``--validate-config``
-     - Optional. Validate configuration and print loaded config summary before executing the command.
-   * - ``--bind-key`` TEXT
-     - Optional. Specify which SQLAlchemy config to use
-   * - ``--no-prompt``
-     - Optional. Skip confirmation prompts
-   * - ``--verbose``
-     - Optional. Enable verbose output
-
-
-Configuration Discovery
------------------------
-
-The CLI resolves configuration in the following order of precedence:
-
-1. **CLI flag** (``--config`` / ``-c``, passed before or after the subcommand):
-
-   .. code-block:: bash
-
-       alchemy --config myapp.config:alchemy_config upgrade
-       alchemy upgrade --config myapp.config:alchemy_config
-
-2. **Environment variable** (``ALCHEMY_CONFIG``):
-
-   .. code-block:: bash
-
-       export ALCHEMY_CONFIG="myapp.config:alchemy_config"
-       alchemy upgrade
-
-3. **Project configuration** (``pyproject.toml``):
-
-   The CLI walks upward from the current working directory (stopping at the ``.git`` repository root) to find ``pyproject.toml`` and reads ``[tool.advanced-alchemy]`` (or ``[tool.alchemy]``):
-
-   .. code-block:: toml
-       :caption: pyproject.toml
-
-       [tool.advanced-alchemy]
-       config = "myapp.config:alchemy_config"
-
-   Multiple configuration paths can be provided as a list or comma-separated string (deduplicated by ``bind_key``):
-
-   .. code-block:: toml
-       :caption: pyproject.toml
-
-       [tool.advanced-alchemy]
-       config = ["myapp.db:primary_config", "myapp.db:analytics_config"]
-
-Here is an example of a configuration module (supporting direct instances, sequences, plugin/extension wrappers, or sync/async factory callables):
+Your config target can be a ``SQLAlchemyAsyncConfig``, ``SQLAlchemySyncConfig``, a list of configs for multiple databases, a framework plugin/extension, or a zero-argument factory function:
 
 .. code-block:: python
-    :caption: alchemy-config.py
 
     from advanced_alchemy.config import SQLAlchemySyncConfig
 
-    config = SQLAlchemySyncConfig(
-        connection_string="sqlite:///test.db"
+    alchemy_config = SQLAlchemySyncConfig(
+        connection_string="sqlite:///:memory:",
     )
 
+Common Flags
+------------
 
-Available Commands
-------------------
-
-Migration Commands
-~~~~~~~~~~~~~~~~~~
-
-These commands manage database migrations and revisions.
-
-show-config
-^^^^^^^^^^^
-
-Display all loaded configurations with migrations enabled:
-
-.. code-block:: bash
-
-    alchemy show-config --config path.to.alchemy-config.config
-
-show-current-revision
-^^^^^^^^^^^^^^^^^^^^^
-
-Show the current revision of the database:
-
-.. code-block:: bash
-
-    alchemy show-current-revision --config path.to.alchemy-config.config
-
-.. list-table:: Options
+.. list-table::
    :header-rows: 1
-   :widths: 20 80
-
-   * - Option
-     - Explanation
-   * - ``--verbose``
-     - Display detailed revision information
-
-downgrade
-^^^^^^^^^
-
-Downgrade database to a specific revision:
-
-.. code-block:: bash
-
-    alchemy downgrade --config path.to.alchemy-config.config [REVISION]
-
-.. list-table:: Options
-   :header-rows: 1
-   :widths: 20 80
-
-   * - Option
-     - Explanation
-   * - ``--sql``
-     - Generate SQL output for offline migrations
-   * - ``--tag`` TEXT
-     - Arbitrary tag for custom env.py scripts
-   * - ``REVISION``
-     - Target revision (default: "-1")
-
-
-upgrade
-^^^^^^^
-
-Upgrade database to a specific revision:
-
-.. code-block:: bash
-
-    alchemy upgrade --config path.to.alchemy-config.config [REVISION]
-
-.. list-table:: Options
-   :header-rows: 1
-   :widths: 20 80
-
-   * - Option
-     - Explanation
-   * - ``--sql``
-     - Generate SQL output for offline migrations
-   * - ``--tag`` TEXT
-     - Arbitrary tag for custom env.py scripts
-   * - ``REVISION``
-     - Target revision (default: "head")
-
-stamp
-^^^^^
-
-Stamp the revision table with a specific revision without running migrations:
-
-.. code-block:: bash
-
-    alchemy stamp --config path.to.alchemy-config.config REVISION
-
-.. list-table:: Options
-   :header-rows: 1
-   :widths: 20 80
-
-   * - Option
-     - Explanation
-   * - ``--sql``
-     - Generate SQL output for offline migrations
-   * - ``--tag`` TEXT
-     - Arbitrary tag for custom env.py scripts
-   * - ``--purge``
-     - Delete all entries in version table before stamping
-   * - ``REVISION``
-     - Target revision to stamp (required)
-
-**Use cases:**
-
-- Initialize version table for existing database
-- Mark migrations as applied without running them
-- Reset migration history (with ``--purge``)
-- Generate SQL for manual database stamping (with ``--sql``)
-
-init
-^^^^
-
-Initialize migrations for the project:
-
-.. code-block:: bash
-
-    alchemy init --config path.to.alchemy-config.config [DIRECTORY]
-
-.. list-table:: Options
-   :header-rows: 1
-   :widths: 20 80
-
-   * - Option
-     - Explanation
-   * - ``--multidb``
-     - Support multiple databases
-   * - ``--package``
-     - Create __init__.py for created folder (default: True)
-   * - ``DIRECTORY``
-     - Directory for migration files (optional)
-
-
-make-migrations
-^^^^^^^^^^^^^^^
-
-Create a new migration revision:
-
-.. code-block:: bash
-
-    alchemy make-migrations --config path.to.alchemy-config.config
-
-.. list-table:: Options
-   :header-rows: 1
-   :widths: 30 70
-
-   * - Option
-     - Explanation
-   * - ``-m``, ``--message`` TEXT
-     - Revision message
-   * - ``--autogenerate``/ ``--no-autogenerate``
-     - Automatically detect changes (default: True)
-   * - ``--sql``
-     - Export to .sql instead of writing to database
-   * - ``--head`` TEXT
-     - Base revision for new revision (default: "head")
-   * - ``--splice``
-     - Allow non-head revision as the "head"
-   * - ``--branch-label`` TEXT
-     - Branch label for new revision
-   * - ``--version-path`` TEXT
-     - Specific path for version file
-   * - ``--rev-id`` TEXT
-     - Specific revision ID
-
-.. note:: **PostgreSQL enum changes**
-
-   Alembic's autogenerate does not detect changes to PostgreSQL native ``ENUM``
-   types on its own (for example, adding a value to an existing ``StrEnum``).
-   Advanced Alchemy automatically enables this detection for PostgreSQL
-   connections when `alembic-postgresql-enum
-   <https://pypi.org/project/alembic-postgresql-enum/>`_ is installed (included
-   automatically with the ``asyncpg``, ``psycopg``, and ``psycopg2`` extras):
-
-   .. tab-set::
-
-       .. tab-item:: uv
-
-           .. code-block:: bash
-
-               uv add "advanced-alchemy[asyncpg]"
-
-       .. tab-item:: pip
-
-           .. code-block:: bash
-
-               python3 -m pip install "advanced-alchemy[asyncpg]"
-
-       .. tab-item:: pdm
-
-           .. code-block:: bash
-
-               pdm add "advanced-alchemy[asyncpg]"
-
-       .. tab-item:: poetry
-
-           .. code-block:: bash
-
-               poetry add "advanced-alchemy[asyncpg]"
-
-   Both :class:`~advanced_alchemy.alembic.commands.AlembicCommandConfig` and the
-   generated ``env.py`` load ``alembic_postgresql_enum`` inside
-   ``contextlib.suppress(ModuleNotFoundError)`` when the target dialect is
-   PostgreSQL, so no manual configuration is required.
-
-
-Inspection Commands
-~~~~~~~~~~~~~~~~~~~
-
-These commands inspect migration history and database state.
-
-check
-^^^^^
-
-Check if the database is up to date with the current migration revision:
-
-.. code-block:: bash
-
-    alchemy check --config path.to.alchemy-config.config
-
-Returns exit code 0 if database is current, non-zero otherwise.
-
-**Use cases:**
-
-- CI/CD validation before deployment
-- Pre-deployment smoke tests
-- Health checks
-
-heads
-^^^^^
-
-Show current available heads in the migration script directory:
-
-.. code-block:: bash
-
-    alchemy heads --config path.to.alchemy-config.config
-
-.. list-table:: Options
-   :header-rows: 1
-   :widths: 20 80
-
-   * - Option
-     - Explanation
-   * - ``--verbose``
-     - Display detailed head information
-   * - ``--resolve-dependencies``
-     - Resolve dependencies between heads
-
-**Use cases:**
-
-- Detect multiple heads (branch conflicts)
-- Verify migration graph state
-- Branch development coordination
-
-history
-^^^^^^^
-
-List migration changesets in chronological order:
-
-.. code-block:: bash
-
-    alchemy history --config path.to.alchemy-config.config
-
-.. list-table:: Options
-   :header-rows: 1
-   :widths: 20 80
-
-   * - Option
-     - Explanation
-   * - ``--verbose``
-     - Display detailed revision information
-   * - ``--rev-range`` TEXT
-     - Revision range to display (e.g., 'base:head', 'abc:def')
-   * - ``--indicate-current``
-     - Indicate the current revision in output
-
-**Use cases:**
-
-- Audit migration history
-- Generate migration documentation
-- Review changes between revisions
-
-show
-^^^^
-
-Show details of a specific revision:
-
-.. code-block:: bash
-
-    alchemy show --config path.to.alchemy-config.config REVISION
-
-**Examples:**
-
-.. code-block:: bash
-
-    # Show head revision
-    alchemy show head --config path.to.alchemy-config.config
-
-    # Show specific revision
-    alchemy show abc123def --config path.to.alchemy-config.config
-
-    # Show base revision
-    alchemy show base --config path.to.alchemy-config.config
-
-branches
-^^^^^^^^
-
-Show current branch points in the migration history:
-
-.. code-block:: bash
-
-    alchemy branches --config path.to.alchemy-config.config
-
-.. list-table:: Options
-   :header-rows: 1
-   :widths: 20 80
-
-   * - Option
-     - Explanation
-   * - ``--verbose``
-     - Display detailed branch information
-
-**Use cases:**
-
-- Identify branch points in migration graph
-- Multi-team development coordination
-- Branch-based development workflows
-
-
-Branch Management Commands
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-These commands manage branched migration workflows.
-
-merge
-^^^^^
-
-Merge two revisions together, creating a new migration file:
-
-.. code-block:: bash
-
-    alchemy merge --config path.to.alchemy-config.config REVISIONS
-
-.. list-table:: Options
-   :header-rows: 1
-   :widths: 20 80
-
-   * - Option
-     - Explanation
-   * - ``-m``, ``--message`` TEXT
-     - Merge message
-   * - ``--branch-label`` TEXT
-     - Branch label for merge revision
-   * - ``--rev-id`` TEXT
-     - Specify custom revision ID
-   * - ``REVISIONS``
-     - Revisions to merge (e.g., 'abc123+def456' or 'heads')
-
-**Examples:**
-
-.. code-block:: bash
-
-    # Merge all heads
-    alchemy merge heads -m "merge feature branches" --config path.to.alchemy-config.config
-
-    # Merge specific revisions
-    alchemy merge abc123+def456 -m "merge database changes" --config path.to.alchemy-config.config
-
-**Use cases:**
-
-- Resolve multiple heads (branch conflicts)
-- Consolidate parallel development branches
-- Team coordination for database changes
-
-
-Utility Commands
-~~~~~~~~~~~~~~~~
-
-These commands provide additional migration utilities.
-
-edit
-^^^^
-
-Edit a revision file using the system editor (set via ``$EDITOR`` environment variable):
-
-.. code-block:: bash
-
-    alchemy edit --config path.to.alchemy-config.config REVISION
-
-**Examples:**
-
-.. code-block:: bash
-
-    # Edit latest revision
-    alchemy edit head --config path.to.alchemy-config.config
-
-    # Edit specific revision
-    alchemy edit abc123def --config path.to.alchemy-config.config
-
-ensure-version
-^^^^^^^^^^^^^^
-
-Create the Alembic version table if it doesn't exist:
-
-.. code-block:: bash
-
-    alchemy ensure-version --config path.to.alchemy-config.config
-
-.. list-table:: Options
-   :header-rows: 1
-   :widths: 20 80
-
-   * - Option
-     - Explanation
-   * - ``--sql``
-     - Generate SQL output instead of executing
-
-**Use cases:**
-
-- Database initialization workflows
-- Manual database setup
-- Generate SQL for DBA review (with ``--sql``)
-
-list-templates
-^^^^^^^^^^^^^^
-
-List available Alembic migration templates:
-
-.. code-block:: bash
-
-    alchemy list-templates --config path.to.alchemy-config.config
-
-**Use cases:**
-
-- Discover available templates for ``init`` command
-- Template selection for new projects
-
-
-Database Commands
-~~~~~~~~~~~~~~~~~
-
-These commands manage database tables and data.
-
-drop-all
-^^^^^^^^
-
-Drop all tables from the database:
-
-.. code-block:: bash
-
-    alchemy drop-all --config path.to.alchemy-config.config
-
-.. warning::
-
-   This command is destructive and will delete all data. Use with caution.
-
-dump-data
-^^^^^^^^^
-
-Dump specified tables from the database to JSON files:
-
-.. code-block:: bash
-
-    alchemy dump-data --config path.to.alchemy-config.config --table TABLE_NAME
-
-.. list-table:: Options
-   :header-rows: 1
-   :widths: 20 80
-
-   * - Option
-     - Explanation
-   * - ``--table`` TEXT
-     - Name of table to dump (use '*' for all tables)
-   * - ``--dir`` PATH
-     - Directory to save JSON files (default: ./fixtures)
-
-
-Extending the CLI
------------------
-
-If you're using Click in your project, you can extend Advanced Alchemy's CLI with your own commands. The CLI provides two main functions for integration:
-
-- ``get_alchemy_group()``: Get the base CLI group
-- ``add_migration_commands()``: Add migration-related commands to a group
-
-Basic Extension
-~~~~~~~~~~~~~~~
-
-Here's how to extend the CLI with your own commands:
+   :widths: 28 72
+
+   * - Flag
+     - What It Does
+   * - ``-c``, ``--config``
+     - Import path (``myapp.db:alchemy_config``) to your config or app plugin.
+   * - ``--validate-config``
+     - Prints discovered configs and checks them before running a command.
+   * - ``--bind-key``
+     - Runs the command only for one named database bind key.
+   * - ``--no-prompt``
+     - Skips confirmation prompts in CI or automated scripts.
+
+Adding Commands to Your Own Click App
+-------------------------------------
+
+Already have a custom project CLI built with Click? Attach Advanced Alchemy's migration commands directly to your group:
 
 .. code-block:: python
 
-    from advanced_alchemy.cli import get_alchemy_group, add_migration_commands
     import click
+    from advanced_alchemy.cli import add_migration_commands, get_alchemy_group
 
     alchemy_group = get_alchemy_group()
 
-    @alchemy_group.command(name="my-command")
-    @click.option("--my-option", help="Custom option")
-    def my_command(my_option):
-        """My custom command."""
-        click.echo(f"Running my command with option: {my_option}")
+
+    @alchemy_group.command(name="seed-reference")
+    @click.option("--env", default="dev", help="Target environment name.")
+    def seed_reference(env: str) -> None:
+        click.echo(f"Seeding reference data for {env}")
+
 
     add_migration_commands(alchemy_group)
+    assert "upgrade" in alchemy_group.commands
 
-Custom Group Integration
-~~~~~~~~~~~~~~~~~~~~~~~~
+Next Steps
+----------
 
-You can also integrate Advanced Alchemy's commands into your existing Click group:
+* :doc:`cli_commands` — Step-by-step commands for creating migrations, checking drift, and exporting fixtures.
+* :doc:`/reference/cli` — Full list of ``alchemy`` commands and flags.
 
-.. code-block:: python
+.. toctree::
+    :titlesonly:
+    :hidden:
 
-    import click
-    from advanced_alchemy.cli import add_migration_commands
-
-    @click.group()
-    def cli():
-        """My application CLI."""
-        pass
-
-    add_migration_commands(cli)
-
-    @cli.command()
-    def my_command():
-        """Custom command in your CLI."""
-        pass
-
-    if __name__ == "__main__":
-        cli()
-
-Typer integration
------------------
-
-You can integrate Advanced Alchemy's CLI commands into your existing ``Typer`` application. Here's how:
-
-
-.. code-block:: python
-    :caption: cli.py
-
-    import typer
-    from advanced_alchemy.cli import get_alchemy_group, add_migration_commands
-
-    app = typer.Typer()
-
-    @app.command()
-    def hello(name: str) -> None:
-        """Says hello to the world."""
-        typer.echo(f"Hello {name}")
-
-    @app.callback()
-    def callback():
-        """
-        Typer app, including Click subapp
-        """
-        pass
-
-    def create_cli() -> typer.Typer:
-        """Create the CLI application with both Typer and Click commands."""
-        alchemy_group = get_alchemy_group()
-        typer_click_object = typer.main.get_command(app)
-        typer_click_object.add_command(add_migration_commands(alchemy_group))
-        return typer_click_object
-
-    if __name__ == "__main__":
-        cli = create_cli()
-        cli()
-
-
-After setting up the integration, you can use both your ``Typer`` commands and Advanced Alchemy commands:
-
-.. code-block:: bash
-
-    # Use your Typer commands
-    python cli.py hello Cody
-
-    # Use Advanced Alchemy commands
-    python cli.py alchemy upgrade --config path.to.config
-    python cli.py alchemy make-migrations --config path.to.config
+    Command Workflows <cli_commands>

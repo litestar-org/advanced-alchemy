@@ -2,345 +2,183 @@
 Caching
 =======
 
-Advanced Alchemy provides optional caching support through integration with
-`dogpile.cache`_. This allows you to cache SQLAlchemy model instances using
-various backends (Redis, Memcached, file, memory) with automatic cache
-invalidation when models are modified.
+Imagine 500 visitors opening the same popular author page at the exact same second. Without a cache, your database runs the exact same ``SELECT`` query 500 times.
 
-.. _dogpile.cache: https://dogpilecache.sqlalchemy.org/
+Advanced Alchemy integrates with `dogpile.cache <https://dogpilecache.sqlalchemy.org/>`__ so repeated lookups come straight from memory or Redis—and whenever you save changes to a row, stale cache entries are cleared automatically when the transaction commits.
+
+.. container:: aa-diagram
+
+    .. image:: /_static/diagrams/caching-flow-light.svg
+        :alt: Query caching lookup, hit, miss, and automatic commit invalidation flow
+        :class: aa-diagram--light
+
+    .. image:: /_static/diagrams/caching-flow-dark.svg
+        :alt: Query caching lookup, hit, miss, and automatic commit invalidation flow
+        :class: aa-diagram--dark
 
 Installation
 ------------
 
-Install the optional caching dependency:
+.. tab-set::
+    :sync-group: pkg
 
-.. code-block:: bash
+    .. tab-item:: uv
+        :sync: uv
 
-    pip install advanced-alchemy[dogpile]
+        .. code-block:: bash
+
+            uv add "advanced-alchemy[dogpile]"
+
+    .. tab-item:: pip
+        :sync: pip
+
+        .. code-block:: bash
+
+            pip install "advanced-alchemy[dogpile]"
+
+    .. tab-item:: pdm
+        :sync: pdm
+
+        .. code-block:: bash
+
+            pdm add "advanced-alchemy[dogpile]"
+
+    .. tab-item:: poetry
+        :sync: poetry
+
+        .. code-block:: bash
+
+            poetry add "advanced-alchemy[dogpile]"
 
 Quick Start
 -----------
 
-Basic setup with in-memory caching using the config system:
+Pass ``CacheConfig`` to your database configuration and enable ``auto_expunge=True`` on cached repositories. Every ``repo.get()`` and ``repo.get_many()`` call uses the cache automatically—or pass ``use_cache=False`` to skip the cache for a specific query:
 
 .. code-block:: python
 
+    from sqlalchemy.orm import Mapped
+    from advanced_alchemy.base import BigIntAuditBase
     from advanced_alchemy.cache import CacheConfig
-    from advanced_alchemy.config import SQLAlchemyAsyncConfig
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+    from advanced_alchemy.config import SQLAlchemySyncConfig
+    from advanced_alchemy.repository import SQLAlchemySyncRepository
 
-    # Configure caching via SQLAlchemy config
-    db_config = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///app.db",
+
+    class CachedAuthor(BigIntAuditBase):
+        __tablename__ = "cached_author_example"
+        name: Mapped[str]
+
+
+    class CachedAuthorRepository(SQLAlchemySyncRepository[CachedAuthor]):
+        model_type = CachedAuthor
+
+
+    db_config = SQLAlchemySyncConfig(
+        connection_string="sqlite:///:memory:",
+        create_all=True,
         cache_config=CacheConfig(
             backend="dogpile.cache.memory",
-            expiration_time=300,  # 5 minutes
+            expiration_time=300,
+            key_prefix="authors:",
         ),
     )
 
-    # Cache listeners are automatically registered when cache_config is set.
-    # The cache_manager is stored in session.info and auto-retrieved by repositories.
+    with db_config.get_session() as session:
+        repo = CachedAuthorRepository(session=session, auto_expunge=True)
+        created = repo.add(CachedAuthor(name="Ada Lovelace"), auto_commit=True)
+        cached_row = repo.get(created.id)
+        fresh_row = repo.get(created.id, use_cache=False)
+        assert cached_row.id == fresh_row.id
 
+Choosing a Cache Backend
+------------------------
 
-    class UserRepository(SQLAlchemyAsyncRepository[User]):
-        model_type = User
+.. tab-set::
 
+    .. tab-item:: Redis (Production)
 
-    # Repository automatically uses cache_manager from session.info
-    async with db_config.get_session() as session:
-        repo = UserRepository(session=session)
+        .. code-block:: python
 
-        # First call hits database and caches the result
-        user = await repo.get(user_id)
+            from advanced_alchemy.cache import CacheConfig
 
-        # Second call returns cached result
-        user = await repo.get(user_id)
+            redis_cache = CacheConfig(
+                backend="dogpile.cache.redis",
+                expiration_time=3600,
+                arguments={
+                    "host": "localhost",
+                    "port": 6379,
+                    "db": 0,
+                    "distributed_lock": True,
+                },
+                key_prefix="myapp:",
+            )
 
-Configuration Options
----------------------
+    .. tab-item:: In-Memory (Single Worker)
 
-The ``CacheConfig`` dataclass provides several configuration options:
+        .. code-block:: python
 
-.. code-block:: python
+            from advanced_alchemy.cache import CacheConfig
 
-    from advanced_alchemy.cache import CacheConfig
+            memory_cache = CacheConfig(
+                backend="dogpile.cache.memory",
+                expiration_time=300,
+            )
 
-    config = CacheConfig(
-        # Cache backend (see Backend Configuration below)
-        backend="dogpile.cache.redis",
+    .. tab-item:: Memcached
 
-        # Default TTL in seconds (default: 3600)
-        expiration_time=3600,
+        .. code-block:: python
 
-        # Backend-specific arguments
-        arguments={
-            "host": "localhost",
-            "port": 6379,
-            "db": 0,
-        },
+            from advanced_alchemy.cache import CacheConfig
 
-        # Key prefix to avoid collisions (default: "aa:")
-        key_prefix="myapp:",
+            memcached_cache = CacheConfig(
+                backend="dogpile.cache.memcached",
+                expiration_time=3600,
+                arguments={"url": ["127.0.0.1:11211"]},
+            )
 
-        # Enable/disable caching globally (default: True)
-        enabled=True,
-    )
+    .. tab-item:: Disabled
 
-Backend Configuration
----------------------
+        .. code-block:: python
 
-Memory Backend
-~~~~~~~~~~~~~~
+            from advanced_alchemy.cache import CacheConfig
 
-Best for development and testing:
+            disabled_cache = CacheConfig(enabled=False)
 
-.. code-block:: python
+What Happens Behind the Scenes
+------------------------------
 
-    config = CacheConfig(
-        backend="dogpile.cache.memory",
-        expiration_time=300,
-    )
+* **Safe rollbacks**: Cache entries are only cleared *after* ``commit()`` succeeds. If a transaction rolls back, your cache stays untouched.
+* **No cache stampedes**: If 50 requests miss the same uncached key at once, one query runs and shares the result with the waiting requests.
+* **Columns only**: Cached rows store column values, not related tables. Call ``session.merge(row)`` first if you need to lazy-load relationships later.
 
-Redis Backend
-~~~~~~~~~~~~~
+.. dropdown:: Custom JSON Serializer & Standalone Setup
+    :icon: gear
 
-Recommended for production with distributed systems:
+    .. code-block:: python
 
-.. code-block:: python
-
-    config = CacheConfig(
-        backend="dogpile.cache.redis",
-        expiration_time=3600,
-        arguments={
-            "host": "localhost",
-            "port": 6379,
-            "db": 0,
-            "distributed_lock": True,  # Enable distributed locking
-        },
-    )
-
-Memcached Backend
-~~~~~~~~~~~~~~~~~
-
-Alternative for high-performance caching:
-
-.. code-block:: python
-
-    config = CacheConfig(
-        backend="dogpile.cache.memcached",
-        expiration_time=3600,
-        arguments={
-            "url": ["127.0.0.1:11211"],
-        },
-    )
-
-Null Backend
-~~~~~~~~~~~~
-
-Disables caching (useful for testing):
-
-.. code-block:: python
-
-    config = CacheConfig(
-        backend="dogpile.cache.null",
-    )
-
-    # Or simply disable caching
-    config = CacheConfig(enabled=False)
-
-Repository Integration
-----------------------
-
-The cache manager integrates with repositories through the ``cache_manager`` parameter:
-
-.. code-block:: python
-
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-
-    class UserRepository(SQLAlchemyAsyncRepository[User]):
-        model_type = User
-
-
-    # Create repository with caching
-    repo = UserRepository(
-        session=session,
-        cache_manager=cache_manager,
-        auto_expunge=True,  # Recommended with caching
-    )
-
-    # These methods support caching:
-    user = await repo.get(user_id)  # Cached by entity ID
-    users = await repo.get_many()  # Cached with version-based invalidation
-    users, count = await repo.get_many_and_count()  # Cached with version-based invalidation
-
-Bypassing the Cache
-~~~~~~~~~~~~~~~~~~~
-
-You can bypass the cache for specific queries:
-
-.. code-block:: python
-
-    # Force database fetch, skip cache
-    user = await repo.get(user_id, use_cache=False)
-    users = await repo.get_many(use_cache=False)
-
-Automatic Cache Invalidation
-----------------------------
-
-When using the config system with ``cache_config``, cache listeners are
-automatically registered (controlled by ``enable_cache_listener=True``, the default).
-Cache entries are automatically invalidated when models are created, updated, or deleted.
-
-The invalidation is transaction-aware:
-
-- Invalidations are deferred until the transaction commits
-- If the transaction rolls back, invalidations are discarded
-- Entity caches are invalidated by ID
-- List caches use version-based invalidation (bumps a version token)
-
-Version-Based List Invalidation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-List queries use version-based invalidation. When any entity of a model type
-is modified, a version token is bumped, which invalidates all list caches
-for that model:
-
-.. code-block:: python
-
-    # First call caches with version token "abc123"
-    users = await repo.get_many()
-
-    # Modify any user
-    user.name = "New Name"
-    await repo.update(user)
-    await session.commit()  # Version token bumped to "def456"
-
-    # Next call sees new version, fetches fresh data
-    users = await repo.get_many()
-
-Singleflight (Stampede Protection)
-----------------------------------
-
-The cache manager includes per-process singleflight to prevent cache stampedes.
-When multiple concurrent requests try to fetch the same uncached data, only
-one request hits the database:
-
-.. code-block:: python
-
-    import asyncio
-
-    # All 10 concurrent calls result in only 1 database query
-    results = await asyncio.gather(*[
-        repo.get(user_id) for _ in range(10)
-    ])
-
-Custom Serialization
---------------------
-
-By default, models are serialized to JSON. You can provide custom serializers
-for different serialization formats:
-
-.. code-block:: python
-
-    import msgpack
-
-    def msgpack_serializer(model):
-        # Convert model to dict and serialize with msgpack
+        from typing import Any
         from sqlalchemy import inspect
-        mapper = inspect(model.__class__)
-        data = {col.key: getattr(model, col.key) for col in mapper.columns}
-        return msgpack.packb(data)
-
-    def msgpack_deserializer(data, model_class):
-        unpacked = msgpack.unpackb(data)
-        return model_class(**unpacked)
-
-    config = CacheConfig(
-        backend="dogpile.cache.redis",
-        serializer=msgpack_serializer,
-        deserializer=msgpack_deserializer,
-    )
-
-.. warning::
-
-    The default JSON serializer only serializes column values, not relationships.
-    Cached instances are detached and accessing lazy-loaded relationships will
-    raise ``DetachedInstanceError``. Use ``session.merge()`` if you need
-    relationship access.
-
-Performance Considerations
---------------------------
-
-1. **Use auto_expunge=True**: When using caching, set ``auto_expunge=True`` on
-   your repository to ensure cached entities are properly detached.
-
-2. **Choose the right backend**: Use Redis or Memcached for production with
-   multiple application instances. Memory backend is only suitable for
-   single-instance deployments or development.
-
-3. **Set appropriate TTLs**: Balance between cache hit rate and data freshness.
-   Shorter TTLs mean more database queries but fresher data.
-
-4. **Key prefix**: Use unique key prefixes when sharing a cache backend with
-   other applications to avoid key collisions.
-
-5. **Graceful degradation**: If dogpile.cache is not installed, the cache
-   manager automatically falls back to a no-op implementation.
-
-Example: Full Application Setup
--------------------------------
-
-.. code-block:: python
-
-    from litestar import Litestar
-    from litestar.contrib.sqlalchemy.plugins import SQLAlchemyPlugin
-
-    from advanced_alchemy.cache import CacheConfig
-    from advanced_alchemy.config import SQLAlchemyAsyncConfig
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+        from advanced_alchemy.cache import CacheConfig, CacheManager, setup_cache_listeners
+        from advanced_alchemy.utils.serialization import decode_json, encode_json
 
 
-    # Configure database with caching
-    db_config = SQLAlchemyAsyncConfig(
-        connection_string="postgresql+asyncpg://user:pass@localhost/db",
-        cache_config=CacheConfig(
-            backend="dogpile.cache.redis",
-            expiration_time=3600,
-            arguments={"host": "localhost", "port": 6379, "db": 0},
-            key_prefix="myapp:",
-        ),
-    )
+        def custom_serializer(model: Any) -> bytes:
+            mapper = inspect(model.__class__)
+            payload = {col.key: getattr(model, col.key) for col in mapper.columns}
+            return encode_json(payload).encode("utf-8")
 
 
-    class UserRepository(SQLAlchemyAsyncRepository[User]):
-        model_type = User
+        def custom_deserializer(raw: bytes, model_class: type[Any]) -> Any:
+            return model_class(**decode_json(raw.decode("utf-8")))
 
 
-    async def get_user(session: AsyncSession, user_id: int) -> User:
-        # Repository auto-retrieves cache_manager from session.info
-        repo = UserRepository(session=session, auto_expunge=True)
-        return await repo.get(user_id)
+        cache_manager = CacheManager(
+            CacheConfig(
+                backend="dogpile.cache.memory",
+                serializer=custom_serializer,
+                deserializer=custom_deserializer,
+            ),
+        )
+        setup_cache_listeners()
 
-
-    app = Litestar(
-        plugins=[SQLAlchemyPlugin(config=db_config)],
-        ...
-    )
-
-Manual Setup (Without Config)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-If you're not using the config system, you can set up caching manually:
-
-.. code-block:: python
-
-    from advanced_alchemy.cache import CacheConfig, CacheManager, setup_cache_listeners
-
-    # Create cache manager
-    cache_manager = CacheManager(CacheConfig(backend="dogpile.cache.memory"))
-
-    # Register listeners once at startup
-    setup_cache_listeners()
-
-    # Pass cache_manager explicitly to repositories
-    repo = UserRepository(session=session, cache_manager=cache_manager)
+See :doc:`/reference/cache` for the full caching API reference.

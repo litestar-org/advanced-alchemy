@@ -15,7 +15,7 @@ Note:
 See Also:
     - :class:`sqlalchemy.sql.expression.Select`: Core SQLAlchemy select expression
     - :class:`sqlalchemy.orm.Query`: SQLAlchemy ORM query interface
-    - :mod:`advanced_alchemy.base`: Base model definitions
+    - :class:`~advanced_alchemy.base.BasicAttributes`: Base model definitions
 
 """
 
@@ -117,29 +117,50 @@ StatementTypeT = TypeVar(
 logger = logging.getLogger("advanced_alchemy")
 
 
-# Define TypedDicts for filter and logical maps
 class FilterMap(TypedDict):
+    """Mapping of filter type keys to their corresponding filter classes."""
+
     before_after: "type[BeforeAfter]"
+    """Exclusive datetime range filter class."""
     on_before_after: "type[OnBeforeAfter]"
+    """Inclusive datetime range filter class."""
     boolean: "type[BooleanFilter]"
+    """Boolean equality filter class."""
     choices: "type[ChoicesFilter[Any]]"
+    """Fixed-choice membership filter class."""
     collection: "type[CollectionFilter[Any]]"
+    """Collection ``IN`` / ``ANY`` membership filter class."""
     not_in_collection: "type[NotInCollectionFilter[Any]]"
+    """Collection ``NOT IN`` / ``!= ANY`` exclusion filter class."""
     limit_offset: "type[LimitOffset]"
+    """Limit and offset pagination filter class."""
     null: "type[NullFilter]"
+    """``IS NULL`` filter class."""
     not_null: "type[NotNullFilter]"
+    """``IS NOT NULL`` filter class."""
     order_by: "type[OrderBy]"
+    """Column ordering filter class."""
     search: "type[SearchFilter]"
+    """Substring ``LIKE`` / ``ILIKE`` filter class."""
     not_in_search: "type[NotInSearchFilter]"
+    """Negated substring ``NOT LIKE`` / ``NOT ILIKE`` filter class."""
     comparison: "type[ComparisonFilter]"
+    """Binary comparison operator filter class."""
     exists: "type[ExistsFilter]"
+    """Correlated ``EXISTS`` subquery filter class."""
     not_exists: "type[NotExistsFilter]"
+    """Correlated ``NOT EXISTS`` subquery filter class."""
     filter_group: "type[FilterGroup]"
+    """Logical ``AND`` / ``OR`` filter group class."""
 
 
 class LogicalOperatorMap(TypedDict):
+    """Mapping of logical operator keys to SQLAlchemy conjunction functions."""
+
     and_: Callable[..., ColumnElement[bool]]
+    """SQLAlchemy ``and_`` conjunction callable."""
     or_: Callable[..., ColumnElement[bool]]
+    """SQLAlchemy ``or_`` disjunction callable."""
 
 
 class StatementFilter(ABC):
@@ -203,9 +224,7 @@ class BeforeAfter(StatementFilter):
     If either `before` or `after` is None, that boundary condition is not applied.
 
     See Also:
-    ---------
-        :class:`OnBeforeAfter` : Inclusive datetime range filtering
-
+        :class:`OnBeforeAfter`: Inclusive datetime range filtering
     """
 
     field_name: FilterFieldName
@@ -218,17 +237,12 @@ class BeforeAfter(StatementFilter):
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         """Apply datetime range conditions to statement.
 
-        Parameters
-        ----------
-        statement : StatementTypeT
-            The SQLAlchemy statement to modify
-        model : type[ModelT]
-            The SQLAlchemy model class
+        Args:
+            statement: The SQLAlchemy statement to modify.
+            model: The SQLAlchemy model class.
 
         Returns:
-        --------
-        StatementTypeT
-            Modified statement with datetime range conditions
+            StatementTypeT: Modified statement with datetime range conditions.
         """
         field = self._get_instrumented_attr(model, self.field_name)
         if self.before is not None:
@@ -249,9 +263,7 @@ class OnBeforeAfter(StatementFilter):
     is not applied.
 
     See Also:
-    ---------
-        :class:`BeforeAfter` : Exclusive datetime range filtering
-
+        :class:`BeforeAfter`: Exclusive datetime range filtering
     """
 
     field_name: FilterFieldName
@@ -264,17 +276,12 @@ class OnBeforeAfter(StatementFilter):
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         """Apply inclusive datetime range conditions to statement.
 
-        Parameters
-        ----------
-        statement : StatementTypeT
-            The SQLAlchemy statement to modify
-        model : type[ModelT]
-            The SQLAlchemy model class
+        Args:
+            statement: The SQLAlchemy statement to modify.
+            model: The SQLAlchemy model class.
 
         Returns:
-        --------
-        StatementTypeT
-            Modified statement with inclusive datetime range conditions
+            StatementTypeT: Modified statement with inclusive datetime range conditions.
         """
         field = self._get_instrumented_attr(model, self.field_name)
         if self.on_or_before is not None:
@@ -316,26 +323,19 @@ class CollectionFilter(InAnyFilter, Generic[T]):
     ) -> StatementTypeT:
         """Apply a WHERE ... IN or WHERE ... ANY (...) clause to the statement.
 
-        Parameters
-        ----------
-        statement : StatementTypeT
-            The SQLAlchemy statement to modify
-        model : type[ModelT]
-            The SQLAlchemy model class
-        prefer_any : bool, optional
-            If True, uses the SQLAlchemy :func:`any_` operator instead of
-            :func:`in_` for the filter condition
+        Args:
+            statement: The SQLAlchemy statement to modify.
+            model: The SQLAlchemy model class.
+            prefer_any: If True, uses the SQLAlchemy :func:`sqlalchemy.any_` operator instead of
+                :meth:`sqlalchemy.sql.expression.ColumnOperators.in_` for the filter condition.
 
         Returns:
-        --------
-        StatementTypeT
-            Modified statement with the appropriate IN conditions
+            StatementTypeT: Modified statement with the appropriate IN conditions.
         """
         field = self._get_instrumented_attr(model, self.field_name)
         if self.values is None:
             return statement
         if not self.values:
-            # Return empty result set by forcing a false condition
             return cast("StatementTypeT", statement.where(text("1=-1")))
         if prefer_any:
             return cast("StatementTypeT", statement.where(any_(self.values) == field))  # type: ignore[arg-type]
@@ -376,14 +376,10 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
     The filter supports both ``NOT IN`` and ``!= ANY`` operators for collection exclusion.
     Use ``prefer_any=True`` in ``append_to_statement`` to use the ``ANY`` operator.
 
-    Parameters
-    ----------
-    field_name : str
-        Name of the model attribute to filter on
-    values : abc.Collection[T] | None
-        Values for the ``NOT IN`` clause. If this is None or empty,
-        the filter is not applied.
-
+    Args:
+        field_name: Name of the model attribute to filter on.
+        values: Values for the ``NOT IN`` clause. If this is None or empty,
+            the filter is not applied.
     """
 
     field_name: FilterFieldName
@@ -399,24 +395,17 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
     ) -> StatementTypeT:
         """Apply a WHERE ... NOT IN or WHERE ... != ANY(...) clause to the statement.
 
-        Parameters
-        ----------
-        statement : StatementTypeT
-            The SQLAlchemy statement to modify
-        model : type[ModelT]
-            The SQLAlchemy model class
-        prefer_any : bool, optional
-            If True, uses the SQLAlchemy :func:`any_` operator instead of
-            :func:`notin_` for the filter condition
+        Args:
+            statement: The SQLAlchemy statement to modify.
+            model: The SQLAlchemy model class.
+            prefer_any: If True, uses the SQLAlchemy :func:`sqlalchemy.any_` operator instead of
+                :meth:`sqlalchemy.sql.expression.ColumnOperators.notin_` for the filter condition.
 
         Returns:
-        --------
-        StatementTypeT
-            Modified statement with the appropriate NOT IN conditions
+            StatementTypeT: Modified statement with the appropriate NOT IN conditions.
         """
         field = self._get_instrumented_attr(model, self.field_name)
         if not self.values:
-            # If None or empty, we do not modify the statement
             return statement
         if prefer_any:
             return cast("StatementTypeT", statement.where(any_(self.values) != field))  # type: ignore[arg-type]
@@ -435,7 +424,6 @@ class NullFilter(StatementFilter):
 
             from advanced_alchemy.filters import NullFilter
 
-            # Find records where email_verified_at is NULL
             null_filter = NullFilter("email_verified_at")
             unverified = await repo.get_many(null_filter)
 
@@ -446,7 +434,6 @@ class NullFilter(StatementFilter):
                 CollectionFilter,
             )
 
-            # Find unverified users in specific roles
             filters = [
                 NullFilter("email_verified_at"),
                 CollectionFilter("role", ["admin", "moderator"]),
@@ -488,7 +475,6 @@ class NotNullFilter(StatementFilter):
 
             from advanced_alchemy.filters import NotNullFilter
 
-            # Find records where email_verified_at is NOT NULL
             not_null_filter = NotNullFilter("email_verified_at")
             verified = await repo.get_many(not_null_filter)
 
@@ -499,7 +485,6 @@ class NotNullFilter(StatementFilter):
                 CollectionFilter,
             )
 
-            # Find verified users in specific roles
             filters = [
                 NotNullFilter("email_verified_at"),
                 CollectionFilter("role", ["admin", "moderator"]),
@@ -783,7 +768,6 @@ class SearchFilter(StatementFilter):
         return cast("StatementTypeT", statement.where(where_clause))
 
 
-# Regular typed dictionary for operators_map
 operators_map: dict[str, Callable[[Any, Any], ColumnElement[bool]]] = {
     "eq": op.eq,
     "ne": op.ne,
@@ -918,16 +902,12 @@ class ExistsFilter(StatementFilter):
         which is true whenever any row matches it — so the filter matches **every** row of the outer
         query rather than raising.
 
-    Parameters
-    ----------
-    values : list[ColumnElement[bool]]
+    Args:
         values: List of SQLAlchemy column expressions to use in the EXISTS clause, including the
-        correlation between the outer table and the subquery table
-    operator : Literal["and", "or"], optional
+            correlation between the outer table and the subquery table.
         operator: If "and", combines conditions with AND, otherwise uses OR. Defaults to "and".
 
     Example:
-    --------
         Basic usage with AND conditions::
 
             from sqlalchemy import select
@@ -935,8 +915,7 @@ class ExistsFilter(StatementFilter):
 
             filter = ExistsFilter(
                 values=[
-                    User.organization_id
-                    == Organization.id,  # correlation
+                    User.organization_id == Organization.id,
                     User.email.like("%@example.com%"),
                 ],
             )
@@ -957,9 +936,8 @@ class ExistsFilter(StatementFilter):
         nest it in a :class:`FilterGroup`, to restrict the outer query.
 
     See Also:
-    --------
-        :class:`NotExistsFilter`: The inverse of this filter
-        :func:`sqlalchemy.sql.expression.exists`: SQLAlchemy EXISTS expression
+        - :class:`NotExistsFilter`: The inverse of this filter
+        - :func:`sqlalchemy.sql.expression.exists`: SQLAlchemy EXISTS expression
     """
 
     values: list[ColumnElement[bool]]
@@ -995,8 +973,7 @@ class ExistsFilter(StatementFilter):
         """Combine the filter conditions using the specified operator.
 
         Returns:
-            ColumnElement[bool]:
-                A SQLAlchemy column expression combining all conditions with AND or OR
+            ColumnElement[bool]: A SQLAlchemy column expression combining all conditions with AND or OR.
         """
         op = self._and if self.operator == "and" else self._or
         return op(*self.values)
@@ -1005,24 +982,16 @@ class ExistsFilter(StatementFilter):
         """Generate the EXISTS clause for the statement.
 
         Args:
-            model : type[ModelT]
-                The SQLAlchemy model class to correlate with
+            model: The SQLAlchemy model class to correlate with.
 
         Returns:
-            ColumnElement[bool]:
-                A correlated EXISTS expression for use in a WHERE clause
+            ColumnElement[bool]: A correlated EXISTS expression for use in a WHERE clause.
         """
-        # Handle empty values list case
         if not self.values:
-            # Use explicitly imported 'false' from sqlalchemy
-            # Return SQLAlchemy FALSE expression
             return false()
 
-        # Combine all values with AND or OR (using the operator specified in the filter)
-        # This creates a single boolean expression from multiple conditions
         combined_conditions = self._get_combined_conditions()
 
-        # Create a correlated subquery with the combined conditions
         try:
             subquery = select(1).where(combined_conditions)
             correlated_subquery = subquery.correlate(model.__table__)
@@ -1034,17 +1003,12 @@ class ExistsFilter(StatementFilter):
         """Append EXISTS condition to the statement.
 
         Args:
-            statement : StatementTypeT
-                The SQLAlchemy statement to modify
-            model : type[ModelT]
-            The SQLAlchemy model class
+            statement: The SQLAlchemy statement to modify.
+            model: The SQLAlchemy model class.
 
         Returns:
-            StatementTypeT:
-                Modified statement with EXISTS condition
+            StatementTypeT: Modified statement with EXISTS condition.
         """
-        # We apply the exists clause regardless of whether self.values is empty,
-        # as get_exists_clause handles the empty case by returning false().
         exists_clause = self.get_exists_clause(model)
         return cast("StatementTypeT", statement.where(exists_clause))
 
@@ -1061,15 +1025,11 @@ class NotExistsFilter(StatementFilter):
     For example, if searching movies with `Movie.genre == "Action"`, only rows where
     the genre is NOT "Action" will be returned.
 
-    Parameters
-    ----------
-    values : list[ColumnElement[bool]]
-        values: List of SQLAlchemy column expressions to use in the NOT EXISTS clause
-    operator : Literal["and", "or"], optional
+    Args:
+        values: List of SQLAlchemy column expressions to use in the NOT EXISTS clause.
         operator: If "and", combines conditions with AND, otherwise uses OR. Defaults to "and".
 
     Example:
-    --------
         Basic usage with AND conditions::
 
             from sqlalchemy import select
@@ -1094,10 +1054,9 @@ class NotExistsFilter(StatementFilter):
         This will return organizations where the user's role is NEITHER "admin" NOR "owner".
 
     See Also:
-    --------
-        :class:`ExistsFilter`: The inverse of this filter
-        :func:`sqlalchemy.sql.expression.not_`: SQLAlchemy NOT operator
-        :func:`sqlalchemy.sql.expression.exists`: SQLAlchemy EXISTS expression
+        - :class:`ExistsFilter`: The inverse of this filter
+        - :func:`sqlalchemy.sql.expression.not_`: SQLAlchemy NOT operator
+        - :func:`sqlalchemy.sql.expression.exists`: SQLAlchemy EXISTS expression
     """
 
     values: list[ColumnElement[bool]]
@@ -1137,20 +1096,14 @@ class NotExistsFilter(StatementFilter):
         """Generate the NOT EXISTS clause for the statement.
 
         Args:
-            model : type[ModelT]
-                The SQLAlchemy model class to correlate with
-
+            model: The SQLAlchemy model class to correlate with.
 
         Returns:
-            ColumnElement[bool]:
-                A correlated NOT EXISTS expression for use in a WHERE clause
+            ColumnElement[bool]: A correlated NOT EXISTS expression for use in a WHERE clause.
         """
-        # Handle empty values list case
         if not self.values:
-            # Return SQLAlchemy TRUE expression
             return true()
 
-        # Combine conditions and create correlated subquery
         combined_conditions = self._get_combined_conditions()
         subquery = select(1).where(combined_conditions)
         correlated_subquery = subquery.correlate(model.__table__)
@@ -1160,17 +1113,12 @@ class NotExistsFilter(StatementFilter):
         """Append NOT EXISTS condition to the statement.
 
         Args:
-            statement : StatementTypeT
-                The SQLAlchemy statement to modify
-            model : type[ModelT]
-                The SQLAlchemy model class
+            statement: The SQLAlchemy statement to modify.
+            model: The SQLAlchemy model class.
 
         Returns:
-            StatementTypeT:
-                Modified statement with NOT EXISTS condition
+            StatementTypeT: Modified statement with NOT EXISTS condition.
         """
-        # We apply the exists clause regardless of whether self.values is empty,
-        # as get_exists_clause handles the empty case by returning true.
         exists_clause = self.get_exists_clause(model)
         return cast("StatementTypeT", statement.where(exists_clause))
 
@@ -1205,18 +1153,13 @@ class FilterGroup(StatementFilter):
         if not self.filters:
             return statement
 
-        # Create a list of expressions from each filter
         expressions = []
         for filter_obj in self.filters:
-            # Each filter needs to be applied to a clean version of the statement
-            # to get just its expression
             filter_statement = filter_obj.append_to_statement(select(), model)
-            # Extract the whereclause from the filter's statement
             if hasattr(filter_statement, "whereclause") and filter_statement.whereclause is not None:
                 expressions.append(filter_statement.whereclause)  # pyright: ignore
 
         if expressions:
-            # Combine all expressions with the logical operator
             combined = self.logical_operator(*expressions)
             return cast("StatementTypeT", statement.where(combined))
         return statement
@@ -1234,7 +1177,6 @@ class MultiFilter(StatementFilter):
     filters: dict[str, Any]
     """JSON/dict structure representing the filters."""
 
-    # TypedDict class variables
     _filter_map: ClassVar[FilterMap] = {
         "before_after": BeforeAfter,
         "on_before_after": OnBeforeAfter,
@@ -1276,14 +1218,12 @@ class MultiFilter(StatementFilter):
         for filter_type, conditions in self.filters.items():
             operator = self._logical_map.get(filter_type)
             if operator and isinstance(conditions, list):
-                # Create filters from the conditions
                 valid_filters = []
                 for cond in conditions:  # pyright: ignore
                     filter_instance = self._create_filter(cond)  # pyright: ignore
                     if filter_instance is not None:
                         valid_filters.append(filter_instance)  # pyright: ignore
 
-                # Only create a filter group if we have valid filters
                 if valid_filters:
                     filter_group = FilterGroup(
                         logical_operator=operator,  # type: ignore
@@ -1301,11 +1241,9 @@ class MultiFilter(StatementFilter):
         Returns:
             Optional[StatementFilter]: Filter instance if successfully created, None otherwise
         """
-        # Check if condition is a nested logical group
         logical_keys = set(self._logical_map.keys())
         intersect = logical_keys.intersection(condition.keys())
         if intersect:
-            # It's a nested filter group
             for key in intersect:
                 operator = self._logical_map.get(key)
                 if operator and isinstance(condition.get(key), list):
@@ -1318,13 +1256,11 @@ class MultiFilter(StatementFilter):
                     if nested_filters:
                         return FilterGroup(logical_operator=operator, filters=nested_filters)  # type: ignore
         else:
-            # Regular filter
             filter_type = condition.get("type")
             if filter_type is not None and isinstance(filter_type, str):
                 filter_class = self._filter_map.get(filter_type)
                 if filter_class is not None:
                     try:
-                        # Create a copy of the condition without the type key
                         filter_args = {k: v for k, v in condition.items() if k != "type"}
                         return filter_class(**filter_args)  # type: ignore
                     except Exception:  # noqa: BLE001
@@ -1332,7 +1268,6 @@ class MultiFilter(StatementFilter):
         return None
 
 
-# Define FilterTypes using direct class references
 FilterTypes: TypeAlias = Union[
     BeforeAfter,
     OnBeforeAfter,

@@ -20,7 +20,6 @@ from advanced_alchemy.base import ModelProtocol, UUIDBase, create_registry, orm_
 from advanced_alchemy.mixins.sentinel import SentinelMixin
 from advanced_alchemy.repository import SQLAlchemySyncRepository
 from advanced_alchemy.types import JsonB
-from tests.helpers import purge_module
 
 _MISSING = object()
 
@@ -69,14 +68,11 @@ def _reload_uuid_mixin(
 
 def test_deprecated_classes_functionality() -> None:
     """Test that mixins classes maintain have base functionality."""
-    purge_module(["advanced_alchemy.base", "advanced_alchemy.mixins"], __file__)
-
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     from sqlalchemy import exc as sa_exc
 
     warnings.filterwarnings("ignore", category=sa_exc.SAWarning)
 
-    # Test instantiation and basic attributes
     from advanced_alchemy.mixins import (
         AuditColumns,
         NanoIDPrimaryKey,
@@ -91,7 +87,6 @@ def test_deprecated_classes_functionality() -> None:
     nanoid_pk = NanoIDPrimaryKey()
     audit = AuditColumns()
 
-    # Verify the classes have the expected attributes
     assert hasattr(uuidv7_pk, "id")
     assert hasattr(uuidv7_pk, "_sentinel")
     assert hasattr(uuidv6_pk, "id")

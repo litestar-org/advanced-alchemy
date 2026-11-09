@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from asgi_lifespan import LifespanManager
 from litestar import Litestar, Request, Response, get
+from litestar.di import NamedDependency
 from litestar.status_codes import (
     HTTP_404_NOT_FOUND,
     HTTP_409_CONFLICT,
@@ -48,7 +49,7 @@ def test_default_before_send_handler() -> None:
     plugin = SQLAlchemyInitPlugin(config=config)
 
     @get()
-    async def test_handler(db_session: AsyncSession, scope: Scope) -> None:
+    async def test_handler(db_session: NamedDependency[AsyncSession], scope: Scope) -> None:
         nonlocal captured_scope_state
         captured_scope_state = scope["state"]
         assert db_session is captured_scope_state[config.session_dependency_key]
@@ -73,7 +74,7 @@ def test_default_before_send_handle_multi() -> None:
     plugin = SQLAlchemyInitPlugin(config=[config1, config2])
 
     @get()
-    async def test_handler(db_session: AsyncSession, scope: Scope) -> None:
+    async def test_handler(db_session: NamedDependency[AsyncSession], scope: Scope) -> None:
         nonlocal captured_scope_state
         captured_scope_state = scope["state"]
         assert db_session is captured_scope_state[config1.session_dependency_key]
@@ -456,4 +457,3 @@ async def test_autocommit_handler_commit_failure_does_not_crash(create_scope: Ca
     await autocommit_before_send_handler(http_response_start, http_scope)
     mock_session.commit.assert_awaited_once()
     mock_session.close.assert_awaited_once()
-    mock_session.commit.assert_awaited_once()

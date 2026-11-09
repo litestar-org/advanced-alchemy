@@ -1,5 +1,5 @@
 ====
-slug
+Slug
 ====
 
 .. automodule:: advanced_alchemy.mixins.slug
