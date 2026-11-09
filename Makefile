@@ -10,6 +10,8 @@ SHELL := /bin/bash
 .EXPORT_ALL_VARIABLES:
 MAKEFLAGS += --no-print-directory
 
+FAST_EXCLUDE_MARKERS := asyncmy or oracledb_sync or oracledb_async or cockroachdb_sync or cockroachdb_async or mssql_sync or mssql_async or spanner or rustfs
+
 # -----------------------------------------------------------------------------
 # Display Formatting and Colors
 # -----------------------------------------------------------------------------
@@ -146,6 +148,26 @@ docs-test:                                         ## Run executable documentati
 	@echo "${INFO} Running executable documentation examples... 📚"
 	@uv run pytest docs/ tests/unit/docs/ tests/unit/test_docs.py --quiet
 	@echo "${OK} Documentation examples passed ✨"
+
+.PHONY: test-unit
+test-unit:                                         ## Run Docker-free unit tests and executable docs
+	@echo "${INFO} Running Docker-free unit tests and docs... 🧪"
+	@uv run pytest tests/unit -n auto --quiet
+	@uv run pytest docs/ tests/unit/docs/ tests/unit/test_docs.py --quiet
+	@echo "${OK} Unit tests passed ✨"
+
+.PHONY: test-fast
+test-fast:                                         ## Run Docker-free fast test suite with embedded PostgreSQL
+	@echo "${INFO} Running Docker-free fast tests... 🧪"
+	@uv run pytest tests --use-embedded-postgres --dist "loadgroup" -m "not ($(FAST_EXCLUDE_MARKERS))" -n 2 --quiet
+	@uv run pytest docs/ tests/unit/docs/ tests/unit/test_docs.py --quiet
+	@echo "${OK} Fast tests passed ✨"
+
+.PHONY: test-integration
+test-integration:                                  ## Run multi-database integration tests
+	@echo "${INFO} Running multi-database integration tests... 🧪"
+	@uv run pytest tests/integration --dist "loadgroup" -m "integration" -n 2 --quiet
+	@echo "${OK} Integration tests passed ✨"
 
 .PHONY: test
 test:                                              ## Run the tests

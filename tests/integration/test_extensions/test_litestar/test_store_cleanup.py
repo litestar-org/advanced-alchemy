@@ -15,7 +15,10 @@ from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlche
 from advanced_alchemy.extensions.litestar.store import SQLAlchemyStore, StoreModelMixin
 from advanced_alchemy.types import DateTimeUTC
 
-pytestmark = pytest.mark.integration
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.xdist_group("sqlite"),
+]
 
 
 class CleanupStoreModel(StoreModelMixin):

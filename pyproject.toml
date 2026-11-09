@@ -199,7 +199,8 @@ test = [
   "pytest>=7.4.4",
   "pytest-asyncio>=0.23.8",
   "pytest-cov>=5.0.0",
-  "pytest-databases[postgres,oracle,cockroachdb,bigquery,spanner]>=0.19.0",
+  "pytest-databases[postgres,oracle,cockroachdb,bigquery,spanner]>=0.19.0 ; python_version < \"3.11\"",
+  "pytest-databases[embedded-postgres]>=0.20.0b1 ; python_version >= \"3.11\"",
   "pytest-lazy-fixtures>=1.1.1",
   "pytest-rerunfailures",
   "pytest-mock>=3.14.0",
@@ -324,6 +325,7 @@ markers = [
   "mock_sync: SQLAlchemy sync mock Tests",
   "cockroachdb_sync: SQLAlchemy CockroachDB (psycopg2) Tests",
   "cockroachdb_async: SQLAlchemy CockroachDB (asyncpg) Tests",
+  "rustfs: S3-compatible RustFS object storage integration tests",
 ]
 testpaths = ["tests", "docs"]
 
@@ -614,7 +616,6 @@ exclude = [
   "tests/unit/test_extensions",
   "tests/unit/test_repository.py",
   "tests/helpers.py",
-  "tests/docker_service_fixtures.py",
   "examples/flask/flask_services.py",
 ]
 include = ["advanced_alchemy", "tools", "docs"]
