@@ -91,7 +91,7 @@ Frameworks, CLI & Utilities
       :link: extensions/index
       :link-type: doc
 
-      Plugin, middleware, provider, DTO, and session store references for Litestar, FastAPI, Starlette, Flask, and Sanic.
+      Plugin, middleware, provider, DTO, and session store references for Litestar, FastAPI, Starlette, Flask, Sanic, and :doc:`Google ADK <adk-compatibility-matrix>`.
 
     .. grid-item-card:: :octicon:`terminal` CLI & Alembic
       :link: cli
