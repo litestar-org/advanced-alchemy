@@ -945,7 +945,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         """
         with self._wrap_exceptions(error_messages=error_messages):
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
-            loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, _loader_options_have_wildcard = self._get_loader_options(load, uniquify)
             instances: List[ModelT] = []
 
             if self._requires_orm_delete():
@@ -956,7 +956,6 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                     load=load,
                     execution_options=execution_options,
                     uniquify=uniquify,
-                    bind_group=bind_group,
                 )
                 for instance in instances:
                     await self.session.delete(instance)
@@ -1095,7 +1094,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         with self._wrap_exceptions(error_messages=error_messages):
             resolved_bind_group = self._resolve_bind_group(bind_group)
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
-            loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, _loader_options_have_wildcard = self._get_loader_options(load, uniquify)
             model_type = self.model_type
             instances: List[ModelT] = []
             if self._requires_orm_delete():
@@ -1157,13 +1156,11 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
     ) -> List[ModelT]:
         """Fetch multiple instances by primary key or ``id_attribute`` in dialect-safe chunks."""
-        _ = bind_group
         if not item_ids:
             return []
-        loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+        loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
         use_composite_path = id_attribute is None and self.has_composite_pk
         instances: List[ModelT] = []
         if use_composite_path:
@@ -1347,7 +1344,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         with self._wrap_exceptions(error_messages=error_messages):
             resolved_execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             resolved_statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
             resolved_statement = self._get_base_stmt(
                 statement=resolved_statement,
                 loader_options=loader_options,
@@ -1437,7 +1434,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         with self._wrap_exceptions(error_messages=error_messages):
             resolved_execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             resolved_statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
             resolved_statement = self._get_base_stmt(
                 statement=resolved_statement,
                 loader_options=loader_options,
@@ -1808,7 +1805,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         with self._wrap_exceptions(error_messages=error_messages):
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -1861,7 +1858,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         with self._wrap_exceptions(error_messages=error_messages):
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -2080,7 +2077,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         with self._wrap_exceptions(error_messages=error_messages):
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -2177,7 +2174,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 ):
                     if mapper is not None:
                         for column in mapper.mapper.columns:
-                            field_name = column.key
+                            field_name = mapper.mapper.get_property_by_column(column).key
                             if field_name in lookup_attr_names:
                                 continue
                             new_field_value = getattr(data, field_name, MISSING)
@@ -2301,7 +2298,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         with self._wrap_exceptions(error_messages=error_messages):
             resolved_bind_group = self._resolve_bind_group(bind_group)
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
-            loader_options = self._get_loader_options(load)[0]
+            loader_options = self._get_loader_options(load, uniquify)[0]
             supports_returning = self._dialect.update_executemany_returning and self._dialect.name != "oracle"
             statement = self._get_update_many_statement(
                 self.model_type,
@@ -2580,7 +2577,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         with self._wrap_exceptions(error_messages=error_messages):
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -2638,7 +2635,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         with self._wrap_exceptions(error_messages=error_messages):
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -3019,7 +3016,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         table = cast("Table", self.model_type.__table__)
         conflict_columns = list(strategy.conflict_columns)
         rows_per_chunk = self._get_upsert_chunk_size(len(input_rows[0]), chunk_size)
-        loader_options = self._get_loader_options(load)[0]
+        loader_options = self._get_loader_options(load, uniquify)[0]
 
         instances: List[ModelT] = []
         for chunk_start in range(0, len(input_rows), rows_per_chunk):
@@ -3424,10 +3421,10 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
     async def _execute(
         self,
         statement: Select[Any],
-        uniquify: bool = False,
+        uniquify: Optional[bool] = None,
     ) -> Result[Any]:
         result = await self.session.execute(statement)
-        if uniquify or self._uniquify:
+        if self._get_uniquify(uniquify):
             result = result.unique()
         return result
 
@@ -3492,9 +3489,6 @@ class SQLAlchemyAsyncSlugRepositoryMixin(Generic[ModelT]):
         **kwargs: Any,
     ) -> bool:
         return await self.exists(slug=slug, load=load, execution_options=execution_options, **kwargs) is False  # type: ignore[attr-defined]
-
-
-_AsyncSlugRepositoryMixin = SQLAlchemyAsyncSlugRepositoryMixin
 
 
 class SQLAlchemyAsyncSlugRepository(

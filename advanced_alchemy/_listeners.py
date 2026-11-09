@@ -54,7 +54,10 @@ async def flush_pending_async_listener_tasks(session: Any) -> None:
         pending = cast("set[asyncio.Task[Any]]", raw_pending)
         tasks: list[asyncio.Task[Any]] = list(pending)
         pending.difference_update(tasks)
-        await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, Exception):
+                logger.warning("Async listener task failed after commit: %r", result)
 
 
 def flush_pending_sync_listener_tasks(session: Any) -> None:

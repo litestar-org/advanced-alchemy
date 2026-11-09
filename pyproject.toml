@@ -641,7 +641,6 @@ update_docstrings = true
 "advanced_alchemy/service/_async.py" = "advanced_alchemy/service/_sync.py"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/_async.py"]
-"_AsyncSlugRepositoryMixin" = "_SyncSlugRepositoryMixin"
 SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
 "SQLAlchemyAsyncQueryRepository" = "SQLAlchemySyncQueryRepository"
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
@@ -670,7 +669,6 @@ SQLAlchemyAsyncSlugRepositoryProtocol = "SQLAlchemySyncSlugRepositoryProtocol"
 "sqlalchemy.ext.asyncio.scoping.async_scoped_session" = "sqlalchemy.orm.scoping.scoped_session"
 
 [tool.unasyncd.per_file_add_replacements."advanced_alchemy/repository/memory/_async.py"]
-"_AsyncSlugRepositoryMixin" = "_SyncSlugRepositoryMixin"
 SQLAlchemyAsyncMockRepository = "SQLAlchemySyncMockRepository"
 "SQLAlchemyAsyncMockSlugRepository" = "SQLAlchemySyncMockSlugRepository"
 SQLAlchemyAsyncRepository = "SQLAlchemySyncRepository"
@@ -678,7 +676,6 @@ SQLAlchemyAsyncRepositoryProtocol = "SQLAlchemySyncRepositoryProtocol"
 "SQLAlchemyAsyncSlugRepository" = "SQLAlchemySyncSlugRepository"
 SQLAlchemyAsyncSlugRepositoryMixin = "SQLAlchemySyncSlugRepositoryMixin"
 SQLAlchemyAsyncSlugRepositoryProtocol = "SQLAlchemySyncSlugRepositoryProtocol"
-"advanced_alchemy.repository._async._AsyncSlugRepositoryMixin" = "advanced_alchemy.repository._sync._SyncSlugRepositoryMixin"
 "advanced_alchemy.repository._async.SQLAlchemyAsyncRepositoryProtocol" = "advanced_alchemy.repository._sync.SQLAlchemySyncRepositoryProtocol"
 "advanced_alchemy.repository._async.SQLAlchemyAsyncSlugRepositoryMixin" = "advanced_alchemy.repository._sync.SQLAlchemySyncSlugRepositoryMixin"
 "advanced_alchemy.repository._async.SQLAlchemyAsyncSlugRepositoryProtocol" = "advanced_alchemy.repository._sync.SQLAlchemySyncSlugRepositoryProtocol"
