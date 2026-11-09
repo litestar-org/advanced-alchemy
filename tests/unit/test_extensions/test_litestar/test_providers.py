@@ -849,10 +849,10 @@ def test_custom_dependency_defaults() -> None:
     assert f.values is not None  # type: ignore
     assert f.values == ["1", "2", "3"]  # type: ignore
     page_func = deps["page"].dependency
-    f: LimitOffset = page_func(current_page=2, page_size=5)  # type: ignore
-    assert isinstance(f, LimitOffset)
-    assert f.limit == 5
-    assert f.offset == 5
+    page_filter = page_func(current_page=2, page_size=5)
+    assert isinstance(page_filter, LimitOffset)
+    assert page_filter.limit == 5
+    assert page_filter.offset == 5
 
 
 def test_id_filter_aggregation() -> None:

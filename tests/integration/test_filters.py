@@ -4,7 +4,7 @@ from typing import Any, Literal, Optional
 
 import pytest
 from pytest import FixtureRequest
-from sqlalchemy import Boolean, Engine, ForeignKey, String, create_engine, func, select
+from sqlalchemy import Boolean, Engine, ForeignKey, String, and_, create_engine, func, or_, select
 from sqlalchemy.dialects import mssql, mysql, oracle, postgresql, sqlite
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, joinedload, mapped_column, relationship
@@ -33,8 +33,6 @@ from advanced_alchemy.filters import (
     OnBeforeAfter,
     OrderBy,
     SearchFilter,
-    and_,
-    or_,
 )
 from tests.integration.helpers import get_worker_id
 
