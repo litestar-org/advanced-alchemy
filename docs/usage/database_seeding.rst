@@ -1,168 +1,168 @@
-====================================
-Database Seeding and Fixture Loading
-====================================
+====================
+Database Seeding
+====================
 
-Advanced Alchemy provides :func:`~advanced_alchemy.utils.fixtures.open_fixture` and :func:`~advanced_alchemy.utils.fixtures.open_fixture_async` for loading JSON and CSV fixtures from disk (including ``.gz`` and ``.zip`` archives).
+When setting up a new environment or staging server, you often want starter rows—such as default roles, categories, or sample products—loaded from version-controlled ``.json`` or ``.csv`` files.
 
-Creating Fixtures
------------------
+Advanced Alchemy's ``open_fixture`` and ``open_fixture_async`` helpers locate and parse fixture files (including compressed ``.gz`` and ``.zip`` files) in one call.
 
-Fixtures can be stored as JSON or CSV. JSON preserves native numbers, booleans, and nested structures, while CSV returns string-valued dictionaries that should be coerced before constructing models.
+Writing a Fixture File
+----------------------
 
-.. code-block:: json
-    :caption: fixtures/products.json
+Store your seed files in a ``fixtures/`` folder. JSON keeps numbers and booleans typed automatically, while CSV files load every column as strings:
 
-    [
-        {
-            "name": "Laptop",
-            "description": "High-performance laptop with 16GB RAM and 1TB SSD",
-            "price": 999.99,
-            "in_stock": true
-        },
-        {
-            "name": "Smartphone",
-            "description": "Latest smartphone model with 5G and advanced camera",
-            "price": 699.99,
-            "in_stock": true
-        }
-    ]
+.. tab-set::
 
-Loading Fixtures
-----------------
+    .. tab-item:: JSON Fixture
 
-Synchronous Loading
-~~~~~~~~~~~~~~~~~~~
+        .. code-block:: json
+            :caption: fixtures/products.json
 
-.. code-block:: python
+            [
+                {
+                    "name": "Laptop",
+                    "description": "16GB RAM and 1TB SSD",
+                    "price": 999.99,
+                    "in_stock": true
+                },
+                {
+                    "name": "Smartphone",
+                    "description": "5G OLED display",
+                    "price": 699.99,
+                    "in_stock": true
+                }
+            ]
 
-    from pathlib import Path
-    from typing import Optional
+    .. tab-item:: CSV Fixture
 
-    from sqlalchemy import String
-    from sqlalchemy.orm import Mapped, mapped_column
+        .. code-block:: text
+            :caption: fixtures/products.csv
 
-    from advanced_alchemy.base import UUIDBase
-    from advanced_alchemy.config import SQLAlchemySyncConfig, SyncSessionConfig
-    from advanced_alchemy.repository import SQLAlchemySyncRepository
-    from advanced_alchemy.utils.fixtures import open_fixture
+            name,price,in_stock
+            Widget,9.99,true
+            Gadget,19.99,true
 
-    alchemy_config = SQLAlchemySyncConfig(
-        connection_string="sqlite:///db.sqlite3",
-        session_config=SyncSessionConfig(expire_on_commit=False),
-    )
+Loading Fixtures Into Your Database
+-----------------------------------
 
+Pick ``open_fixture_async`` for async apps or ``open_fixture`` for sync scripts:
 
-    class SyncProduct(UUIDBase):
-        __tablename__ = "sync_products"
+.. tab-set::
 
-        name: Mapped[str] = mapped_column(String(length=100))
-        description: Mapped[Optional[str]] = mapped_column(String(length=500))
-        price: Mapped[float]
-        in_stock: Mapped[bool] = mapped_column(default=True)
+    .. tab-item:: Async Seeding
 
+        .. code-block:: python
 
-    class SyncProductRepository(SQLAlchemySyncRepository[SyncProduct]):
-        model_type = SyncProduct
+            from pathlib import Path
+            from typing import Optional
+            from sqlalchemy import String
+            from sqlalchemy.orm import Mapped, mapped_column
+            from advanced_alchemy.base import UUIDBase
+            from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
+            from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+            from advanced_alchemy.utils.fixtures import open_fixture_async
 
-
-    def seed_database(fixtures_path: Path = Path("fixtures")) -> None:
-        with alchemy_config.get_session() as db_session:
-            repository = SyncProductRepository(session=db_session)
-            fixture_data = open_fixture(fixtures_path, "products")
-            repository.add_many([SyncProduct(**item) for item in fixture_data], auto_commit=True)
-
-Asynchronous Loading
-~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-    from pathlib import Path
-    from typing import Optional
-
-    from sqlalchemy import String
-    from sqlalchemy.orm import Mapped, mapped_column
-
-    from advanced_alchemy.base import UUIDBase
-    from advanced_alchemy.config import AsyncSessionConfig, SQLAlchemyAsyncConfig
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-    from advanced_alchemy.utils.fixtures import open_fixture_async
-
-    async_config = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///db.sqlite3",
-        session_config=AsyncSessionConfig(expire_on_commit=False),
-    )
+            async_config = SQLAlchemyAsyncConfig(
+                connection_string="sqlite+aiosqlite:///db.sqlite3",
+                session_config=AsyncSessionConfig(expire_on_commit=False),
+            )
 
 
-    class AsyncProduct(UUIDBase):
-        __tablename__ = "async_products"
+            class AsyncProduct(UUIDBase):
+                __tablename__ = "async_products"
 
-        name: Mapped[str] = mapped_column(String(length=100))
-        description: Mapped[Optional[str]] = mapped_column(String(length=500))
-        price: Mapped[float]
-        in_stock: Mapped[bool] = mapped_column(default=True)
-
-
-    class AsyncProductRepository(SQLAlchemyAsyncRepository[AsyncProduct]):
-        model_type = AsyncProduct
+                name: Mapped[str] = mapped_column(String(length=100))
+                description: Mapped[Optional[str]] = mapped_column(String(length=500), default=None)
+                price: Mapped[float]
+                in_stock: Mapped[bool] = mapped_column(default=True)
 
 
-    async def seed_async_database(fixtures_path: Path = Path("fixtures")) -> None:
-        async with async_config.get_session() as db_session:
-            repository = AsyncProductRepository(session=db_session)
-            fixture_data = await open_fixture_async(fixtures_path, "products")
-            await repository.add_many([AsyncProduct(**item) for item in fixture_data], auto_commit=True)
+            class AsyncProductRepository(SQLAlchemyAsyncRepository[AsyncProduct]):
+                model_type = AsyncProduct
 
-CSV Fixtures
-~~~~~~~~~~~~
 
-CSV fixtures use the header row as dictionary keys and return string values:
+            async def seed_async_products(fixtures_path: Path = Path("fixtures")) -> None:
+                async with async_config.get_session() as db_session:
+                    repo = AsyncProductRepository(session=db_session)
+                    rows = await open_fixture_async(fixtures_path, "products")
+                    await repo.add_many([AsyncProduct(**row) for row in rows], auto_commit=True)
 
-.. code-block:: text
+    .. tab-item:: Sync Seeding
 
-    name,price,in_stock
-    Widget,9.99,true
-    Gadget,19.99,true
+        .. code-block:: python
 
-Coerce CSV strings before passing rows to a repository or service:
+            from pathlib import Path
+            from typing import Optional
+            from sqlalchemy import String
+            from sqlalchemy.orm import Mapped, mapped_column
+            from advanced_alchemy.base import UUIDBase
+            from advanced_alchemy.config import SQLAlchemySyncConfig, SyncSessionConfig
+            from advanced_alchemy.repository import SQLAlchemySyncRepository
+            from advanced_alchemy.utils.fixtures import open_fixture
+
+            sync_config = SQLAlchemySyncConfig(
+                connection_string="sqlite:///db.sqlite3",
+                session_config=SyncSessionConfig(expire_on_commit=False),
+            )
+
+
+            class SyncProduct(UUIDBase):
+                __tablename__ = "sync_products"
+
+                name: Mapped[str] = mapped_column(String(length=100))
+                description: Mapped[Optional[str]] = mapped_column(String(length=500), default=None)
+                price: Mapped[float]
+                in_stock: Mapped[bool] = mapped_column(default=True)
+
+
+            class SyncProductRepository(SQLAlchemySyncRepository[SyncProduct]):
+                model_type = SyncProduct
+
+
+            def seed_sync_products(fixtures_path: Path = Path("fixtures")) -> None:
+                with sync_config.get_session() as db_session:
+                    repo = SyncProductRepository(session=db_session)
+                    rows = open_fixture(fixtures_path, "products")
+                    repo.add_many([SyncProduct(**row) for row in rows], auto_commit=True)
+
+    .. tab-item:: Converting CSV Strings
+
+        .. code-block:: python
+
+            from pathlib import Path
+            from typing import Any
+            from advanced_alchemy.utils.fixtures import open_fixture_async
+
+
+            def parse_csv_product(row: dict[str, str]) -> dict[str, Any]:
+                return {
+                    "name": row["name"],
+                    "price": float(row["price"]),
+                    "in_stock": row["in_stock"].lower() == "true",
+                }
+
+
+            async def seed_from_csv(repo: AsyncProductRepository, fixtures_path: Path) -> None:
+                raw_rows = await open_fixture_async(fixtures_path, "products")
+                products = [AsyncProduct(**parse_csv_product(item)) for item in raw_rows]
+                await repo.add_many(products, auto_commit=True)
+
+Safe Re-Runs Across Deployments
+-------------------------------
+
+Use ``upsert_many`` instead of ``add_many`` when a seed script runs on every deployment so existing rows are updated cleanly without duplicate errors:
 
 .. code-block:: python
 
     from pathlib import Path
     from typing import Any
-
     from advanced_alchemy.utils.fixtures import open_fixture_async
 
 
-    def coerce_product_row(row: dict[str, str]) -> dict[str, Any]:
-        return {
-            "name": row["name"],
-            "price": float(row["price"]),
-            "in_stock": row["in_stock"].lower() == "true",
-        }
+    async def seed_roles(role_service: Any, fixtures_path: Path) -> None:
+        rows = await open_fixture_async(fixtures_path, "role")
+        await role_service.upsert_many(match_fields=["name"], data=rows, auto_commit=True)
 
+.. tip::
 
-    async def seed_from_csv(repository: AsyncProductRepository, fixtures_path: Path) -> None:
-        raw_rows = await open_fixture_async(fixtures_path, "products")
-        products = [AsyncProduct(**coerce_product_row(item)) for item in raw_rows]
-        await repository.add_many(products, auto_commit=True)
-
-Application Integration and Best Practices
-------------------------------------------
-
-Keep schema migrations (``alembic upgrade``) separate from fixture loading, and use ``upsert_many`` when seed commands must be idempotent across deployments:
-
-.. code-block:: python
-
-    from pathlib import Path
-    from typing import Any
-
-    from advanced_alchemy.utils.fixtures import open_fixture_async
-
-
-    async def load_database_fixtures(role_service: Any, fixtures_path: Path) -> None:
-        fixture_data = await open_fixture_async(fixtures_path, "role")
-        await role_service.upsert_many(match_fields=["name"], data=fixture_data, auto_commit=True)
-
-- Store fixtures in a dedicated version-controlled ``fixtures/`` directory (plain or ``.gz`` / ``.zip`` compressed).
-- Seed parent tables before dependent child tables.
-- Use `Polyfactory <https://github.com/litestar-org/polyfactory>`__ when generating synthetic test data rather than loading static seed files.
+    Seed parent tables (like ``Author``) before child tables (like ``Post``), and consider `Polyfactory <https://github.com/litestar-org/polyfactory>`__ when generating random test data in ``pytest``.

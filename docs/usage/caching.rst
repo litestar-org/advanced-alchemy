@@ -2,12 +2,22 @@
 Caching
 =======
 
-Advanced Alchemy integrates with `dogpile.cache <https://dogpilecache.sqlalchemy.org/>`__ to provide second-level (L2) entity and query caching with transaction-aware invalidation and singleflight stampede protection.
+Imagine 500 visitors opening the same popular author page at the exact same second. Without a cache, your database runs the exact same ``SELECT`` query 500 times.
+
+Advanced Alchemy integrates with `dogpile.cache <https://dogpilecache.sqlalchemy.org/>`__ so repeated lookups come straight from memory or Redis—and whenever you save changes to a row, stale cache entries are cleared automatically when the transaction commits.
+
+.. container:: aa-diagram
+
+    .. image:: /_static/diagrams/caching-flow-light.svg
+        :alt: Query caching lookup, hit, miss, and automatic commit invalidation flow
+        :class: aa-diagram--light
+
+    .. image:: /_static/diagrams/caching-flow-dark.svg
+        :alt: Query caching lookup, hit, miss, and automatic commit invalidation flow
+        :class: aa-diagram--dark
 
 Installation
 ------------
-
-Install the optional ``dogpile`` extra:
 
 .. tab-set::
     :sync-group: pkg
@@ -43,12 +53,11 @@ Install the optional ``dogpile`` extra:
 Quick Start
 -----------
 
-Attach :class:`~advanced_alchemy.cache.CacheConfig` to :class:`~advanced_alchemy.config.SQLAlchemyAsyncConfig` or :class:`~advanced_alchemy.config.SQLAlchemySyncConfig`. Repositories automatically retrieve the configured :class:`~advanced_alchemy.cache.CacheManager` from ``session.info``:
+Pass ``CacheConfig`` to your database configuration and enable ``auto_expunge=True`` on cached repositories. Every ``repo.get()`` and ``repo.get_many()`` call uses the cache automatically—or pass ``use_cache=False`` to skip the cache for a specific query:
 
 .. code-block:: python
 
     from sqlalchemy.orm import Mapped
-
     from advanced_alchemy.base import BigIntAuditBase
     from advanced_alchemy.cache import CacheConfig
     from advanced_alchemy.config import SQLAlchemySyncConfig
@@ -57,7 +66,6 @@ Attach :class:`~advanced_alchemy.cache.CacheConfig` to :class:`~advanced_alchemy
 
     class CachedAuthor(BigIntAuditBase):
         __tablename__ = "cached_author_example"
-
         name: Mapped[str]
 
 
@@ -78,93 +86,99 @@ Attach :class:`~advanced_alchemy.cache.CacheConfig` to :class:`~advanced_alchemy
     with db_config.get_session() as session:
         repo = CachedAuthorRepository(session=session, auto_expunge=True)
         created = repo.add(CachedAuthor(name="Ada Lovelace"), auto_commit=True)
-        first_fetch = repo.get(created.id)
-        cached_fetch = repo.get(created.id)
-        bypassed_fetch = repo.get(created.id, use_cache=False)
-        assert first_fetch.id == cached_fetch.id == bypassed_fetch.id
+        cached_row = repo.get(created.id)
+        fresh_row = repo.get(created.id, use_cache=False)
+        assert cached_row.id == fresh_row.id
 
-Backend Configurations
-----------------------
+Choosing a Cache Backend
+------------------------
 
-Configure ``backend``, ``expiration_time``, ``arguments``, and ``key_prefix`` on :class:`~advanced_alchemy.cache.CacheConfig`:
+.. tab-set::
 
-.. code-block:: python
+    .. tab-item:: Redis (Production)
 
-    from advanced_alchemy.cache import CacheConfig
+        .. code-block:: python
 
-    memory_cache = CacheConfig(
-        backend="dogpile.cache.memory",
-        expiration_time=300,
-    )
+            from advanced_alchemy.cache import CacheConfig
 
-    redis_cache = CacheConfig(
-        backend="dogpile.cache.redis",
-        expiration_time=3600,
-        arguments={
-            "host": "localhost",
-            "port": 6379,
-            "db": 0,
-            "distributed_lock": True,
-        },
-        key_prefix="myapp:",
-    )
+            redis_cache = CacheConfig(
+                backend="dogpile.cache.redis",
+                expiration_time=3600,
+                arguments={
+                    "host": "localhost",
+                    "port": 6379,
+                    "db": 0,
+                    "distributed_lock": True,
+                },
+                key_prefix="myapp:",
+            )
 
-    memcached_cache = CacheConfig(
-        backend="dogpile.cache.memcached",
-        expiration_time=3600,
-        arguments={"url": ["127.0.0.1:11211"]},
-    )
+    .. tab-item:: In-Memory (Single Worker)
 
-    disabled_cache = CacheConfig(enabled=False)
+        .. code-block:: python
 
-Transaction-Aware Invalidation and Singleflight
------------------------------------------------
+            from advanced_alchemy.cache import CacheConfig
 
-When ``enable_cache_listener=True`` (the default on SQLAlchemy config classes), Advanced Alchemy registers session listeners that track entity mutations:
+            memory_cache = CacheConfig(
+                backend="dogpile.cache.memory",
+                expiration_time=300,
+            )
 
-- **Commit-bound invalidation**: Cache invalidations are queued during flush and executed only after the transaction commits. Rollbacks discard pending invalidations.
-- **Entity vs. list invalidation**: ``repo.get()`` caches by primary key and invalidates individual keys, while ``repo.get_many()`` and ``repo.get_many_and_count()`` bump a per-model version token on any model mutation.
-- **Singleflight**: Concurrent in-process misses for the same cache key coalesce into a single database query.
+    .. tab-item:: Memcached
 
-Custom Serialization and Manual Setup
--------------------------------------
+        .. code-block:: python
 
-Provide custom ``serializer`` and ``deserializer`` callables on :class:`~advanced_alchemy.cache.CacheConfig`, or instantiate :class:`~advanced_alchemy.cache.CacheManager` directly when not using a config class:
+            from advanced_alchemy.cache import CacheConfig
 
-.. code-block:: python
+            memcached_cache = CacheConfig(
+                backend="dogpile.cache.memcached",
+                expiration_time=3600,
+                arguments={"url": ["127.0.0.1:11211"]},
+            )
 
-    from typing import Any
+    .. tab-item:: Disabled
 
-    from sqlalchemy import inspect
+        .. code-block:: python
 
-    from advanced_alchemy.cache import CacheConfig, CacheManager, setup_cache_listeners
-    from advanced_alchemy.utils.serialization import decode_json, encode_json
+            from advanced_alchemy.cache import CacheConfig
+
+            disabled_cache = CacheConfig(enabled=False)
+
+What Happens Behind the Scenes
+------------------------------
+
+* **Safe rollbacks**: Cache entries are only cleared *after* ``commit()`` succeeds. If a transaction rolls back, your cache stays untouched.
+* **No cache stampedes**: If 50 requests miss the same uncached key at once, one query runs and shares the result with the waiting requests.
+* **Columns only**: Cached rows store column values, not related tables. Call ``session.merge(row)`` first if you need to lazy-load relationships later.
+
+.. dropdown:: Custom JSON Serializer & Standalone Setup
+    :icon: gear
+
+    .. code-block:: python
+
+        from typing import Any
+        from sqlalchemy import inspect
+        from advanced_alchemy.cache import CacheConfig, CacheManager, setup_cache_listeners
+        from advanced_alchemy.utils.serialization import decode_json, encode_json
 
 
-    def custom_serializer(model: Any) -> bytes:
-        mapper = inspect(model.__class__)
-        payload = {col.key: getattr(model, col.key) for col in mapper.columns}
-        return encode_json(payload).encode("utf-8")
+        def custom_serializer(model: Any) -> bytes:
+            mapper = inspect(model.__class__)
+            payload = {col.key: getattr(model, col.key) for col in mapper.columns}
+            return encode_json(payload).encode("utf-8")
 
 
-    def custom_deserializer(raw: bytes, model_class: type[Any]) -> Any:
-        return model_class(**decode_json(raw.decode("utf-8")))
+        def custom_deserializer(raw: bytes, model_class: type[Any]) -> Any:
+            return model_class(**decode_json(raw.decode("utf-8")))
 
 
-    custom_cache_config = CacheConfig(
-        backend="dogpile.cache.memory",
-        serializer=custom_serializer,
-        deserializer=custom_deserializer,
-    )
-    cache_manager = CacheManager(custom_cache_config)
-    setup_cache_listeners()
+        cache_manager = CacheManager(
+            CacheConfig(
+                backend="dogpile.cache.memory",
+                serializer=custom_serializer,
+                deserializer=custom_deserializer,
+            ),
+        )
+        setup_cache_listeners()
 
-.. warning::
-
-    The default serializer persists column attributes only, not ORM relationships. Set ``auto_expunge=True`` on cached repositories and call ``session.merge(instance)`` before lazy-loading relationships.
-
-See Also
---------
-
-- :doc:`/reference/cache`
-- :doc:`/usage/repositories/index`
+See :doc:`/reference/cache` for the full caching API reference.

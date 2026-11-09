@@ -1,18 +1,64 @@
-=====
-Usage
-=====
+===========
+Usage Guide
+===========
 
-This guide demonstrates building a complete blog system using Advanced Alchemy's features. We'll create a system that supports:
+Imagine you are building a blog with **Posts**, **Authors**, and **Tags**. A reader opens your home page, asks for page 2 of published posts, and creates a comment.
 
-- Posts with tags and slugs
-- Tag management with automatic deduplication
-- Efficient querying and pagination
-- Type-safe database operations
-- Schema validation and transformation
+Advanced Alchemy organizes that work into three clear steps so your route handlers stay tiny and easy to test:
+
+.. raw:: html
+
+    <div class="aa-diagram">
+        <img src="../_static/diagrams/architecture-overview-light.svg" alt="How Advanced Alchemy Fits Into Your App" class="aa-diagram--light" />
+        <img src="../_static/diagrams/architecture-overview-dark.svg" alt="How Advanced Alchemy Fits Into Your App" class="aa-diagram--dark" />
+    </div>
+
+1. **Models** describe what your tables look like in the database (such as a post's title, author, and timestamps).
+2. **Repositories** run SQL queries for one table—adding rows, filtering, sorting, and paginating without repeating query code.
+3. **Services** sit in front of repositories to validate incoming API schemas (Pydantic or Msgspec) and enforce your app's business rules.
+
+.. grid:: 1 1 2 2
+    :padding: 0
+    :gutter: 3
+
+    .. grid-item-card:: :octicon:`table` 1. Data Modeling
+      :link: modeling/index
+      :link-type: doc
+
+      Define tables with automatic UUID or integer primary keys, audit timestamps, JSON, encrypted columns, and file storage.
+
+    .. grid-item-card:: :octicon:`database` 2. Repositories
+      :link: repositories/index
+      :link-type: doc
+
+      Add, fetch, filter, paginate, and bulk-upsert records using async or sync sessions.
+
+    .. grid-item-card:: :octicon:`package` 3. Services
+      :link: services
+      :link-type: doc
+
+      Keep business rules in one place and convert database rows straight into Pydantic or Msgspec responses.
+
+    .. grid-item-card:: :octicon:`plug` 4. Framework Integrations
+      :link: frameworks/index
+      :link-type: doc
+
+      Connect your services to Litestar, FastAPI, Starlette, Flask, or Sanic with automatic session management.
+
+Scaling and Day-Two Tools
+-------------------------
+
+Once your core tables and routes are running, you can turn on operational features without rewriting your queries:
+
+* :doc:`Replica Routing <routing>` — Send writes to your primary database and spread reads across read replicas.
+* :doc:`Caching <caching>` — Cache frequent lookups in Redis or memory and clear stale entries automatically on commit.
+* :doc:`CLI & Migrations <cli>` — Generate and apply Alembic schema migrations from the terminal.
+* :doc:`Database Seeding <database_seeding>` — Load starter data from JSON or CSV files.
 
 .. toctree::
     :maxdepth: 2
     :caption: Core Features
+    :hidden:
 
     modeling/index
     repositories/index
@@ -20,41 +66,4 @@ This guide demonstrates building a complete blog system using Advanced Alchemy's
     routing
     caching
     cli
-    cli_commands
     database_seeding
-
-.. toctree::
-    :maxdepth: 2
-    :caption: Framework Integration
-
-    frameworks/litestar
-    frameworks/litestar_sessions
-    frameworks/litestar_storage
-    frameworks/flask
-    frameworks/fastapi
-    frameworks/fastapi_storage
-    frameworks/sanic
-    frameworks/starlette
-
-The guide follows a practical approach:
-
-1. **Modeling**: Define SQLAlchemy models with Advanced Alchemy's enhanced base classes
-2. **Repositories**: Implement type-safe database operations using repositories
-3. **Services**: Build business logic with automatic schema validation
-4. **Framework Integration**: Integrate with Litestar and FastAPI
-
-Each section includes:
-
-- Concepts and usage overview
-- Complete code examples
-- Best practices
-- Performance considerations
-- Error handling strategies
-
-Prerequisites
--------------
-
-- Python 3.9+
-- SQLAlchemy 2.0+
-- Basic understanding of SQLAlchemy and async programming
-- Basic understanding of Pydantic or Msgspec

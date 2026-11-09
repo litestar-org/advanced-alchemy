@@ -1,141 +1,147 @@
-======================
+=====================
 Starlette Integration
-======================
+=====================
 
-Advanced Alchemy integrates with Starlette through :class:`~advanced_alchemy.extensions.starlette.AdvancedAlchemy`, which initializes SQLAlchemy configurations, manages request-scoped sessions on ``request.state``, and exposes engine and session accessors for route handlers.
+For lightweight ASGI services built on Starlette, ``AdvancedAlchemy`` manages engine startup/shutdown and attaches a request-scoped database session to ``request.state`` automatically.
 
-Basic Setup
------------
+What's Included for Starlette
+-----------------------------
 
-Initialize the extension with a Starlette ``app`` and one or more SQLAlchemy configurations:
+.. list-table::
+   :header-rows: 1
+   :widths: 28 46 26
 
-.. code-block:: python
+   * - Feature
+     - What It Gives You
+     - Reference
+   * - **Session Middleware**
+     - Opens and cleans up a SQLAlchemy session on ``request.state`` for every HTTP request.
+     - :doc:`API </reference/extensions/starlette/index>`
+   * - **Commit Modes**
+     - Supports manual commits, ``"autocommit"`` on ``2xx``, and ``"autocommit_include_redirect"``.
+     - :doc:`API </reference/extensions/starlette/index>`
+   * - **Multi-Database Binds**
+     - Connects multiple sync or async databases in a single Starlette app via ``bind_key``.
+     - :doc:`API </reference/extensions/starlette/index>`
 
-    from starlette.applications import Starlette
+Setup and Route Usage
+---------------------
 
-    from advanced_alchemy.extensions.starlette import (
-        AdvancedAlchemy,
-        AsyncSessionConfig,
-        SQLAlchemyAsyncConfig,
-    )
+Attach ``AdvancedAlchemy`` to your ``Starlette`` app and grab the current request's session with ``alchemy.get_async_session(request)``:
 
-    alchemy_config = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:",
-        session_config=AsyncSessionConfig(expire_on_commit=False),
-        commit_mode="autocommit",
-        create_all=True,
-    )
+.. tab-set::
 
-    app = Starlette()
-    alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
+    .. tab-item:: 1. App Setup
 
-Working with Services, Filters, and Sessions in Routes
-------------------------------------------------------
+        .. code-block:: python
 
-Use ``alchemy.get_async_session(request)`` (or ``alchemy.get_sync_session(request)``) inside Starlette route handlers to instantiate repository services, apply filters, and return serialized schemas:
+            from starlette.applications import Starlette
+            from advanced_alchemy.extensions.starlette import (
+                AdvancedAlchemy,
+                AsyncSessionConfig,
+                SQLAlchemyAsyncConfig,
+            )
 
-.. code-block:: python
+            alchemy_config = SQLAlchemyAsyncConfig(
+                connection_string="sqlite+aiosqlite:///:memory:",
+                session_config=AsyncSessionConfig(expire_on_commit=False),
+                commit_mode="autocommit",
+                create_all=True,
+            )
 
-    from uuid import UUID
+            app = Starlette()
+            alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
 
-    import msgspec
-    from sqlalchemy.orm import Mapped
-    from starlette.requests import Request
-    from starlette.responses import JSONResponse, Response
-    from starlette.routing import Route
+    .. tab-item:: 2. Models, Service & Routes
 
-    from advanced_alchemy.extensions.starlette import base, filters, repository, service
+        .. code-block:: python
 
-
-    class AuthorModel(base.UUIDBase):
-        __tablename__ = "starlette_author"
-
-        name: Mapped[str]
-
-
-    class AuthorSchema(msgspec.Struct):
-        id: UUID
-        name: str
-
-
-    class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
-        class Repo(repository.SQLAlchemyAsyncRepository[AuthorModel]):
-            model_type = AuthorModel
-
-        repository_type = Repo
-
-
-    async def list_authors(request: Request) -> Response:
-        current_page = int(request.query_params.get("currentPage", 1))
-        page_size = int(request.query_params.get("pageSize", 10))
-        limit_offset = filters.LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
-
-        authors_service = AuthorService(session=alchemy.get_async_session(request))
-        results, total = await authors_service.get_many_and_count(limit_offset)
-        pagination = authors_service.to_schema(
-            results,
-            total,
-            filters=[limit_offset],
-            schema_type=AuthorSchema,
-        )
-        return Response(content=msgspec.json.encode(pagination), media_type="application/json")
+            from uuid import UUID
+            import msgspec
+            from sqlalchemy.orm import Mapped
+            from starlette.requests import Request
+            from starlette.responses import JSONResponse, Response
+            from starlette.routing import Route
+            from advanced_alchemy.extensions.starlette import base, filters, repository, service
 
 
-    async def healthcheck(request: Request) -> JSONResponse:
-        db_session = alchemy.get_async_session(request)
-        engine = alchemy.get_async_engine()
-        assert db_session is not None
-        return JSONResponse({"dialect": engine.dialect.name, "status": "ok"})
+            class AuthorModel(base.UUIDBase):
+                __tablename__ = "starlette_author"
+                name: Mapped[str]
 
 
-    app.router.routes.extend(
-        [
-            Route("/authors", endpoint=list_authors, methods=["GET"]),
-            Route("/health", endpoint=healthcheck, methods=["GET"]),
-        ]
-    )
+            class AuthorSchema(msgspec.Struct):
+                id: UUID
+                name: str
 
-Commit Modes
-------------
 
-Starlette integration supports the same commit strategies as the core SQLAlchemy configurations:
+            class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
+                class Repo(repository.SQLAlchemyAsyncRepository[AuthorModel]):
+                    model_type = AuthorModel
 
-.. code-block:: python
+                repository_type = Repo
 
-    alchemy_config = SQLAlchemyAsyncConfig(
-        connection_string="sqlite+aiosqlite:///:memory:",
-        commit_mode="autocommit_include_redirect",
-    )
 
-    app = Starlette()
-    alchemy = AdvancedAlchemy(config=alchemy_config, app=app)
+            async def list_authors(request: Request) -> Response:
+                page = int(request.query_params.get("currentPage", 1))
+                size = int(request.query_params.get("pageSize", 10))
+                limit_offset = filters.LimitOffset(limit=size, offset=size * (page - 1))
 
-Multiple Binds
---------------
+                authors_service = AuthorService(session=alchemy.get_async_session(request))
+                results, total = await authors_service.get_many_and_count(limit_offset)
+                payload = authors_service.to_schema(
+                    results,
+                    total,
+                    filters=[limit_offset],
+                    schema_type=AuthorSchema,
+                )
+                return Response(content=msgspec.json.encode(payload), media_type="application/json")
 
-Provide a sequence of configurations when you need more than one bind key:
 
-.. code-block:: python
+            async def healthcheck(request: Request) -> JSONResponse:
+                db_session = alchemy.get_async_session(request)
+                assert db_session is not None
+                return JSONResponse({"dialect": alchemy.get_async_engine().dialect.name, "status": "ok"})
 
-    from advanced_alchemy.extensions.starlette import SQLAlchemySyncConfig
 
-    app = Starlette()
-    alchemy = AdvancedAlchemy(
-        config=[
-            SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:"),
-            SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:", bind_key="reporting"),
-        ],
-        app=app,
-    )
+            app.router.routes.extend(
+                [
+                    Route("/authors", endpoint=list_authors, methods=["GET"]),
+                    Route("/health", endpoint=healthcheck, methods=["GET"]),
+                ],
+            )
 
-    default_config = alchemy.get_async_config()
-    reporting_config = alchemy.get_sync_config("reporting")
-    assert default_config.bind_key == "default"
-    assert reporting_config.bind_key == "reporting"
+Commit Modes and Multiple Databases
+-----------------------------------
 
-Notes
------
+.. tab-set::
 
-- ``AdvancedAlchemy(config=..., app=app)`` calls ``init_app()`` for you.
-- Sessions are stored on ``request.state`` and are reused within the same request.
-- Use ``alchemy.get_session(request)`` when your code should support either sync or async configurations.
+    .. tab-item:: Commit on Redirects
+
+        .. code-block:: python
+
+            redirect_config = SQLAlchemyAsyncConfig(
+                connection_string="sqlite+aiosqlite:///:memory:",
+                commit_mode="autocommit_include_redirect",
+            )
+            redirect_app = Starlette()
+            redirect_alchemy = AdvancedAlchemy(config=redirect_config, app=redirect_app)
+
+    .. tab-item:: Multiple Databases
+
+        .. code-block:: python
+
+            from advanced_alchemy.extensions.starlette import SQLAlchemySyncConfig
+
+            multi_db_app = Starlette()
+            multi_alchemy = AdvancedAlchemy(
+                config=[
+                    SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+                    SQLAlchemySyncConfig(connection_string="sqlite+pysqlite:///:memory:", bind_key="reporting"),
+                ],
+                app=multi_db_app,
+            )
+            assert multi_alchemy.get_async_config().bind_key == "default"
+            assert multi_alchemy.get_sync_config("reporting").bind_key == "reporting"
+
+See :doc:`/reference/extensions/starlette/index` for full API signatures.

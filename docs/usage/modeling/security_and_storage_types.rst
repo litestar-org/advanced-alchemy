@@ -2,106 +2,110 @@
 Security and File Storage Types
 ================================
 
-Advanced Alchemy provides column types for field-level encryption, one-way password hashing, TOTP multi-factor enrollment, single-use verification codes, and backend-agnostic file storage.
+Most apps eventually need to store sensitive values—API keys, user passwords, two-factor login codes—or attach uploaded files like avatars and PDF reports to a database row.
 
-EncryptedString and EncryptedText
----------------------------------
+Advanced Alchemy provides dedicated column types so sensitive values are never stored in plain text and uploaded files stay in sync with your database transactions.
 
-:class:`~advanced_alchemy.types.EncryptedString` and :class:`~advanced_alchemy.types.EncryptedText` encrypt column values at rest using :class:`~advanced_alchemy.types.FernetBackend` (via ``cryptography``) or PostgreSQL's server-side :class:`~advanced_alchemy.types.PGCryptoBackend`. Always pass an explicit ``key`` (string, ``bytes``, or callable):
+Encrypted Text and Password Hashing
+-----------------------------------
 
-.. code-block:: python
+Use ``EncryptedString`` or ``EncryptedText`` when your app needs to decrypt a secret later (like an API token), and ``PasswordHash`` when storing one-way user passwords:
 
-    from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import BigIntBase
-    from advanced_alchemy.types import EncryptedString, EncryptedText
+.. tab-set::
 
+    .. tab-item:: Encrypted Columns
 
-    class SecretRecord(BigIntBase):
-        __tablename__ = "secret_record"
+        .. code-block:: python
 
-        api_token: Mapped[str] = mapped_column(EncryptedString(key="my-secret-key"))
-        private_notes: Mapped[str] = mapped_column(EncryptedText(key="my-secret-key"))
-
-PasswordHash
-------------
-
-:class:`~advanced_alchemy.types.PasswordHash` stores one-way password hashes and hydrates a :class:`~advanced_alchemy.types.HashedPassword` wrapper on read with ``verify()`` and ``verify_and_update()`` methods. Supported backends include :class:`~advanced_alchemy.types.password_hash.argon2.Argon2Hasher`, :class:`~advanced_alchemy.types.password_hash.bcrypt.BcryptHasher`, :class:`~advanced_alchemy.types.password_hash.pwdlib.PwdlibHasher`, and :class:`~advanced_alchemy.types.password_hash.passlib.PasslibHasher`:
-
-.. code-block:: python
-
-    from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import BigIntBase
-    from advanced_alchemy.types import HashedPassword, PasswordHash
-    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
-
-    hasher = Argon2Hasher()
+            from sqlalchemy.orm import Mapped, mapped_column
+            from advanced_alchemy.base import BigIntBase
+            from advanced_alchemy.types import EncryptedString, EncryptedText
 
 
-    class AccountRecord(BigIntBase):
-        __tablename__ = "account_record"
+            class SecretRecord(BigIntBase):
+                __tablename__ = "secret_record"
 
-        password: Mapped[str] = mapped_column(PasswordHash(backend=hasher))
+                api_token: Mapped[str] = mapped_column(EncryptedString(key="my-secret-key"))
+                private_notes: Mapped[str] = mapped_column(EncryptedText(key="my-secret-key"))
 
+    .. tab-item:: Password Hashing
 
-    stored = HashedPassword(hasher.hash("s3cret-passphrase"), hasher)
-    verified, upgraded_hash = stored.verify_and_update("s3cret-passphrase")
-    assert verified is True
+        .. code-block:: python
 
-TOTPSecret
-----------
+            from sqlalchemy.orm import Mapped, mapped_column
+            from advanced_alchemy.base import BigIntBase
+            from advanced_alchemy.types import HashedPassword, PasswordHash
+            from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
 
-:class:`~advanced_alchemy.types.TOTPSecret` encrypts a Base32 TOTP shared secret at rest and returns a :class:`~advanced_alchemy.types.TOTPProvider` on read for generating provisioning URIs and verifying 6-digit authenticator codes:
-
-.. code-block:: python
-
-    from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import BigIntBase
-    from advanced_alchemy.types import TOTPProvider, TOTPSecret, generate_totp_secret
+            hasher = Argon2Hasher()
 
 
-    class MfaEnrollment(BigIntBase):
-        __tablename__ = "mfa_enrollment"
+            class AccountRecord(BigIntBase):
+                __tablename__ = "account_record"
 
-        seed: Mapped[str] = mapped_column(TOTPSecret(key="my-secret-key", issuer="ACME"))
-
-
-    provider = TOTPProvider(generate_totp_secret(), issuer="ACME")
-    uri = provider.provisioning_uri(name="alice@example.com")
-    assert uri.startswith("otpauth://totp/")
-
-OneTimeCode
------------
-
-:class:`~advanced_alchemy.types.OneTimeCode` stores a hashed email/SMS verification code alongside its expiration timestamp, redemption state, and failed attempt counter in a JSON column, returning :class:`~advanced_alchemy.types.HashedOneTimeCode` on read:
-
-.. code-block:: python
-
-    from typing import Any
-    from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import BigIntBase
-    from advanced_alchemy.types import HashedOneTimeCode, OneTimeCode, generate_one_time_code
-    from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
-
-    otp_hasher = Argon2Hasher()
+                password: Mapped[str] = mapped_column(PasswordHash(backend=hasher))
 
 
-    class LoginCode(BigIntBase):
-        __tablename__ = "login_code"
+            stored = HashedPassword(hasher.hash("s3cret-passphrase"), hasher)
+            verified, _ = stored.verify_and_update("s3cret-passphrase")
+            assert verified is True
 
-        code: Mapped[Any] = mapped_column(
-            OneTimeCode(backend=otp_hasher, ttl_seconds=600, max_attempts=3),
-        )
+Two-Factor Secrets and One-Time Codes
+-------------------------------------
+
+For multi-factor login flows, ``TOTPSecret`` encrypts authenticator app seeds (Google Authenticator, 1Password), while ``OneTimeCode`` hashes short-lived email or SMS verification codes and tracks retry limits:
+
+.. tab-set::
+
+    .. tab-item:: Authenticator App (TOTP)
+
+        .. code-block:: python
+
+            from sqlalchemy.orm import Mapped, mapped_column
+            from advanced_alchemy.base import BigIntBase
+            from advanced_alchemy.types import TOTPProvider, TOTPSecret, generate_totp_secret
 
 
-    raw_code = generate_one_time_code()
-    otp = HashedOneTimeCode(otp_hasher.hash(raw_code), otp_hasher, max_attempts=3)
-    ok, otp = otp.redeem(raw_code)
-    assert ok is True and otp.is_used is True
+            class MfaEnrollment(BigIntBase):
+                __tablename__ = "mfa_enrollment"
 
-StoredObject and FileObject
----------------------------
+                seed: Mapped[str] = mapped_column(TOTPSecret(key="my-secret-key", issuer="ACME"))
 
-:class:`~advanced_alchemy.types.StoredObject` persists :class:`~advanced_alchemy.types.FileObject` metadata in JSONB while delegating object storage I/O and lifecycle cleanup to a named backend registered in :data:`~advanced_alchemy.types.storages`:
+
+            provider = TOTPProvider(generate_totp_secret(), issuer="ACME")
+            uri = provider.provisioning_uri(name="alice@example.com")
+            assert uri.startswith("otpauth://totp/")
+
+    .. tab-item:: Email / SMS One-Time Code
+
+        .. code-block:: python
+
+            from typing import Any
+            from sqlalchemy.orm import Mapped, mapped_column
+            from advanced_alchemy.base import BigIntBase
+            from advanced_alchemy.types import HashedOneTimeCode, OneTimeCode, generate_one_time_code
+            from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+
+            otp_hasher = Argon2Hasher()
+
+
+            class LoginCode(BigIntBase):
+                __tablename__ = "login_code"
+
+                code: Mapped[Any] = mapped_column(
+                    OneTimeCode(backend=otp_hasher, ttl_seconds=600, max_attempts=3),
+                )
+
+
+            raw_code = generate_one_time_code()
+            otp = HashedOneTimeCode(otp_hasher.hash(raw_code), otp_hasher, max_attempts=3)
+            ok, otp = otp.redeem(raw_code)
+            assert ok is True and otp.is_used is True
+
+File and Object Storage
+-----------------------
+
+Instead of storing large binary blobs inside SQL tables, ``StoredObject`` saves lightweight file metadata in your table and writes the file bytes to local disk, S3, Google Cloud Storage, or Azure via ``storages``:
 
 .. code-block:: python
 
@@ -129,10 +133,8 @@ StoredObject and FileObject
         )
 
 
-    file_obj = FileObject(
-        backend="documents",
-        filename="report.txt",
-        metadata={"category": "report"},
-    )
+    file_obj = FileObject(backend="documents", filename="report.txt", metadata={"category": "report"})
     file_obj.update_metadata({"priority": "high"})
     storages.clear_backends()
+
+See :doc:`/usage/frameworks/litestar_storage` and :doc:`/usage/frameworks/fastapi_storage` for complete file-upload web examples.

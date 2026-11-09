@@ -1,37 +1,26 @@
-======================
+=====================
 CLI Command Workflows
-======================
+=====================
 
-This guide walks through common database lifecycle workflows using the standalone ``alchemy`` CLI (or ``litestar database`` / ``flask database`` when using web framework integrations). Complete flag signatures for every subcommand are documented in :doc:`/reference/cli`.
+Once :doc:`your config is connected </usage/cli>`, day-to-day schema changes follow the same commands whether you run ``alchemy ...``, ``litestar database ...``, or ``flask database ...``.
 
-Inspecting Loaded Configurations
---------------------------------
+Everyday Migration Flow
+-----------------------
 
-Before running migrations, verify which configurations were discovered and have Alembic enabled using ``show-config`` or ``--validate-config``:
+1. **Set up migrations once** in a new project, generate a migration script from your models, and apply it:
 
-.. code-block:: bash
+   .. code-block:: bash
 
-    alchemy show-config
-    alchemy --validate-config show-current-revision
+       alchemy init migrations
+       alchemy make-migrations -m "create blog tables"
+       alchemy upgrade head
 
-Initializing and Generating Migrations
---------------------------------------
+2. **Undo the last migration** or **preview raw SQL** without touching the database:
 
-Initialize an Alembic migration directory for a single database or multi-database project, then autogenerate revision scripts from your SQLAlchemy metadata:
+   .. code-block:: bash
 
-.. code-block:: bash
-
-    alchemy init migrations
-    alchemy make-migrations -m "create initial tables"
-
-Apply pending migrations with ``upgrade`` or revert revisions with ``downgrade``:
-
-.. code-block:: bash
-
-    alchemy upgrade head
-    alchemy downgrade -1
-
-Pass ``--sql`` to ``upgrade``, ``downgrade``, ``stamp``, or ``ensure-version`` to emit offline SQL scripts for DBA review without executing statements against the live database.
+       alchemy downgrade -1
+       alchemy upgrade head --sql
 
 .. note:: **PostgreSQL enum changes**
 
@@ -70,56 +59,53 @@ Pass ``--sql`` to ``upgrade``, ``downgrade``, ``stamp``, or ``ensure-version`` t
 
    Both :class:`~advanced_alchemy.alembic.commands.AlembicCommandConfig` and the generated ``env.py`` load ``alembic_postgresql_enum`` inside ``contextlib.suppress(ModuleNotFoundError)`` when the target dialect is PostgreSQL, so no manual configuration is required.
 
-Auditing Migration History and Drift
-------------------------------------
+Checking Configs and Schema Drift in CI
+---------------------------------------
 
-Use the inspection commands in CI/CD pipelines to verify that your migration scripts match your SQLAlchemy models and have no unmerged branch heads:
+Run ``show-config`` to confirm which databases were found, and run ``check`` in CI to catch model changes that are missing a migration file:
 
 .. code-block:: bash
 
+    alchemy show-config
     alchemy check
-    alchemy heads --verbose
     alchemy history --indicate-current
-    alchemy show head
 
-Branching and Merging Revisions
--------------------------------
+Handling Parallel Git Branches
+------------------------------
 
-When parallel feature branches create independent migration heads, inspect the branch points with ``branches`` and consolidate them into a single merge revision with ``merge``:
-
-.. code-block:: bash
-
-    alchemy branches --verbose
-    alchemy merge heads -m "merge parallel feature migrations"
-
-Stamping Existing Databases
----------------------------
-
-When adopting Alembic on an existing database or resetting a local development version table, use ``ensure-version`` and ``stamp``:
+When two teammates create migrations on separate branches, merge both heads into one linear revision before deploying:
 
 .. code-block:: bash
 
-    alchemy ensure-version
-    alchemy stamp head
+    alchemy heads --verbose
+    alchemy merge heads -m "merge feature migrations"
 
-Database Maintenance and Fixture Dumps
---------------------------------------
+Adopting an Existing Database or Exporting Data
+-----------------------------------------------
 
-During local development or test fixture generation, export table rows to JSON files with ``dump-data`` or reset all mapped tables with ``drop-all``:
+.. tab-set::
 
-.. code-block:: bash
+    .. tab-item:: Mark Existing Schema Current
 
-    alchemy dump-data --table "*" --dir ./fixtures
-    alchemy drop-all --no-prompt
+        .. code-block:: bash
+
+            alchemy ensure-version
+            alchemy stamp head
+
+    .. tab-item:: Export JSON Seed Files
+
+        .. code-block:: bash
+
+            alchemy dump-data --table "*" --dir ./fixtures
+
+    .. tab-item:: Reset Local Dev Tables
+
+        .. code-block:: bash
+
+            alchemy drop-all --no-prompt
 
 .. warning::
 
-    ``alchemy drop-all`` permanently drops all tables bound to the target metadata. Always verify the target environment before passing ``--no-prompt``.
+    ``drop-all`` permanently deletes every mapped table in the target database. Only run it against disposable local or test databases.
 
-Related Documentation
----------------------
-
-- :doc:`/usage/cli` — CLI installation, configuration discovery, global flags, and Click extension points.
-- :doc:`/usage/database_seeding` — Loading exported JSON fixtures back into your database.
-- :doc:`/reference/cli` — Complete ``alchemy`` CLI command and option reference.
-- :doc:`/reference/extensions/litestar/cli` — Litestar ``database`` CLI command reference.
+See :doc:`/reference/cli` for every command flag.

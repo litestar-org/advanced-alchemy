@@ -1,25 +1,26 @@
-========================================
+=====================================
 Litestar Database and Server Sessions
-========================================
+=====================================
 
-Advanced Alchemy manages both request-scoped SQLAlchemy database sessions and database-backed server-side HTTP sessions for Litestar applications.
+This guide covers two kinds of "sessions" in Litestar:
 
-Request-Scoped Database Sessions
---------------------------------
+1. **Database sessions**: The SQLAlchemy connection used by your routes to read and save rows during a request.
+2. **Server-side user sessions**: Keeping logged-in user state (like shopping carts or auth data) inside a database table instead of Redis.
 
-When :class:`~advanced_alchemy.extensions.litestar.SQLAlchemyPlugin` is registered, Litestar injects a request-scoped SQLAlchemy session under the ``db_session`` dependency key (configurable via ``session_dependency_key`` on :class:`~advanced_alchemy.extensions.litestar.SQLAlchemyAsyncConfig` or :class:`~advanced_alchemy.extensions.litestar.SQLAlchemySyncConfig`).
-
-Configure ``before_send_handler`` on the plugin configuration to control transaction commit behavior at the end of each HTTP response:
-
-- ``"autocommit"`` commits the transaction when the response succeeds and rolls back on unhandled exceptions or error status codes.
-- ``"autocommit_include_redirect"`` also commits on ``3xx`` redirect responses.
-
-Outside a request handler (such as in lifespan hooks or CLI tasks), open a managed session directly with ``async with config.get_session() as db_session:`` or retrieve the request session from ASGI scope via ``config.provide_session(app.state, scope)``.
-
-Multi-Database Configurations
+Per-Request Database Sessions
 -----------------------------
 
-Pass a sequence of configuration objects to :class:`~advanced_alchemy.extensions.litestar.SQLAlchemyPlugin` with distinct ``session_dependency_key``, ``engine_dependency_key``, and ``bind_key`` values to connect a single Litestar application to multiple databases:
+When ``SQLAlchemyPlugin`` is registered, Litestar injects a database session under the ``db_session`` parameter name. You can control when changes commit by setting ``before_send_handler`` on your config:
+
+* ``"autocommit"`` saves changes automatically when a route returns a normal ``2xx`` response and rolls back on errors.
+* ``"autocommit_include_redirects"`` also commits when a route returns a ``3xx`` redirect (useful for HTML form submissions).
+
+Need a session outside a web request, such as in a startup hook or background script? Open one directly with ``async with config.get_session() as db_session:``.
+
+Connecting Multiple Databases
+-----------------------------
+
+To talk to both a main database and an analytics database in one Litestar app, pass a list of configs with unique ``session_dependency_key``, ``engine_dependency_key``, and ``bind_key`` names:
 
 .. code-block:: python
 
@@ -39,52 +40,54 @@ Pass a sequence of configuration objects to :class:`~advanced_alchemy.extensions
     )
     plugin = SQLAlchemyPlugin(config=[primary_config, analytics_config])
 
-Store-Based Server-Side Sessions
---------------------------------
+Storing User Sessions in Your Database
+--------------------------------------
 
-Advanced Alchemy provides :class:`~advanced_alchemy.extensions.litestar.store.SQLAlchemyStore` (a Litestar :class:`~litestar.stores.base.NamespacedStore`) and :class:`~advanced_alchemy.extensions.litestar.store.StoreModelMixin` for storing server-side sessions, rate-limit counters, or response cache entries in your relational database:
+Instead of running a separate Redis server just for user login cookies or rate-limit counters, you can store them in your SQL database using ``SQLAlchemyStore`` or ``SQLAlchemyAsyncSessionBackend``:
 
-.. literalinclude:: /examples/litestar/session_store.py
-    :language: python
-    :pyobject: AppStoreModel
+.. tab-set::
 
-Wire :class:`~advanced_alchemy.extensions.litestar.store.SQLAlchemyStore` into Litestar's :class:`~litestar.stores.registry.StoreRegistry` and :class:`~litestar.middleware.session.server_side.ServerSideSessionConfig`:
+    .. tab-item:: 1. Store Table
 
-.. literalinclude:: /examples/litestar/session_store.py
-    :language: python
-    :start-at: @post(path="/session/{key:str}/{value:str}")
-    :end-before: @post(
+        .. literalinclude:: /examples/litestar/session_store.py
+            :language: python
+            :pyobject: AppStoreModel
 
-.. literalinclude:: /examples/litestar/session_store.py
-    :language: python
-    :pyobject: create_app
+    .. tab-item:: 2. Route Handler
 
-Backend-Based Server-Side Sessions
-----------------------------------
+        .. literalinclude:: /examples/litestar/session_store.py
+            :language: python
+            :start-at: @post(path="/session/{key:str}/{value:str}")
+            :end-before: @post(
 
-Alternatively, use :class:`~advanced_alchemy.extensions.litestar.session.SQLAlchemyAsyncSessionBackend` or :class:`~advanced_alchemy.extensions.litestar.session.SQLAlchemySyncSessionBackend` with a declarative model inheriting from :class:`~advanced_alchemy.extensions.litestar.session.SessionModelMixin`:
+    .. tab-item:: 3. App Wiring
 
-.. code-block:: python
+        .. literalinclude:: /examples/litestar/session_store.py
+            :language: python
+            :pyobject: create_app
 
-    from advanced_alchemy.extensions.litestar.session import (
-        SQLAlchemyAsyncSessionBackend,
-        SessionModelMixin,
-    )
+    .. tab-item:: Dedicated Session Backend
+
+        .. code-block:: python
+
+            from advanced_alchemy.extensions.litestar.session import (
+                SQLAlchemyAsyncSessionBackend,
+                SessionModelMixin,
+            )
 
 
-    class UserSessionModel(SessionModelMixin):
-        __tablename__ = "litestar_user_sessions"
+            class UserSessionModel(SessionModelMixin):
+                __tablename__ = "litestar_user_sessions"
 
 
-    assert issubclass(UserSessionModel, SessionModelMixin)
-    assert SQLAlchemyAsyncSessionBackend is not None
+            assert issubclass(UserSessionModel, SessionModelMixin)
+            assert SQLAlchemyAsyncSessionBackend is not None
 
-Both :class:`~advanced_alchemy.extensions.litestar.store.SQLAlchemyStore` and :class:`~advanced_alchemy.extensions.litestar.session.SQLAlchemyAsyncSessionBackend` execute dialect-optimized ``MERGE`` / ``ON CONFLICT`` upserts and provide ``delete_expired()`` maintenance methods for purging expired session rows.
+Both approaches use native database upserts and include a ``delete_expired()`` helper to clear old session rows on a schedule.
 
-Related Documentation
----------------------
+Related Guides
+--------------
 
-- :doc:`/usage/frameworks/litestar` — Core Litestar setup, DTOs, repositories, and controllers.
-- :doc:`/usage/frameworks/litestar_storage` — Declarative file storage and multipart uploads.
-- :doc:`/reference/extensions/litestar/session` — Session backend API reference.
-- :doc:`/reference/extensions/litestar/store` — General-purpose SQLAlchemy store API reference.
+* :doc:`/usage/frameworks/litestar` — Core Litestar plugin, DTOs, and controllers.
+* :doc:`/usage/frameworks/litestar_storage` — Uploading files with ``StoredObject``.
+* :doc:`/reference/extensions/litestar/store` — Store and session backend API reference.

@@ -1,5 +1,5 @@
 =====
-sanic
+Sanic
 =====
 
 API Reference for the ``Sanic`` extensions module.

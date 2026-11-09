@@ -1,41 +1,39 @@
-=====================================
+=================================
 Litestar File and Object Storage
-=====================================
+=================================
 
-Advanced Alchemy integrates declarative file and object storage with Litestar via :class:`~advanced_alchemy.types.StoredObject`, :class:`~advanced_alchemy.types.FileObject`, and the global :data:`~advanced_alchemy.types.storages` registry.
+Uploading user avatars, invoices, or attachments usually creates headaches: if a database commit fails after uploading to S3, you get orphaned files; if a row is deleted, someone forgets to delete the file in storage.
 
-Registering Storage Backends
-----------------------------
+``StoredObject`` and ``FileObject`` keep your files and database rows in lockstep—uploading files when your transaction commits and deleting old files automatically when rows are removed or replaced.
 
-Register a local filesystem URL, cloud bucket URL (S3, GCS, Azure Blob Storage via ``obstore`` or ``fsspec``), or explicit :class:`~advanced_alchemy.types.StorageBackend` instance with :data:`~advanced_alchemy.types.storages`:
+Uploading Files in Three Steps
+------------------------------
 
-.. literalinclude:: /examples/litestar/session_store.py
-    :language: python
-    :pyobject: create_app
+.. tab-set::
 
-Declarative Model Columns
--------------------------
+    .. tab-item:: 1. Model Column
 
-Declare :class:`~advanced_alchemy.types.StoredObject` columns on your SQLAlchemy models. The SQLAlchemy session tracker (:class:`~advanced_alchemy._listeners.FileObjectSessionTracker`) automatically uploads pending content on transaction commit and deletes orphaned objects when records are removed or replaced:
+        .. literalinclude:: /examples/litestar/session_store.py
+            :language: python
+            :start-at: class AttachmentModel
+            :end-before: class AttachmentRepository
 
-.. literalinclude:: /examples/litestar/session_store.py
-    :language: python
-    :start-at: class AttachmentModel
-    :end-before: class AttachmentRepository
+    .. tab-item:: 2. Upload Route
 
-Handling Uploads in Route Handlers
-----------------------------------
+        .. literalinclude:: /examples/litestar/session_store.py
+            :language: python
+            :pyobject: upload_attachment
 
-Construct a :class:`~advanced_alchemy.types.FileObject` with ``content`` (raw ``bytes`` or an async byte stream such as Litestar's ``UploadFile.read()``) or ``source_path`` and pass it directly to your repository or service:
+    .. tab-item:: 3. Register Storage
 
-.. literalinclude:: /examples/litestar/session_store.py
-    :language: python
-    :pyobject: upload_attachment
+        .. literalinclude:: /examples/litestar/session_store.py
+            :language: python
+            :pyobject: create_app
 
-Custom JSON Serialization
--------------------------
+Custom JSON Encoders
+--------------------
 
-When storing ``StoredObject`` metadata on dialects that require custom JSON serializers (or when customizing Litestar's ``type_encoders``), configure ``json_serializer`` and ``json_deserializer`` on :class:`~advanced_alchemy.extensions.litestar.SQLAlchemyAsyncConfig` or :data:`~advanced_alchemy.types.storages`:
+If your database driver needs custom JSON helpers for file metadata, pass ``json_serializer`` and ``json_deserializer`` on ``EngineConfig``:
 
 .. code-block:: python
 
@@ -53,14 +51,15 @@ When storing ``StoredObject`` metadata on dialects that require custom JSON seri
 Complete Runnable Example
 -------------------------
 
-The combined session store and file storage example in ``docs/examples/litestar/session_store.py`` runs inside a sandboxed ``tempfile.TemporaryDirectory()``:
+.. dropdown:: View Complete Litestar Upload & Store App
+    :icon: code
 
-.. literalinclude:: /examples/litestar/session_store.py
-    :language: python
+    .. literalinclude:: /examples/litestar/session_store.py
+        :language: python
 
-Related Documentation
----------------------
+Related Guides
+--------------
 
-- :doc:`/usage/frameworks/litestar` — Core Litestar setup, DTOs, repositories, and controllers.
-- :doc:`/usage/frameworks/litestar_sessions` — Request-scoped sessions and server-side session stores.
-- :doc:`/reference/types` — :class:`~advanced_alchemy.types.StoredObject` and :class:`~advanced_alchemy.types.FileObject` API reference.
+* :doc:`/usage/frameworks/litestar` — Core Litestar setup and controllers.
+* :doc:`/usage/modeling/security_and_storage_types` — Storage backends (local disk, S3, GCS, Azure).
+* :doc:`/reference/types` — ``StoredObject`` and ``FileObject`` API reference.

@@ -1,135 +1,118 @@
-=====================
+===================
 Advanced Repository
-=====================
+===================
 
-This section covers advanced repository features including composite primary keys and row locking.
+Most tables have a single ``id`` column and simple single-row updates. When you run into trickier real-world cases—join tables with two-part keys, concurrent checkout updates, or clearing old drafts in one query—repositories handle them cleanly.
 
 .. _composite-primary-keys:
 
 Composite Primary Keys
 ----------------------
 
-Advanced Alchemy supports models with composite primary keys. For these models, the repository methods accept several formats for identifying records.
+Some tables identify a row by **two columns together** rather than a single ``id``—for example, a ``UserRole`` table keyed by ``(user_id, role_id)``.
+
+You can pass composite keys to ``get`` or ``delete_many`` as a dictionary (recommended because column names are explicit) or as an ordered tuple:
+
+.. tab-set::
+
+    .. tab-item:: Model Setup
+
+        .. code-block:: python
+
+            from collections.abc import Sequence
+            from sqlalchemy import ForeignKey
+            from sqlalchemy.ext.asyncio import AsyncSession
+            from sqlalchemy.orm import Mapped, mapped_column
+            from advanced_alchemy.base import BigIntBase, DefaultBase
+            from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+
+
+            class AdvancedUser(BigIntBase):
+                __tablename__ = "advanced_user_account"
+                username: Mapped[str]
+
+
+            class AdvancedRole(BigIntBase):
+                __tablename__ = "advanced_role"
+                name: Mapped[str]
+
+
+            class AdvancedUserRole(DefaultBase):
+                __tablename__ = "advanced_user_role"
+
+                user_id: Mapped[int] = mapped_column(ForeignKey("advanced_user_account.id"), primary_key=True)
+                role_id: Mapped[int] = mapped_column(ForeignKey("advanced_role.id"), primary_key=True)
+                permissions: Mapped[str] = mapped_column(default="member")
+
+
+            class AdvancedPost(BigIntBase):
+                __tablename__ = "advanced_post"
+                title: Mapped[str]
+                published: Mapped[bool] = mapped_column(default=False)
+
+
+            class AdvancedUserRoleRepository(SQLAlchemyAsyncRepository[AdvancedUserRole]):
+                model_type = AdvancedUserRole
+
+
+            class AdvancedUserRepository(SQLAlchemyAsyncRepository[AdvancedUser]):
+                model_type = AdvancedUser
+
+
+            class AdvancedPostRepository(SQLAlchemyAsyncRepository[AdvancedPost]):
+                model_type = AdvancedPost
+
+    .. tab-item:: Dictionary Key (Recommended)
+
+        .. code-block:: python
+
+            async def get_role_by_dict(
+                db_session: AsyncSession,
+                user_id: int,
+                role_id: int,
+            ) -> AdvancedUserRole:
+                repo = AdvancedUserRoleRepository(session=db_session)
+                return await repo.get({"user_id": user_id, "role_id": role_id})
+
+    .. tab-item:: Tuple Key & Bulk Delete
+
+        .. code-block:: python
+
+            async def get_and_remove_roles(
+                db_session: AsyncSession,
+                user_id: int,
+                role_id: int,
+            ) -> Sequence[AdvancedUserRole]:
+                repo = AdvancedUserRoleRepository(session=db_session)
+                _ = await repo.get((user_id, role_id))
+                return await repo.delete_many([{"user_id": user_id, "role_id": role_id}])
+
+Row Locking
+-----------
+
+Imagine two requests trying to deduct credits from the same user account at the exact same instant. Passing ``with_for_update=True`` locks that row in the database until your transaction finishes so the second request waits its turn:
 
 .. code-block:: python
 
-    from collections.abc import Sequence
-
-    from sqlalchemy import ForeignKey
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from sqlalchemy.orm import Mapped, mapped_column
-
-    from advanced_alchemy.base import BigIntBase, DefaultBase
-    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+    async def lock_user_for_update(db_session: AsyncSession, user_id: int) -> AdvancedUser:
+        repo = AdvancedUserRepository(session=db_session)
+        return await repo.get_one(id=user_id, with_for_update=True)
 
 
-    class AdvancedUser(BigIntBase):
-        __tablename__ = "advanced_user_account"
-
-        username: Mapped[str]
-
-
-    class AdvancedRole(BigIntBase):
-        __tablename__ = "advanced_role"
-
-        name: Mapped[str]
-
-
-    class AdvancedUserRole(DefaultBase):
-        __tablename__ = "advanced_user_role"
-
-        user_id: Mapped[int] = mapped_column(ForeignKey("advanced_user_account.id"), primary_key=True)
-        role_id: Mapped[int] = mapped_column(ForeignKey("advanced_role.id"), primary_key=True)
-        permissions: Mapped[str] = mapped_column(default="member")
-
-
-    class AdvancedPost(BigIntBase):
-        __tablename__ = "advanced_post"
-
-        title: Mapped[str]
-        published: Mapped[bool] = mapped_column(default=False)
-
-
-    class AdvancedUserRoleRepository(SQLAlchemyAsyncRepository[AdvancedUserRole]):
-        model_type = AdvancedUserRole
-
-
-    class AdvancedUserRepository(SQLAlchemyAsyncRepository[AdvancedUser]):
-        model_type = AdvancedUser
-
-
-    class AdvancedPostRepository(SQLAlchemyAsyncRepository[AdvancedPost]):
-        model_type = AdvancedPost
-
-**Tuple Format**
-
-Pass primary key values as a tuple in the order they are defined on the model.
-
-.. code-block:: python
-
-    async def get_user_role_by_tuple(
-        db_session: AsyncSession,
-        user_id: int,
-        role_id: int,
-    ) -> AdvancedUserRole:
-        repository = AdvancedUserRoleRepository(session=db_session)
-        return await repository.get((user_id, role_id))
-
-**Dict Format**
-
-Pass primary key values as a dictionary with column names as keys. This is more explicit and avoids ordering issues.
-
-.. code-block:: python
-
-    async def get_user_role_by_mapping(
-        db_session: AsyncSession,
-        user_id: int,
-        role_id: int,
-    ) -> AdvancedUserRole:
-        repository = AdvancedUserRoleRepository(session=db_session)
-        return await repository.get({"user_id": user_id, "role_id": role_id})
-
-**Bulk Operations**
-
-You can use sequences of tuples or dicts for bulk operations like ``delete_many``.
-
-.. code-block:: python
-
-    async def delete_user_roles(
-        db_session: AsyncSession,
-        role_ids: Sequence[dict[str, int]],
-    ) -> Sequence[AdvancedUserRole]:
-        repository = AdvancedUserRoleRepository(session=db_session)
-        return await repository.delete_many(list(role_ids))
-
-Row Locking (FOR UPDATE)
-------------------------
-
-.. versionadded:: 1.9.0
-
-The ``get_one`` and ``get_one_or_none`` methods support a ``with_for_update`` parameter, allowing you to emit a ``SELECT ... FOR UPDATE`` query for row-level locking.
-
-.. code-block:: python
-
-    async def get_user_for_update(db_session: AsyncSession, user_id: int) -> AdvancedUser:
-        repository = AdvancedUserRepository(session=db_session)
-        return await repository.get_one(id=user_id, with_for_update=True)
-
-
-    async def get_user_for_update_nowait(db_session: AsyncSession, user_id: int) -> AdvancedUser:
-        repository = AdvancedUserRepository(session=db_session)
-        return await repository.get_one(
+    async def lock_user_without_waiting(db_session: AsyncSession, user_id: int) -> AdvancedUser:
+        repo = AdvancedUserRepository(session=db_session)
+        return await repo.get_one(
             id=user_id,
             with_for_update={"nowait": True, "of": AdvancedUser.id},
         )
 
-Custom DELETE WHERE
---------------------
+Deleting Rows by Condition
+--------------------------
 
-For deleting multiple records matching a specific criteria:
+Need to purge every unpublished draft in one query without loading each post into Python first? Call ``delete_where``:
 
 .. code-block:: python
 
-    async def delete_unpublished_posts(db_session: AsyncSession) -> Sequence[AdvancedPost]:
-        repository = AdvancedPostRepository(session=db_session)
-        return await repository.delete_where(AdvancedPost.published.is_(False))
+    async def purge_unpublished_drafts(db_session: AsyncSession) -> Sequence[AdvancedPost]:
+        repo = AdvancedPostRepository(session=db_session)
+        return await repo.delete_where(AdvancedPost.published.is_(False))

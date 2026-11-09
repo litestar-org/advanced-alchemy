@@ -1,6 +1,6 @@
-===
-dto
-===
+=====================
+Data Transfer Objects
+=====================
 
 .. py:module:: advanced_alchemy.extensions.litestar.dto
 

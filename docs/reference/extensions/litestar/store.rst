@@ -1,6 +1,6 @@
-=====
-Store
-=====
+================
+SQLAlchemy Store
+================
 
 .. py:module:: advanced_alchemy.extensions.litestar.store
 
@@ -18,8 +18,8 @@ Store Model Mixin
     :no-inherited-members:
     :show-inheritance:
 
-SQLAlchemy Store
-----------------
+Store Implementation
+--------------------
 
 .. autoclass:: advanced_alchemy.extensions.litestar.store.SQLAlchemyStore
     :members: get, set, delete, delete_all, exists, expires_in, delete_expired, with_namespace

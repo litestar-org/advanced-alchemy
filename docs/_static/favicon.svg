@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none" role="img" aria-label="Advanced Alchemy">
+  <title>Advanced Alchemy</title>
+  <rect x="92" y="24" width="72" height="24" rx="12" fill="none" stroke="#EDB641" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M106 48V86.5C68.5 96.8 42 131.2 42 172C42 213.97 80.5 236 128 236C175.5 236 214 213.97 214 172C214 131.2 187.5 96.8 150 86.5V48" fill="none" stroke="#EDB641" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M49 140C78 158 104 158 128 142C152 126 178 126 207 144" fill="none" stroke="#EDB641" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="90" cy="186" r="14" fill="none" stroke="#EDB641" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="134" cy="206" r="11" fill="none" stroke="#EDB641" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="164" cy="174" r="9" fill="none" stroke="#EDB641" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

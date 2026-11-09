@@ -70,7 +70,7 @@ def test_sphinx_conf_nav_links_and_version_env(
     assert isinstance(theme_options, dict)
     nav_links = theme_options["nav_links"]
     assert isinstance(nav_links, list)
-    assert [item["title"] for item in nav_links] == ["Learn", "Frameworks", "Reference", "About", "Help"]
+    assert [item["title"] for item in nav_links] == ["Learn", "Frameworks", "Reference", "About"]
 
     aliases = conf_globals["autodoc_type_aliases"]
     assert isinstance(aliases, dict)
@@ -91,20 +91,25 @@ def test_sphinx_conf_has_no_inline_comments() -> None:
 
 
 def test_shibuya_custom_css_layout_and_link_contracts() -> None:
-    """Verify docs/_static/custom.css enforces Shibuya layout, sapphire links, and scoped code pills."""
+    """Verify docs/_static/custom.css enforces Shibuya layout, Litestar branding, sapphire links, and scoped code pills."""
     css = CUSTOM_CSS_PATH.read_text(encoding="utf-8")
     assert "@media (min-width: 1280px)" in css
     assert ".sy-rside" in css
     assert "display: block !important;" in css
     assert "visibility: visible !important;" in css
-    assert ".sy-main .yue" in css
-    assert "max-width: 72ch;" in css
+    assert ".sy-page .sy-main .yue" in css
+    assert "max-width: 48rem;" in css
     assert ".sy-content" not in css
+    assert "#202235" in css
+    assert "#131522" in css
+    assert "#edb641" in css
     assert "#1d4ed8" in css
     assert "#60a5fa" in css
     assert "text-underline-offset: 0.18em;" in css
     assert "border: none;" in css
     assert "a > code.literal" in css
+    assert ".aa-diagram .aa-diagram-dark" in css
+    assert "html.dark .aa-diagram .aa-diagram-light" in css
 
 
 def test_build_docs_cleanup_and_convert_docs_removed() -> None:

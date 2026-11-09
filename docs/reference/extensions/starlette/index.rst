@@ -1,5 +1,5 @@
 =========
-starlette
+Starlette
 =========
 
 API Reference for the ``Starlette`` extensions module.

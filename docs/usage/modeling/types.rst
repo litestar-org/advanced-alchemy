@@ -1,105 +1,84 @@
-==============
-Advanced Types
-==============
+=====================
+Portable Column Types
+=====================
 
-Advanced Alchemy provides dialect-adaptive SQLAlchemy column types in :mod:`advanced_alchemy.types` with strict Python type annotations. Security and file storage types are covered in :doc:`security_and_storage_types`.
+Different SQL databases use different column types for UUIDs, UTC timestamps, JSON, and AI vector embeddings—especially when you test against SQLite locally and deploy to PostgreSQL, MySQL, or Oracle in production.
 
-DateTimeUTC
------------
+Advanced Alchemy's column types automatically pick the best native database type on each engine while keeping your Python types consistent.
 
-:class:`~advanced_alchemy.types.DateTimeUTC` normalizes timezone-aware ``datetime`` values to UTC on write and returns timezone-aware UTC ``datetime`` instances on read across all dialects:
+Common Column Types at a Glance
+-------------------------------
 
-.. code-block:: python
+.. list-table::
+   :header-rows: 1
+   :widths: 28 72
 
-    from datetime import datetime
-    from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import BigIntBase
-    from advanced_alchemy.types import DateTimeUTC
+   * - Column Type
+     - What It Does
+   * - ``DateTimeUTC``
+     - Converts datetimes to UTC before saving and always returns timezone-aware UTC datetimes on read.
+   * - ``GUID``
+     - Stores Python ``UUID`` objects natively on PostgreSQL, CockroachDB, DuckDB, MSSQL, and Oracle, or compactly on SQLite/MySQL.
+   * - ``BigIntIdentity``
+     - Uses 64-bit ``BIGINT`` in production and ``INTEGER`` on SQLite so auto-incrementing IDs work in local tests.
+   * - ``JsonB``
+     - Uses fast binary JSON on PostgreSQL, CockroachDB, and Oracle, and standard ``JSON`` everywhere else.
+   * - ``Vector(dim=...)``
+     - Stores float embeddings for similarity search (``pgvector``, Oracle 23ai+, CockroachDB, DuckDB, and SQLite fallback).
 
+Examples by Type
+----------------
 
-    class AuditLogRecord(BigIntBase):
-        __tablename__ = "audit_log_record"
+.. tab-set::
 
-        occurred_at: Mapped[datetime] = mapped_column(DateTimeUTC)
+    .. tab-item:: Timestamps & JSON
 
-GUID and UUIDv7 Keys
---------------------
+        .. code-block:: python
 
-:class:`~advanced_alchemy.types.GUID` stores UUID values using the native ``UUID`` type on PostgreSQL, DuckDB, and CockroachDB, ``UNIQUEIDENTIFIER`` on MSSQL, ``RAW(16)`` on Oracle, and ``BINARY(16)`` or ``CHAR(32)`` on other dialects:
-
-.. code-block:: python
-
-    from uuid import UUID
-    from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import DefaultBase, UUIDv7AuditBase
-    from advanced_alchemy.types import GUID
-
-
-    class ExternalIdentity(DefaultBase):
-        __tablename__ = "external_identity"
-
-        id: Mapped[UUID] = mapped_column(GUID, primary_key=True)
-
-
-    class TimeOrderedOrder(UUIDv7AuditBase):
-        __tablename__ = "time_ordered_orders"
-
-For primary keys, prefer :class:`~advanced_alchemy.base.UUIDv7Base` or :class:`~advanced_alchemy.base.UUIDv7AuditBase` so monotonic RFC 9562 timestamps keep B-tree indexes balanced.
-
-BigIntIdentity
---------------
-
-:class:`~advanced_alchemy.types.BigIntIdentity` maps to ``BIGINT`` on relational databases while falling back to ``INTEGER`` on SQLite so auto-incrementing primary keys work seamlessly in SQLite test suites:
-
-.. code-block:: python
-
-    from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import DefaultBase
-    from advanced_alchemy.types import BigIntIdentity
+            from datetime import datetime
+            from sqlalchemy.orm import Mapped, mapped_column
+            from advanced_alchemy.base import BigIntBase
+            from advanced_alchemy.types import DateTimeUTC, JsonB
 
 
-    class LedgerEntry(DefaultBase):
-        __tablename__ = "ledger_entry"
+            class AuditEvent(BigIntBase):
+                __tablename__ = "audit_event"
 
-        id: Mapped[int] = mapped_column(BigIntIdentity, primary_key=True)
-        description: Mapped[str]
+                occurred_at: Mapped[datetime] = mapped_column(DateTimeUTC)
+                metadata_payload: Mapped[dict[str, str]] = mapped_column(JsonB)
 
-JsonB
------
+    .. tab-item:: UUIDs & Integer Keys
 
-:class:`~advanced_alchemy.types.JsonB` selects native ``JSONB`` on PostgreSQL and CockroachDB, Binary JSON (``BLOB`` with JSON constraint) on Oracle, and standard ``JSON`` on other dialects:
+        .. code-block:: python
 
-.. code-block:: python
-
-    from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import BigIntBase
-    from advanced_alchemy.types import JsonB
+            from uuid import UUID
+            from sqlalchemy.orm import Mapped, mapped_column
+            from advanced_alchemy.base import DefaultBase
+            from advanced_alchemy.types import BigIntIdentity, GUID
 
 
-    class SettingsRecord(BigIntBase):
-        __tablename__ = "settings_record"
+            class LedgerEntry(DefaultBase):
+                __tablename__ = "ledger_entry"
 
-        preferences: Mapped[dict[str, str]] = mapped_column(JsonB)
+                id: Mapped[int] = mapped_column(BigIntIdentity, primary_key=True)
+                external_ref: Mapped[UUID] = mapped_column(GUID, index=True)
 
-Vector Embeddings
------------------
+    .. tab-item:: Vector Embeddings
 
-:class:`~advanced_alchemy.types.Vector` stores fixed-dimension float embeddings for similarity search on PostgreSQL (``pgvector``), Oracle 23ai+, CockroachDB, DuckDB, and JSON/array fallbacks on SQLite:
+        .. code-block:: python
 
-.. code-block:: python
-
-    from sqlalchemy.orm import Mapped, mapped_column
-    from advanced_alchemy.base import UUIDBase
-    from advanced_alchemy.types import Vector
+            from sqlalchemy.orm import Mapped, mapped_column
+            from advanced_alchemy.base import UUIDv7Base
+            from advanced_alchemy.types import Vector
 
 
-    class DocumentChunk(UUIDBase):
-        __tablename__ = "document_chunk"
+            class DocumentChunk(UUIDv7Base):
+                __tablename__ = "document_chunk"
 
-        embedding: Mapped[list[float]] = mapped_column(Vector(dim=3))
+                embedding: Mapped[list[float]] = mapped_column(Vector(dim=3))
 
 Related Guides
 --------------
 
-- :doc:`security_and_storage_types` — ``EncryptedString``, ``EncryptedText``, ``PasswordHash``, ``TOTPSecret``, ``OneTimeCode``, and ``StoredObject``.
-- :doc:`/reference/types` — Complete custom types API reference.
+* :doc:`security_and_storage_types` — Field encryption, password hashing, authenticator codes, and uploaded files.
+* :doc:`/reference/types` — Full API reference for ``advanced_alchemy.types``.

@@ -1,13 +1,13 @@
 =================
-Command Line Tool
+CLI & Migrations
 =================
 
-Advanced Alchemy provides a standalone command-line interface (``alchemy``) for database migrations, schema initialization, table dumps, and configuration inspection. Full option tables for every command are generated automatically in :doc:`/reference/cli`.
+Whenever you add a column or create a new table in Python, your SQL database needs a migration script to apply that change safely.
+
+Advanced Alchemy includes a terminal tool called ``alchemy`` (plus ``litestar database`` and ``flask database`` when using web frameworks) that wraps Alembic so you can create migrations, upgrade databases, and export seed data with one command.
 
 Installation
 ------------
-
-Install Advanced Alchemy with the ``cli`` extra using your preferred package manager:
 
 .. tab-set::
     :sync-group: pkg
@@ -40,57 +40,34 @@ Install Advanced Alchemy with the ``cli`` extra using your preferred package man
 
             poetry add "advanced-alchemy[cli]"
 
-Global Options
---------------
+Pointing the CLI at Your Database Config
+----------------------------------------
 
-Global options can be passed either before or after the subcommand name:
+Tell ``alchemy`` where your database config lives once in ``pyproject.toml`` (recommended), with an environment variable, or with ``--config`` on the command line:
 
-.. list-table:: Global CLI options
-   :header-rows: 1
-   :widths: 25 75
+.. tab-set::
 
-   * - Option
-     - Description
-   * - ``-c``, ``--config`` TEXT
-     - Dotted (``module.attr``) or colon (``module:attr``) path to SQLAlchemy config(s), framework extensions, or a sync/async factory callable.
-   * - ``--validate-config``
-     - Validate discovered configurations and print a summary table before executing the command.
-   * - ``--bind-key`` TEXT
-     - Filter execution to a specific SQLAlchemy ``bind_key``.
-   * - ``--no-prompt``
-     - Skip interactive confirmation prompts for destructive operations.
-   * - ``--verbose``
-     - Enable verbose output.
+    .. tab-item:: pyproject.toml (Recommended)
 
-Configuration Discovery
------------------------
+        .. code-block:: toml
 
-The CLI resolves SQLAlchemy configurations in the following order of precedence:
+            [tool.advanced-alchemy]
+            config = "myapp.db:alchemy_config"
 
-1. **CLI flag** (``--config`` / ``-c``, accepted on the root group or on any subcommand):
+    .. tab-item:: Environment Variable
 
-   .. code-block:: bash
+        .. code-block:: bash
 
-       alchemy --config myapp.db:alchemy_config upgrade
-       alchemy upgrade --config myapp.db:alchemy_config
+            export ALCHEMY_CONFIG="myapp.db:alchemy_config"
+            alchemy upgrade head
 
-2. **Environment variable** (``ALCHEMY_CONFIG``):
+    .. tab-item:: Command Flag
 
-   .. code-block:: bash
+        .. code-block:: bash
 
-       export ALCHEMY_CONFIG="myapp.db:alchemy_config"
-       alchemy upgrade
+            alchemy --config myapp.db:alchemy_config upgrade head
 
-3. **Project configuration** (``pyproject.toml``):
-
-   The CLI walks upward from the current working directory (stopping at the ``.git`` repository root) to locate ``pyproject.toml`` and reads ``[tool.advanced-alchemy]`` (or ``[tool.alchemy]``):
-
-   .. code-block:: toml
-
-       [tool.advanced-alchemy]
-       config = ["myapp.db:primary_config", "myapp.db:analytics_config"]
-
-A configuration target can be a :class:`~advanced_alchemy.config.SQLAlchemyAsyncConfig` or :class:`~advanced_alchemy.config.SQLAlchemySyncConfig` instance, a sequence of configs, a framework plugin/extension instance, or a zero-argument sync/async factory function:
+Your config target can be a ``SQLAlchemyAsyncConfig``, ``SQLAlchemySyncConfig``, a list of configs for multiple databases, a framework plugin/extension, or a zero-argument factory function:
 
 .. code-block:: python
 
@@ -100,10 +77,28 @@ A configuration target can be a :class:`~advanced_alchemy.config.SQLAlchemyAsync
         connection_string="sqlite:///:memory:",
     )
 
-Extending the Click Group
--------------------------
+Common Flags
+------------
 
-Use :func:`~advanced_alchemy.cli.get_alchemy_group` and :func:`~advanced_alchemy.cli.add_migration_commands` to embed Advanced Alchemy's CLI commands inside an existing Click or Typer application:
+.. list-table::
+   :header-rows: 1
+   :widths: 28 72
+
+   * - Flag
+     - What It Does
+   * - ``-c``, ``--config``
+     - Import path (``myapp.db:alchemy_config``) to your config or app plugin.
+   * - ``--validate-config``
+     - Prints discovered configs and checks them before running a command.
+   * - ``--bind-key``
+     - Runs the command only for one named database bind key.
+   * - ``--no-prompt``
+     - Skips confirmation prompts in CI or automated scripts.
+
+Adding Commands to Your Own Click App
+-------------------------------------
+
+Already have a custom project CLI built with Click? Attach Advanced Alchemy's migration commands directly to your group:
 
 .. code-block:: python
 
@@ -116,19 +111,20 @@ Use :func:`~advanced_alchemy.cli.get_alchemy_group` and :func:`~advanced_alchemy
     @alchemy_group.command(name="seed-reference")
     @click.option("--env", default="dev", help="Target environment name.")
     def seed_reference(env: str) -> None:
-        """Custom project command registered alongside migration commands."""
         click.echo(f"Seeding reference data for {env}")
 
 
     add_migration_commands(alchemy_group)
     assert "upgrade" in alchemy_group.commands
-    assert "seed-reference" in alchemy_group.commands
 
-You can also attach the migration subcommands directly onto your own root ``@click.group()`` via ``add_migration_commands(custom_group)``.
+Next Steps
+----------
 
-Related Documentation
----------------------
+* :doc:`cli_commands` — Step-by-step commands for creating migrations, checking drift, and exporting fixtures.
+* :doc:`/reference/cli` — Full list of ``alchemy`` commands and flags.
 
-- :doc:`cli_commands` — Migration, inspection, branching, and data dump command workflows.
-- :doc:`/reference/cli` — Standalone ``alchemy`` CLI command and flag reference.
-- :doc:`/reference/extensions/litestar/cli` — Litestar ``database`` CLI command reference.
+.. toctree::
+    :titlesonly:
+    :hidden:
+
+    Command Workflows <cli_commands>

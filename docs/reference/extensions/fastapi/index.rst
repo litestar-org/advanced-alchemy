@@ -1,5 +1,5 @@
 =======
-fastapi
+FastAPI
 =======
 
 API Reference for the ``FastAPI`` extensions module.

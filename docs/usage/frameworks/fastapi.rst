@@ -2,12 +2,33 @@
 FastAPI Integration
 ===================
 
-Advanced Alchemy integrates with FastAPI through :class:`~advanced_alchemy.extensions.fastapi.AdvancedAlchemy`, providing engine lifecycle management, request-scoped SQLAlchemy sessions, service and filter dependency generators, and CLI migration commands.
+Advanced Alchemy plugs into FastAPI through the ``AdvancedAlchemy`` extension, managing database startup/shutdown automatically and giving your routes clean ``Depends(...)`` helpers for sessions, services, and OpenAPI-documented search/pagination filters.
+
+What's Included for FastAPI
+---------------------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 26 48 26
+
+   * - Feature
+     - What It Gives You
+     - Guide & API
+   * - **Lifespan & Sessions**
+     - Starts and disposes engines automatically and opens a fresh database session per request.
+     - :doc:`API </reference/extensions/fastapi/index>`
+   * - **Depends Helpers**
+     - ``provide_session``, ``provide_service``, and ``provide_filters`` (with automatic Swagger UI query params).
+     - :doc:`API </reference/extensions/fastapi/index>`
+   * - **Uploads & Multi-Binds**
+     - Multipart ``UploadFile`` storage columns and support for multiple databases in one app.
+     - :doc:`Guide <fastapi_storage>` · :doc:`API </reference/types>`
+   * - **Migrations CLI**
+     - Works directly with the ``alchemy`` CLI to generate and run Alembic migrations.
+     - :doc:`CLI Guide </usage/cli>`
 
 Installation
 ------------
-
-Install Advanced Alchemy with FastAPI and an async database driver:
 
 .. tab-set::
     :sync-group: pkg
@@ -40,62 +61,67 @@ Install Advanced Alchemy with FastAPI and an async database driver:
 
             poetry add advanced-alchemy fastapi aiosqlite
 
-Extension Initialization
-------------------------
+Building a FastAPI Service Step by Step
+---------------------------------------
 
-Configure :class:`~advanced_alchemy.extensions.fastapi.SQLAlchemyAsyncConfig` or :class:`~advanced_alchemy.extensions.fastapi.SQLAlchemySyncConfig` and bind :class:`~advanced_alchemy.extensions.fastapi.AdvancedAlchemy` to your FastAPI application:
+.. tab-set::
 
-.. code-block:: python
+    .. tab-item:: 1. Quick Extension Setup
 
-    from fastapi import FastAPI
-    from advanced_alchemy.extensions.fastapi import (
-        AdvancedAlchemy,
-        AsyncSessionConfig,
-        SQLAlchemyAsyncConfig,
-    )
+        .. code-block:: python
 
-    app = FastAPI()
-    alchemy = AdvancedAlchemy(
-        config=SQLAlchemyAsyncConfig(
-            connection_string="sqlite+aiosqlite:///:memory:",
-            session_config=AsyncSessionConfig(expire_on_commit=False),
-            create_all=True,
-            commit_mode="autocommit",
-        ),
-        app=app,
-    )
+            from fastapi import FastAPI
+            from advanced_alchemy.extensions.fastapi import (
+                AdvancedAlchemy,
+                AsyncSessionConfig,
+                SQLAlchemyAsyncConfig,
+            )
 
-Models, Schemas, and Services
------------------------------
+            app = FastAPI()
+            alchemy = AdvancedAlchemy(
+                config=SQLAlchemyAsyncConfig(
+                    connection_string="sqlite+aiosqlite:///:memory:",
+                    session_config=AsyncSessionConfig(expire_on_commit=False),
+                    create_all=True,
+                    commit_mode="autocommit",
+                ),
+                app=app,
+            )
 
-Define declarative SQLAlchemy models, Pydantic schemas, and repository services:
+    .. tab-item:: 2. Models, Schemas & Service
 
-.. literalinclude:: /examples/fastapi/service_di.py
-    :language: python
-    :start-at: class AuthorModel
-    :end-before: def create_app
+        .. literalinclude:: /examples/fastapi/service_di.py
+            :language: python
+            :start-at: class AuthorModel
+            :end-before: def create_app
 
-Dependency Injection and Filters
---------------------------------
+    .. tab-item:: 3. Routes & Filter Depends
 
-Use ``alchemy.provide_session()``, ``alchemy.provide_service(...)``, and ``alchemy.provide_filters(...)`` with FastAPI's ``Depends(...)`` to inject database sessions, services, and OpenAPI-documented query filters (IDs, search strings, boolean flags, enum choices, date ranges, and pagination) into route handlers:
+        .. literalinclude:: /examples/fastapi/service_di.py
+            :language: python
+            :pyobject: create_app
 
-.. literalinclude:: /examples/fastapi/service_di.py
-    :language: python
-    :pyobject: create_app
+.. tip::
 
-When multiple database configurations are registered, pass the target ``bind_key`` to ``alchemy.provide_session("reporting")`` or ``alchemy.provide_service(ReportService, key="reporting")``.
+    Using multiple databases? Pass the bind key to ``alchemy.provide_session("reporting")`` or ``alchemy.provide_service(ReportService, key="reporting")``.
 
-Complete Runnable Example
--------------------------
+Complete Runnable App
+---------------------
 
-The complete runnable example in ``docs/examples/fastapi/service_di.py`` exercises service and filter dependency injection in-process using FastAPI's ``TestClient``:
+.. dropdown:: View Complete FastAPI Application
+    :icon: code
 
-.. literalinclude:: /examples/fastapi/service_di.py
-    :language: python
+    .. literalinclude:: /examples/fastapi/service_di.py
+        :language: python
 
 Related Guides
 --------------
 
-- :doc:`fastapi_storage` — Declarative file storage, signed URLs, and multipart uploads in FastAPI.
-- :doc:`/reference/extensions/fastapi/index` — FastAPI extension API reference.
+* :doc:`fastapi_storage` — File uploads with ``UploadFile`` and multi-database setups.
+* :doc:`/reference/extensions/fastapi/index` — FastAPI extension API reference.
+
+.. toctree::
+    :titlesonly:
+    :hidden:
+
+    File Storage & Multi-Binds <fastapi_storage>

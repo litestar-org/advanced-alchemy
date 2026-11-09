@@ -1,6 +1,6 @@
-======
-plugin
-======
+=======================
+Plugins & Configuration
+=======================
 
 .. py:module:: advanced_alchemy.extensions.litestar.plugins
 

@@ -1,5 +1,5 @@
 ========
-litestar
+Litestar
 ========
 
 .. py:module:: advanced_alchemy.extensions.litestar
@@ -43,14 +43,14 @@ Dependency Injection & CLI Plugin Helpers
     :no-inherited-members:
     :show-inheritance:
 
-Additional API References
--------------------------
+Component API References
+------------------------
 
 .. toctree::
     :titlesonly:
 
-    dto
     plugins
-    cli
+    dto
     session
     store
+    cli

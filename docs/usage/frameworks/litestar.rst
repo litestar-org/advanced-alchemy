@@ -2,16 +2,39 @@
 Litestar Integration
 ====================
 
-.. seealso::
+Advanced Alchemy is built by the Litestar team and plugs into Litestar with a single ``SQLAlchemyPlugin``. One plugin setup handles database connections, per-request sessions, JSON serialization, error responses, and ``litestar database`` CLI migrations.
 
-    :external+litestar:doc:`Litestar's documentation for SQLAlchemy integration <usage/databases/sqlalchemy/index>`
+What's Included for Litestar
+----------------------------
 
-Advanced Alchemy provides first-class integration with Litestar through :class:`~advanced_alchemy.extensions.litestar.SQLAlchemyPlugin`, which re-exports core models, repositories, services, filters, and data transfer objects under ``advanced_alchemy.extensions.litestar``.
+.. list-table::
+   :header-rows: 1
+   :widths: 26 48 26
+
+   * - Feature
+     - What It Gives You
+     - Guide & API
+   * - **Plugin & Configs**
+     - Starts engines on app startup, opens a session per request, and maps database errors to HTTP responses.
+     - :doc:`API </reference/extensions/litestar/plugins>`
+   * - **Service & Filter DI**
+     - Injects services and ready-made search/pagination filters straight into controller routes.
+     - :doc:`API </reference/extensions/litestar/index>`
+   * - **SQLAlchemy DTOs**
+     - Auto-generates request/response DTOs from your SQLAlchemy models and ``@property`` fields.
+     - :doc:`API </reference/extensions/litestar/dto>`
+   * - **Sessions & Stores**
+     - Connects multiple databases and stores server-side user sessions or cache keys in SQL tables.
+     - :doc:`Guide <litestar_sessions>` · :doc:`API </reference/extensions/litestar/store>`
+   * - **File Storage**
+     - Streams ``UploadFile`` payloads to local disk or S3/GCS and cleans up orphaned files on delete.
+     - :doc:`Guide <litestar_storage>` · :doc:`API </reference/types>`
+   * - **Database CLI**
+     - Adds ``litestar database make-migrations``, ``upgrade``, and ``dump-data`` commands automatically.
+     - :doc:`API </reference/extensions/litestar/cli>`
 
 Installation
 ------------
-
-Install Advanced Alchemy with the ``litestar`` extra using your preferred package manager:
 
 .. tab-set::
     :sync-group: pkg
@@ -44,26 +67,43 @@ Install Advanced Alchemy with the ``litestar`` extra using your preferred packag
 
             poetry add "advanced-alchemy[litestar]" aiosqlite
 
-Plugin and Engine Configuration
--------------------------------
+Building an Author API Step by Step
+-----------------------------------
 
-Configure :class:`~advanced_alchemy.extensions.litestar.SQLAlchemyAsyncConfig` or :class:`~advanced_alchemy.extensions.litestar.SQLAlchemySyncConfig` and register :class:`~advanced_alchemy.extensions.litestar.SQLAlchemyPlugin` on your Litestar application. The plugin manages engine lifecycles, request-scoped database sessions, exception handling, and CLI migration commands:
+Click through each tab to see how a model, service, controller, and Litestar app fit together:
 
-.. literalinclude:: /examples/litestar/basic_app.py
-    :language: python
-    :pyobject: create_app
+.. tab-set::
 
-Models, Schemas, and Data Transfer Objects
-------------------------------------------
+    .. tab-item:: 1. Models & Schemas
 
-Define declarative models using the base classes in :mod:`advanced_alchemy.base` (re-exported as ``advanced_alchemy.extensions.litestar.base``), alongside :class:`msgspec.Struct` schemas or :class:`~advanced_alchemy.extensions.litestar.dto.SQLAlchemyDTO` definitions:
+        .. literalinclude:: /examples/litestar/basic_app.py
+            :language: python
+            :start-at: class AuthorModel
+            :end-before: class AuthorRepository
 
-.. literalinclude:: /examples/litestar/basic_app.py
-    :language: python
-    :start-at: class AuthorModel
-    :end-before: class AuthorRepository
+    .. tab-item:: 2. Repository & Service
 
-:class:`~advanced_alchemy.extensions.litestar.dto.SQLAlchemyDTO` automatically inspects model columns, relationships, and ``@property`` / ``@cached_property`` descriptors (exposing properties as read-only fields):
+        .. literalinclude:: /examples/litestar/basic_app.py
+            :language: python
+            :start-at: class AuthorRepository
+            :end-before: class AuthorController
+
+    .. tab-item:: 3. Controller & Filters
+
+        .. literalinclude:: /examples/litestar/basic_app.py
+            :language: python
+            :pyobject: AuthorController
+
+    .. tab-item:: 4. Plugin & App Setup
+
+        .. literalinclude:: /examples/litestar/basic_app.py
+            :language: python
+            :pyobject: create_app
+
+Auto-Generating DTOs from Models
+--------------------------------
+
+Don't want to write separate ``msgspec`` or Pydantic schemas for simple CRUD endpoints? ``SQLAlchemyDTO`` inspects your model's columns, relationships, and read-only ``@property`` fields automatically:
 
 .. code-block:: python
 
@@ -88,36 +128,25 @@ Define declarative models using the base classes in :mod:`advanced_alchemy.base`
 
     UserAccountDTO = SQLAlchemyDTO[UserAccount]
 
-Repositories and Services
--------------------------
+Complete Runnable App
+---------------------
 
-Bind a model to a repository and service class to encapsulate query execution, pagination, and schema serialization:
+.. dropdown:: View Complete Litestar Application
+    :icon: code
 
-.. literalinclude:: /examples/litestar/basic_app.py
-    :language: python
-    :start-at: class AuthorRepository
-    :end-before: class AuthorController
+    .. literalinclude:: /examples/litestar/basic_app.py
+        :language: python
 
-Controllers and Dependency Injection
-------------------------------------
+More Litestar Guides
+--------------------
 
-Use :func:`~advanced_alchemy.extensions.litestar.providers.create_service_dependencies` to wire service instances and query filter dependencies (such as ID filters, search filters, date bounds, and limit/offset pagination) directly into route handlers:
+* :doc:`litestar_sessions` — Request transactions, multi-database setups, and server-side session stores.
+* :doc:`litestar_storage` — File uploads and cloud/local object storage.
+* `Litestar SQLAlchemy Docs <https://docs.litestar.dev/latest/usage/databases/sqlalchemy/>`_ — Upstream Litestar framework guide.
 
-.. literalinclude:: /examples/litestar/basic_app.py
-    :language: python
-    :pyobject: AuthorController
+.. toctree::
+    :titlesonly:
+    :hidden:
 
-Complete Runnable Example
--------------------------
-
-The full runnable module is located in ``docs/examples/litestar/basic_app.py`` and can be verified in-process with Litestar's test client:
-
-.. literalinclude:: /examples/litestar/basic_app.py
-    :language: python
-
-Related Guides
---------------
-
-- :doc:`litestar_sessions` — Session management, multi-database configurations, and server-side session backends.
-- :doc:`litestar_storage` — Declarative file uploads and storage backends.
-- :doc:`/reference/extensions/litestar/cli` — CLI migration commands.
+    Database & Server Sessions <litestar_sessions>
+    File & Object Storage <litestar_storage>

@@ -1,5 +1,5 @@
 =====
-flask
+Flask
 =====
 
 API Reference for the ``Flask`` extensions module.

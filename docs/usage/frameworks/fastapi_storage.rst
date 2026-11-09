@@ -2,12 +2,12 @@
 FastAPI File Storage and Multi-Binds
 ====================================
 
-Advanced Alchemy's :class:`~advanced_alchemy.types.StoredObject` and :class:`~advanced_alchemy.types.FileObject` types integrate with FastAPI multipart form uploads and Pydantic computed fields.
+This guide shows how to attach uploaded files to SQLAlchemy models in FastAPI and how to connect a single FastAPI app to more than one database.
 
-Registering Backends and Mapping Columns
-----------------------------------------
+Storing Uploaded Files
+----------------------
 
-Register a storage backend in :data:`~advanced_alchemy.types.storages` and map a :class:`~advanced_alchemy.types.StoredObject` column on your model:
+Register a local folder or cloud bucket (S3, GCS, Azure) in ``storages`` and add a ``StoredObject`` column to your model. In FastAPI routes that receive an ``UploadFile``, pass ``FileObject(backend=..., filename=file.filename, content=await file.read())`` to ``service.create(...)``—Advanced Alchemy saves the file when the transaction commits and deletes it if the row is deleted:
 
 .. code-block:: python
 
@@ -15,10 +15,8 @@ Register a storage backend in :data:`~advanced_alchemy.types.storages` and map a
     import tempfile
     from typing import Optional
     from uuid import UUID
-
     from pydantic import BaseModel, Field
     from sqlalchemy.orm import Mapped, mapped_column
-
     from advanced_alchemy.extensions.fastapi import base, repository, service
     from advanced_alchemy.types import FileObject, StoredObject, storages
 
@@ -51,17 +49,13 @@ Register a storage backend in :data:`~advanced_alchemy.types.storages` and map a
         name: str
         file: Optional[FileObject] = Field(default=None, exclude=True)
 
+
     storages.clear_backends()
 
-Multipart Uploads in FastAPI Routes
------------------------------------
+Connecting Multiple Databases
+-----------------------------
 
-In route handlers that accept ``UploadFile`` and ``Form`` fields, construct a :class:`~advanced_alchemy.types.FileObject` with ``content=await file.read()`` and pass it to ``service.create(...)`` or ``service.update(...)``. The session tracker persists the file payload to the configured storage backend when the database transaction commits.
-
-Multi-Database Bind Keys
-------------------------
-
-Pass a sequence of :class:`~advanced_alchemy.extensions.fastapi.SQLAlchemyAsyncConfig` or :class:`~advanced_alchemy.extensions.fastapi.SQLAlchemySyncConfig` instances to :class:`~advanced_alchemy.extensions.fastapi.AdvancedAlchemy` to manage multiple database binds within a single FastAPI application:
+Pass a list of configs with distinct ``bind_key`` names when your FastAPI app talks to more than one database (for example, an async main database and a sync reporting database):
 
 .. code-block:: python
 
@@ -86,9 +80,8 @@ Pass a sequence of :class:`~advanced_alchemy.extensions.fastapi.SQLAlchemyAsyncC
     assert alchemy.get_async_config().bind_key == "default"
     assert alchemy.get_sync_config("reporting").bind_key == "reporting"
 
-Related Documentation
----------------------
+Related Guides
+--------------
 
-- :doc:`/usage/frameworks/fastapi` — Core FastAPI setup, dependency injection, and route handlers.
-- :doc:`/reference/extensions/fastapi/index` — FastAPI extension API reference.
-- :doc:`/reference/types` — :class:`~advanced_alchemy.types.StoredObject` and :class:`~advanced_alchemy.types.FileObject` API reference.
+* :doc:`/usage/frameworks/fastapi` — Core FastAPI setup, ``Depends`` services, and query filters.
+* :doc:`/reference/extensions/fastapi/index` — FastAPI extension API reference.

@@ -164,18 +164,43 @@ viewcode_follow_imported_members = False
 
 copybutton_prompt_text = "$ "
 
+mermaid_version = "11.4.1"
+mermaid_init_js = """
+mermaid.initialize({
+    startOnLoad: true,
+    theme: "base",
+    flowchart: { curve: "basis", padding: 14, nodeSpacing: 42, rankSpacing: 48 },
+    themeVariables: {
+        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif",
+        fontSize: "14px",
+        primaryColor: "#fef9ec",
+        primaryTextColor: "#202235",
+        primaryBorderColor: "#edb641",
+        lineColor: "#64748b",
+        secondaryColor: "#eff6ff",
+        secondaryTextColor: "#202235",
+        secondaryBorderColor: "#93c5fd",
+        tertiaryColor: "#ecfdf5",
+        tertiaryTextColor: "#202235",
+        tertiaryBorderColor: "#86efac",
+        clusterBkg: "#f8fafc",
+        clusterBorder: "#cbd5e1",
+        edgeLabelBackground: "#ffffff"
+    }
+});
+"""
+
 html_theme = "shibuya"
 html_title = "Advanced Alchemy"
 html_short_title = "AA"
 llms_txt_base_url = "https://docs.advanced-alchemy.litestar.dev/latest/"
 
-pygments_style = "a11y-light"
-pygments_dark_style = "a11y-high-contrast-dark"
+pygments_style = "default"
 
 todo_include_todos = True
 
 html_static_path = ["_static"]
-html_favicon = "_static/favicon.png"
+html_favicon = "_static/favicon.svg"
 templates_path = ["_templates"]
 html_css_files = ["custom.css", "syntax-highlighting.css"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "PYPI_README.md", "guides/**", "examples/**"]
@@ -190,7 +215,7 @@ html_meta = {
     "og:type": "website",
     "og:description": "Advanced Alchemy - A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy",
     "og:site_name": "Advanced Alchemy",
-    "twitter:card": "summary",
+    "twitter:card": "summary_large_image",
 }
 
 html_context = {
@@ -208,9 +233,9 @@ html_theme_options = {
     "discord_url": "https://discord.gg/dSDXd4mKhp",
     "navigation_with_keys": True,
     "globaltoc_expand_depth": 2,
-    "light_logo": "_static/logo-default.png",
-    "dark_logo": "_static/logo-default.png",
-    "discussion_url": "https://discord.gg/dSDXd4mKhp",
+    "light_logo": "_static/logo.svg",
+    "dark_logo": "_static/logo.svg",
+    "og_image_url": "https://docs.advanced-alchemy.litestar.dev/latest/_static/og-social-dark.png",
     "nav_links": [
         {
             "title": "Learn",
@@ -239,29 +264,34 @@ html_theme_options = {
         },
         {
             "title": "Frameworks",
-            "url": "usage/frameworks/litestar",
+            "url": "usage/frameworks/index",
             "children": [
+                {
+                    "title": "Overview",
+                    "url": "usage/frameworks/index",
+                    "summary": "Capabilities and components across all supported frameworks",
+                },
                 {
                     "title": "Litestar",
                     "url": "usage/frameworks/litestar",
-                    "summary": "Plugin, DI providers, DTOs, and session stores",
+                    "summary": "Plugin, DI providers, DTOs, storage, and session stores",
                 },
                 {
                     "title": "FastAPI",
                     "url": "usage/frameworks/fastapi",
-                    "summary": "Extension, lifespan, and Annotated dependencies",
+                    "summary": "Extension, lifespan, Annotated dependencies, and storage",
                 },
                 {
                     "title": "Starlette",
                     "url": "usage/frameworks/starlette",
                     "summary": "ASGI middleware and request-scoped sessions",
                 },
+                {"title": "Flask", "url": "usage/frameworks/flask", "summary": "WSGI and async Flask integration"},
                 {
                     "title": "Sanic",
                     "url": "usage/frameworks/sanic",
                     "summary": "Sanic extension and dependency injection",
                 },
-                {"title": "Flask", "url": "usage/frameworks/flask", "summary": "WSGI and async Flask integration"},
             ],
         },
         {"title": "Reference", "url": "reference/index"},
@@ -303,24 +333,19 @@ html_theme_options = {
                     "url": "https://github.com/litestar-org/.github?tab=coc-ov-file#security-ov-file",
                     "icon": "coc",
                 },
-                {"title": "Sponsor", "url": "https://github.com/sponsors/Litestar-Org", "icon": "heart"},
-            ],
-        },
-        {
-            "title": "Help",
-            "children": [
                 {
                     "title": "Discord Help Forum",
-                    "summary": "Dedicated Discord help forum",
+                    "summary": "Ask questions and get help in Discord",
                     "url": "https://discord.gg/dSDXd4mKhp",
                     "icon": "coc",
                 },
                 {
                     "title": "GitHub Discussions",
-                    "summary": "GitHub Discussions",
+                    "summary": "Discuss ideas and patterns with the community",
                     "url": "https://github.com/litestar-org/advanced-alchemy/discussions",
                     "icon": "coc",
                 },
+                {"title": "Sponsor", "url": "https://github.com/sponsors/Litestar-Org", "icon": "heart"},
             ],
         },
     ],
