@@ -635,13 +635,13 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         session: Optional[Union[AsyncSession, async_scoped_session[AsyncSession]]] = None,
         statement: Optional[Select[tuple[ModelT]]] = None,
         config: Optional[SQLAlchemyAsyncConfig] = None,
-        model_type: Optional[type[ModelT]] = None,
-        repository_type: Optional[type[SQLAlchemyAsyncRepositoryT]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
+        model_type: Optional[type[ModelT]] = None,
+        repository_type: Optional[type[SQLAlchemyAsyncRepositoryT]] = None,
     ) -> AsyncGenerator[Self, None]:
         """Context manager that returns instance of service object.
 

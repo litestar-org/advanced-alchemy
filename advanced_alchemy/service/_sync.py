@@ -633,13 +633,13 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         session: Optional[Union[Session, scoped_session[Session]]] = None,
         statement: Optional[Select[tuple[ModelT]]] = None,
         config: Optional[SQLAlchemySyncConfig] = None,
-        model_type: Optional[type[ModelT]] = None,
-        repository_type: Optional[type[SQLAlchemySyncRepositoryT]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
         uniquify: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
+        model_type: Optional[type[ModelT]] = None,
+        repository_type: Optional[type[SQLAlchemySyncRepositoryT]] = None,
     ) -> Generator[Self, None, None]:
         """Context manager that returns instance of service object.
 

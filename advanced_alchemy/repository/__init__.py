@@ -21,7 +21,6 @@ from advanced_alchemy.repository._util import (
     ModelRepositoryMixin,
     get_instrumented_attr,
     model_from_dict,
-    resolve_generic_type_args,
 )
 from advanced_alchemy.repository.typing import ModelOrRowMappingT, ModelT, OrderingPair
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
@@ -50,5 +49,4 @@ __all__ = (
     "SQLAlchemySyncSlugRepositoryProtocol",
     "get_instrumented_attr",
     "model_from_dict",
-    "resolve_generic_type_args",
 )

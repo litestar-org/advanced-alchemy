@@ -14,7 +14,7 @@ from uuid import UUID
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.filters import LimitOffset, StatementFilter
-from advanced_alchemy.repository._util import resolve_generic_type_args
+from advanced_alchemy.repository._util import ModelRepositoryMixin, resolve_generic_type_args
 from advanced_alchemy.repository.typing import PrimaryKeyType
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.typing import (
@@ -64,10 +64,11 @@ def configure_service_subclass(cls: type[Any], service_base: type[Any], default_
     )
     raw_repo = args[1] if len(args) > 1 else None
     origin_repo = get_origin(raw_repo)
-    repo_cls: Optional[type[Any]] = (
-        origin_repo
-        if isinstance(origin_repo, type)
-        else (raw_repo if raw_repo is not Any and isinstance(raw_repo, type) else None)
+    candidate_repo: Any = origin_repo if isinstance(origin_repo, type) else raw_repo
+    repo_cls = (
+        cast("type[Any]", candidate_repo)
+        if isinstance(candidate_repo, type) and issubclass(candidate_repo, ModelRepositoryMixin)
+        else None
     )
     if model_cls is None and repo_cls is not None:
         repo_args = get_args(raw_repo)
@@ -78,7 +79,7 @@ def configure_service_subclass(cls: type[Any], service_base: type[Any], default_
         )
     if model_cls is not None and "_model_type" not in cls.__dict__:
         cls._model_type = model_cls
-    if "repository_type" in cls.__dict__:
+    if getattr(cls, "repository_type", None) is not None:
         return
     if repo_cls is not None:
         if getattr(repo_cls, "model_type", None) is not None or model_cls is None:
@@ -89,7 +90,7 @@ def configure_service_subclass(cls: type[Any], service_base: type[Any], default_
                 (repo_cls,),
                 {"model_type": model_cls},
             )
-    elif getattr(cls, "repository_type", None) is None and model_cls is not None:
+    elif model_cls is not None:
         cls.repository_type = type(
             f"{model_cls.__name__}Repository",
             (default_repo_base,),

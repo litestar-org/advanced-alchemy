@@ -515,7 +515,7 @@ def snapshot_and_detach_relationships(instance: Any, mapper: Any) -> dict[str, A
             related_items = list(mapping.values())
         elif isinstance(raw_value, (list, set)):
             items = cast("Iterable[Any]", raw_value)
-            values[relationship.key] = list(items)
+            values[relationship.key] = set(items) if isinstance(raw_value, set) else list(items)
             related_items = list(items)
         else:
             values[relationship.key] = raw_value

@@ -12,7 +12,16 @@ from sqlalchemy import BinaryExpression, BooleanClauseList, Column, ColumnElemen
 from sqlalchemy.exc import NoInspectionAvailable
 from sqlalchemy.orm import InstrumentedAttribute, RelationshipProperty, Session, object_mapper
 from sqlalchemy.sql import operators as sql_op
-from sqlalchemy.sql.elements import BindParameter, ClauseList, False_, Grouping, True_, UnaryExpression
+from sqlalchemy.sql.elements import (
+    BindParameter,
+    ClauseList,
+    ExpressionClauseList,
+    False_,
+    Grouping,
+    Null,
+    True_,
+    UnaryExpression,
+)
 from typing_extensions import TypeVar
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
@@ -46,7 +55,6 @@ from advanced_alchemy.repository.typing import (
     _MISSING,  # pyright: ignore[reportPrivateUsage]
     MISSING,
     ModelT,
-    OrderingPair,
 )
 from advanced_alchemy.utils.deprecation import warn_deprecation
 
@@ -600,13 +608,15 @@ class InMemoryFilterEvaluator:
             return True
         if isinstance(expr, False_):
             return False
+        if isinstance(expr, Null):
+            return None
         if isinstance(expr, BindParameter):
             return expr.value  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
         if isinstance(expr, BooleanClauseList):
             if expr.operator is sql_op.or_:
                 return any(bool(cls.evaluate_sql_expression(item, clause)) for clause in expr.clauses)
             return all(bool(cls.evaluate_sql_expression(item, clause)) for clause in expr.clauses)
-        if isinstance(expr, ClauseList):
+        if isinstance(expr, (ClauseList, ExpressionClauseList)):
             return tuple(cls.evaluate_sql_expression(item, clause) for clause in expr.clauses)
         if isinstance(expr, UnaryExpression):
             inner = cls.evaluate_sql_expression(item, expr.element)
@@ -625,7 +635,8 @@ class InMemoryFilterEvaluator:
             key = getattr(expr, "key", None) or getattr(expr, "name", None)  # pyright: ignore[reportUnknownArgumentType]
             if isinstance(key, str) and hasattr(item, key):
                 return getattr(item, key)
-        return cast("Any", expr)
+        msg = f"{type(expr)} expressions are not supported in mock repositories (in-memory filtering)"  # pyright: ignore[reportUnknownArgumentType]
+        raise RepositoryError(msg)
 
     @classmethod
     def order_by(
@@ -648,25 +659,6 @@ class InMemoryFilterEvaluator:
         if nulls == "last":
             return [*present, *missing]
         return [*present, *missing] if sort_desc else [*missing, *present]
-
-    @classmethod
-    def apply_order_by_list(
-        cls,
-        result: List[ModelT],
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]],
-    ) -> List[ModelT]:
-        """Apply repository `order_by` pairs or unary expressions to `result`."""
-        if order_by is None:
-            return result
-        order_list = order_by if isinstance(order_by, list) else [order_by]
-        for order_item in reversed(order_list):
-            if isinstance(order_item, UnaryExpression):
-                field_name = cls.extract_field_name(cast("Any", order_item.element))
-                is_desc = order_item.modifier is sql_op.desc_op
-                result = cls.order_by(result, field_name, sort_desc=is_desc)
-            else:
-                result = cls.order_by(result, order_item[0], sort_desc=bool(order_item[1]))
-        return result
 
     @classmethod
     def apply_filters(
