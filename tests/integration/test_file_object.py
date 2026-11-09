@@ -70,6 +70,14 @@ def register_async_listeners() -> None:
             event.listen(Session, event_name, fn)
 
 
+@pytest.fixture(autouse=True)
+def _cleanup_file_object_listeners() -> Generator[None, None, None]:
+    """Ensure global Session file object listeners do not leak across tests."""
+    remove_listeners()
+    yield
+    remove_listeners()
+
+
 def rustfs_s3_filesystem(rustfs_service: RustfsService, **kwargs: Any) -> Any:
     s3fs = pytest.importorskip("s3fs")
     return s3fs.S3FileSystem(
