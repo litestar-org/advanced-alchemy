@@ -1,6 +1,6 @@
-======
-config
-======
+=============
+Configuration
+=============
 
 .. py:module:: advanced_alchemy.config
 

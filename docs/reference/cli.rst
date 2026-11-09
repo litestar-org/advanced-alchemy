@@ -1,8 +1,8 @@
 :tocdepth: 2
 
-===
-cli
-===
+======================
+Command-Line Interface
+======================
 
 .. py:module:: advanced_alchemy.cli
 

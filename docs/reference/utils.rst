@@ -1,6 +1,6 @@
-=====
-utils
-=====
+=========
+Utilities
+=========
 
 .. py:module:: advanced_alchemy.utils
 

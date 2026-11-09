@@ -24,6 +24,40 @@ What's Included for Starlette
      - Connects multiple sync or async databases in a single Starlette app via ``bind_key``.
      - :doc:`API </reference/extensions/starlette/index>`
 
+Installation
+------------
+
+.. tab-set::
+    :sync-group: pkg
+
+    .. tab-item:: uv
+        :sync: uv
+
+        .. code-block:: bash
+
+            uv add "advanced-alchemy[starlette,aiosqlite]"
+
+    .. tab-item:: pip
+        :sync: pip
+
+        .. code-block:: bash
+
+            pip install "advanced-alchemy[starlette,aiosqlite]"
+
+    .. tab-item:: pdm
+        :sync: pdm
+
+        .. code-block:: bash
+
+            pdm add "advanced-alchemy[starlette,aiosqlite]"
+
+    .. tab-item:: poetry
+        :sync: poetry
+
+        .. code-block:: bash
+
+            poetry add "advanced-alchemy[starlette,aiosqlite]"
+
 Setup and Route Usage
 ---------------------
 

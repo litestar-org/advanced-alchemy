@@ -115,7 +115,23 @@ Advanced Alchemy gives your tables ready-made IDs and timestamps, provides ready
     :caption: API Reference
     :hidden:
 
-    API Reference <reference/index>
+    Overview <reference/index>
+    Declarative Base <reference/base>
+    Mixins <reference/mixins/index>
+    Configuration <reference/config/index>
+    Repositories <reference/repository>
+    Memory Repositories <reference/repository_memory>
+    Services <reference/service>
+    Filters <reference/filters>
+    Bulk Operations <reference/operations>
+    Custom Types <reference/types>
+    Replica Routing <reference/routing>
+    Caching <reference/cache>
+    Framework Extensions <reference/extensions/index>
+    Alembic <reference/alembic/index>
+    CLI Commands <reference/cli>
+    Exceptions <reference/exceptions>
+    Utilities <reference/utils>
 
 .. toctree::
     :titlesonly:

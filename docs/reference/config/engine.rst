@@ -1,5 +1,5 @@
 ======
-engine
+Engine
 ======
 
 .. automodule:: advanced_alchemy.config.engine

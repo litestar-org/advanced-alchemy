@@ -24,6 +24,40 @@ What's Included for Sanic
      - Supports multiple sync or async databases side by side using named ``bind_key`` configs.
      - :doc:`API </reference/extensions/sanic/index>`
 
+Installation
+------------
+
+.. tab-set::
+    :sync-group: pkg
+
+    .. tab-item:: uv
+        :sync: uv
+
+        .. code-block:: bash
+
+            uv add "advanced-alchemy[sanic,aiosqlite]"
+
+    .. tab-item:: pip
+        :sync: pip
+
+        .. code-block:: bash
+
+            pip install "advanced-alchemy[sanic,aiosqlite]"
+
+    .. tab-item:: pdm
+        :sync: pdm
+
+        .. code-block:: bash
+
+            pdm add "advanced-alchemy[sanic,aiosqlite]"
+
+    .. tab-item:: poetry
+        :sync: poetry
+
+        .. code-block:: bash
+
+            poetry add "advanced-alchemy[sanic,aiosqlite]"
+
 Setup and Route Handlers
 ------------------------
 

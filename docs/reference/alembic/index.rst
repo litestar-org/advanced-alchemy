@@ -1,5 +1,5 @@
 =======
-alembic
+Alembic
 =======
 
 .. py:module:: advanced_alchemy.alembic

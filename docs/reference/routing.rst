@@ -1,6 +1,6 @@
-=======
-routing
-=======
+===============
+Replica Routing
+===============
 
 .. py:module:: advanced_alchemy.routing
 

@@ -1,5 +1,5 @@
 =====
-types
+Types
 =====
 
 .. automodule:: advanced_alchemy.config.types

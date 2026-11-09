@@ -1,5 +1,5 @@
 ============
-repositories
+Repositories
 ============
 
 .. py:module:: advanced_alchemy.repository

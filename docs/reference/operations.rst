@@ -1,6 +1,6 @@
-==========
-operations
-==========
+===============
+Bulk Operations
+===============
 
 .. py:module:: advanced_alchemy.operations
 

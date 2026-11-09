@@ -14,7 +14,7 @@ Advanced Alchemy handles that repetitive plumbing while keeping plain SQLAlchemy
 Installation
 ------------
 
-Install ``advanced-alchemy`` with your preferred package manager. For the quick example below, we also include ``aiosqlite`` so it runs in memory with zero database setup:
+Install ``advanced-alchemy`` with your preferred package manager and database/framework extras (such as ``asyncpg``, ``psycopg``, ``aiosqlite``, ``litestar``, or ``fastapi``):
 
 .. tab-set::
     :sync-group: pkg
@@ -24,28 +24,28 @@ Install ``advanced-alchemy`` with your preferred package manager. For the quick 
 
         .. code-block:: bash
 
-            uv add advanced-alchemy aiosqlite
+            uv add "advanced-alchemy[aiosqlite]"
 
     .. tab-item:: pip
         :sync: pip
 
         .. code-block:: bash
 
-            pip install advanced-alchemy aiosqlite
+            pip install "advanced-alchemy[aiosqlite]"
 
     .. tab-item:: pdm
         :sync: pdm
 
         .. code-block:: bash
 
-            pdm add advanced-alchemy aiosqlite
+            pdm add "advanced-alchemy[aiosqlite]"
 
     .. tab-item:: poetry
         :sync: poetry
 
         .. code-block:: bash
 
-            poetry add advanced-alchemy aiosqlite
+            poetry add "advanced-alchemy[aiosqlite]"
 
 Your First Model and Repository
 -------------------------------

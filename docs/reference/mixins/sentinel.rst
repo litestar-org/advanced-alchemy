@@ -1,5 +1,5 @@
 ========
-sentinel
+Sentinel
 ========
 
 .. automodule:: advanced_alchemy.mixins.sentinel

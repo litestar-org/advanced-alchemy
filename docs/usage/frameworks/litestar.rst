@@ -44,28 +44,28 @@ Installation
 
         .. code-block:: bash
 
-            uv add "advanced-alchemy[litestar]" aiosqlite
+            uv add "advanced-alchemy[litestar,aiosqlite]"
 
     .. tab-item:: pip
         :sync: pip
 
         .. code-block:: bash
 
-            pip install "advanced-alchemy[litestar]" aiosqlite
+            pip install "advanced-alchemy[litestar,aiosqlite]"
 
     .. tab-item:: pdm
         :sync: pdm
 
         .. code-block:: bash
 
-            pdm add "advanced-alchemy[litestar]" aiosqlite
+            pdm add "advanced-alchemy[litestar,aiosqlite]"
 
     .. tab-item:: poetry
         :sync: poetry
 
         .. code-block:: bash
 
-            poetry add "advanced-alchemy[litestar]" aiosqlite
+            poetry add "advanced-alchemy[litestar,aiosqlite]"
 
 Building an Author API Step by Step
 -----------------------------------

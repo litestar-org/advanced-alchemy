@@ -1,5 +1,5 @@
 ========
-services
+Services
 ========
 
 .. py:module:: advanced_alchemy.service

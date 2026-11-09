@@ -1,6 +1,6 @@
-====
-base
-====
+================
+Declarative Base
+================
 
 .. py:module:: advanced_alchemy.base
 

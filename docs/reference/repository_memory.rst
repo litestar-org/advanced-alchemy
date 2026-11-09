@@ -1,5 +1,5 @@
 ===================
-memory repositories
+Memory Repositories
 ===================
 
 .. py:module:: advanced_alchemy.repository.memory

@@ -1,6 +1,6 @@
-=====
-cache
-=====
+=======
+Caching
+=======
 
 .. py:module:: advanced_alchemy.cache
 

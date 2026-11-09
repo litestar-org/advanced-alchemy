@@ -1,5 +1,5 @@
 ======
-mixins
+Mixins
 ======
 
 .. py:module:: advanced_alchemy.mixins

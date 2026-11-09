@@ -1,6 +1,6 @@
-=====
-types
-=====
+============
+Custom Types
+============
 
 .. py:module:: advanced_alchemy.types
 

@@ -1,5 +1,5 @@
 ==========
-exceptions
+Exceptions
 ==========
 
 .. py:module:: advanced_alchemy.exceptions

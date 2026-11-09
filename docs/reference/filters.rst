@@ -1,5 +1,5 @@
 =======
-filters
+Filters
 =======
 
 .. py:module:: advanced_alchemy.filters

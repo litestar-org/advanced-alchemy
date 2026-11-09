@@ -38,28 +38,28 @@ Installation
 
         .. code-block:: bash
 
-            uv add advanced-alchemy fastapi aiosqlite
+            uv add "advanced-alchemy[fastapi,aiosqlite]"
 
     .. tab-item:: pip
         :sync: pip
 
         .. code-block:: bash
 
-            pip install advanced-alchemy fastapi aiosqlite
+            pip install "advanced-alchemy[fastapi,aiosqlite]"
 
     .. tab-item:: pdm
         :sync: pdm
 
         .. code-block:: bash
 
-            pdm add advanced-alchemy fastapi aiosqlite
+            pdm add "advanced-alchemy[fastapi,aiosqlite]"
 
     .. tab-item:: poetry
         :sync: poetry
 
         .. code-block:: bash
 
-            poetry add advanced-alchemy fastapi aiosqlite
+            poetry add "advanced-alchemy[fastapi,aiosqlite]"
 
 Building a FastAPI Service Step by Step
 ---------------------------------------
