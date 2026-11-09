@@ -850,5 +850,69 @@ dto_type = SQLAlchemyDTO[Annotated[TestModel, SQLAlchemyDTOConfig()]]
         b'{"id": 2, "children": [{"id": 1, "test_model_id": 2}]}',
     )
     assert isinstance(model, module.TestModel)
-    # WriteOnlyMapped relationships can only be written to, not read from
-    # So we can only verify the model was created successfully
+
+
+def test_dto_exclude_and_include_skip_untyped_descriptors(
+    create_module: Callable[[str], ModuleType],
+) -> None:
+    """Verify excluded or unincluded descriptors are skipped before descriptor reflection (#236)."""
+
+    module = create_module(
+        """
+from __future__ import annotations
+
+from typing import Optional
+from typing_extensions import Annotated
+import sqlalchemy
+from sqlalchemy import ForeignKey
+from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
+
+
+class Base(DeclarativeBase):
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+
+class RelatedItem(Base):
+    __tablename__ = "related_item_236"
+    title: Mapped[str] = mapped_column(sqlalchemy.String)
+
+
+class ItemWithUntypedDescriptors(Base):
+    __tablename__ = "item_untyped_236"
+    name: Mapped[str] = mapped_column(sqlalchemy.String)
+    related_id: Mapped[Optional[int]] = mapped_column(ForeignKey("related_item_236.id"))
+    related: Mapped[Optional[RelatedItem]] = relationship(RelatedItem)
+    untyped_proxy = association_proxy("related", "title")
+    untyped_hybrid = hybrid_property(lambda self: self.name)
+
+
+exclude_dto = SQLAlchemyDTO[
+    Annotated[
+        ItemWithUntypedDescriptors,
+        SQLAlchemyDTOConfig(exclude={"untyped_hybrid", "untyped_proxy"}),
+    ]
+]
+include_dto = SQLAlchemyDTO[
+    Annotated[
+        ItemWithUntypedDescriptors,
+        SQLAlchemyDTOConfig(include={"id", "name", "related.title"}),
+    ]
+]
+""",
+    )
+
+    exclude_field_names = {
+        f.name for f in module.exclude_dto.generate_field_definitions(module.ItemWithUntypedDescriptors)
+    }
+    assert "untyped_hybrid" not in exclude_field_names
+    assert "untyped_proxy" not in exclude_field_names
+    assert {"id", "name", "related_id", "related"}.issubset(exclude_field_names)
+
+    include_field_names = {
+        f.name for f in module.include_dto.generate_field_definitions(module.ItemWithUntypedDescriptors)
+    }
+    assert include_field_names == {"id", "name", "related"}
