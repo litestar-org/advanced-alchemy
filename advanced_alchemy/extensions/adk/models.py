@@ -13,6 +13,8 @@ from advanced_alchemy.extensions.adk._constants import DEFAULT_MAX_KEY_LENGTH, D
 from advanced_alchemy.types import DateTimeUTC, FileObject, JsonB, StoredObject
 
 if TYPE_CHECKING:
+    from google.adk.events.event import Event
+    from google.adk.sessions.session import Session
     from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
 
 DEFAULT_ARTIFACT_BACKEND_KEY = "adk-artifacts"
@@ -85,7 +87,7 @@ class ADKSessionModelMixin(UUIDv7Base):
         state: Optional[dict[str, Any]] = None,
         events: Optional[list[Any]] = None,
         is_sqlite: bool = False,
-    ) -> Any:
+    ) -> "Session":
         """Convert this storage row into a Google ADK ``Session``."""
         from google.adk.sessions.session import Session
 
@@ -156,7 +158,7 @@ class ADKEventModelMixin(UUIDv7Base):
         return mapped_column(MutableDict.as_mutable(JsonB), nullable=True)
 
     @classmethod
-    def from_event(cls, session: Any, event: Any) -> "ADKEventModelMixin":
+    def from_event(cls, session: "Session", event: "Event") -> "ADKEventModelMixin":
         """Create a storage event from a Google ADK ``Event``."""
         return cls(
             event_id=event.id,
@@ -168,7 +170,7 @@ class ADKEventModelMixin(UUIDv7Base):
             event_data=event.model_dump(exclude_none=True, mode="json"),
         )
 
-    def to_event(self) -> Any:
+    def to_event(self) -> "Event":
         """Convert this storage row into a Google ADK ``Event``."""
         from google.adk.events.event import Event
 
