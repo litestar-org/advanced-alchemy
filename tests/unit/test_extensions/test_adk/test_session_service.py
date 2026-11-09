@@ -6,7 +6,14 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 
-from advanced_alchemy.extensions.adk.v1 import ADKAppState, ADKEvent, ADKSession, ADKUserState, metadata
+from tests.unit.test_extensions.test_adk.fixtures import (
+    SESSION_MODEL_CONFIG,
+    SampleADKAppState,
+    SampleADKEvent,
+    SampleADKSession,
+    SampleADKUserState,
+    metadata,
+)
 
 
 @pytest.fixture
@@ -43,7 +50,7 @@ async def test_session_service_create_get_list_and_delete(session_factory: async
     from advanced_alchemy.extensions.adk import ADKAsyncSessionService
 
     async with session_factory() as db_session:
-        service = ADKAsyncSessionService(db_session)
+        service = ADKAsyncSessionService(db_session, model_config=SESSION_MODEL_CONFIG)
 
         assert isinstance(service, BaseSessionService)
 
@@ -66,9 +73,9 @@ async def test_session_service_create_get_list_and_delete(session_factory: async
             "session_counter": 3,
         }
 
-        stored_session = await db_session.scalar(select(ADKSession))
-        stored_app_state = await db_session.scalar(select(ADKAppState))
-        stored_user_state = await db_session.scalar(select(ADKUserState))
+        stored_session = await db_session.scalar(select(SampleADKSession))
+        stored_app_state = await db_session.scalar(select(SampleADKAppState))
+        stored_user_state = await db_session.scalar(select(SampleADKUserState))
         assert stored_session is not None
         assert stored_session.state == {"session_counter": 3}
         assert stored_app_state is not None
@@ -106,7 +113,7 @@ async def test_session_service_append_event_persists_state_and_filters_temp(
     from advanced_alchemy.extensions.adk import ADKAsyncSessionService
 
     async with session_factory() as db_session:
-        service = ADKAsyncSessionService(db_session)
+        service = ADKAsyncSessionService(db_session, model_config=SESSION_MODEL_CONFIG)
         session = await service.create_session(app_name="app", user_id="user", session_id="session")
         event = Event(
             id="event-1",
@@ -132,10 +139,10 @@ async def test_session_service_append_event_persists_state_and_filters_temp(
         assert session.state["user:name"] == "Grace"
         assert session.state["turn"] == 1
 
-        stored_event = await db_session.scalar(select(ADKEvent))
-        stored_session = await db_session.scalar(select(ADKSession))
-        stored_app_state = await db_session.scalar(select(ADKAppState))
-        stored_user_state = await db_session.scalar(select(ADKUserState))
+        stored_event = await db_session.scalar(select(SampleADKEvent))
+        stored_session = await db_session.scalar(select(SampleADKSession))
+        stored_app_state = await db_session.scalar(select(SampleADKAppState))
+        stored_user_state = await db_session.scalar(select(SampleADKUserState))
         assert stored_event is not None
         assert stored_event.event_data["actions"]["state_delta"] == {
             "app:theme": "light",
@@ -159,7 +166,7 @@ async def test_session_service_rejects_stale_session_appends(
     from advanced_alchemy.extensions.adk import ADKAsyncSessionService
 
     async with session_factory() as db_session:
-        service = ADKAsyncSessionService(db_session)
+        service = ADKAsyncSessionService(db_session, model_config=SESSION_MODEL_CONFIG)
         first = await service.create_session(app_name="app", user_id="user", session_id="session")
         second = await service.get_session(app_name="app", user_id="user", session_id="session")
         assert second is not None
@@ -198,7 +205,7 @@ async def test_session_service_get_session_applies_event_config(
     from advanced_alchemy.extensions.adk import ADKAsyncSessionService
 
     async with session_factory() as db_session:
-        service = ADKAsyncSessionService(db_session)
+        service = ADKAsyncSessionService(db_session, model_config=SESSION_MODEL_CONFIG)
         session = await service.create_session(app_name="app", user_id="user", session_id="session")
 
         for index in range(3):
@@ -230,7 +237,7 @@ async def test_session_service_get_session_rejects_identity_mismatch(
     from advanced_alchemy.extensions.adk import ADKAsyncSessionService
 
     async with session_factory() as db_session:
-        service = ADKAsyncSessionService(db_session)
+        service = ADKAsyncSessionService(db_session, model_config=SESSION_MODEL_CONFIG)
         await service.create_session(app_name="app", user_id="user", session_id="session")
 
         with pytest.raises(PermissionError, match="does not belong"):
@@ -244,7 +251,7 @@ def test_sync_session_service_create_get_and_delete(tmp_path: Path) -> None:
     metadata.create_all(engine)
 
     with Session(engine, expire_on_commit=False) as db_session:
-        service = ADKSyncSessionService(db_session)
+        service = ADKSyncSessionService(db_session, model_config=SESSION_MODEL_CONFIG)
 
         created = service.create_session(
             app_name="app",

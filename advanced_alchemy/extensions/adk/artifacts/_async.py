@@ -7,25 +7,30 @@ from google.adk.artifacts import artifact_util
 from google.adk.artifacts.base_artifact_service import ArtifactVersion, BaseArtifactService, ensure_part
 from google.adk.errors.input_validation_error import InputValidationError
 from google.genai import types
-from sqlalchemy import Select, distinct, select
+from sqlalchemy import Select, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from advanced_alchemy.extensions.adk.artifacts.models import (
+from advanced_alchemy.extensions.adk.models import (
     DEFAULT_ARTIFACT_BACKEND_KEY,
     USER_SCOPE_SESSION_ID,
-    ADKArtifact,
+    ADKArtifactModelMixin,
 )
-from advanced_alchemy.extensions.adk.artifacts.repositories import ADKArtifactRepository
 from advanced_alchemy.types import FileObject
 
 
 class ADKAsyncArtifactService(BaseArtifactService):
     """Async SQLAlchemy-backed implementation of Google ADK's artifact contract."""
 
-    def __init__(self, session: AsyncSession, *, backend_key: str = DEFAULT_ARTIFACT_BACKEND_KEY) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        artifact_model: type[ADKArtifactModelMixin],
+        backend_key: str = DEFAULT_ARTIFACT_BACKEND_KEY,
+    ) -> None:
         self.session = session
+        self.artifact_model = artifact_model
         self.backend_key = backend_key
-        self.repository = ADKArtifactRepository(session=session)
 
     async def save_artifact(
         self,
@@ -40,7 +45,7 @@ class ADKAsyncArtifactService(BaseArtifactService):
         """Save an ADK artifact and return its version number."""
         artifact_part = ensure_part(artifact)
         storage_session_id = self._storage_session_id(filename=filename, session_id=session_id)
-        current_version = await self.repository.get_max_version(
+        current_version = await self._get_max_version(
             app_name=app_name,
             user_id=user_id,
             session_id=storage_session_id,
@@ -65,7 +70,7 @@ class ADKAsyncArtifactService(BaseArtifactService):
             else None
         )
         self.session.add(
-            ADKArtifact(
+            self.artifact_model(
                 app_name=app_name,
                 user_id=user_id,
                 session_id=storage_session_id,
@@ -114,11 +119,11 @@ class ADKAsyncArtifactService(BaseArtifactService):
         if session_id is not None:
             storage_session_ids.append(session_id)
         statement = (
-            select(distinct(ADKArtifact.filename))
-            .where(ADKArtifact.app_name == app_name)
-            .where(ADKArtifact.user_id == user_id)
-            .where(ADKArtifact.session_id.in_(storage_session_ids))
-            .order_by(ADKArtifact.filename)
+            select(distinct(self.artifact_model.filename))
+            .where(self.artifact_model.app_name == app_name)
+            .where(self.artifact_model.user_id == user_id)
+            .where(self.artifact_model.session_id.in_(storage_session_ids))
+            .order_by(self.artifact_model.filename)
         )
         return list((await self.session.scalars(statement)).all())
 
@@ -155,12 +160,12 @@ class ADKAsyncArtifactService(BaseArtifactService):
         """List available versions for an artifact."""
         storage_session_id = self._storage_session_id(filename=filename, session_id=session_id)
         statement = (
-            select(ADKArtifact.version)
-            .where(ADKArtifact.app_name == app_name)
-            .where(ADKArtifact.user_id == user_id)
-            .where(ADKArtifact.session_id == storage_session_id)
-            .where(ADKArtifact.filename == filename)
-            .order_by(ADKArtifact.version)
+            select(self.artifact_model.version)
+            .where(self.artifact_model.app_name == app_name)
+            .where(self.artifact_model.user_id == user_id)
+            .where(self.artifact_model.session_id == storage_session_id)
+            .where(self.artifact_model.filename == filename)
+            .order_by(self.artifact_model.version)
         )
         return list((await self.session.scalars(statement)).all())
 
@@ -228,6 +233,16 @@ class ADKAsyncArtifactService(BaseArtifactService):
         expires_seconds = int(expires_in.total_seconds()) if isinstance(expires_in, datetime.timedelta) else expires_in
         return await artifact.blob.sign_async(expires_in=expires_seconds)
 
+    async def _get_max_version(self, *, app_name: str, user_id: str, session_id: str, filename: str) -> Optional[int]:
+        statement = (
+            select(func.max(self.artifact_model.version))
+            .where(self.artifact_model.app_name == app_name)
+            .where(self.artifact_model.user_id == user_id)
+            .where(self.artifact_model.session_id == session_id)
+            .where(self.artifact_model.filename == filename)
+        )
+        return await self.session.scalar(statement)
+
     async def _get_artifact(
         self,
         *,
@@ -236,10 +251,10 @@ class ADKAsyncArtifactService(BaseArtifactService):
         filename: str,
         session_id: Optional[str],
         version: Optional[int],
-    ) -> Optional[ADKArtifact]:
+    ) -> Optional[ADKArtifactModelMixin]:
         storage_session_id = self._storage_session_id(filename=filename, session_id=session_id)
         if version is None:
-            version = await self.repository.get_max_version(
+            version = await self._get_max_version(
                 app_name=app_name,
                 user_id=user_id,
                 session_id=storage_session_id,
@@ -254,12 +269,12 @@ class ADKAsyncArtifactService(BaseArtifactService):
                 session_id=storage_session_id,
                 filename=filename,
             )
-            .where(ADKArtifact.version == version)
+            .where(self.artifact_model.version == version)
             .limit(1)
         )
         return await self.session.scalar(statement)
 
-    async def _to_part(self, artifact: ADKArtifact) -> Optional[types.Part]:
+    async def _to_part(self, artifact: ADKArtifactModelMixin) -> Optional[types.Part]:
         if artifact.artifact_kind == "file_data":
             return await self._to_file_data_part(artifact)
 
@@ -272,7 +287,7 @@ class ADKAsyncArtifactService(BaseArtifactService):
             return types.Part(text=content.decode("utf-8"))
         return types.Part(inline_data=types.Blob(data=content, mime_type=artifact.mime_type))
 
-    async def _to_file_data_part(self, artifact: ADKArtifact) -> Optional[types.Part]:
+    async def _to_file_data_part(self, artifact: ADKArtifactModelMixin) -> Optional[types.Part]:
         part = types.Part.model_validate(artifact.artifact_data)
         if not artifact_util.is_artifact_ref(part):
             return part
@@ -291,7 +306,7 @@ class ADKAsyncArtifactService(BaseArtifactService):
             version=parsed_uri.version,
         )
 
-    def _to_artifact_version(self, artifact: ADKArtifact) -> ArtifactVersion:
+    def _to_artifact_version(self, artifact: ADKArtifactModelMixin) -> ArtifactVersion:
         return ArtifactVersion(
             version=artifact.version,
             canonical_uri=self._canonical_uri(artifact),
@@ -307,7 +322,7 @@ class ADKAsyncArtifactService(BaseArtifactService):
         return value.timestamp()
 
     @staticmethod
-    def _canonical_uri(artifact: ADKArtifact) -> str:
+    def _canonical_uri(artifact: ADKArtifactModelMixin) -> str:
         if artifact.blob is not None:
             return f"{artifact.blob.protocol}://{artifact.blob.path}"
         session_id = None if artifact.session_id == USER_SCOPE_SESSION_ID else artifact.session_id
@@ -358,17 +373,21 @@ class ADKAsyncArtifactService(BaseArtifactService):
     def _blob_name(*, app_name: str, user_id: str, session_id: str, filename: str, version: int) -> str:
         return f"{app_name}/{user_id}/{session_id}/{filename}/{version}"
 
-    @staticmethod
     def _artifact_statement(
-        *, app_name: str, user_id: str, session_id: str, filename: str
-    ) -> Select[tuple[ADKArtifact]]:
+        self,
+        *,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        filename: str,
+    ) -> Select[tuple[ADKArtifactModelMixin]]:
         return (
-            select(ADKArtifact)
-            .where(ADKArtifact.app_name == app_name)
-            .where(ADKArtifact.user_id == user_id)
-            .where(ADKArtifact.session_id == session_id)
-            .where(ADKArtifact.filename == filename)
-            .order_by(ADKArtifact.version)
+            select(self.artifact_model)
+            .where(self.artifact_model.app_name == app_name)
+            .where(self.artifact_model.user_id == user_id)
+            .where(self.artifact_model.session_id == session_id)
+            .where(self.artifact_model.filename == filename)
+            .order_by(self.artifact_model.version)
         )
 
 
