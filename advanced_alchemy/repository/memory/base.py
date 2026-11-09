@@ -24,7 +24,7 @@ from sqlalchemy.sql.elements import (
 )
 from typing_extensions import TypeVar
 
-from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
+from advanced_alchemy.exceptions import AdvancedAlchemyError, IntegrityError, RepositoryError
 from advanced_alchemy.filters import (
     VALID_OPERATORS,
     BeforeAfter,
@@ -46,7 +46,6 @@ from advanced_alchemy.filters import (
     StatementFilter,
 )
 from advanced_alchemy.repository._util import (
-    column_has_defaults,
     compare_values,
     get_primary_key_info,
     was_attribute_set,
@@ -194,7 +193,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
     id_attribute: str = "id"
 
     @staticmethod
-    def changed_attrs(data: ModelT) -> "Iterable[str]":  # pragma: no cover
+    def changed_attrs(data: ModelT) -> "Iterable[str]":
         res: List[str] = []
         try:
             mapper = inspect(data)
@@ -205,11 +204,9 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
             msg = f"Cannot inspect {data.__class__} model"
             raise AdvancedAlchemyError(msg)
         for column in mapper.mapper.columns:
-            field_name = column.key
+            field_name = mapper.mapper.get_property_by_column(column).key
             new_field_value = getattr(data, field_name, MISSING)
             if new_field_value is MISSING:
-                continue
-            if new_field_value is None and column_has_defaults(column):
                 continue
             if was_attribute_set(data, mapper, field_name):
                 res.append(field_name)
@@ -250,9 +247,16 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
 
     def update(self, obj: ModelT) -> ModelT:
         existing = self.get(self.key(obj))
+        mapper = object_mapper(existing)
         for attr in self.changed_attrs(obj):
             new_value = getattr(obj, attr, MISSING)
             existing_value = getattr(existing, attr, MISSING)
+            if new_value is None:
+                prop: Any = mapper.attrs.get(attr)
+                prop_columns: Iterable[Column[Any]] = getattr(prop, "columns", ())
+                if any(not col.nullable and not col.primary_key for col in prop_columns):
+                    msg = f"Column '{attr}' on {existing.__class__.__name__} cannot be None"
+                    raise IntegrityError(msg)
             if new_value is not MISSING and not compare_values(existing_value, new_value):
                 setattr(existing, attr, new_value)
         self._update_fks(existing)
@@ -307,15 +311,17 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                         setattr(data, local.key, remote_value)
                     self._update_relationship(value, data)
 
-    def _set_defaults(self, data: ModelT) -> None:  # pragma: no cover
+    def _set_defaults(self, data: ModelT) -> None:
         """Set fields with dynamic defaults.
 
         Args:
             data: Instance to be updated
         """
-        for elem in object_mapper(data).c:
+        mapper = object_mapper(data)
+        for elem in mapper.c:
+            attr_name = mapper.get_property_by_column(elem).key
             default = getattr(elem, "default", MISSING)
-            value = getattr(data, elem.key, MISSING)
+            value = getattr(data, attr_name, MISSING)
             if value is None and not isinstance(default, _MISSING) and default is not None:
                 if default.is_scalar:
                     default_value: Any = default.arg
@@ -330,7 +336,7 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                         continue
                 else:
                     continue
-                setattr(data, elem.key, default_value)
+                setattr(data, attr_name, default_value)
 
 
 class SQLAlchemyMultiStore(MultiStore[ModelT]):
@@ -449,13 +455,13 @@ class InMemoryFilterEvaluator:
             attr: Optional[datetime.datetime] = getattr(item, field_str, None)
             if attr is None:
                 continue
-            if before is not None and not (attr < before):
+            if before is not None and attr >= before:
                 continue
-            if after is not None and not (attr > after):
+            if after is not None and attr <= after:
                 continue
-            if on_or_before is not None and not (attr <= on_or_before):
+            if on_or_before is not None and attr > on_or_before:
                 continue
-            if on_or_after is not None and not (attr >= on_or_after):
+            if on_or_after is not None and attr < on_or_after:
                 continue
             result_.append(item)
         return result_

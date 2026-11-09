@@ -65,7 +65,6 @@ from advanced_alchemy.repository._util import (
     FilterableRepositoryProtocol,
     LoadSpec,
     _build_cache_key,  # pyright: ignore
-    column_has_defaults,
     compare_values,
     get_abstract_loader_options,
     get_instrumented_attr,
@@ -2119,8 +2118,6 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                                 continue
                             new_field_value = getattr(data, field_name, MISSING)
                             if new_field_value is not MISSING:
-                                if new_field_value is None and column_has_defaults(column):
-                                    continue
                                 if not was_attribute_set(data, mapper, field_name):
                                     continue
                                 existing_field_value = getattr(existing_instance, field_name, MISSING)

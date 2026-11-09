@@ -15,10 +15,11 @@ import pytest
 from msgspec import Struct
 from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
-from sqlalchemy import ForeignKey, Integer, String, column, or_
+from sqlalchemy import ForeignKey, Integer, String, column, create_engine, false, func, or_, select, true
 from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute, Mapped, Session, mapped_column, relationship
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.sql.selectable import ForUpdateArg
 from sqlalchemy.types import TypeEngine
 
@@ -61,6 +62,7 @@ from advanced_alchemy.repository._util import (
     _normalize_cache_key_value,
     column_has_defaults,
     model_from_dict,
+    partial_model_from_dict,
 )
 from advanced_alchemy.repository.memory import (
     SQLAlchemyAsyncMockRepository,
@@ -3298,3 +3300,325 @@ def test_sync_mock_repository_and_service_autobind_and_filter_parity() -> None:
 
     filtered = service.get_many(ComparisonFilter(field_name="name", operator="eq", value="Alpha"))
     assert [item.id for item in filtered] == [1]
+
+
+class ContractSQLBase(DeclarativeBase):
+    """Isolated declarative base for SQLite repository contract unit tests."""
+
+
+class RenamedColumnModel(ContractSQLBase):
+    """Model with renamed columns and nullable/non-nullable defaults."""
+
+    __tablename__ = "unit_contract_renamed"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column("title_col", default="untitled")
+    subtitle: Mapped[Union[str, None]] = mapped_column("subtitle_col", default="default-sub", nullable=True)
+    status: Mapped[str] = mapped_column(default="draft", nullable=False)
+
+
+class UniquifyParentModel(ContractSQLBase):
+    """Parent model for testing per-call uniquify overrides."""
+
+    __tablename__ = "unit_contract_uniquify_parent"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[Union[str, None]]
+    children: Mapped[list[UniquifyChildModel]] = relationship()
+
+
+class UniquifyChildModel(ContractSQLBase):
+    """Child model for testing per-call uniquify overrides."""
+
+    __tablename__ = "unit_contract_uniquify_child"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    parent_id: Mapped[int] = mapped_column(ForeignKey("unit_contract_uniquify_parent.id"))
+
+
+def test_update_renamed_columns_and_explicit_none_semantics() -> None:
+    """SQL and mock repositories update renamed columns, clear nullable defaults on None, and reject NOT NULL None."""
+
+    class RenamedSQLRepo(SQLAlchemySyncRepository[RenamedColumnModel]):
+        pass
+
+    class RenamedMockRepo(SQLAlchemySyncMockRepository[RenamedColumnModel]):
+        pass
+
+    class RenamedService(SQLAlchemySyncRepositoryService[RenamedColumnModel]):
+        pass
+
+    engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+    ContractSQLBase.metadata.create_all(engine)
+    try:
+        with Session(engine, expire_on_commit=False) as session:
+            service = RenamedService(session=session)
+            repo = RenamedSQLRepo(session=session)
+
+            session.add(RenamedColumnModel(id=1, title="old", subtitle="custom-sub", status="published"))
+            session.commit()
+
+            service.update({"title": "new"}, item_id=1, auto_commit=True)
+            session.expire_all()
+            fetched = session.get(RenamedColumnModel, 1)
+            assert fetched is not None
+            assert fetched.title == "new"
+            assert fetched.subtitle == "custom-sub"
+            assert fetched.status == "published"
+
+            service.update({"subtitle": None}, item_id=1, auto_commit=True)
+            session.expire_all()
+            fetched = session.get(RenamedColumnModel, 1)
+            assert fetched is not None
+            assert fetched.subtitle is None
+
+            repo.update(RenamedColumnModel(id=1, subtitle="restored"), auto_commit=True)
+            repo.update(RenamedColumnModel(id=1, subtitle=None), auto_commit=True)
+            session.expire_all()
+            fetched = session.get(RenamedColumnModel, 1)
+            assert fetched is not None
+            assert fetched.subtitle is None
+
+            with pytest.raises(IntegrityError):
+                service.update({"status": None}, item_id=1, auto_commit=True)
+            session.rollback()
+
+            with pytest.raises(IntegrityError):
+                repo.update(RenamedColumnModel(id=1, status=None), auto_commit=True)
+            session.rollback()
+    finally:
+        engine.dispose()
+
+    RenamedMockRepo.__database_clear__()
+    try:
+        mock_repo = RenamedMockRepo(session=MagicMock(spec=Session, bind=MagicMock()))
+        added = mock_repo.add(RenamedColumnModel(id=1))
+        assert added.title == "untitled"
+        assert added.subtitle == "default-sub"
+        assert added.status == "draft"
+
+        updated_mock = mock_repo.update(partial_model_from_dict(RenamedColumnModel, id=1, title="mock-new"))
+        assert updated_mock.title == "mock-new"
+        assert updated_mock.subtitle == "default-sub"
+
+        cleared_mock = mock_repo.update(partial_model_from_dict(RenamedColumnModel, id=1, subtitle=None))
+        assert cleared_mock.subtitle is None
+
+        with pytest.raises(IntegrityError):
+            mock_repo.update(partial_model_from_dict(RenamedColumnModel, id=1, status=None))
+    finally:
+        RenamedMockRepo.__database_clear__()
+
+
+def test_explicit_uniquify_false_overrides_repository_default() -> None:
+    """Explicit uniquify=False overrides repository-level uniquify=True."""
+
+    class ParentRepo(SQLAlchemySyncRepository[UniquifyParentModel]):
+        pass
+
+    engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+    ContractSQLBase.metadata.create_all(engine)
+    try:
+        with Session(engine, expire_on_commit=False) as session:
+            session.add(
+                UniquifyParentModel(
+                    id=1,
+                    name="parent",
+                    children=[UniquifyChildModel(id=1), UniquifyChildModel(id=2)],
+                )
+            )
+            session.commit()
+            statement = select(UniquifyParentModel).join(UniquifyParentModel.children)
+            repository = ParentRepo(session=session, statement=statement, uniquify=True)
+
+            assert len(repository.get_many()) == 1
+            assert len(repository.get_many(uniquify=False)) == 2
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("operator", "field_name", "target", "expected_ids"),
+    [
+        ("ne", "name", "Alpha", [2, 3]),
+        ("gt", "score", 10, [2, 3]),
+        ("ge", "score", 20, [2, 3]),
+        ("lt", "score", 30, [1, 2]),
+        ("le", "score", 20, [1, 2]),
+        ("in", "slug", ["alpha", "gamma"], [1, 3]),
+        ("notin", "slug", ["alpha"], [2, 3]),
+        ("between", "score", (15, 25), [2]),
+        ("like", "name", "Al%a", [1]),
+        ("ilike", "name", "ga_ma", [3]),
+        ("startswith", "name", "Al", [1]),
+        ("istartswith", "name", "be", [2]),
+        ("endswith", "name", "ta", [2]),
+        ("iendswith", "name", "MA", [3]),
+    ],
+)
+def test_mock_repository_comparison_filter_operators(
+    operator: str,
+    field_name: str,
+    target: Any,
+    expected_ids: list[int],
+) -> None:
+    """InMemoryFilterEvaluator supports all ComparisonFilter operators."""
+
+    class ItemMockRepo(SQLAlchemySyncMockRepository[InMemoryFilterTestModel]):
+        pass
+
+    base_time = datetime.datetime(2026, 1, 10, 12, 0, tzinfo=datetime.timezone.utc)
+    ItemMockRepo.__database_clear__()
+    try:
+        repo = ItemMockRepo(session=MagicMock(spec=Session, bind=MagicMock()))
+        repo.add_many(
+            [
+                InMemoryFilterTestModel(
+                    id=1, name="Alpha", slug="alpha", category="tech", score=10, created_at=base_time
+                ),
+                InMemoryFilterTestModel(id=2, name="Beta", slug="beta", category=None, score=20, created_at=base_time),
+                InMemoryFilterTestModel(
+                    id=3, name="Gamma", slug="gamma", category="art", score=30, created_at=base_time
+                ),
+            ]
+        )
+        matched = repo.get_many(ComparisonFilter(field_name=field_name, operator=operator, value=target))  # type: ignore[arg-type]
+        assert sorted(item.id for item in matched) == expected_ids
+    finally:
+        ItemMockRepo.__database_clear__()
+
+
+def test_mock_repository_sql_ast_and_edge_expressions() -> None:
+    """InMemoryFilterEvaluator evaluates SQLAlchemy AST expressions and rejects unsupported functions."""
+
+    class ItemMockRepo(SQLAlchemySyncMockRepository[InMemoryFilterTestModel]):
+        pass
+
+    base_time = datetime.datetime(2026, 1, 10, 12, 0, tzinfo=datetime.timezone.utc)
+    ItemMockRepo.__database_clear__()
+    try:
+        repo = ItemMockRepo(session=MagicMock(spec=Session, bind=MagicMock()))
+        repo.add_many(
+            [
+                InMemoryFilterTestModel(
+                    id=1, name="Alpha", slug="alpha", category="tech", score=10, created_at=base_time
+                ),
+                InMemoryFilterTestModel(
+                    id=2,
+                    name="Beta",
+                    slug="beta",
+                    category=None,
+                    score=20,
+                    created_at=base_time + datetime.timedelta(days=2),
+                ),
+                InMemoryFilterTestModel(
+                    id=3,
+                    name="Gamma",
+                    slug="gamma",
+                    category="science",
+                    score=30,
+                    created_at=base_time + datetime.timedelta(days=4),
+                ),
+            ]
+        )
+
+        assert sorted(i.id for i in repo.get_many(InMemoryFilterTestModel.id.between(1, 2))) == [1, 2]
+        assert [i.id for i in repo.get_many(InMemoryFilterTestModel.category.is_(None))] == [2]
+        assert sorted(i.id for i in repo.get_many(InMemoryFilterTestModel.category.is_not(None))) == [1, 3]
+        assert sorted(i.id for i in repo.get_many(InMemoryFilterTestModel.id.in_([1, 3]))) == [1, 3]
+        assert [i.id for i in repo.get_many(InMemoryFilterTestModel.id.notin_([1, 3]))] == [2]
+        assert [i.id for i in repo.get_many(InMemoryFilterTestModel.name.like("Al%"))] == [1]
+        assert [i.id for i in repo.get_many(InMemoryFilterTestModel.name.ilike("ga%"))] == [3]
+        assert sorted(i.id for i in repo.get_many(InMemoryFilterTestModel.name.not_like("Al%"))) == [2, 3]
+        assert sorted(i.id for i in repo.get_many(InMemoryFilterTestModel.name.not_ilike("ga%"))) == [1, 2]
+        assert [i.id for i in repo.get_many(InMemoryFilterTestModel.name.startswith("Be"))] == [2]
+        assert [i.id for i in repo.get_many(InMemoryFilterTestModel.name.endswith("ma"))] == [3]
+        assert [i.id for i in repo.get_many(InMemoryFilterTestModel.name.contains("et"))] == [2]
+        assert sorted(i.id for i in repo.get_many(~(InMemoryFilterTestModel.id == 1))) == [2, 3]
+        assert len(repo.get_many(true())) == 3
+        assert repo.get_many(false()) == []
+        assert [
+            i.id
+            for i in repo.get_many(
+                ComparisonFilter(field_name="created_at", operator="dateeq", value=datetime.date(2026, 1, 12))
+            )
+        ] == [2]
+        assert [
+            i.id
+            for i in repo.get_many(
+                OnBeforeAfter(
+                    field_name="created_at",
+                    on_or_after=base_time + datetime.timedelta(days=2),
+                    on_or_before=base_time + datetime.timedelta(days=2),
+                )
+            )
+        ] == [2]
+        assert ExistsFilter(values=[]) and repo.get_many(ExistsFilter(values=[])) == []
+        assert len(repo.get_many(NotExistsFilter(values=[]))) == 3
+
+        with pytest.raises(ValueError, match="Invalid operator"):
+            repo.get_many(ComparisonFilter(field_name="score", operator="invalid_op", value=10))  # type: ignore[arg-type]
+
+        with pytest.raises(RepositoryError, match="not supported in mock repositories"):
+            repo.get_many(func.lower(InMemoryFilterTestModel.name) == "alpha")
+    finally:
+        ItemMockRepo.__database_clear__()
+
+
+async def test_async_mock_and_sync_cascade_delete_operations() -> None:
+    """Async mock repository write/delete helpers and sync cascade ORM deletes execute cleanly."""
+
+    class ItemAsyncMockRepo(SQLAlchemyAsyncMockRepository[InMemoryFilterTestModel]):
+        pass
+
+    class CascadeSyncRepo(SQLAlchemySyncRepository[CascadeParentModel]):
+        pass
+
+    ItemAsyncMockRepo.__database_clear__()
+    try:
+        repo = ItemAsyncMockRepo(session=AsyncMock(spec=AsyncSession, bind=MagicMock()))
+        created, was_created = await repo.get_or_upsert(
+            id=1, name="Alpha", slug="alpha", score=10, match_fields=["slug"]
+        )
+        assert was_created is True
+        assert created.id == 1
+
+        updated, was_updated = await repo.get_and_update(
+            id=1, name="Alpha2", slug="alpha", score=15, match_fields=["slug"]
+        )
+        assert was_updated is True
+        assert updated.name == "Alpha2"
+
+        await repo.add_many(
+            [
+                InMemoryFilterTestModel(id=2, name="Beta", slug="beta", score=20),
+                InMemoryFilterTestModel(id=3, name="Gamma", slug="gamma", score=30),
+                InMemoryFilterTestModel(id=4, name="Delta", slug="delta", score=40),
+            ]
+        )
+        assert await repo.count(LimitOffset(limit=1, offset=0)) == 4
+        one = await repo.get_one(InMemoryFilterTestModel.slug == "beta")
+        assert one.id == 2
+
+        deleted_one = await repo.delete(1)
+        assert deleted_one.id == 1
+
+        deleted_many = await repo.delete_many([2])
+        assert [d.id for d in deleted_many] == [2]
+
+        deleted_where = await repo.delete_where(InMemoryFilterTestModel.score >= 30)
+        assert sorted(d.id for d in deleted_where) == [3, 4]
+        assert await repo.count() == 0
+    finally:
+        ItemAsyncMockRepo.__database_clear__()
+
+    sync_session = MagicMock(spec=Session, bind=MagicMock())
+    sync_repo = CascadeSyncRepo(session=sync_session)
+    assert sync_repo._requires_orm_delete() is True
+    p1 = CascadeParentModel(id=1, name="P1", slug="p1", children=[])
+    p2 = CascadeParentModel(id=2, name="P2", slug="p2", children=[])
+    sync_repo._fetch_many_by_ids = MagicMock(return_value=[p1, p2])  # type: ignore[method-assign]
+    sync_repo.get_many = MagicMock(return_value=[p1, p2])  # type: ignore[method-assign]
+    assert sync_repo.delete_many([1, 2]) == [p1, p2]
+    assert sync_repo.delete_where() == [p1, p2]
+    assert sync_session.delete.call_count == 4

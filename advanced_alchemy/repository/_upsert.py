@@ -65,6 +65,13 @@ def was_attribute_set(instance: Any, mapper: Any, attr_name: str) -> bool:
         if attr_state is None:
             return False
 
+        pydantic_fields_set = getattr(instance, "__pydantic_fields_set__", None)
+        if isinstance(pydantic_fields_set, set):
+            if getattr(mapper, "transient", True):
+                return attr_name in pydantic_fields_set
+            if attr_name in pydantic_fields_set:
+                return True
+
         history = attr_state.history
         if history.has_changes():
             return True

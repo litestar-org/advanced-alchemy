@@ -8,16 +8,18 @@ input normalization before repository delegation.
 from __future__ import annotations
 
 import datetime
-from typing import Any, Optional, cast
+from typing import Any, Generic, Optional, TypeVar, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy import String
+from sqlalchemy import String, create_engine
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Mapped, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, Session, mapped_column
+from sqlalchemy.pool import StaticPool
 
 from advanced_alchemy.base import UUIDAuditBase
+from advanced_alchemy.exceptions import IntegrityError
 from advanced_alchemy.repository import (
     SQLAlchemyAsyncRepository,
     SQLAlchemyAsyncSlugRepository,
@@ -25,6 +27,7 @@ from advanced_alchemy.repository import (
     SQLAlchemySyncSlugRepository,
 )
 from advanced_alchemy.repository._util import get_primary_key_info
+from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository
 from advanced_alchemy.repository.typing import PrimaryKeyType
 from advanced_alchemy.service import SchemaDumpConfig, SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
 from advanced_alchemy.utils.serialization import ATTRS_INSTALLED, MSGSPEC_INSTALLED, PYDANTIC_INSTALLED, ModelDictT
@@ -634,3 +637,86 @@ def test_service_generic_subclass_auto_binds_repository_type() -> None:
     assert direct_async_service.repository.model_type is MockModel
     assert isinstance(direct_sync_service.repository, SQLAlchemySyncRepository)
     assert direct_sync_service.repository.model_type is MockModel
+
+    class MockAsyncOverrideRepo(SQLAlchemyAsyncMockRepository[MockModel]):
+        pass
+
+    class MockSyncOverrideRepo(SQLAlchemySyncMockRepository[MockModel]):
+        pass
+
+    mock_async_svc = AutoAsyncService(session=async_session, repository_type=MockAsyncOverrideRepo)
+    mock_sync_svc = AutoSyncService(session=sync_session, repository_type=MockSyncOverrideRepo)
+    assert isinstance(mock_async_svc.repository, MockAsyncOverrideRepo)
+    assert isinstance(mock_sync_svc.repository, MockSyncOverrideRepo)
+
+
+def test_inherited_repository_type_survives_extra_generic_parameters() -> None:
+    """Service subclasses with custom generic parameters preserve inherited repository_type."""
+    model_var = TypeVar("model_var")
+    schema_var = TypeVar("schema_var")
+
+    class BaseService(SQLAlchemySyncRepositoryService[model_var], Generic[model_var, schema_var]):  # type: ignore[type-var]
+        pass
+
+    class ParentService(BaseService[MockModel, dict[str, Any]]):
+        repository_type = MockSyncRepository
+
+    class LeafService(ParentService):
+        pass
+
+    assert LeafService.repository_type is MockSyncRepository
+
+
+class DataclassMappedBase(MappedAsDataclass, DeclarativeBase):
+    """Base for dataclass-mapped service update tests."""
+
+
+class DataclassMappedArticle(DataclassMappedBase):
+    """Dataclass-mapped model with required, nullable, and default columns."""
+
+    __tablename__ = "service_dataclass_article"
+
+    id: Mapped[int] = mapped_column(primary_key=True, init=False)
+    title: Mapped[str]
+    status: Mapped[str] = mapped_column(default="draft")
+    subtitle: Mapped[Optional[str]] = mapped_column(default="default-sub", nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(default=None, nullable=True)
+
+
+class DataclassMappedArticleService(SQLAlchemySyncRepositoryService[DataclassMappedArticle]):
+    """Auto-bound sync service for DataclassMappedArticle."""
+
+
+def test_dataclass_mapped_model_partial_update_and_explicit_none() -> None:
+    """Partial updates on MappedAsDataclass omit required/default fields and honor explicit None."""
+    engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+    DataclassMappedBase.metadata.create_all(engine)
+    try:
+        with Session(engine, expire_on_commit=False) as session:
+            service = DataclassMappedArticleService(session=session)
+            article = DataclassMappedArticle(
+                title="Initial",
+                status="published",
+                subtitle="custom-sub",
+                notes="keep-me",
+            )
+            session.add(article)
+            session.commit()
+            article_id = article.id
+
+            updated = service.update({"title": "Renamed"}, item_id=article_id, auto_commit=True)
+            assert updated.title == "Renamed"
+            assert updated.status == "published"
+            assert updated.subtitle == "custom-sub"
+            assert updated.notes == "keep-me"
+
+            cleared = service.update({"subtitle": None, "notes": None}, item_id=article_id, auto_commit=True)
+            assert cleared.title == "Renamed"
+            assert cleared.status == "published"
+            assert cleared.subtitle is None
+            assert cleared.notes is None
+
+            with pytest.raises(IntegrityError):
+                service.update({"status": None}, item_id=article_id, auto_commit=True)
+    finally:
+        engine.dispose()
