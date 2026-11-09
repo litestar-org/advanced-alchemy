@@ -577,17 +577,19 @@ class InMemoryFilterEvaluator:
                 "Optional[Callable[..., ColumnElement[bool]]]",
                 filter_._logical_map.get(filter_type),  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
             )
-            if operator and isinstance(conditions, list):
-                valid_filters: List[StatementFilter] = []
-                for cond in conditions:  # pyright: ignore[reportUnknownVariableType]
-                    if isinstance(cond, dict):
-                        cond_dict = cast("dict[str, Any]", cond)
-                        filter_instance = filter_._create_filter(cond_dict)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
-                        if filter_instance is not None:
-                            valid_filters.append(filter_instance)
-                if valid_filters:
-                    group = FilterGroup(logical_operator=operator, filters=valid_filters)
-                    current = cls.filter_group(current, group)
+            if not operator or not isinstance(conditions, list):
+                continue
+            valid_filters: List[StatementFilter] = []
+            for cond in conditions:  # pyright: ignore[reportUnknownVariableType]
+                if not isinstance(cond, dict):
+                    continue
+                cond_dict = cast("dict[str, Any]", cond)
+                filter_instance = filter_._create_filter(cond_dict)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+                if filter_instance is not None:
+                    valid_filters.append(filter_instance)
+            if valid_filters:
+                group = FilterGroup(logical_operator=operator, filters=valid_filters)
+                current = cls.filter_group(current, group)
         return current
 
     @classmethod
@@ -679,70 +681,8 @@ class InMemoryFilterEvaluator:
             if isinstance(filter_, LimitOffset):
                 if apply_pagination:
                     pagination_filters.append(filter_)
-            elif isinstance(filter_, BeforeAfter):
-                result = cls.filter_on_datetime_field(
-                    result,
-                    field_name=filter_.field_name,
-                    before=filter_.before,
-                    after=filter_.after,
-                )
-            elif isinstance(filter_, OnBeforeAfter):
-                result = cls.filter_on_datetime_field(
-                    result,
-                    field_name=filter_.field_name,
-                    on_or_before=filter_.on_or_before,
-                    on_or_after=filter_.on_or_after,
-                )
-            elif isinstance(filter_, NotInCollectionFilter):
-                values: Optional[abc.Collection[Any]] = filter_.values  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
-                if values is not None:
-                    result = cls.filter_not_in_collection(result, filter_.field_name, values)  # pyright: ignore[reportUnknownArgumentType]
-            elif isinstance(filter_, CollectionFilter):
-                in_values: Optional[abc.Collection[Any]] = filter_.values  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
-                if in_values is not None:
-                    result = cls.filter_in_collection(result, filter_.field_name, in_values)  # pyright: ignore[reportUnknownArgumentType]
-            elif isinstance(filter_, OrderBy):
-                result = cls.order_by(
-                    result,
-                    filter_.field_name,
-                    sort_desc=filter_.sort_order == "desc",
-                    nulls=filter_.nulls,
-                )
-            elif isinstance(filter_, NotInSearchFilter):
-                result = cls.filter_by_not_like(
-                    result,
-                    filter_.field_name,
-                    value=filter_.value,
-                    ignore_case=bool(filter_.ignore_case),
-                    escape_wildcards=filter_.escape_wildcards,
-                )
-            elif isinstance(filter_, SearchFilter):
-                result = cls.filter_by_like(
-                    result,
-                    filter_.field_name,
-                    value=filter_.value,
-                    ignore_case=bool(filter_.ignore_case),
-                    escape_wildcards=filter_.escape_wildcards,
-                )
-            elif isinstance(filter_, ComparisonFilter):
-                result = cls.filter_comparison(result, filter_)
-            elif isinstance(filter_, BooleanFilter):
-                result = cls.filter_boolean(result, filter_)
-            elif isinstance(filter_, NullFilter):
-                result = cls.filter_null(result, filter_)
-            elif isinstance(filter_, NotNullFilter):
-                result = cls.filter_not_null(result, filter_)
-            elif isinstance(filter_, FilterGroup):
-                result = cls.filter_group(result, filter_)
-            elif isinstance(filter_, MultiFilter):
-                result = cls.filter_multi(result, filter_)
-            elif isinstance(filter_, (ExistsFilter, NotExistsFilter)):
-                result = cls.filter_exists(result, filter_)
-            elif isinstance(filter_, ColumnElement):
-                result = [item for item in result if bool(cls.evaluate_sql_expression(item, filter_))]
             else:
-                msg = f"Unexpected filter: {filter_}"
-                raise RepositoryError(msg)
+                result = cls._apply_statement_filter(result, filter_)
         for pag in pagination_filters:
             result = cls.apply_limit_offset_pagination(result, pag.limit, pag.offset)
         return result
@@ -770,6 +710,78 @@ class InMemoryFilterEvaluator:
         except AttributeError as error:
             raise RepositoryError from error
 
+    @classmethod
+    def _apply_statement_filter(
+        cls,
+        result: List[ModelT],
+        filter_: Union[StatementFilter, ColumnElement[bool]],
+    ) -> List[ModelT]:
+        if isinstance(filter_, BeforeAfter):
+            return cls.filter_on_datetime_field(
+                result,
+                field_name=filter_.field_name,
+                before=filter_.before,
+                after=filter_.after,
+            )
+        if isinstance(filter_, OnBeforeAfter):
+            return cls.filter_on_datetime_field(
+                result,
+                field_name=filter_.field_name,
+                on_or_before=filter_.on_or_before,
+                on_or_after=filter_.on_or_after,
+            )
+        if isinstance(filter_, NotInCollectionFilter):
+            values: Optional[abc.Collection[Any]] = filter_.values  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+            if values is None:
+                return result
+            return cls.filter_not_in_collection(result, filter_.field_name, values)  # pyright: ignore[reportUnknownArgumentType]
+        if isinstance(filter_, CollectionFilter):
+            in_values: Optional[abc.Collection[Any]] = filter_.values  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+            if in_values is None:
+                return result
+            return cls.filter_in_collection(result, filter_.field_name, in_values)  # pyright: ignore[reportUnknownArgumentType]
+        if isinstance(filter_, OrderBy):
+            return cls.order_by(
+                result,
+                filter_.field_name,
+                sort_desc=filter_.sort_order == "desc",
+                nulls=filter_.nulls,
+            )
+        if isinstance(filter_, NotInSearchFilter):
+            return cls.filter_by_not_like(
+                result,
+                filter_.field_name,
+                value=filter_.value,
+                ignore_case=bool(filter_.ignore_case),
+                escape_wildcards=filter_.escape_wildcards,
+            )
+        if isinstance(filter_, SearchFilter):
+            return cls.filter_by_like(
+                result,
+                filter_.field_name,
+                value=filter_.value,
+                ignore_case=bool(filter_.ignore_case),
+                escape_wildcards=filter_.escape_wildcards,
+            )
+        if isinstance(filter_, ComparisonFilter):
+            return cls.filter_comparison(result, filter_)
+        if isinstance(filter_, BooleanFilter):
+            return cls.filter_boolean(result, filter_)
+        if isinstance(filter_, NullFilter):
+            return cls.filter_null(result, filter_)
+        if isinstance(filter_, NotNullFilter):
+            return cls.filter_not_null(result, filter_)
+        if isinstance(filter_, FilterGroup):
+            return cls.filter_group(result, filter_)
+        if isinstance(filter_, MultiFilter):
+            return cls.filter_multi(result, filter_)
+        if isinstance(filter_, (ExistsFilter, NotExistsFilter)):
+            return cls.filter_exists(result, filter_)
+        if isinstance(filter_, ColumnElement):
+            return [item for item in result if bool(cls.evaluate_sql_expression(item, filter_))]
+        msg = f"Unexpected filter: {filter_}"
+        raise RepositoryError(msg)
+
     @staticmethod
     def _like_to_regex(pattern_str: str, ignore_case: bool = False) -> re.Pattern[str]:
         parts: List[str] = ["^"]
@@ -784,6 +796,32 @@ class InMemoryFilterEvaluator:
         flags = re.IGNORECASE | re.DOTALL if ignore_case else re.DOTALL
         return re.compile("".join(parts), flags)
 
+    _COMPARISON_VALUE_OPS: dict[str, Callable[[Any, Any], bool]] = {
+        "gt": lambda val, target: bool(val > target),
+        "ge": lambda val, target: bool(val >= target),
+        "lt": lambda val, target: bool(val < target),
+        "le": lambda val, target: bool(val <= target),
+        "in": lambda val, target: bool(val in target),
+        "notin": lambda val, target: bool(val not in target),
+        "between": lambda val, target: bool(target[0] <= val <= target[1]),
+    }
+
+    @classmethod
+    def _eval_string_comparison_op(cls, val: str, op_name: str, target: Any) -> bool:
+        if op_name == "like":
+            return bool(cls._like_to_regex(str(target), ignore_case=False).match(val))
+        if op_name == "ilike":
+            return bool(cls._like_to_regex(str(target), ignore_case=True).match(val))
+        if op_name == "startswith":
+            return val.startswith(str(target))
+        if op_name == "istartswith":
+            return val.lower().startswith(str(target).lower())
+        if op_name == "endswith":
+            return val.endswith(str(target))
+        if op_name == "iendswith":
+            return val.lower().endswith(str(target).lower())
+        return False
+
     @classmethod
     def _eval_comparison_op(cls, val: Any, op_name: str, target: Any) -> bool:
         if op_name == "eq":
@@ -792,40 +830,26 @@ class InMemoryFilterEvaluator:
             return bool(val != target)
         if val is None:
             return False
-        if op_name == "gt":
-            return bool(val > target)
-        if op_name == "ge":
-            return bool(val >= target)
-        if op_name == "lt":
-            return bool(val < target)
-        if op_name == "le":
-            return bool(val <= target)
-        if op_name == "in":
-            return bool(val in target)
-        if op_name == "notin":
-            return bool(val not in target)
-        if op_name == "between":
-            return bool(target[0] <= val <= target[1])
-        if op_name == "like":
-            return isinstance(val, str) and bool(cls._like_to_regex(str(target), ignore_case=False).match(val))
-        if op_name == "ilike":
-            return isinstance(val, str) and bool(cls._like_to_regex(str(target), ignore_case=True).match(val))
-        if op_name == "startswith":
-            return isinstance(val, str) and val.startswith(str(target))
-        if op_name == "istartswith":
-            return isinstance(val, str) and val.lower().startswith(str(target).lower())
-        if op_name == "endswith":
-            return isinstance(val, str) and val.endswith(str(target))
-        if op_name == "iendswith":
-            return isinstance(val, str) and val.lower().endswith(str(target).lower())
+        value_op = cls._COMPARISON_VALUE_OPS.get(op_name)
+        if value_op is not None:
+            return value_op(val, target)
         if op_name == "dateeq":
             val_date = val.date() if isinstance(val, datetime.datetime) else val
             target_date = target.date() if isinstance(target, datetime.datetime) else target
             return bool(val_date == target_date)
+        if isinstance(val, str):
+            return cls._eval_string_comparison_op(val, op_name, target)
         return False
 
-    @classmethod
-    def _eval_binary_operator(cls, left: Any, right: Any, operator: Any) -> bool:
+    _BINARY_ORDER_OPS: dict[Any, Callable[[Any, Any], bool]] = {
+        sql_op.gt: lambda left, right: bool(left > right),
+        sql_op.ge: lambda left, right: bool(left >= right),
+        sql_op.lt: lambda left, right: bool(left < right),
+        sql_op.le: lambda left, right: bool(left <= right),
+    }
+
+    @staticmethod
+    def _eval_null_aware_binary_op(left: Any, right: Any, operator: Any) -> Optional[bool]:
         if operator in (sql_op.is_, sql_op.eq):
             if right is None and operator is sql_op.is_:
                 return left is None
@@ -837,28 +861,13 @@ class InMemoryFilterEvaluator:
                 not compare_values(left, right) if not isinstance(left, (int, str, float, bool)) else left != right
             )
         if operator is sql_op.in_op:
-            if right is None:
-                return False
-            return bool(left in right)
+            return False if right is None else bool(left in right)
         if operator is sql_op.notin_op:
-            if right is None:
-                return True
-            return bool(left not in right)
-        if left is None:
-            return False
-        if operator is sql_op.gt:
-            return bool(left > right)
-        if operator is sql_op.ge:
-            return bool(left >= right)
-        if operator is sql_op.lt:
-            return bool(left < right)
-        if operator is sql_op.le:
-            return bool(left <= right)
-        if operator is sql_op.between_op and isinstance(right, tuple):
-            right_tuple: tuple[Any, ...] = right  # pyright: ignore[reportUnknownVariableType]
-            if len(right_tuple) > 1:
-                return bool(right_tuple[0] <= left <= right_tuple[1])
-        right_str = str(cast("Any", right))
+            return True if right is None else bool(left not in right)
+        return None
+
+    @classmethod
+    def _eval_string_binary_op(cls, left: Any, right_str: str, operator: Any) -> Optional[bool]:
         if operator is sql_op.like_op:
             return isinstance(left, str) and bool(cls._like_to_regex(right_str, ignore_case=False).match(left))
         if operator is sql_op.ilike_op:
@@ -873,6 +882,25 @@ class InMemoryFilterEvaluator:
             return isinstance(left, str) and left.endswith(right_str)
         if operator is sql_op.contains_op:
             return isinstance(left, str) and (right_str in left)
+        return None
+
+    @classmethod
+    def _eval_binary_operator(cls, left: Any, right: Any, operator: Any) -> bool:
+        null_aware_result = cls._eval_null_aware_binary_op(left, right, operator)
+        if null_aware_result is not None:
+            return null_aware_result
+        if left is None:
+            return False
+        order_op = cls._BINARY_ORDER_OPS.get(operator)
+        if order_op is not None:
+            return order_op(left, right)
+        if operator is sql_op.between_op and isinstance(right, tuple):
+            right_tuple: tuple[Any, ...] = right  # pyright: ignore[reportUnknownVariableType]
+            if len(right_tuple) > 1:
+                return bool(right_tuple[0] <= left <= right_tuple[1])
+        string_result = cls._eval_string_binary_op(left, str(cast("Any", right)), operator)
+        if string_result is not None:
+            return string_result
         try:
             return bool(operator(left, right))
         except Exception:  # noqa: BLE001

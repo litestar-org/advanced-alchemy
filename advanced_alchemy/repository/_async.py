@@ -81,6 +81,7 @@ from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams  # pyright: ignore[reportPrivateUsage]
+    from sqlalchemy.orm.state import InstanceState
 
     from advanced_alchemy.cache.manager import CacheManager
 
@@ -945,102 +946,128 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 )
                 for instance in instances:
                     await self.session.delete(instance)
+            elif id_attribute is None and self.has_composite_pk:
+                instances = await self._delete_many_composite(
+                    item_ids,
+                    chunk_size=chunk_size,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                )
             else:
-                use_composite_path = id_attribute is None and self.has_composite_pk
-
-                if use_composite_path:
-                    base_chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
-                    effective_chunk_size = max(1, base_chunk_size // len(self._pk_columns))
-                    normalized_ids = self._normalize_pk_values_to_tuples(item_ids)
-
-                    for idx in range(0, len(normalized_ids), effective_chunk_size):
-                        chunk = normalized_ids[idx : min(idx + effective_chunk_size, len(normalized_ids))]
-                        pk_filter = (
-                            or_(
-                                *[
-                                    and_(*[col == val for col, val in zip(self._pk_columns, pk_tuple)])
-                                    for pk_tuple in chunk
-                                ]
-                            )
-                            if self._dialect.name == "mssql"
-                            else tuple_(*self._pk_columns).in_(chunk)
-                        )
-
-                        if self._dialect.delete_executemany_returning:
-                            returning_delete_stmt = self._get_base_stmt(
-                                statement=delete(self.model_type).where(pk_filter),
-                                loader_options=None,
-                                execution_options=execution_options,
-                            ).returning(self.model_type)
-                            instances.extend(await self.session.scalars(returning_delete_stmt))
-                        else:
-                            select_stmt = self._get_base_stmt(
-                                statement=select(self.model_type).where(pk_filter),
-                                loader_options=loader_options,
-                                execution_options=execution_options,
-                            )
-                            instances.extend(await self.session.scalars(select_stmt))
-
-                            plain_delete_stmt = self._get_base_stmt(
-                                statement=delete(self.model_type).where(pk_filter),
-                                loader_options=None,
-                                execution_options=execution_options,
-                            )
-                            await self.session.execute(plain_delete_stmt)
-                else:
-                    id_attr = get_instrumented_attr(
-                        self.model_type,
-                        id_attribute if id_attribute is not None else self.id_attribute,
-                    )
-                    if self._prefer_any:
-                        chunk_size = len(item_ids) + 1
-                    chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
-                    for idx in range(0, len(item_ids), chunk_size):
-                        chunk = cast("List[Any]", item_ids[idx : min(idx + chunk_size, len(item_ids))])
-                        if self._dialect.delete_executemany_returning:
-                            instances.extend(
-                                await self.session.scalars(
-                                    self._get_delete_many_statement(
-                                        statement_type="delete",
-                                        model_type=self.model_type,
-                                        id_attribute=id_attr,
-                                        id_chunk=chunk,
-                                        supports_returning=self._dialect.delete_executemany_returning,
-                                        loader_options=loader_options,
-                                        execution_options=execution_options,
-                                    ),
-                                ),
-                            )
-                        else:
-                            instances.extend(
-                                await self.session.scalars(
-                                    self._get_delete_many_statement(
-                                        statement_type="select",
-                                        model_type=self.model_type,
-                                        id_attribute=id_attr,
-                                        id_chunk=chunk,
-                                        supports_returning=self._dialect.delete_executemany_returning,
-                                        loader_options=loader_options,
-                                        execution_options=execution_options,
-                                    ),
-                                ),
-                            )
-                            await self.session.execute(
-                                self._get_delete_many_statement(
-                                    statement_type="delete",
-                                    model_type=self.model_type,
-                                    id_attribute=id_attr,
-                                    id_chunk=chunk,
-                                    supports_returning=self._dialect.delete_executemany_returning,
-                                    loader_options=loader_options,
-                                    execution_options=execution_options,
-                                ),
-                            )
+                instances = await self._delete_many_by_id_attr(
+                    item_ids,
+                    id_attribute=id_attribute,
+                    chunk_size=chunk_size,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                )
             await self._flush_or_commit(auto_commit=auto_commit)
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
                 self._queue_cache_invalidation(self.get_primary_key_value(instance), bind_group)
             return instances
+
+    def _build_composite_pk_filter(self, chunk: Sequence[tuple[Any, ...]]) -> ColumnElement[bool]:
+        if self._dialect.name == "mssql":
+            return or_(*[and_(*[col == val for col, val in zip(self._pk_columns, pk_tuple)]) for pk_tuple in chunk])
+        return tuple_(*self._pk_columns).in_(chunk)
+
+    async def _delete_many_composite(
+        self,
+        item_ids: List[PrimaryKeyType],
+        *,
+        chunk_size: Optional[int],
+        loader_options: Any,
+        execution_options: dict[str, Any],
+    ) -> List[ModelT]:
+        base_chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
+        effective_chunk_size = max(1, base_chunk_size // len(self._pk_columns))
+        normalized_ids = self._normalize_pk_values_to_tuples(item_ids)
+        instances: List[ModelT] = []
+        for idx in range(0, len(normalized_ids), effective_chunk_size):
+            chunk = normalized_ids[idx : min(idx + effective_chunk_size, len(normalized_ids))]
+            pk_filter = self._build_composite_pk_filter(chunk)
+            if self._dialect.delete_executemany_returning:
+                returning_delete_stmt = self._get_base_stmt(
+                    statement=delete(self.model_type).where(pk_filter),
+                    loader_options=None,
+                    execution_options=execution_options,
+                ).returning(self.model_type)
+                instances.extend(await self.session.scalars(returning_delete_stmt))
+            else:
+                select_stmt = self._get_base_stmt(
+                    statement=select(self.model_type).where(pk_filter),
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                )
+                instances.extend(await self.session.scalars(select_stmt))
+                plain_delete_stmt = self._get_base_stmt(
+                    statement=delete(self.model_type).where(pk_filter),
+                    loader_options=None,
+                    execution_options=execution_options,
+                )
+                await self.session.execute(plain_delete_stmt)
+        return instances
+
+    async def _delete_many_by_id_attr(
+        self,
+        item_ids: List[PrimaryKeyType],
+        *,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]],
+        chunk_size: Optional[int],
+        loader_options: Any,
+        execution_options: dict[str, Any],
+    ) -> List[ModelT]:
+        id_attr = get_instrumented_attr(
+            self.model_type,
+            id_attribute if id_attribute is not None else self.id_attribute,
+        )
+        if self._prefer_any:
+            chunk_size = len(item_ids) + 1
+        chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
+        instances: List[ModelT] = []
+        for idx in range(0, len(item_ids), chunk_size):
+            chunk = cast("List[Any]", item_ids[idx : min(idx + chunk_size, len(item_ids))])
+            if self._dialect.delete_executemany_returning:
+                instances.extend(
+                    await self.session.scalars(
+                        self._get_delete_many_statement(
+                            statement_type="delete",
+                            model_type=self.model_type,
+                            id_attribute=id_attr,
+                            id_chunk=chunk,
+                            supports_returning=self._dialect.delete_executemany_returning,
+                            loader_options=loader_options,
+                            execution_options=execution_options,
+                        ),
+                    ),
+                )
+            else:
+                instances.extend(
+                    await self.session.scalars(
+                        self._get_delete_many_statement(
+                            statement_type="select",
+                            model_type=self.model_type,
+                            id_attribute=id_attr,
+                            id_chunk=chunk,
+                            supports_returning=self._dialect.delete_executemany_returning,
+                            loader_options=loader_options,
+                            execution_options=execution_options,
+                        ),
+                    ),
+                )
+                await self.session.execute(
+                    self._get_delete_many_statement(
+                        statement_type="delete",
+                        model_type=self.model_type,
+                        id_attribute=id_attr,
+                        id_chunk=chunk,
+                        supports_returning=self._dialect.delete_executemany_returning,
+                        loader_options=loader_options,
+                        execution_options=execution_options,
+                    ),
+                )
+        return instances
 
     async def delete_where(
         self,
@@ -2082,11 +2109,12 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                     data,
                     id_attribute=id_attribute,
                 )
-                lookup_attr_key = (
-                    id_attribute.key
-                    if isinstance(id_attribute, InstrumentedAttribute)
-                    else (id_attribute if id_attribute is not None else self.id_attribute)
-                )
+                if isinstance(id_attribute, InstrumentedAttribute):
+                    lookup_attr_key = id_attribute.key
+                elif id_attribute is not None:
+                    lookup_attr_key = id_attribute
+                else:
+                    lookup_attr_key = self.id_attribute
                 lookup_attr_names = {lookup_attr_key}
             mapper = None
             relationship_values: dict[str, Any] = {}
@@ -2106,43 +2134,18 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 uniquify=uniquify,
                 bind_group=bind_group,
             )
-            if data is not existing_instance:
+            if data is not existing_instance and mapper is not None:
                 with (
                     self.session.no_autoflush,
                     contextlib.suppress(MissingGreenlet, NoInspectionAvailable),
                 ):
-                    if mapper is not None:
-                        for column in mapper.mapper.columns:
-                            field_name = mapper.mapper.get_property_by_column(column).key
-                            if field_name in lookup_attr_names:
-                                continue
-                            new_field_value = getattr(data, field_name, MISSING)
-                            if new_field_value is not MISSING:
-                                if not was_attribute_set(data, mapper, field_name):
-                                    continue
-                                existing_field_value = getattr(existing_instance, field_name, MISSING)
-                                if existing_field_value is not MISSING and not compare_values(
-                                    existing_field_value, new_field_value
-                                ):
-                                    setattr(existing_instance, field_name, new_field_value)
-
-                        for relationship in mapper.mapper.relationships:
-                            if relationship.viewonly or relationship.lazy in {  # pragma: no cover
-                                "write_only",
-                                "dynamic",
-                            }:
-                                continue
-                            if relationship.key in relationship_values:
-                                new_value = relationship_values[relationship.key]
-                            else:
-                                if relationship.lazy in {"raise", "raise_on_sql"}:  # pragma: no cover
-                                    continue
-                                if not was_attribute_set(data, mapper, relationship.key):
-                                    continue
-                                new_value = getattr(data, relationship.key, MISSING)
-                            if new_value is not MISSING:
-                                merged_value = await self._resolve_relationship_value(new_value)
-                                setattr(existing_instance, relationship.key, merged_value)
+                    await self._sync_update_fields(
+                        data,
+                        existing_instance,
+                        mapper,
+                        lookup_attr_names,
+                        relationship_values,
+                    )
 
             instance = await self._attach_to_session(existing_instance, strategy="merge")
 
@@ -2156,6 +2159,43 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             self._expunge(instance, auto_expunge=auto_expunge)
             self._queue_cache_invalidation(self.get_primary_key_value(instance), self._resolve_bind_group(bind_group))
             return instance
+
+    async def _sync_update_fields(
+        self,
+        data: ModelT,
+        existing_instance: ModelT,
+        mapper: "InstanceState[Any]",
+        lookup_attr_names: set[str],
+        relationship_values: dict[str, Any],
+    ) -> None:
+        for column in mapper.mapper.columns:
+            field_name = mapper.mapper.get_property_by_column(column).key
+            if field_name in lookup_attr_names:
+                continue
+            new_field_value = getattr(data, field_name, MISSING)
+            if new_field_value is MISSING or not was_attribute_set(data, mapper, field_name):
+                continue
+            existing_field_value = getattr(existing_instance, field_name, MISSING)
+            if existing_field_value is not MISSING and not compare_values(existing_field_value, new_field_value):
+                setattr(existing_instance, field_name, new_field_value)
+
+        for relationship in mapper.mapper.relationships:
+            if relationship.viewonly or relationship.lazy in {  # pragma: no cover
+                "write_only",
+                "dynamic",
+            }:
+                continue
+            if relationship.key in relationship_values:
+                new_value = relationship_values[relationship.key]
+            elif relationship.lazy in {"raise", "raise_on_sql"} or not was_attribute_set(
+                data, mapper, relationship.key
+            ):  # pragma: no cover
+                continue
+            else:
+                new_value = getattr(data, relationship.key, MISSING)
+            if new_value is not MISSING:
+                merged_value = await self._resolve_relationship_value(new_value)
+                setattr(existing_instance, relationship.key, merged_value)
 
     async def _resolve_relationship_value(self, new_value: Any) -> Any:
         if isinstance(new_value, list):

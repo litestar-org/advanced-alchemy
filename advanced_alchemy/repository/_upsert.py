@@ -17,6 +17,7 @@ from advanced_alchemy.repository.typing import MISSING, ModelT
 from advanced_alchemy.types.file_object import StoredObject
 
 if TYPE_CHECKING:
+    from sqlalchemy import Column
     from sqlalchemy.orm import InstrumentedAttribute
 
 __all__ = (
@@ -147,15 +148,18 @@ class _UpsertPlanningMixin(Generic[ModelT]):
         if not matched_values:
             return False
 
-        if field_type is not None:
-            try:
-                expected_python_type = getattr(field_type, "python_type", None)
-                if expected_python_type is not None:
-                    for value in matched_values:
-                        if value is not None and not isinstance(value, expected_python_type):
-                            return True
-            except (AttributeError, NotImplementedError):
-                return True
+        if field_type is None:
+            return any(value is not None and type(value) not in DEFAULT_SAFE_TYPES for value in matched_values)
+
+        try:
+            expected_python_type = getattr(field_type, "python_type", None)
+        except (AttributeError, NotImplementedError):
+            return True
+
+        if expected_python_type is not None and any(
+            value is not None and not isinstance(value, expected_python_type) for value in matched_values
+        ):
+            return True
 
         return any(value is not None and type(value) not in DEFAULT_SAFE_TYPES for value in matched_values)
 
@@ -304,6 +308,45 @@ class _UpsertPlanningMixin(Generic[ModelT]):
         }
         return any(not sql_default_columns.issubset(row.keys()) for row in input_rows)
 
+    @classmethod
+    def _prepare_upsert_column_value(
+        cls,
+        prepared_row: dict[str, Any],
+        instance: Any,
+        column: "Column[Any]",
+        has_update_intent: bool,
+    ) -> None:
+        """Resolve a single column's value or default in ``prepared_row`` for native upsert."""
+        if column.onupdate is not None and not has_update_intent:
+            onupdate_value = getattr(column.onupdate, "arg", None)
+            if callable(onupdate_value):
+                prepared_row[column.key] = resolve_column_default(onupdate_value)
+                return
+            if onupdate_value is not None:
+                prepared_row[column.key] = onupdate_value
+                return
+        if has_update_intent:
+            prepared_row[column.key] = getattr(instance, column.key)
+            return
+        if prepared_row.get(column.key) is not None:
+            return
+        cls._apply_missing_column_default(prepared_row, column)
+
+    @staticmethod
+    def _apply_missing_column_default(prepared_row: dict[str, Any], column: "Column[Any]") -> None:
+        """Apply column default or prune generated/clause-default keys from ``prepared_row``."""
+        value_default = column.onupdate if column.onupdate is not None else column.default
+        if value_default is not None and value_default.is_clause_element:
+            prepared_row.pop(column.key, None)
+            return
+        default_value = getattr(value_default, "arg", None) if value_default is not None else None
+        if callable(default_value):
+            prepared_row[column.key] = resolve_column_default(default_value)
+        elif value_default is not None and default_value is not None:
+            prepared_row[column.key] = default_value
+        elif column.primary_key or value_default is not None or column.server_default is not None:
+            prepared_row.pop(column.key, None)
+
     def _extract_upsert_row(self, instance: ModelT) -> dict[str, Any]:
         """Convert a model instance to a row dict suitable for native upsert execution."""
         model_values = model_to_dict(instance)
@@ -312,32 +355,7 @@ class _UpsertPlanningMixin(Generic[ModelT]):
         instance_state = inspect(instance)
         for column in table.columns:
             has_update_intent = has_upsert_update_intent(instance, instance_state, column.key)
-            if column.onupdate is not None and not has_update_intent:
-                onupdate_value = getattr(column.onupdate, "arg", None)
-                if callable(onupdate_value):
-                    prepared_row[column.key] = resolve_column_default(onupdate_value)
-                    continue
-                if onupdate_value is not None:
-                    prepared_row[column.key] = onupdate_value
-                    continue
-            if has_update_intent:
-                prepared_row[column.key] = getattr(instance, column.key)
-                continue
-            if prepared_row.get(column.key) is not None:
-                continue
-            value_default = column.onupdate if column.onupdate is not None else column.default
-            if value_default is not None and value_default.is_clause_element:
-                prepared_row.pop(column.key, None)
-                continue
-            default_value = getattr(value_default, "arg", None) if value_default is not None else None
-            if callable(default_value):
-                prepared_row[column.key] = resolve_column_default(default_value)
-                continue
-            if value_default is not None and default_value is not None:
-                prepared_row[column.key] = default_value
-                continue
-            if column.primary_key or value_default is not None or column.server_default is not None:
-                prepared_row.pop(column.key, None)
+            self._prepare_upsert_column_value(prepared_row, instance, column, has_update_intent)
         return prepared_row
 
     @staticmethod
