@@ -639,6 +639,53 @@ async def test_sqlalchemy_repo_get_member(
     mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
 
+async def test_sqlalchemy_repo_get_by_id_member(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    monkeypatch: MonkeyPatch,
+    mock_repo_execute: AnyMock,
+) -> None:
+    """Test expected method calls for member get_by_id operation."""
+    mock_instance = MagicMock()
+    mock_repo_execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=mock_instance))
+
+    instance = await maybe_async(mock_repo.get_by_id("instance-id"))
+
+    assert instance is mock_instance
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+
+
+async def test_sqlalchemy_repo_get_or_none_member(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    monkeypatch: MonkeyPatch,
+    mock_repo_execute: AnyMock,
+) -> None:
+    """Test expected method calls for member get_or_none operation (found)."""
+    mock_instance = MagicMock()
+    mock_repo_execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=mock_instance))
+
+    instance = await maybe_async(mock_repo.get_or_none("instance-id"))
+
+    assert instance is mock_instance
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+
+
+async def test_sqlalchemy_repo_get_or_none_not_found(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    monkeypatch: MonkeyPatch,
+    mock_repo_execute: AnyMock,
+) -> None:
+    """Test expected method calls for member get_or_none operation (Not found)."""
+    mock_repo_execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+
+    instance = await maybe_async(mock_repo.get_or_none("instance-id"))
+
+    assert instance is None
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+
+
 async def test_sqlalchemy_repo_get_with_for_update(
     mock_repo: SQLAlchemyAsyncRepository[Any],
     mocker: MockerFixture,
@@ -2789,3 +2836,42 @@ def test_mock_repository_search_honors_escape_wildcards(filter_type: type[Search
     expected_literal = [1] if filter_type is SearchFilter else [2]
     assert [item.id for item in literal] == expected_literal
     assert sorted(item.id for item in pattern) == ([1, 2] if filter_type is SearchFilter else [])
+
+
+def test_sync_mock_repository_get_by_id_and_get_or_none() -> None:
+    """Test SQLAlchemySyncMockRepository get_by_id and get_or_none."""
+    from advanced_alchemy.exceptions import NotFoundError
+
+    class Repo(SQLAlchemySyncMockRepository[SearchableTitleModel]):
+        model_type = SearchableTitleModel
+
+    Repo.__database_clear__()
+    repo = Repo(session=MagicMock(spec=Session, bind=MagicMock()))
+    item = SearchableTitleModel(id=1, title="Test")
+    repo.add(item)
+
+    assert repo.get_by_id(1) is item
+    assert repo.get_or_none(1) is item
+    assert repo.get_or_none(999) is None
+    with pytest.raises(NotFoundError):
+        repo.get_by_id(999)
+
+
+async def test_async_mock_repository_get_by_id_and_get_or_none() -> None:
+    """Test SQLAlchemyAsyncMockRepository get_by_id and get_or_none."""
+    from advanced_alchemy.exceptions import NotFoundError
+    from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository
+
+    class Repo(SQLAlchemyAsyncMockRepository[SearchableTitleModel]):
+        model_type = SearchableTitleModel
+
+    Repo.__database_clear__()
+    repo = Repo(session=AsyncMock(spec=AsyncSession, bind=MagicMock()))
+    item = SearchableTitleModel(id=1, title="Test")
+    await repo.add(item)
+
+    assert await repo.get_by_id(1) is item
+    assert await repo.get_or_none(1) is item
+    assert await repo.get_or_none(999) is None
+    with pytest.raises(NotFoundError):
+        await repo.get_by_id(999)

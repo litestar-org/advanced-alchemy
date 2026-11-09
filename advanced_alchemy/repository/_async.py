@@ -226,6 +226,34 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         bind_group: Optional[str] = None,
     ) -> ModelT: ...
 
+    async def get_by_id(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        auto_expunge: Optional[bool] = None,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
+    ) -> ModelT: ...
+
+    async def get_or_none(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        auto_expunge: Optional[bool] = None,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
+    ) -> Optional[ModelT]: ...
+
     async def get_one(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
@@ -1833,6 +1861,69 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             with_for_update=with_for_update,
             bind_group=bind_group,
         )
+
+    async def get_by_id(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        auto_expunge: Optional[bool] = None,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
+    ) -> ModelT:
+        """Get instance identified by `item_id`, raising `NotFoundError` if not found."""
+        return await self.get(
+            item_id,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            id_attribute=id_attribute,
+            error_messages=error_messages,
+            load=load,
+            execution_options=execution_options,
+            uniquify=uniquify,
+            with_for_update=with_for_update,
+            use_cache=use_cache,
+            bind_group=bind_group,
+        )
+
+    async def get_or_none(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        auto_expunge: Optional[bool] = None,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
+    ) -> Optional[ModelT]:
+        """Get instance identified by `item_id` or return `None` if not found."""
+        try:
+            return await self.get(
+                item_id,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                id_attribute=id_attribute,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                uniquify=uniquify,
+                with_for_update=with_for_update,
+                use_cache=use_cache,
+                bind_group=bind_group,
+            )
+        except NotFoundError:
+            return None
 
     async def get_one(
         self,
