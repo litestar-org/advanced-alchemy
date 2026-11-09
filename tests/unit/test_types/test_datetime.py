@@ -87,7 +87,7 @@ def test_process_bind_param() -> None:
     aware = dt.datetime(2026, 1, 1, 12, 0, 0, 123456, tzinfo=eastern)
     bound = t.process_bind_param(aware, dialect)
     assert bound is not None
-    assert bound.tzinfo == dt.timezone.utc
+    assert bound.tzinfo == dt.UTC
     assert bound.hour == 17
     assert bound.microsecond == 123456
 
@@ -101,9 +101,9 @@ def test_process_result_value() -> None:
     naive = dt.datetime(2026, 1, 1, 12, 0, 0, 654321)
     res = t.process_result_value(naive, dialect)
     assert res is not None
-    assert res.tzinfo == dt.timezone.utc
+    assert res.tzinfo == dt.UTC
     assert res.microsecond == 654321
 
-    already_aware = dt.datetime(2026, 1, 1, 12, 0, 0, 654321, tzinfo=dt.timezone.utc)
+    already_aware = dt.datetime(2026, 1, 1, 12, 0, 0, 654321, tzinfo=dt.UTC)
     res2 = t.process_result_value(already_aware, dialect)
     assert res2 == already_aware

@@ -620,7 +620,7 @@ def test_sync_routing_session_executes_listeners(tmp_path: Path) -> None:
     assert isinstance(maker, RoutingSyncSessionMaker)
     Base.metadata.create_all(maker.primary_engine)
 
-    initial_time = datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)
+    initial_time = datetime.datetime(2020, 1, 1, tzinfo=datetime.UTC)
     with maker() as session:
         item = AuditModel(id=1, name="initial", updated_at=initial_time)
         session.add(item)
@@ -662,7 +662,7 @@ async def test_async_routing_session_executes_listeners(tmp_path: Path) -> None:
     async with maker.primary_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    initial_time = datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)
+    initial_time = datetime.datetime(2020, 1, 1, tzinfo=datetime.UTC)
     async with maker() as session:
         item = AuditModel(id=1, name="initial", updated_at=initial_time)
         session.add(item)

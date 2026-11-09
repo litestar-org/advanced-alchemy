@@ -54,22 +54,37 @@ def test_totp_provider_requires_pyotp(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.skipif(not PYOTP_INSTALLED, reason="pyotp not installed")
-def test_totp_secret_requires_explicit_key() -> None:
-    """The new type has no deprecated random default; key is required."""
-    from advanced_alchemy.types import TOTPSecret
+def test_totp_secret_zero_arg_and_lazy_key_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TOTPSecret supports zero-argument declaration and resolves its key lazily."""
+    from sqlalchemy.dialects import sqlite
 
-    with pytest.raises(TypeError):
-        TOTPSecret()  # type: ignore[call-arg]
+    from advanced_alchemy.exceptions import ImproperConfigurationError
+    from advanced_alchemy.types import DEFAULT_ENCRYPTION_KEY_ENV, TOTPSecret, generate_totp_secret
+    from advanced_alchemy.types.encrypted_string import set_default_encryption_key
+
+    monkeypatch.delenv(DEFAULT_ENCRYPTION_KEY_ENV, raising=False)
+    set_default_encryption_key(None)
+    col = TOTPSecret(issuer="ACME")
+    dialect = sqlite.dialect()
+    with pytest.raises(ImproperConfigurationError):
+        col.process_bind_param("JBSWY3DPEHPK3PXP", dialect)
+
+    monkeypatch.setenv(DEFAULT_ENCRYPTION_KEY_ENV, "totp-env-key")
+    secret = generate_totp_secret()
+    encrypted = col.process_bind_param(secret, dialect)
+    provider = col.process_result_value(encrypted, dialect)
+    assert provider is not None
+    assert provider.secret == secret
 
 
 @pytest.mark.skipif(not PYOTP_INSTALLED, reason="pyotp not installed")
 def test_totp_secret_repr_includes_params() -> None:
-    """The repr must name TOTPSecret and carry its TOTP params so Alembic reconstructs faithfully."""
+    """The repr must name TOTPSecret and carry its TOTP params without leaking secret keys."""
     from advanced_alchemy.types import TOTPSecret
 
     rendered = repr(TOTPSecret(key="k", issuer="ACME", digits=8, interval=60))
     assert rendered == (
-        "TOTPSecret(key='k', backend=FernetBackend, digits=8, interval=60, digest=None, issuer='ACME', length=None)"
+        "TOTPSecret(backend=FernetBackend, digits=8, interval=60, digest=None, issuer='ACME', length=None)"
     )
 
 

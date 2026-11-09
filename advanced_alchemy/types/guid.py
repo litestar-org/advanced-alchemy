@@ -1,6 +1,6 @@
 from base64 import b64decode
 from importlib.util import find_spec
-from typing import Any, Optional, Union, cast
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER as MSSQL_UNIQUEIDENTIFIER
@@ -56,9 +56,9 @@ class GUID(TypeDecorator[UUID]):
 
     def process_bind_param(
         self,
-        value: Optional[Union[bytes, str, UUID]],
+        value: bytes | str | UUID | None,
         dialect: Dialect,
-    ) -> Optional[Union[bytes, str]]:
+    ) -> bytes | str | None:
         if value is None:
             return value
         if dialect.name in {"postgresql", "duckdb", "cockroachdb", "mssql"}:
@@ -72,15 +72,15 @@ class GUID(TypeDecorator[UUID]):
 
     def process_result_value(
         self,
-        value: Optional[Union[bytes, str, UUID]],
+        value: bytes | str | UUID | None,
         dialect: Dialect,
-    ) -> Optional[UUID]:
+    ) -> UUID | None:
         if value is None:
             return value
         if value.__class__.__name__ == "UUID":
             return cast("UUID", value)
         if dialect.name in {"spanner", "spanner+spanner"}:
-            return UUID(bytes=b64decode(cast("Union[str, Buffer]", value)))
+            return UUID(bytes=b64decode(cast("str | Buffer", value)))
         if isinstance(value, bytes):
             return UUID(bytes=value) if len(value) == _UUID_BYTE_LENGTH else UUID(hex=value.decode("ascii"))
         if self.binary:
@@ -88,14 +88,14 @@ class GUID(TypeDecorator[UUID]):
         return UUID(hex=cast("str", value))
 
     @staticmethod
-    def to_uuid(value: Any) -> Optional[UUID]:
+    def to_uuid(value: Any) -> UUID | None:
         if value.__class__.__name__ == "UUID" or value is None:
-            return cast("Optional[UUID]", value)
+            return cast("UUID | None", value)
         try:
             value = UUID(hex=value)
         except (TypeError, ValueError):
             value = UUID(bytes=value)
-        return cast("Optional[UUID]", value)
+        return cast("UUID | None", value)
 
     def compare_values(self, x: Any, y: Any) -> bool:
         """Compare two values for equality."""

@@ -4,11 +4,14 @@ from advanced_alchemy.types import encrypted_string, file_object, password_hash,
 from advanced_alchemy.types.boolean import Bool
 from advanced_alchemy.types.datetime import DateTimeUTC
 from advanced_alchemy.types.encrypted_string import (
+    DEFAULT_ENCRYPTION_KEY_ENV,
     EncryptedString,
     EncryptedText,
     EncryptionBackend,
     FernetBackend,
     PGCryptoBackend,
+    get_default_encryption_key,
+    set_default_encryption_key,
 )
 from advanced_alchemy.types.file_object import (
     FileObject,
@@ -33,6 +36,7 @@ from advanced_alchemy.types.totp import TOTPProvider, TOTPSecret, generate_totp_
 from advanced_alchemy.types.vector import Vector
 
 __all__ = (
+    "DEFAULT_ENCRYPTION_KEY_ENV",
     "GUID",
     "NANOID_INSTALLED",
     "ORA_JSONB",
@@ -64,7 +68,9 @@ __all__ = (
     "file_object",
     "generate_one_time_code",
     "generate_totp_secret",
+    "get_default_encryption_key",
     "password_hash",
+    "set_default_encryption_key",
     "storages",
     "totp",
 )

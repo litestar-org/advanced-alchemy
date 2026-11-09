@@ -1,5 +1,5 @@
 import datetime
-from typing import Annotated, Optional
+from typing import Annotated
 from uuid import UUID
 
 from litestar import Controller, Litestar, delete, get, patch, post
@@ -31,24 +31,24 @@ class BookModel(base.UUIDAuditBase):
 class AuthorModel(base.UUIDBase):
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[Optional[datetime.date]]
+    dob: Mapped[datetime.date | None]
     books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="selectin")
 
 
 class Author(BaseModel):
-    id: Optional[UUID] = None
+    id: UUID | None = None
     name: str
-    dob: Optional[datetime.date] = None
+    dob: datetime.date | None = None
 
 
 class AuthorCreate(BaseModel):
     name: str
-    dob: Optional[datetime.date] = None
+    dob: datetime.date | None = None
 
 
 class AuthorUpdate(BaseModel):
-    name: Optional[str] = None
-    dob: Optional[datetime.date] = None
+    name: str | None = None
+    dob: datetime.date | None = None
 
 
 class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):

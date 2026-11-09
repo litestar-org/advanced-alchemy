@@ -15,14 +15,12 @@ Usage:
 """
 
 import inspect
-from collections.abc import Iterable
-from typing import Any, Callable, Final, Optional
-
-from typing_extensions import ParamSpec
+from collections.abc import Callable, Iterable
+from typing import Any, Final, ParamSpec
 
 _rich_click_available = False
 _rich_click_aliases_supported = False
-_rich_group_cls: "Optional[type[click.Group]]" = None
+_rich_group_cls: "type[click.Group] | None" = None
 
 try:
     import rich_click as click
@@ -68,7 +66,7 @@ class AliasedGroup(click.Group):
     def __init__(
         self,
         *args: Any,
-        aliases: Optional[Iterable[str]] = None,
+        aliases: Iterable[str] | None = None,
         **kwargs: Any,
     ) -> None:
         aliases_iterable = aliases or ()
@@ -79,8 +77,8 @@ class AliasedGroup(click.Group):
     def add_command(
         self,
         cmd: click.Command,
-        name: Optional[str] = None,
-        aliases: Optional[Iterable[str]] = None,
+        name: str | None = None,
+        aliases: Iterable[str] | None = None,
         **kwargs: Any,
     ) -> None:
         super().add_command(cmd, name, **kwargs)
@@ -93,13 +91,13 @@ class AliasedGroup(click.Group):
             self._alias_mapping[alias] = command_name
         self._alias_mapping.pop(command_name, None)
 
-    def get_command(self, ctx: click.Context, cmd_name: str) -> Optional[click.Command]:
+    def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
         resolved_name = self._alias_mapping.get(cmd_name, cmd_name)
         return super().get_command(ctx, resolved_name)
 
     def resolve_command(
         self, ctx: click.Context, args: list[str]
-    ) -> tuple[Optional[str], Optional[click.Command], list[str]]:
+    ) -> tuple[str | None, click.Command | None, list[str]]:
         cmd_name, cmd, remaining_args = super().resolve_command(ctx, args)
         if cmd is None:
             return cmd_name, cmd, remaining_args
@@ -128,8 +126,8 @@ def _patch_group_class_for_aliases(group_cls: type[click.Group]) -> None:
     def _patched_add_command(
         self: click.Group,
         cmd: click.Command,
-        name: Optional[str] = None,
-        aliases: Optional[Iterable[str]] = None,
+        name: str | None = None,
+        aliases: Iterable[str] | None = None,
         **kwargs: Any,
     ) -> None:
         _original_add_command(self, cmd, name, **kwargs)
@@ -146,7 +144,7 @@ def _patch_group_class_for_aliases(group_cls: type[click.Group]) -> None:
         self: click.Group,
         ctx: click.Context,
         cmd_name: str,
-    ) -> Optional[click.Command]:
+    ) -> click.Command | None:
         alias_mapping: dict[str, str] = getattr(self, "_alias_mapping", {})
         resolved_name: str = alias_mapping.get(cmd_name, cmd_name)
         return _original_get_command(self, ctx, resolved_name)
@@ -172,7 +170,7 @@ def _patch_click_group_for_aliases() -> None:
 _patch_click_group_for_aliases()
 
 
-def _alias_enabled_group_class(cls: Optional[type[click.Group]], aliases: Optional[Iterable[str]]) -> type[click.Group]:
+def _alias_enabled_group_class(cls: type[click.Group] | None, aliases: Iterable[str] | None) -> type[click.Group]:
     """Choose a group class that can accept ``aliases`` safely."""
 
     base_cls: type[click.Group]
@@ -194,8 +192,8 @@ def _alias_enabled_group_class(cls: Optional[type[click.Group]], aliases: Option
 
 
 def group(
-    name: Optional[str] = None,
-    cls: Optional[type[click.Group]] = None,
+    name: str | None = None,
+    cls: type[click.Group] | None = None,
     **attrs: Any,
 ) -> Callable[[Callable[P, Any]], click.Group]:
     """Wrapper around ``click.group`` with alias support."""
@@ -206,8 +204,8 @@ def group(
 
 
 def command(
-    name: Optional[str] = None,
-    cls: Optional[type[click.Command]] = None,
+    name: str | None = None,
+    cls: type[click.Command] | None = None,
     **attrs: Any,
 ) -> Callable[[Callable[P, Any]], click.Command]:
     """Wrapper around ``click.command`` that preserves aliases on plain Click."""

@@ -13,9 +13,7 @@ import inspect
 import sys
 import threading
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
-from typing import TYPE_CHECKING, Any, Generic, Optional, TypeVar, Union, cast
-
-from typing_extensions import ParamSpec
+from typing import TYPE_CHECKING, Any, Generic, ParamSpec, TypeVar, cast
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine
@@ -91,15 +89,7 @@ class CapacityLimiter:
         Args:
             total_tokens: Maximum number of concurrent operations allowed
         """
-        self._total_tokens = total_tokens
-        self._semaphore_instance: Optional[asyncio.Semaphore] = None
-
-    @property
-    def _semaphore(self) -> asyncio.Semaphore:
-        """Lazy initialization of asyncio.Semaphore for Python 3.9 compatibility."""
-        if self._semaphore_instance is None:
-            self._semaphore_instance = asyncio.Semaphore(self._total_tokens)
-        return self._semaphore_instance
+        self._semaphore = asyncio.Semaphore(total_tokens)
 
     async def acquire(self) -> None:
         """Acquire a token from the semaphore."""
@@ -112,14 +102,11 @@ class CapacityLimiter:
     @property
     def total_tokens(self) -> int:
         """Get the number of tokens currently available."""
-        if self._semaphore_instance is None:
-            return self._total_tokens
-        return self._semaphore_instance._value
+        return self._semaphore._value
 
     @total_tokens.setter
     def total_tokens(self, value: int) -> None:
-        self._total_tokens = value
-        self._semaphore_instance = None
+        self._semaphore = asyncio.Semaphore(value)
 
     async def __aenter__(self) -> None:
         """Async context manager entry."""
@@ -127,9 +114,9 @@ class CapacityLimiter:
 
     async def __aexit__(
         self,
-        exc_type: "Optional[type[BaseException]]",
-        exc_val: "Optional[BaseException]",
-        exc_tb: "Optional[TracebackType]",
+        exc_type: "type[BaseException] | None",
+        exc_val: "BaseException | None",
+        exc_tb: "TracebackType | None",
     ) -> None:
         """Async context manager exit."""
         self.release()
@@ -223,7 +210,7 @@ def await_(
 
 
 def async_(
-    function: "Callable[ParamSpecT, ReturnT]", *, limiter: "Optional[CapacityLimiter]" = None
+    function: "Callable[ParamSpecT, ReturnT]", *, limiter: "CapacityLimiter | None" = None
 ) -> "Callable[ParamSpecT, Awaitable[ReturnT]]":
     """Convert a blocking function to an async one using asyncio.to_thread().
 
@@ -246,7 +233,7 @@ def async_(
 
 
 def ensure_async_(
-    function: "Callable[ParamSpecT, Union[Awaitable[ReturnT], ReturnT]]",
+    function: "Callable[ParamSpecT, Awaitable[ReturnT] | ReturnT]",
 ) -> "Callable[ParamSpecT, Awaitable[ReturnT]]":
     """Convert a function to an async one if it is not already.
 
@@ -283,7 +270,7 @@ def ensure_async_(
 class _ContextManagerWrapper(Generic[T]):
     def __init__(self, cm: AbstractContextManager[T]) -> None:
         self._cm = cm
-        self._executor: Optional[concurrent.futures.ThreadPoolExecutor] = None
+        self._executor: concurrent.futures.ThreadPoolExecutor | None = None
 
     async def __aenter__(self) -> T:
         # Use a single thread executor to ensure same thread for enter/exit
@@ -302,10 +289,10 @@ class _ContextManagerWrapper(Generic[T]):
 
     async def __aexit__(
         self,
-        exc_type: "Optional[type[BaseException]]",
-        exc_val: "Optional[BaseException]",
-        exc_tb: "Optional[TracebackType]",
-    ) -> "Optional[bool]":
+        exc_type: "type[BaseException] | None",
+        exc_val: "BaseException | None",
+        exc_tb: "TracebackType | None",
+    ) -> "bool | None":
         # Use the same executor to ensure same thread
         if self._executor is None:
             # Fallback to any thread if executor wasn't created
@@ -314,7 +301,7 @@ class _ContextManagerWrapper(Generic[T]):
         loop = asyncio.get_running_loop()
         try:
 
-            def _exit_with_flag_clear() -> "Optional[bool]":
+            def _exit_with_flag_clear() -> "bool | None":
                 try:
                     return self._cm.__exit__(exc_type, exc_val, exc_tb)
                 finally:
@@ -331,7 +318,7 @@ class _ContextManagerWrapper(Generic[T]):
 
 
 def with_ensure_async_(
-    obj: "Union[AbstractContextManager[T], AbstractAsyncContextManager[T]]",
+    obj: "AbstractContextManager[T] | AbstractAsyncContextManager[T]",
 ) -> "AbstractAsyncContextManager[T]":
     """Convert a context manager to an async one if it is not already.
 

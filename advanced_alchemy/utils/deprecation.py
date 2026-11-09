@@ -1,9 +1,8 @@
 import inspect
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, Literal, Optional
+from typing import Literal, ParamSpec, TypeVar
 from warnings import warn
-
-from typing_extensions import ParamSpec, TypeVar
 
 __all__ = ("deprecated", "warn_deprecation")
 
@@ -18,9 +17,9 @@ def warn_deprecation(
     deprecated_name: str,
     kind: DeprecatedKind,
     *,
-    removal_in: Optional[str] = None,
-    alternative: Optional[str] = None,
-    info: Optional[str] = None,
+    removal_in: str | None = None,
+    alternative: str | None = None,
+    info: str | None = None,
     pending: bool = False,
 ) -> None:
     """Warn about a call to a (soon to be) deprecated function.
@@ -69,11 +68,11 @@ def warn_deprecation(
 def deprecated(
     version: str,
     *,
-    removal_in: Optional[str] = None,
-    alternative: Optional[str] = None,
-    info: Optional[str] = None,
+    removal_in: str | None = None,
+    alternative: str | None = None,
+    info: str | None = None,
     pending: bool = False,
-    kind: Optional[Literal["function", "method", "classmethod", "property"]] = None,
+    kind: Literal["function", "method", "classmethod", "property"] | None = None,
 ) -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Create a decorator wrapping a function, method or property with a warning call about a (pending) deprecation.
 

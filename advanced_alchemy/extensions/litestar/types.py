@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from advanced_alchemy.types import (
+        DEFAULT_ENCRYPTION_KEY_ENV,
         GUID,
         NANOID_INSTALLED,
         ORA_JSONB,
@@ -38,12 +39,15 @@ if TYPE_CHECKING:
         file_object,
         generate_one_time_code,
         generate_totp_secret,
+        get_default_encryption_key,
         password_hash,
+        set_default_encryption_key,
         storages,
         totp,
     )
 
 __all__ = (
+    "DEFAULT_ENCRYPTION_KEY_ENV",
     "GUID",
     "NANOID_INSTALLED",
     "ORA_JSONB",
@@ -75,7 +79,9 @@ __all__ = (
     "file_object",
     "generate_one_time_code",
     "generate_totp_secret",
+    "get_default_encryption_key",
     "password_hash",
+    "set_default_encryption_key",
     "storages",
     "totp",
 )

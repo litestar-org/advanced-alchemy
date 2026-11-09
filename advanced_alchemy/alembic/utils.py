@@ -1,6 +1,6 @@
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from pathlib import Path
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Column, Engine, MetaData, String, Table
 from typing_extensions import TypeIs
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 __all__ = ("drop_all", "dump_tables")
 
 
-async def drop_all(engine: "Union[AsyncEngine, Engine]", version_table_name: str, metadata: MetaData) -> None:
+async def drop_all(engine: "AsyncEngine | Engine", version_table_name: str, metadata: MetaData) -> None:
     """Drop all tables in the database.
 
     Args:
@@ -35,7 +35,7 @@ async def drop_all(engine: "Union[AsyncEngine, Engine]", version_table_name: str
 
     console = get_console()
 
-    def _is_sync(engine: "Union[Engine, AsyncEngine]") -> "TypeIs[Engine]":
+    def _is_sync(engine: "Engine | AsyncEngine") -> "TypeIs[Engine]":
         return isinstance(engine, Engine)
 
     def _drop_tables_sync(engine: Engine) -> None:
@@ -79,7 +79,7 @@ async def drop_all(engine: "Union[AsyncEngine, Engine]", version_table_name: str
 
 async def dump_tables(
     dump_dir: Path,
-    session: "Union[AbstractContextManager[Session], AbstractAsyncContextManager[AsyncSession]]",
+    session: "AbstractContextManager[Session] | AbstractAsyncContextManager[AsyncSession]",
     models: "list[type[DeclarativeBase]]",
 ) -> None:
     from types import new_class
@@ -95,7 +95,7 @@ async def dump_tables(
     console = get_console()
 
     def _is_sync(
-        session: "Union[AbstractAsyncContextManager[AsyncSession], AbstractContextManager[Session]]",
+        session: "AbstractAsyncContextManager[AsyncSession] | AbstractContextManager[Session]",
     ) -> "TypeIs[AbstractContextManager[Session]]":
         return isinstance(session, AbstractContextManager)
 

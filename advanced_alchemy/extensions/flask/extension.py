@@ -1,8 +1,8 @@
 """Flask extension for Advanced Alchemy."""
 
-from collections.abc import Generator, Sequence
+from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager, suppress
-from typing import TYPE_CHECKING, Callable, Optional, Union, cast
+from typing import TYPE_CHECKING, cast
 
 from flask import g
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,10 +31,10 @@ class AdvancedAlchemy:
 
     def __init__(
         self,
-        config: "Union[SQLAlchemySyncConfig, SQLAlchemyAsyncConfig, Sequence[Union[SQLAlchemySyncConfig, SQLAlchemyAsyncConfig]]]",
-        app: "Optional[Flask]" = None,
+        config: "SQLAlchemySyncConfig | SQLAlchemyAsyncConfig | Sequence[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig]",
+        app: "Flask | None" = None,
         *,
-        portal_provider: "Optional[PortalProvider]" = None,
+        portal_provider: "PortalProvider | None" = None,
     ) -> None:
         """Initialize the extension.
 
@@ -47,7 +47,7 @@ class AdvancedAlchemy:
         self.portal_provider = portal_provider if portal_provider is not None else PortalProvider()
         self._config = config if isinstance(config, Sequence) else [config]
         self._has_async_config = any(isinstance(c, SQLAlchemyAsyncConfig) for c in self.config)
-        self._session_makers: dict[str, Callable[..., Union[AsyncSession, Session]]] = {}
+        self._session_makers: dict[str, Callable[..., AsyncSession | Session]] = {}
 
         if app is not None:
             self.init_app(app)
@@ -58,7 +58,7 @@ class AdvancedAlchemy:
         return self.portal_provider.portal
 
     @property
-    def config(self) -> "Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]":
+    def config(self) -> "Sequence[SQLAlchemyAsyncConfig | SQLAlchemySyncConfig]":
         """Get the SQLAlchemy configuration(s).
 
         Returns:
@@ -105,7 +105,7 @@ class AdvancedAlchemy:
                     self.portal_provider.portal.call(cfg.create_all_metadata)
 
             @app.teardown_appcontext
-            def shutdown_portal(_exception: "Optional[BaseException]" = None) -> None:  # pyright: ignore[reportUnusedFunction]
+            def shutdown_portal(_exception: "BaseException | None" = None) -> None:  # pyright: ignore[reportUnusedFunction]
                 """Stop the portal when the application shuts down."""
                 if not app.debug:
                     with suppress(Exception):
@@ -123,7 +123,7 @@ class AdvancedAlchemy:
         db_group_cmd = cast("click.Command", database_group)
         app.cli.add_command(db_group_cmd)
 
-    def _teardown_appcontext(self, _exception: "Optional[BaseException]" = None) -> None:
+    def _teardown_appcontext(self, _exception: "BaseException | None" = None) -> None:
         """Clean up resources when the application context ends."""
         for key in list(g):
             if key.startswith("advanced_alchemy_session_"):
@@ -135,7 +135,7 @@ class AdvancedAlchemy:
                     session.close()
                 delattr(g, key)
 
-    def get_session(self, bind_key: str = "default") -> "Union[AsyncSession, Session]":
+    def get_session(self, bind_key: str = "default") -> "AsyncSession | Session":
         """Get a new session from the configured session factory.
 
         Args:
@@ -152,7 +152,7 @@ class AdvancedAlchemy:
 
         session_key = f"advanced_alchemy_session_{bind_key}"
         if hasattr(g, session_key):
-            return cast("Union[AsyncSession, Session]", getattr(g, session_key))
+            return cast("AsyncSession | Session", getattr(g, session_key))
 
         reset_routing_context()
 
@@ -209,7 +209,7 @@ class AdvancedAlchemy:
     @contextmanager
     def with_session(  # pragma: no cover
         self, bind_key: str = "default"
-    ) -> "Generator[Union[AsyncSession, Session], None, None]":
+    ) -> "Generator[AsyncSession | Session, None, None]":
         """Provide a transactional scope around a series of operations.
 
         Args:

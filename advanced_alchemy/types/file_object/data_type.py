@@ -1,4 +1,4 @@
-from typing import Any, Optional, Union, cast
+from typing import Any, cast
 
 from sqlalchemy import TypeDecorator
 
@@ -9,9 +9,8 @@ from advanced_alchemy.types.json import JsonB
 from advanced_alchemy.types.mutables import MutableList
 from advanced_alchemy.utils.serialization import decode_json
 
-# Define the type hint for the value this TypeDecorator handles
-FileObjectOrList = Union[FileObject, list[FileObject], set[FileObject], MutableList[FileObject]]
-OptionalFileObjectOrList = Optional[FileObjectOrList]
+FileObjectOrList = FileObject | list[FileObject] | set[FileObject] | MutableList[FileObject]
+OptionalFileObjectOrList = FileObjectOrList | None
 
 
 class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
@@ -24,16 +23,14 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
     impl = JsonB
     cache_ok = True
 
-    # Default settings
     multiple: bool
-    _raw_backend: Union[str, StorageBackend]
-    _resolved_backend: "Optional[StorageBackend]" = None
+    _raw_backend: str | StorageBackend
+    _resolved_backend: "StorageBackend | None" = None
 
     @property
     def python_type(self) -> "type[OptionalFileObjectOrList]":
         """Specifies the Python type used, accounting for the `multiple` flag."""
-        # This provides a hint to SQLAlchemy and type checkers
-        return MutableList[FileObject] if self.multiple else Optional[FileObject]  # type: ignore
+        return MutableList[FileObject] if self.multiple else FileObject | None  # type: ignore
 
     @property
     def backend(self) -> "StorageBackend":
@@ -52,7 +49,7 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
 
     def __init__(
         self,
-        backend: Union[str, StorageBackend],
+        backend: str | StorageBackend,
         multiple: bool = False,
         *args: "Any",
         **kwargs: "Any",
@@ -78,9 +75,9 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
 
     def process_bind_param(
         self,
-        value: "Optional[FileObjectOrList]",
+        value: "FileObjectOrList | None",
         dialect: "Any",
-    ) -> "Optional[Union[dict[str, Any], list[dict[str, Any]]]]":
+    ) -> "dict[str, Any] | list[dict[str, Any]] | None":
         """Convert FileObject(s) to JSON representation for the database.
 
         Injects the configured backend into the FileObject before conversion.
@@ -113,8 +110,8 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
         return value.to_dict() if value else None
 
     def process_result_value(
-        self, value: "Optional[Union[bytes, str, dict[str, Any], list[dict[str, Any]]]]", dialect: "Any"
-    ) -> "Optional[FileObjectOrList]":
+        self, value: "bytes | str | dict[str, Any] | list[dict[str, Any]] | None", dialect: "Any"
+    ) -> "FileObjectOrList | None":
         """Convert database JSON back to FileObject or MutableList[FileObject].
 
         Args:

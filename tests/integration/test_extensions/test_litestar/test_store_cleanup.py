@@ -52,7 +52,7 @@ async def cleanup_config(
 async def test_delete_expired_preserves_other_entries(
     cleanup_config: Union[SQLAlchemySyncConfig, SQLAlchemyAsyncConfig], namespace: str
 ) -> None:
-    now = datetime.datetime(2026, 9, 7, tzinfo=datetime.timezone.utc)
+    now = datetime.datetime(2026, 9, 7, tzinfo=datetime.UTC)
     rows = [
         CleanupStoreModel(
             key="expired", namespace=namespace, value=b"expired", expires_at=now - datetime.timedelta(seconds=1)

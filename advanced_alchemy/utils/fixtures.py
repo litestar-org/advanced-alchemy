@@ -3,7 +3,7 @@ import gzip
 import io
 import zipfile
 from functools import partial
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.utils.serialization import decode_json
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 __all__ = ("open_fixture", "open_fixture_async")
 
 
-def open_fixture(fixtures_path: "Union[Path, AsyncPath]", fixture_name: str) -> Any:
+def open_fixture(fixtures_path: "Path | AsyncPath", fixture_name: str) -> Any:
     """Loads JSON or CSV file with the specified fixture name.
 
     Supports plain files, gzipped files (.json.gz, .csv.gz), and zipped files (.json.zip, .csv.zip).
@@ -181,7 +181,7 @@ def _read_csv_zip_file(path: "AsyncPath", name: str) -> "list[dict[str, Any]]":
     return list(reader)
 
 
-async def open_fixture_async(fixtures_path: "Union[Path, AsyncPath]", fixture_name: str) -> Any:
+async def open_fixture_async(fixtures_path: "Path | AsyncPath", fixture_name: str) -> Any:
     """Loads JSON or CSV file with the specified fixture name asynchronously.
 
     Supports plain files, gzipped files (.json.gz, .csv.gz), and zipped files (.json.zip, .csv.zip).

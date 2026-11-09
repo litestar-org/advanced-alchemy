@@ -1,12 +1,19 @@
 """TOTP shared-secret column type with pyotp-backed helpers."""
 
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from advanced_alchemy.exceptions import MissingDependencyError
-from advanced_alchemy.types.encrypted_string import EncryptedString, EncryptionBackend, FernetBackend
+from advanced_alchemy.types.encrypted_string import (
+    DEFAULT_ENCRYPTION_KEY_ENV,
+    EncryptedString,
+    EncryptionBackend,
+    FernetBackend,
+)
 from advanced_alchemy.typing import PYOTP_INSTALLED
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from sqlalchemy.engine import Dialect
 
 __all__ = ("TOTPProvider", "TOTPSecret", "generate_totp_secret")
@@ -46,8 +53,8 @@ class TOTPProvider:
         *,
         digits: int = 6,
         interval: int = 30,
-        digest: "Optional[Any]" = None,
-        issuer: "Optional[str]" = None,
+        digest: "Any | None" = None,
+        issuer: "str | None" = None,
     ) -> None:
         """Initialize the provider.
 
@@ -105,7 +112,7 @@ class TOTPProvider:
         """
         return cast("bool", self._totp().verify(code, valid_window=valid_window))
 
-    def provisioning_uri(self, name: "Optional[str]" = None, issuer_name: "Optional[str]" = None) -> str:
+    def provisioning_uri(self, name: "str | None" = None, issuer_name: "str | None" = None) -> str:
         """Return an ``otpauth://`` provisioning URI for QR enrollment.
 
         Args:
@@ -129,26 +136,29 @@ class TOTPSecret(EncryptedString):
 
     def __init__(
         self,
-        key: "Union[str, bytes, Callable[[], Union[str, bytes]]]",
+        key: "str | bytes | Callable[[], str | bytes] | None" = None,
         backend: "type[EncryptionBackend]" = FernetBackend,
         digits: int = 6,
         interval: int = 30,
-        digest: "Optional[Any]" = None,
-        issuer: "Optional[str]" = None,
-        length: "Optional[int]" = None,
+        digest: "Any | None" = None,
+        issuer: "str | None" = None,
+        length: "int | None" = None,
+        key_env: str = DEFAULT_ENCRYPTION_KEY_ENV,
         **kwargs: Any,
     ) -> None:
         """Initialize the TOTPSecret type.
 
         Args:
-            key: The encryption key (str/bytes or a callable returning one). Required: unlike
-                :class:`EncryptedString`, this new type has no deprecated random default.
+            key: The encryption key (str/bytes or a callable returning one). When omitted,
+                resolves lazily from :func:`~advanced_alchemy.types.get_default_encryption_key`
+                or the environment variable named by ``key_env``.
             backend: The encryption backend class. Defaults to FernetBackend.
             digits: Number of digits in generated codes. Defaults to 6.
             interval: Time step in seconds. Defaults to 30.
             digest: Hash algorithm passed to pyotp (None selects SHA1).
             issuer: Default issuer used for provisioning URIs.
             length: The unencrypted string length (documentation only).
+            key_env: Environment variable name checked when ``key`` and the default encryption key are unset.
             **kwargs: Additional arguments passed to the underlying String type.
 
         Raises:
@@ -156,26 +166,25 @@ class TOTPSecret(EncryptedString):
         """
         if not PYOTP_INSTALLED:
             raise MissingDependencyError(package="pyotp")
-        super().__init__(key=key, backend=backend, length=length, **kwargs)
+        super().__init__(key=key, backend=backend, length=length, key_env=key_env, **kwargs)
         self.digits = digits
         self.interval = interval
         self.digest = digest
         self.issuer = issuer
 
     def __repr__(self) -> str:
-        """Return a reconstructable representation including the TOTP parameters.
+        """Return a reconstructable representation including the TOTP parameters without leaking secret keys.
 
         Overrides :class:`EncryptedString` so Alembic autogenerate reconstructs the type with
         its configured ``digits``/``interval``/``digest``/``issuer`` rather than the defaults.
         """
-        key_repr = self.key.__name__ if callable(self.key) else repr(self.key)
         return (
-            f"{type(self).__name__}(key={key_repr}, backend={self.backend.__class__.__name__}, "
+            f"{type(self).__name__}(backend={self.backend.__class__.__name__}, "
             f"digits={self.digits}, interval={self.interval}, digest={self.digest!r}, "
             f"issuer={self.issuer!r}, length={self.length})"
         )
 
-    def process_bind_param(self, value: Any, dialect: "Dialect") -> "Union[str, None]":
+    def process_bind_param(self, value: Any, dialect: "Dialect") -> "str | None":
         """Accept a raw secret string or a :class:`TOTPProvider`, then encrypt as usual.
 
         Args:
@@ -189,7 +198,7 @@ class TOTPSecret(EncryptedString):
             value = value.secret
         return super().process_bind_param(value, dialect)
 
-    def process_result_value(self, value: Any, dialect: "Dialect") -> "Optional[TOTPProvider]":  # type: ignore[override]
+    def process_result_value(self, value: Any, dialect: "Dialect") -> "TOTPProvider | None":  # type: ignore[override]
         """Decrypt the stored secret and wrap it in a :class:`TOTPProvider`.
 
         Args:

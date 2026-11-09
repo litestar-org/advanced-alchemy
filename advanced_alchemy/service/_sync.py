@@ -9,7 +9,7 @@ should be a SQLAlchemy model.
 from collections.abc import Generator, Iterable, Sequence
 from contextlib import contextmanager
 from functools import cached_property
-from typing import Any, ClassVar, Generic, List, Optional, Union, cast
+from typing import Any, ClassVar, Generic, List, Self, cast
 
 from sqlalchemy import Select
 from sqlalchemy import inspect as sa_inspect
@@ -17,7 +17,6 @@ from sqlalchemy.orm import InstrumentedAttribute, Session
 from sqlalchemy.orm.scoping import scoped_session
 from sqlalchemy.sql import ColumnElement
 from sqlalchemy.sql.selectable import ForUpdateParameter
-from typing_extensions import Self
 
 from advanced_alchemy.base import ModelProtocol, model_to_dict
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig
@@ -28,7 +27,6 @@ from advanced_alchemy.repository._util import LoadSpec, model_from_dict
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, SQLAlchemySyncRepositoryT
 from advanced_alchemy.service._util import ResultConverter, resolve_item_ids
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
-from advanced_alchemy.utils.deprecation import warn_deprecation
 from advanced_alchemy.utils.serialization import (
     BulkModelDictT,
     ModelDictListT,
@@ -50,7 +48,7 @@ class SQLAlchemySyncQueryService(ResultConverter):
 
     def __init__(
         self,
-        session: Union[Session, scoped_session[Session]],
+        session: Session | scoped_session[Session],
         **repo_kwargs: Any,
     ) -> None:
         """Configure the service object.
@@ -68,8 +66,8 @@ class SQLAlchemySyncQueryService(ResultConverter):
     @contextmanager
     def new(
         cls,
-        session: Optional[Union[Session, scoped_session[Session]]] = None,
-        config: Optional[SQLAlchemySyncConfig] = None,
+        session: Session | scoped_session[Session] | None = None,
+        config: SQLAlchemySyncConfig | None = None,
     ) -> Generator[Self, None, None]:
         """Context manager that returns instance of service object.
 
@@ -96,11 +94,11 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
     repository_type: type[SQLAlchemySyncRepositoryT]
     """Type of the repository to use."""
-    loader_options: ClassVar[Optional[LoadSpec]] = None
+    loader_options: ClassVar[LoadSpec | None] = None
     """Default loader options for the repository."""
-    execution_options: ClassVar[Optional[dict[str, Any]]] = None
+    execution_options: ClassVar[dict[str, Any] | None] = None
     """Default execution options for the repository."""
-    match_fields: ClassVar[Optional[Union[List[str], str]]] = None
+    match_fields: ClassVar[List[str] | str | None] = None
     """List of dialects that prefer to use ``field.id = ANY(:1)`` instead of ``field.id IN (...)``."""
     uniquify: ClassVar[bool] = False
     """Optionally apply the ``unique()`` method to results before returning."""
@@ -112,19 +110,19 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
     def __init__(
         self,
-        session: Union[Session, scoped_session[Session]],
+        session: Session | scoped_session[Session],
         *,
-        statement: Optional[Select[Any]] = None,
+        statement: Select[Any] | None = None,
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        order_by: List[OrderingPair] | OrderingPair | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
         wrap_exceptions: bool = True,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        count_with_window_function: Optional[bool] = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        count_with_window_function: bool | None = None,
         **repo_kwargs: Any,
     ) -> None:
         """Configure the service object.
@@ -165,7 +163,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             **repo_kwargs,
         )
 
-    def _get_uniquify(self, uniquify: Optional[bool] = None) -> bool:
+    def _get_uniquify(self, uniquify: bool | None = None) -> bool:
         return bool(uniquify or self.uniquify)
 
     @property
@@ -190,13 +188,13 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
     def count(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        *filters: StatementFilter | ColumnElement[bool],
+        statement: Select[tuple[ModelT]] | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
         **kwargs: Any,
     ) -> int:
         """Count of records returned by query.
@@ -228,12 +226,12 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
     def exists(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        *filters: StatementFilter | ColumnElement[bool],
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
         **kwargs: Any,
     ) -> bool:
         """Wrap repository exists operation.
@@ -265,14 +263,14 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         self,
         item_id: PrimaryKeyType,
         *,
-        statement: Optional[Select[tuple[ModelT]]] = None,
-        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
-        auto_expunge: Optional[bool] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        statement: Select[tuple[ModelT]] | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
     ) -> ModelT:
         """Wrap repository scalar operation.
 
@@ -323,15 +321,15 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
     def get_one(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
-        auto_expunge: Optional[bool] = None,
-        load: Optional[LoadSpec] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
+        *filters: StatementFilter | ColumnElement[bool],
+        statement: Select[tuple[ModelT]] | None = None,
+        auto_expunge: bool | None = None,
+        load: LoadSpec | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
         with_for_update: ForUpdateParameter = None,
-        bind_group: Optional[str] = None,
+        bind_group: str | None = None,
         **kwargs: Any,
     ) -> ModelT:
         """Wrap repository scalar operation.
@@ -370,17 +368,17 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
     def get_one_or_none(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
-        auto_expunge: Optional[bool] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
+        *filters: StatementFilter | ColumnElement[bool],
+        statement: Select[tuple[ModelT]] | None = None,
+        auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
         with_for_update: ForUpdateParameter = None,
-        bind_group: Optional[str] = None,
+        bind_group: str | None = None,
         **kwargs: Any,
-    ) -> Optional[ModelT]:
+    ) -> ModelT | None:
         """Wrap repository scalar operation.
 
         Args:
@@ -400,7 +398,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             Representation of instance with identifier `item_id`.
         """
         return cast(
-            "Optional[ModelT]",
+            "ModelT | None",
             self.repository.get_one_or_none(
                 *filters,
                 auto_expunge=auto_expunge,
@@ -462,8 +460,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     def to_model(
         self,
         data: "ModelDictT[ModelT]",
-        operation: Optional[str] = None,
-        schema_dump_config: Optional[SchemaDumpConfig] = None,
+        operation: str | None = None,
+        schema_dump_config: SchemaDumpConfig | None = None,
     ) -> ModelT:
         """Parse and Convert input into a model.
 
@@ -510,17 +508,17 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
     def get_many_and_count(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
-        auto_expunge: Optional[bool] = None,
-        count_with_window_function: Optional[bool] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
+        *filters: StatementFilter | ColumnElement[bool],
+        statement: Select[tuple[ModelT]] | None = None,
+        auto_expunge: bool | None = None,
+        count_with_window_function: bool | None = None,
+        order_by: List[OrderingPair] | OrderingPair | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
         use_cache: bool = True,
-        bind_group: Optional[str] = None,
+        bind_group: str | None = None,
         **kwargs: Any,
     ) -> tuple[Sequence[ModelT], int]:
         """List of records and total count returned by query.
@@ -561,60 +559,18 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             ),
         )
 
-    def list_and_count(
-        self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
-        auto_expunge: Optional[bool] = None,
-        count_with_window_function: Optional[bool] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        use_cache: bool = True,
-        bind_group: Optional[str] = None,
-        **kwargs: Any,
-    ) -> tuple[Sequence[ModelT], int]:
-        """List of records and total count returned by query.
-
-        .. deprecated:: 1.10.0
-            Use :meth:`get_many_and_count` instead.
-        """
-        warn_deprecation(
-            version="1.10.0",
-            deprecated_name="list_and_count",
-            kind="method",
-            removal_in="2.0.0",
-            alternative="get_many_and_count",
-        )
-        return self.get_many_and_count(
-            *filters,
-            statement=statement,
-            auto_expunge=auto_expunge,
-            count_with_window_function=count_with_window_function,
-            order_by=order_by,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
-            uniquify=uniquify,
-            use_cache=use_cache,
-            bind_group=bind_group,
-            **kwargs,
-        )
-
     @classmethod
     @contextmanager
     def new(
         cls,
-        session: Optional[Union[Session, scoped_session[Session]]] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
-        config: Optional[SQLAlchemySyncConfig] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        count_with_window_function: Optional[bool] = None,
+        session: Session | scoped_session[Session] | None = None,
+        statement: Select[tuple[ModelT]] | None = None,
+        config: SQLAlchemySyncConfig | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        count_with_window_function: bool | None = None,
     ) -> Generator[Self, None, None]:
         """Context manager that returns instance of service object.
 
@@ -653,16 +609,16 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
 
     def get_many(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
-        auto_expunge: Optional[bool] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
+        *filters: StatementFilter | ColumnElement[bool],
+        statement: Select[tuple[ModelT]] | None = None,
+        auto_expunge: bool | None = None,
+        order_by: List[OrderingPair] | OrderingPair | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
         use_cache: bool = True,
-        bind_group: Optional[str] = None,
+        bind_group: str | None = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Wrap repository scalars operation.
@@ -701,46 +657,6 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             ),
         )
 
-    def list(
-        self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
-        auto_expunge: Optional[bool] = None,
-        order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        use_cache: bool = True,
-        bind_group: Optional[str] = None,
-        **kwargs: Any,
-    ) -> Sequence[ModelT]:
-        """Wrap repository scalars operation.
-
-        .. deprecated:: 1.10.0
-            Use :meth:`get_many` instead.
-        """
-        warn_deprecation(
-            version="1.10.0",
-            deprecated_name="list",
-            kind="method",
-            removal_in="2.0.0",
-            alternative="get_many",
-        )
-        return self.get_many(
-            *filters,
-            statement=statement,
-            auto_expunge=auto_expunge,
-            order_by=order_by,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
-            uniquify=uniquify,
-            use_cache=use_cache,
-            bind_group=bind_group,
-            **kwargs,
-        )
-
 
 class SQLAlchemySyncRepositoryService(
     SQLAlchemySyncRepositoryReadService[ModelT, SQLAlchemySyncRepositoryT],
@@ -752,12 +668,12 @@ class SQLAlchemySyncRepositoryService(
         self,
         data: "ModelDictT[ModelT]",
         *,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        auto_refresh: Optional[bool] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        bind_group: Optional[str] = None,
-        schema_dump_config: Optional[SchemaDumpConfig] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        bind_group: str | None = None,
+        schema_dump_config: SchemaDumpConfig | None = None,
     ) -> "ModelT":
         """Wrap repository instance creation.
 
@@ -791,11 +707,11 @@ class SQLAlchemySyncRepositoryService(
         self,
         data: "BulkModelDictT[ModelT]",
         *,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        bind_group: Optional[str] = None,
-        schema_dump_config: Optional[SchemaDumpConfig] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        bind_group: str | None = None,
+        schema_dump_config: SchemaDumpConfig | None = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance creation.
 
@@ -831,20 +747,20 @@ class SQLAlchemySyncRepositoryService(
     def update(
         self,
         data: "ModelDictT[ModelT]",
-        item_id: Optional[Any] = None,
+        item_id: Any | None = None,
         *,
-        attribute_names: Optional[Iterable[str]] = None,
+        attribute_names: Iterable[str] | None = None,
         with_for_update: ForUpdateParameter = None,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        auto_refresh: Optional[bool] = None,
-        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
-        schema_dump_config: Optional[SchemaDumpConfig] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
+        schema_dump_config: SchemaDumpConfig | None = None,
     ) -> "ModelT":
         """Wrap repository update operation.
 
@@ -881,8 +797,6 @@ class SQLAlchemySyncRepositoryService(
         data = self.to_model(data, "update", schema_dump_config=schema_dump_config)
 
         if item_id is not None:
-            # When item_id is provided, update existing instance rather than replacing it
-            # This preserves relationships and database-managed fields
             existing_instance: ModelT = self.repository.get(
                 item_id,
                 id_attribute=id_attribute,
@@ -892,11 +806,8 @@ class SQLAlchemySyncRepositoryService(
                 bind_group=bind_group,
             )
 
-            # Extract attributes from converted model to update existing instance
-            # Only copy attributes that were explicitly set (present in instance state)
             instance_state = sa_inspect(data)  # pyright: ignore[reportOptionalMemberAccess]
             for attr in instance_state.mapper.attrs:  # type: ignore[union-attr]  # pyright: ignore[reportOptionalMemberAccess]
-                # Check if attribute was explicitly set in the instance
                 if attr.key in instance_state.dict:  # type: ignore[union-attr]  # pyright: ignore[reportOptionalMemberAccess]
                     value = getattr(data, attr.key, MISSING)
                     if value is not MISSING and hasattr(existing_instance, attr.key):
@@ -944,14 +855,14 @@ class SQLAlchemySyncRepositoryService(
         self,
         data: "BulkModelDictT[ModelT]",
         *,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
-        schema_dump_config: Optional[SchemaDumpConfig] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
+        schema_dump_config: SchemaDumpConfig | None = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance update.
 
@@ -993,20 +904,20 @@ class SQLAlchemySyncRepositoryService(
     def upsert(
         self,
         data: "ModelDictT[ModelT]",
-        item_id: Optional[Any] = None,
+        item_id: Any | None = None,
         *,
-        attribute_names: Optional[Iterable[str]] = None,
+        attribute_names: Iterable[str] | None = None,
         with_for_update: ForUpdateParameter = None,
-        auto_expunge: Optional[bool] = None,
-        auto_commit: Optional[bool] = None,
-        auto_refresh: Optional[bool] = None,
-        match_fields: Optional[Union[List[str], str]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
-        schema_dump_config: Optional[SchemaDumpConfig] = None,
+        auto_expunge: bool | None = None,
+        auto_commit: bool | None = None,
+        auto_refresh: bool | None = None,
+        match_fields: List[str] | str | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
+        schema_dump_config: SchemaDumpConfig | None = None,
     ) -> ModelT:
         """Wrap repository upsert operation.
 
@@ -1070,17 +981,17 @@ class SQLAlchemySyncRepositoryService(
         self,
         data: "BulkModelDictT[ModelT]",
         *,
-        auto_expunge: Optional[bool] = None,
-        auto_commit: Optional[bool] = None,
+        auto_expunge: bool | None = None,
+        auto_commit: bool | None = None,
         no_merge: bool = False,
-        match_fields: Optional[Union[List[str], str]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
-        schema_dump_config: Optional[SchemaDumpConfig] = None,
-        chunk_size: Optional[int] = None,
+        match_fields: List[str] | str | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
+        schema_dump_config: SchemaDumpConfig | None = None,
+        chunk_size: int | None = None,
     ) -> Sequence[ModelT]:
         """Wrap repository upsert operation.
 
@@ -1134,20 +1045,20 @@ class SQLAlchemySyncRepositoryService(
 
     def get_or_upsert(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: Optional[Union[List[str], str]] = None,
+        *filters: StatementFilter | ColumnElement[bool],
+        match_fields: List[str] | str | None = None,
         upsert: bool = True,
-        attribute_names: Optional[Iterable[str]] = None,
+        attribute_names: Iterable[str] | None = None,
         with_for_update: ForUpdateParameter = None,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        auto_refresh: Optional[bool] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
-        schema_dump_config: Optional[SchemaDumpConfig] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
+        schema_dump_config: SchemaDumpConfig | None = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Wrap repository instance creation.
@@ -1203,19 +1114,19 @@ class SQLAlchemySyncRepositoryService(
 
     def get_and_update(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        match_fields: Optional[Union[List[str], str]] = None,
-        attribute_names: Optional[Iterable[str]] = None,
+        *filters: StatementFilter | ColumnElement[bool],
+        match_fields: List[str] | str | None = None,
+        attribute_names: Iterable[str] | None = None,
         with_for_update: ForUpdateParameter = None,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        auto_refresh: Optional[bool] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
-        schema_dump_config: Optional[SchemaDumpConfig] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        auto_refresh: bool | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
+        schema_dump_config: SchemaDumpConfig | None = None,
         **kwargs: Any,
     ) -> tuple[ModelT, bool]:
         """Wrap repository instance creation.
@@ -1269,14 +1180,14 @@ class SQLAlchemySyncRepositoryService(
         self,
         item_id: PrimaryKeyType,
         *,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
     ) -> ModelT:
         """Wrap repository delete operation.
 
@@ -1329,15 +1240,15 @@ class SQLAlchemySyncRepositoryService(
         self,
         item_ids: List[PrimaryKeyType],
         *,
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
-        chunk_size: Optional[int] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        id_attribute: str | InstrumentedAttribute[Any] | None = None,
+        chunk_size: int | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
     ) -> Sequence[ModelT]:
         """Wrap repository bulk instance deletion.
 
@@ -1408,15 +1319,15 @@ class SQLAlchemySyncRepositoryService(
 
     def delete_where(
         self,
-        *filters: Union[StatementFilter, ColumnElement[bool]],
-        auto_commit: Optional[bool] = None,
-        auto_expunge: Optional[bool] = None,
-        error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+        *filters: StatementFilter | ColumnElement[bool],
+        auto_commit: bool | None = None,
+        auto_expunge: bool | None = None,
+        error_messages: ErrorMessages | EmptyType | None = Empty,
         sanity_check: bool = True,
-        load: Optional[LoadSpec] = None,
-        execution_options: Optional[dict[str, Any]] = None,
-        uniquify: Optional[bool] = None,
-        bind_group: Optional[str] = None,
+        load: LoadSpec | None = None,
+        execution_options: dict[str, Any] | None = None,
+        uniquify: bool | None = None,
+        bind_group: str | None = None,
         **kwargs: Any,
     ) -> Sequence[ModelT]:
         """Wrap repository scalars operation.

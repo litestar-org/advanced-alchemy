@@ -1,6 +1,6 @@
 """Passlib Hashing Backend."""
 
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.password_hash.base import HashingBackend
@@ -33,7 +33,7 @@ class PasslibHasher(HashingBackend):
             raise MissingDependencyError(package="passlib")
         self.context = context
 
-    def hash(self, value: "Union[str, bytes]") -> str:
+    def hash(self, value: "str | bytes") -> str:
         """Hash the given value using the Passlib context.
 
         Args:
@@ -44,7 +44,7 @@ class PasslibHasher(HashingBackend):
         """
         return self.context.hash(self._ensure_bytes(value))
 
-    def verify(self, plain: "Union[str, bytes]", hashed: str) -> bool:
+    def verify(self, plain: "str | bytes", hashed: str) -> bool:
         """Verify a plain text value against a hash using the Passlib context.
 
         Args:

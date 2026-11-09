@@ -35,7 +35,7 @@ See Also:
 """
 
 import re
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Optional, cast
 from uuid import UUID
 from weakref import WeakKeyDictionary
 
@@ -123,10 +123,10 @@ class MergeStatement(Executable, ClauseElement):
     def __init__(
         self,
         table: Table,
-        source: Union[ClauseElement, str],
+        source: ClauseElement | str,
         on_condition: ClauseElement,
-        when_matched_update: Optional[dict[str, Any]] = None,
-        when_not_matched_insert: Optional[dict[str, Any]] = None,
+        when_matched_update: dict[str, Any] | None = None,
+        when_not_matched_insert: dict[str, Any] | None = None,
     ) -> None:
         """Initialize a MERGE statement.
 
@@ -390,8 +390,8 @@ class OnConflictUpsert:
         table: Table,
         values: dict[str, Any],
         conflict_columns: list[str],
-        update_columns: Optional[list[str]] = None,
-        dialect_name: Optional[str] = None,
+        update_columns: list[str] | None = None,
+        dialect_name: str | None = None,
         validate_identifiers: bool = False,
     ) -> Insert:
         """Create a dialect-specific upsert statement.
@@ -476,8 +476,8 @@ class OnConflictUpsert:
         table: Table,
         values: dict[str, Any],
         conflict_columns: list[str],
-        update_columns: Optional[list[str]] = None,
-        dialect_name: Optional[str] = None,
+        update_columns: list[str] | None = None,
+        dialect_name: str | None = None,
         validate_identifiers: bool = False,
     ) -> tuple[MergeStatement, dict[str, Any]]:
         """Create a MERGE-based upsert for Oracle/PostgreSQL 15+.
@@ -515,7 +515,7 @@ class OnConflictUpsert:
         update_columns = _resolve_update_columns(table, values, conflict_columns, update_columns)
 
         additional_params: dict[str, Any] = {}
-        source: Union[ClauseElement, str]
+        source: ClauseElement | str
         when_not_matched_insert: dict[str, Any]
 
         if dialect_name == "oracle":
@@ -581,10 +581,10 @@ class OnConflictUpsert:
         table: Table,
         rows: "Sequence[dict[str, Any]]",
         conflict_columns: list[str],
-        update_columns: Optional[list[str]] = None,
-        dialect_name: Optional[str] = None,
+        update_columns: list[str] | None = None,
+        dialect_name: str | None = None,
         validate_identifiers: bool = False,
-        model_type: Optional[type[Any]] = None,
+        model_type: type[Any] | None = None,
     ) -> Insert:
         """Build a dialect-specific bulk Insert with ON CONFLICT / ON DUPLICATE KEY UPDATE.
 
@@ -618,7 +618,7 @@ class OnConflictUpsert:
             conflict_columns,
             update_columns,
         )
-        insert_target: Union[Table, type[Any]] = model_type if model_type is not None else table
+        insert_target: Table | type[Any] = model_type if model_type is not None else table
 
         if dialect_name in {"postgresql", "sqlite", "duckdb", "cockroachdb"}:
             pg_stmt = pg_insert(insert_target).values(list(rows))
@@ -647,8 +647,8 @@ class OnConflictUpsert:
         table: Table,
         rows: "Sequence[dict[str, Any]]",
         conflict_columns: list[str],
-        update_columns: Optional[list[str]] = None,
-        dialect_name: Optional[str] = None,
+        update_columns: list[str] | None = None,
+        dialect_name: str | None = None,
         validate_identifiers: bool = False,
     ) -> MergeStatement:
         """Build a multi-row ``MergeStatement`` for dialects with native MERGE support.
@@ -890,7 +890,7 @@ _DIALECTS_INSERT_OR_UPDATE: frozenset[str] = frozenset({"spanner", "spanner+span
 _UPSERT_STRATEGY_CACHE: "WeakKeyDictionary[Table, dict[tuple[Any, ...], UpsertStrategy]]" = WeakKeyDictionary()
 
 
-def _parse_dialect(dialect: Union[str, Dialect]) -> tuple[str, Optional[bool]]:
+def _parse_dialect(dialect: str | Dialect) -> tuple[str, bool | None]:
     """Extract ``(dialect_name, insert_returning)`` from a dialect name or ``Dialect`` instance."""
     if isinstance(dialect, str):
         return dialect, None
@@ -898,8 +898,8 @@ def _parse_dialect(dialect: Union[str, Dialect]) -> tuple[str, Optional[bool]]:
 
 
 def _native_primitive_for_dialect(
-    dialect_name: str, insert_returning: Optional[bool] = None
-) -> tuple[Optional[UpsertKind], bool]:
+    dialect_name: str, insert_returning: bool | None = None
+) -> tuple[UpsertKind | None, bool]:
     """Return ``(kind, supports_returning)`` for the dialect's native upsert primitive.
 
     Returns ``(None, False)`` for dialects without a native primitive (fallback).
@@ -923,7 +923,7 @@ def _get_native_unique_index_columns(index: Any) -> tuple[str, ...]:
         return ()
     index_columns = tuple(index.columns)
     if len(index_columns) != len(index.expressions) or any(
-        expression is not column for expression, column in zip(index.expressions, index_columns)
+        expression is not column for expression, column in zip(index.expressions, index_columns, strict=False)
     ):
         return ()
     return tuple(col.key for col in index_columns)
@@ -950,7 +950,7 @@ def _mysql_unique_target_is_ambiguous(table: Table, primary_key_columns: tuple[s
 def resolve_upsert_strategy(
     table: Table,
     match_fields: "Sequence[str]",
-    dialect: Union[str, Dialect],
+    dialect: str | Dialect,
 ) -> UpsertStrategy:
     """Resolve the optimal upsert strategy for ``(table, match_fields, dialect)``.
 
@@ -1012,13 +1012,13 @@ def _resolve_upsert_strategy(
     table: Table,
     match_fields: tuple[str, ...],
     dialect_name: str,
-    insert_returning: Optional[bool],
+    insert_returning: bool | None,
 ) -> UpsertStrategy:
     """Resolution logic behind :func:`resolve_upsert_strategy`; results are memoized per table."""
     kind, supports_returning = _native_primitive_for_dialect(dialect_name, insert_returning)
     match_set = set(match_fields)
     primary_key_columns = tuple(column.key for column in table.primary_key.columns)
-    native_conflict_columns: Optional[tuple[str, ...]] = None
+    native_conflict_columns: tuple[str, ...] | None = None
     if kind is not None and primary_key_columns and set(primary_key_columns) == match_set:
         native_conflict_columns = primary_key_columns
     elif kind is not None and kind != "insert_or_update":
