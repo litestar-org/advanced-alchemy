@@ -695,7 +695,7 @@ def _aggregate_filters(keys: tuple[str, ...], **kwargs: Any) -> list[FilterTypes
             continue
         if isinstance(value, SearchFilter) and (value.field_name is None or value.value is None):  # pyright: ignore[reportUnnecessaryComparison]
             continue  # type: ignore[unreachable]
-        if isinstance(value, OrderBy) and value.field_name is None:
+        if isinstance(value, OrderBy) and value.field_name is None:  # pyright: ignore[reportUnnecessaryComparison]
             continue  # type: ignore[unreachable]
         filters.append(value)
     return filters

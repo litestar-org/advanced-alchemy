@@ -16,7 +16,7 @@ A **Repository** wraps one table model and gives you ready-made, type-checked me
         :alt: How a repository connects your code and filters to your SQL database
         :class: aa-diagram--dark
 
-.. grid:: 1 1 3 3
+.. grid:: 1 1 2 2
     :padding: 0
     :gutter: 3
 
@@ -32,6 +32,12 @@ A **Repository** wraps one table model and gives you ready-made, type-checked me
 
       Search text, filter by IDs or dates, and return paginated results with total counts.
 
+    .. grid-item-card:: :octicon:`git-branch` Relationship Filtering & FilterSet
+      :link: relationship-filtering
+      :link-type: doc
+
+      Filter across related tables with correlated subqueries and declarative query-parameter filter sets.
+
     .. grid-item-card:: :octicon:`lock` Advanced Patterns
       :link: advanced
       :link-type: doc
@@ -44,4 +50,5 @@ A **Repository** wraps one table model and gives you ready-made, type-checked me
 
     basics
     filtering
+    relationship-filtering
     advanced
