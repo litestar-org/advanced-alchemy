@@ -283,6 +283,7 @@ def test_provide_services_sync_with_connection_and_config() -> None:
 
 
 def test_framework_re_exports() -> None:
+    import advanced_alchemy.extensions.litestar.service as litestar_service_module
     from advanced_alchemy.extensions.fastapi.providers import (
         ServiceGroup as FastApiServiceGroup,
     )
@@ -312,6 +313,9 @@ def test_framework_re_exports() -> None:
     assert LitestarServiceGroup is ServiceGroup
     assert LitestarAsyncRepoService is SQLAlchemyAsyncRepositoryService
     assert litestar_provide_services is provide_services
+    assert "ServiceGroup" in dir(litestar_service_module)
+    with pytest.raises(AttributeError):
+        getattr(litestar_service_module, "NonExistentAttribute")
 
 
 @pytest.mark.asyncio

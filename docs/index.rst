@@ -93,6 +93,7 @@ Advanced Alchemy gives your tables ready-made IDs and timestamps, provides ready
     Data Modeling <usage/modeling/index>
     Repositories <usage/repositories/index>
     Services <usage/services>
+    Service Composition <usage/service_composition>
     Read/Write Routing <usage/routing>
     Caching <usage/caching>
     CLI & Migrations <usage/cli>
@@ -122,6 +123,7 @@ Advanced Alchemy gives your tables ready-made IDs and timestamps, provides ready
     Repositories <reference/repository>
     Memory Repositories <reference/repository_memory>
     Services <reference/service>
+    Service Composition <reference/service_composition>
     Filters <reference/filters>
     Bulk Operations <reference/operations>
     Custom Types <reference/types>

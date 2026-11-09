@@ -55,7 +55,7 @@ async def _aclosing(thing: Any) -> AsyncGenerator[Any, None]:
         await thing.aclose()
 
 
-class _ServiceGroupContext(Generic[Unpack[Ts]]):
+class ServiceGroupContext(Generic[Unpack[Ts]]):
     """Context manager for acquiring multiple services on a shared session."""
 
     __slots__ = (
@@ -482,11 +482,11 @@ class ServiceGroup(Generic[Unpack[Ts]]):
         execution_options: dict[str, Any] | None = None,
         uniquify: bool | None = None,
         count_with_window_function: bool | None = None,
-    ) -> _ServiceGroupContext[Unpack[Ts]]:
+    ) -> ServiceGroupContext[Unpack[Ts]]:
         """Instantiate an acquisition context for services in this group."""
         return cast(
-            "_ServiceGroupContext[Unpack[Ts]]",
-            _ServiceGroupContext(
+            "ServiceGroupContext[Unpack[Ts]]",
+            ServiceGroupContext(
                 self.specs,
                 session=session,
                 config=config,
@@ -639,7 +639,7 @@ def provide_services(
     execution_options: dict[str, Any] | None = None,
     uniquify: bool | None = None,
     count_with_window_function: bool | None = None,
-) -> _ServiceGroupContext[T1]: ...
+) -> ServiceGroupContext[T1]: ...
 
 
 @overload
@@ -657,7 +657,7 @@ def provide_services(
     execution_options: dict[str, Any] | None = None,
     uniquify: bool | None = None,
     count_with_window_function: bool | None = None,
-) -> _ServiceGroupContext[T1, T2]: ...
+) -> ServiceGroupContext[T1, T2]: ...
 
 
 @overload
@@ -676,7 +676,7 @@ def provide_services(
     execution_options: dict[str, Any] | None = None,
     uniquify: bool | None = None,
     count_with_window_function: bool | None = None,
-) -> _ServiceGroupContext[T1, T2, T3]: ...
+) -> ServiceGroupContext[T1, T2, T3]: ...
 
 
 @overload
@@ -696,7 +696,7 @@ def provide_services(
     execution_options: dict[str, Any] | None = None,
     uniquify: bool | None = None,
     count_with_window_function: bool | None = None,
-) -> _ServiceGroupContext[T1, T2, T3, T4]: ...
+) -> ServiceGroupContext[T1, T2, T3, T4]: ...
 
 
 @overload
@@ -717,7 +717,7 @@ def provide_services(
     execution_options: dict[str, Any] | None = None,
     uniquify: bool | None = None,
     count_with_window_function: bool | None = None,
-) -> _ServiceGroupContext[T1, T2, T3, T4, T5]: ...
+) -> ServiceGroupContext[T1, T2, T3, T4, T5]: ...
 
 
 @overload
@@ -739,7 +739,7 @@ def provide_services(
     execution_options: dict[str, Any] | None = None,
     uniquify: bool | None = None,
     count_with_window_function: bool | None = None,
-) -> _ServiceGroupContext[T1, T2, T3, T4, T5, T6]: ...
+) -> ServiceGroupContext[T1, T2, T3, T4, T5, T6]: ...
 
 
 @overload
