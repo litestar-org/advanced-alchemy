@@ -75,6 +75,7 @@ __all__ = (
     "get_primary_key_info",
     "has_upsert_update_intent",
     "model_from_dict",
+    "partial_model_from_dict",
     "resolve_generic_type_args",
     "snapshot_and_detach_relationships",
     "was_attribute_set",
@@ -325,27 +326,24 @@ def model_from_dict(model: type[ModelT], /, **kwargs: Any) -> ModelT:
     Returns:
         ModelT: A new instance of the model populated with the provided values.
     """
-    mapper = class_mapper(model)
-    mapper_attrs = mapper.attrs
-    converted_data: dict[str, Any] = {}
+    return _hydrate_model_dict(model, kwargs, partial=False)
 
-    for key, value in kwargs.items():
-        if key not in mapper_attrs:
-            continue
 
-        attr = mapper_attrs[key]
+def partial_model_from_dict(model: type[ModelT], /, **kwargs: Any) -> ModelT:
+    """Create a partial ORM model instance without invoking ``model.__init__``.
 
-        if isinstance(attr, RelationshipProperty):
-            related_model: type[ModelT] = attr.mapper.class_
-            converted_data[key] = _convert_relationship_value(
-                value=value,
-                related_model=related_model,
-                is_collection=attr.uselist or False,
-            )
-        else:
-            converted_data[key] = value
+    Used for partial updates so omitted attributes remain uninitialized across
+    standard declarative models, ``MappedAsDataclass`` models (including models
+    with required non-default fields), and ``SQLModel`` table models.
 
-    return model(**converted_data)
+    Args:
+        model: The SQLAlchemy model class to instantiate.
+        **kwargs: Keyword arguments containing only the attributes to update.
+
+    Returns:
+        ModelT: A transient model instance with only ``kwargs`` populated.
+    """
+    return _hydrate_model_dict(model, kwargs, partial=True)
 
 
 def get_abstract_loader_options(
@@ -508,36 +506,12 @@ def snapshot_and_detach_relationships(instance: Any, mapper: Any) -> dict[str, A
         if not was_attribute_set(instance, mapper, relationship.key):
             continue
         raw_value: Any = instance.__dict__.get(relationship.key)
-        related_items: list[Any]
-        if isinstance(raw_value, Mapping):
-            mapping = cast("dict[Any, Any]", raw_value)
-            values[relationship.key] = dict(mapping)
-            related_items = list(mapping.values())
-        elif isinstance(raw_value, (list, set)):
-            items = cast("Iterable[Any]", raw_value)
-            values[relationship.key] = set(items) if isinstance(raw_value, set) else list(items)
-            related_items = list(items)
-        else:
-            values[relationship.key] = raw_value
-            related_items = [raw_value]
+        snapshotted, related_items = _snapshot_relationship_items(raw_value)
+        values[relationship.key] = snapshotted
 
         back_attr = relationship.back_populates
-        if not is_transient or not back_attr or raw_value is None:
-            continue
-        for related in related_items:
-            related_state: Any = inspect(related, raiseerr=False)  # pyright: ignore[reportUnknownVariableType]
-            if related is None or related_state is None:
-                continue
-            back_value: Any = related.__dict__.get(back_attr)
-            if isinstance(back_value, (list, set)) and instance in back_value:
-                cast("Any", back_value).remove(instance)
-            elif back_value is instance:
-                setattr(related, back_attr, None)
-            else:
-                pending: Any = getattr(related_state, "_pending_mutations", None)  # pyright: ignore[reportUnknownArgumentType]
-                added_items: Any = getattr(pending.get(back_attr), "added_items", None) if pending else None
-                if added_items is not None and instance in added_items:
-                    added_items.discard(instance)
+        if is_transient and back_attr and raw_value is not None:
+            _detach_transient_backrefs(instance, related_items, back_attr)
     return values
 
 
@@ -964,6 +938,62 @@ class FilterableRepository(
         if isinstance(statement, Select):
             statement = cast("StatementTypeT", statement.order_by(field.desc() if is_desc else field.asc()))
         return statement
+
+
+def _hydrate_model_dict(model: type[ModelT], kwargs: Mapping[str, Any], *, partial: bool = False) -> ModelT:
+    mapper = class_mapper(model)
+    mapper_attrs = mapper.attrs
+    converted_data: dict[str, Any] = {}
+
+    for key, value in kwargs.items():
+        if key not in mapper_attrs:
+            continue
+
+        attr = mapper_attrs[key]
+        if isinstance(attr, RelationshipProperty):
+            related_model: type[ModelT] = attr.mapper.class_
+            converted_data[key] = _convert_relationship_value(
+                value=value,
+                related_model=related_model,
+                is_collection=attr.uselist or False,
+            )
+        else:
+            converted_data[key] = value
+
+    if partial:
+        instance: ModelT = mapper.class_manager.new_instance()
+        for key, value in converted_data.items():
+            setattr(instance, key, value)
+        return instance
+
+    return model(**converted_data)
+
+
+def _snapshot_relationship_items(raw_value: Any) -> tuple[Any, list[Any]]:
+    if isinstance(raw_value, Mapping):
+        mapping = cast("dict[Any, Any]", raw_value)
+        return dict(mapping), list(mapping.values())
+    if isinstance(raw_value, (list, set)):
+        items = cast("Iterable[Any]", raw_value)
+        return (set(items) if isinstance(raw_value, set) else list(items)), list(items)
+    return raw_value, [raw_value]
+
+
+def _detach_transient_backrefs(instance: Any, related_items: Sequence[Any], back_attr: str) -> None:
+    for related in related_items:
+        related_state: Any = inspect(related, raiseerr=False)  # pyright: ignore[reportUnknownVariableType]
+        if related is None or related_state is None:
+            continue
+        back_value: Any = related.__dict__.get(back_attr)
+        if isinstance(back_value, (list, set)) and instance in back_value:
+            cast("Any", back_value).remove(instance)
+        elif back_value is instance:
+            setattr(related, back_attr, None)
+        else:
+            pending: Any = getattr(related_state, "_pending_mutations", None)  # pyright: ignore[reportUnknownArgumentType]
+            added_items: Any = getattr(pending.get(back_attr), "added_items", None) if pending else None
+            if added_items is not None and instance in added_items:
+                added_items.discard(instance)
 
 
 def _convert_relationship_value(

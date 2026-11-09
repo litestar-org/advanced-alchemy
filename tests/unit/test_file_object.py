@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from advanced_alchemy._listeners import (
     AsyncFileObjectListener,
     FileObjectInspector,
+    _register_session_async_task,
     flush_pending_async_listener_tasks,
 )
 from advanced_alchemy.types.file_object import FileObject
@@ -2035,3 +2036,22 @@ async def test_flush_pending_async_listener_tasks_awaits_session_tasks() -> None
 
     assert completed is True
     tracker.commit_async.assert_awaited_once()
+
+
+def test_flush_logs_failed_listener_task(caplog: pytest.LogCaptureFixture) -> None:
+    """Test flush_pending_async_listener_tasks logs warnings when a background listener task fails."""
+
+    async def fail() -> None:
+        msg = "cache backend down"
+        raise RuntimeError(msg)
+
+    async def run() -> None:
+        session = MagicMock(spec=Session)
+        session.info = {}
+        _register_session_async_task(session, asyncio.create_task(fail()))
+        await flush_pending_async_listener_tasks(session)
+
+    with caplog.at_level(logging.WARNING, logger="advanced_alchemy"):
+        asyncio.run(run())
+
+    assert "cache backend down" in caplog.text
