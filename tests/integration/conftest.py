@@ -21,6 +21,7 @@ from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 
+from tests.integration import helpers as test_helpers
 from tests.integration.repository_fixtures import *  # noqa: F403
 
 if TYPE_CHECKING:
@@ -694,74 +695,40 @@ def session(engine: Engine, request: FixtureRequest) -> Generator[Session, None,
 def _auto_clean_sync_db(request: FixtureRequest) -> Generator[None, None, None]:
     """Universal cleanup fixture for sync engine tests.
 
-    Handles cleanup for all test types including:
-    - Repository fixture tests (uuid/bigint session-based)
-    - Filter tests (movie model)
-    - Legacy tests with manual cleanup
-
-    Only runs cleanup when appropriate and avoids conflicts.
+    Handles cleanup for filter tests and legacy repository model tests
+    after the test session fixture has torn down and released locks.
     """
+    if "engine" not in request.fixturenames or any(
+        fixture in request.fixturenames
+        for fixture in ("test_session_sync", "uuid_test_session_sync", "bigint_test_session_sync")
+    ):
+        yield
+        return
+
+    model_fixture = next((name for name in ("uuid_models", "bigint_models") if name in request.fixturenames), None)
+    has_movie_model = "movie_model_sync" in request.fixturenames
+    if model_fixture is None and not has_movie_model:
+        yield
+        return
+
+    engine = request.getfixturevalue("engine")
+    models = request.getfixturevalue(model_fixture) if model_fixture is not None else None
     yield
 
-    # Skip cleanup for mock engines or if no sync engine available
-    if "engine" not in request.fixturenames:
-        return
-
-    try:
-        engine = request.getfixturevalue("engine")
-    except Exception:
-        return
-
-    # Skip cleanup for mock engines
     if getattr(engine.dialect, "name", "") == "mock":
         return
 
-    from tests.integration import helpers as test_helpers
-
     try:
-        # 1. Handle repository fixture tests - these use transaction-based cleanup
-        if any(
-            fixture in request.fixturenames
-            for fixture in ["test_session_sync", "uuid_test_session_sync", "bigint_test_session_sync"]
-        ):
-            # These fixtures handle their own transaction-based cleanup
-            # No additional cleanup needed
+        movie_metadata = getattr(request.node, "_movie_model_metadata", None)
+        if movie_metadata is not None:
+            test_helpers.clean_tables(engine, movie_metadata)
             return
 
-        # 2. Handle filter tests with movie models
-        if "movie_model_sync" in request.fixturenames:
-            try:
-                movie_model = request.getfixturevalue("movie_model_sync")
-                test_helpers.clean_tables(engine, movie_model.metadata)
-            except Exception as e:
-                # Log but don't fail on cleanup errors
-                import logging
-
-                logging.getLogger(__name__).warning(f"Movie model cleanup failed: {e}")
-            return
-
-        # 3. Handle legacy tests with repository models
-        base_model = None
-        if "uuid_models" in request.fixturenames:
-            try:
-                uuid_models = request.getfixturevalue("uuid_models")
-                base_model = uuid_models["base"]
-            except Exception:
-                pass
-        elif "bigint_models" in request.fixturenames:
-            try:
-                bigint_models = request.getfixturevalue("bigint_models")
-                base_model = bigint_models["base"]
-            except Exception:
-                pass
-
-        if base_model:
-            test_helpers.clean_tables(engine, base_model.metadata)
-
+        if models is not None:
+            base_model = models["base"]
+            if base_model:
+                test_helpers.clean_tables(engine, base_model.metadata)
     except Exception as e:
-        # Log but don't fail the test on cleanup errors
-        import logging
-
         logging.getLogger(__name__).warning(f"Sync cleanup failed: {e}")
 
 
@@ -769,75 +736,40 @@ def _auto_clean_sync_db(request: FixtureRequest) -> Generator[None, None, None]:
 async def _auto_clean_async_db(request: FixtureRequest) -> AsyncGenerator[None, None]:
     """Universal cleanup fixture for async engine tests.
 
-    Handles cleanup for all async test types including:
-    - Repository fixture tests (uuid/bigint session-based)
-    - Filter tests (movie model)
-    - Legacy tests with manual cleanup
-
-    Only runs cleanup when appropriate and avoids conflicts.
+    Handles cleanup for filter tests and legacy repository model tests
+    after the test session fixture has torn down and released locks.
     """
+    if "async_engine" not in request.fixturenames or any(
+        fixture in request.fixturenames
+        for fixture in ("test_session_async", "uuid_test_session_async", "bigint_test_session_async")
+    ):
+        yield
+        return
+
+    model_fixture = next((name for name in ("uuid_models", "bigint_models") if name in request.fixturenames), None)
+    has_movie_model = "movie_model_async" in request.fixturenames
+    if model_fixture is None and not has_movie_model:
+        yield
+        return
+
+    async_engine = request.getfixturevalue("async_engine")
+    models = request.getfixturevalue(model_fixture) if model_fixture is not None else None
     yield
 
-    # Skip cleanup if no async engine available
-    if "async_engine" not in request.fixturenames:
-        return
-
-    try:
-        async_engine = request.getfixturevalue("async_engine")
-    except Exception:
-        # Fixture might be torn down already
-        return
-
-    # Skip cleanup for mock engines
     if getattr(async_engine.dialect, "name", "") == "mock":
         return
 
-    from tests.integration import helpers as test_helpers
-
     try:
-        # 1. Handle repository fixture tests - these use transaction-based cleanup
-        if any(
-            fixture in request.fixturenames
-            for fixture in ["test_session_async", "uuid_test_session_async", "bigint_test_session_async"]
-        ):
-            # These fixtures handle their own transaction-based cleanup
-            # No additional cleanup needed
+        movie_metadata = getattr(request.node, "_movie_model_metadata", None)
+        if movie_metadata is not None:
+            await test_helpers.async_clean_tables(async_engine, movie_metadata)
             return
 
-        # 2. Handle filter tests with movie models
-        if "movie_model_async" in request.fixturenames:
-            try:
-                movie_model = request.getfixturevalue("cached_movie_model")
-                await test_helpers.async_clean_tables(async_engine, movie_model.metadata)
-            except Exception as e:
-                # Log but don't fail on cleanup errors
-                import logging
-
-                logging.getLogger(__name__).warning(f"Async movie model cleanup failed: {e}")
-            return
-
-        # 3. Handle legacy tests with repository models
-        base_model = None
-        if "uuid_models" in request.fixturenames:
-            try:
-                uuid_models = request.getfixturevalue("uuid_models")
-                base_model = uuid_models["base"]
-            except Exception:
-                pass
-        elif "bigint_models" in request.fixturenames:
-            try:
-                bigint_models = request.getfixturevalue("bigint_models")
-                base_model = bigint_models["base"]
-            except Exception:
-                pass
-
-        if base_model:
-            await test_helpers.async_clean_tables(async_engine, base_model.metadata)
-
+        if models is not None:
+            base_model = models["base"]
+            if base_model:
+                await test_helpers.async_clean_tables(async_engine, base_model.metadata)
     except Exception as e:
-        # Log but don't fail the test on cleanup errors
-        import logging
-
         logging.getLogger(__name__).warning(f"Async cleanup failed: {e}")
 
 

@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
 
 from sqlalchemy import event
 from sqlalchemy.inspection import inspect
+from sqlalchemy.util import await_only
+from sqlalchemy.util.concurrency import in_greenlet
 
 from advanced_alchemy.utils.deprecation import warn_deprecation
 from advanced_alchemy.utils.sync_tools import is_async_context as _is_async_context_util
@@ -405,15 +407,15 @@ class AsyncFileObjectListener(BaseFileObjectListener):
             try:
                 await tracker.commit_async()
             except Exception as e:
-                # Using %s for cleaner logging of exception causes
                 logger.debug("An error occurred while committing a file object: %s", e.__cause__)
             finally:
                 session.info.pop(_FILE_TRACKER_KEY, None)
 
-        # Store the task reference, even if not awaited here
         t = asyncio.create_task(_do_async_commit())
         _active_file_operations.add(t)
         t.add_done_callback(lambda _: _active_file_operations.remove(t))
+        if in_greenlet():
+            await_only(t)
 
     @classmethod
     def after_rollback(cls, session: "Session") -> None:
@@ -430,10 +432,11 @@ class AsyncFileObjectListener(BaseFileObjectListener):
             finally:
                 session.info.pop(_FILE_TRACKER_KEY, None)
 
-        # Store the task reference, even if not awaited here
         t = asyncio.create_task(_do_async_rollback())
         _active_file_operations.add(t)
         t.add_done_callback(lambda _: _active_file_operations.remove(t))
+        if in_greenlet():
+            await_only(t)
 
 
 class FileObjectListener(SyncFileObjectListener, AsyncFileObjectListener):

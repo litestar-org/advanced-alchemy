@@ -457,4 +457,3 @@ async def test_autocommit_handler_commit_failure_does_not_crash(create_scope: Ca
     await autocommit_before_send_handler(http_response_start, http_scope)
     mock_session.commit.assert_awaited_once()
     mock_session.close.assert_awaited_once()
-    mock_session.commit.assert_awaited_once()

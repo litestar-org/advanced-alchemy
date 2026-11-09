@@ -1615,6 +1615,7 @@ async def test_obstore_backend_listener_update_file_object_async(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
     """Test listener deletes old file when attribute is updated and session committed using asynchronous SQLAlchemy session."""
+    set_async_context(True)
     setup_file_object_listeners()
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"Old file content sync"

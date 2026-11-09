@@ -16,9 +16,32 @@ from collections.abc import Generator
 import pytest
 from pytest import MonkeyPatch
 
+from advanced_alchemy.base import metadata_registry, orm_registry
+from advanced_alchemy.config.common import GenericSQLAlchemyConfig
+from advanced_alchemy.routing import reset_routing_context
+from advanced_alchemy.types.file_object.registry import DEFAULT_BACKEND, storages
+
 os.environ.setdefault("SPANNER_DISABLE_BUILTIN_METRICS", "true")
 os.environ.setdefault("no_proxy", "127.0.0.1,localhost")
 os.environ.setdefault("NO_PROXY", "127.0.0.1,localhost")
+
+
+def _reset_global_state() -> None:
+    """Reset mutable global registries and context variables across tests."""
+    GenericSQLAlchemyConfig._SESSION_SCOPE_KEY_REGISTRY.clear()
+    GenericSQLAlchemyConfig._ENGINE_APP_STATE_KEY_REGISTRY.clear()
+    GenericSQLAlchemyConfig._SESSIONMAKER_APP_STATE_KEY_REGISTRY.clear()
+    metadata_registry.set(None, orm_registry.metadata)
+    storages.set_default_backend(DEFAULT_BACKEND)
+    reset_routing_context()
+
+
+@pytest.fixture(autouse=True)
+def reset_global_alchemy_state() -> Generator[None, None, None]:
+    """Ensure mutable global registries are reset before and after every test."""
+    _reset_global_state()
+    yield
+    _reset_global_state()
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
