@@ -4,6 +4,7 @@ from flask import Flask
 
 from advanced_alchemy.extensions.adk import ADKServiceConfig
 from advanced_alchemy.extensions.adk.plugins.flask import ADKFlaskExtension
+from advanced_alchemy.extensions.adk.service import ADKSyncSessionService
 from advanced_alchemy.extensions.flask import AdvancedAlchemy, SQLAlchemySyncConfig
 from examples.adk_models import ADK_METADATA, ADK_MODELS, ExampleADKMemory
 
@@ -25,6 +26,7 @@ adk = ADKFlaskExtension(
 @app.post("/sessions")
 def create_session() -> dict[str, Any]:
     service = adk.get_adk_session_service()
+    assert isinstance(service, ADKSyncSessionService)
     session = service.create_session(
         app_name="adk-example",
         user_id="user-123",

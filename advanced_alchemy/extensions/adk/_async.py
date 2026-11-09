@@ -183,7 +183,8 @@ class ADKAsyncSessionService(BaseSessionService):
             .where(self.session_model.user_id == user_id)
             .where(self.session_model.session_id == session_id)
         )
-        return await self.session.scalar(statement)
+        result: Optional[ADKSessionModelMixin] = await self.session.scalar(statement)
+        return result
 
     async def _delete_session_events(self, app_name: str, user_id: str, session_id: str) -> None:
         events = await self.session.scalars(
