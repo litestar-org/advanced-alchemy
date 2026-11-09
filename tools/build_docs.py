@@ -65,7 +65,7 @@ def build(output_dir: str, version: str | None) -> None:
     else:
         os.environ["_ADVANCED_ALCHEMY_DOCS_BUILD_VERSION"] = version
 
-    exit_code = build_main(["-M", "html", "docs", "docs/_build", "-E", "-a"])
+    exit_code = build_main(["-b", "html", "-d", "docs/_build/doctrees", "docs", "docs/_build/html", "-E", "-a"])
     if exit_code != 0:
         msg = f"Sphinx documentation build failed with exit code {exit_code}"
         raise RuntimeError(msg)

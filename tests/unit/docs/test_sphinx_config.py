@@ -136,3 +136,34 @@ def test_pyproject_includes_tools_and_docs_in_mypy_and_pyright() -> None:
     assert '"docs"' in pyproject_text
     assert '"docs/conftest.py"' not in pyproject_text
     assert 'include = ["advanced_alchemy", "tools", "docs"]' in pyproject_text
+
+
+def test_build_docs_uses_build_main_html_builder_flags(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Verify tools/build_docs.py invokes sphinx.cmd.build.build_main with -b html rather than unsupported -M."""
+    from tools import build_docs
+
+    recorded_args: list[list[str]] = []
+    docs_html_dir = tmp_path / "docs" / "_build" / "html"
+    docs_html_dir.mkdir(parents=True)
+    (docs_html_dir / "index.html").write_text("<html></html>", encoding="utf-8")
+    versions_dir = tmp_path / "docs" / "_static"
+    versions_dir.mkdir(parents=True)
+    (versions_dir / "versions.json").write_text('{"versions": ["1", "latest"], "latest": "1"}', encoding="utf-8")
+
+    def _fake_build_main(argv: list[str]) -> int:
+        recorded_args.append(argv)
+        return 0
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(build_docs, "build_main", _fake_build_main)
+
+    output_dir = tmp_path / "docs-build"
+    build_docs.build(output_dir=str(output_dir), version="latest")
+
+    assert len(recorded_args) == 1
+    assert "-M" not in recorded_args[0]
+    assert recorded_args[0][:2] == ["-b", "html"]
+    assert (output_dir / "latest" / "index.html").is_file()
