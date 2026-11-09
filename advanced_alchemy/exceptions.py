@@ -58,7 +58,10 @@ DUPLICATE_KEY_REGEXES = {
             re.IGNORECASE,
         ),
     ],
-    "mssql": [],
+    "mssql": [
+        re.compile(r"Violation\s+of\s+(PRIMARY|UNIQUE)\s+KEY\s+constraint\s+'(?P<constraint>[^']+)'", re.IGNORECASE),
+        re.compile(r"Cannot\s+insert\s+duplicate\s+key\s+row\s+in\s+object\s+'(?P<table>[^']+)'", re.IGNORECASE),
+    ],
     "bigquery": [],
     "cockroach": [],
 }
@@ -100,7 +103,12 @@ FOREIGN_KEY_REGEXES = {
     "duckdb": [
         re.compile(r".*Violates\s+foreign\s+key\s+constraint.*", re.IGNORECASE),
     ],
-    "mssql": [],
+    "mssql": [
+        re.compile(
+            r"conflicted\s+with\s+the\s+(FOREIGN\s+KEY|REFERENCE)\s+constraint\s+\"(?P<constraint>[^\"]+)\"",
+            re.IGNORECASE,
+        ),
+    ],
     "bigquery": [],
     "cockroach": [],
 }
@@ -128,7 +136,9 @@ CHECK_CONSTRAINT_REGEXES = {
     "duckdb": [
         re.compile(r".*CHECK\s+constraint\s+failed.*", re.IGNORECASE),
     ],
-    "mssql": [],
+    "mssql": [
+        re.compile(r"conflicted\s+with\s+the\s+CHECK\s+constraint\s+\"(?P<check_name>[^\"]+)\"", re.IGNORECASE),
+    ],
     "bigquery": [],
     "cockroach": [],
 }
@@ -145,6 +155,15 @@ ORACLE_ERROR_CODE_TO_ERROR_KEY = {
     2292: "foreign_key",
     2290: "check_constraint",
 }
+
+# 547 is shared by FOREIGN KEY, REFERENCE, and CHECK conflicts, so it is left to the regex fallback.
+MSSQL_ERROR_NUMBER_TO_ERROR_KEY = {
+    2601: "duplicate_key",
+    2627: "duplicate_key",
+}
+
+# pyodbc has no native error attribute; the number precedes the ODBC function marker of the first diagnostic record.
+MSSQL_ERROR_NUMBER_REGEX = re.compile(r"\((?P<number>\d+)\)\s+\(SQL\w+\)(?:;|$)")
 
 DUCKDB_ERROR_TYPE_TO_KEY = {
     "duplicate_key": "duplicate_key",
@@ -345,8 +364,9 @@ def _get_error_key_by_code(orig: Optional[BaseException], dialect_name: str) -> 
 
     Checks ``error_type`` for DuckDB, ``sqlstate`` / ``pgcode`` for PostgreSQL and
     CockroachDB, ``sqlite_errorcode`` for SQLite on Python 3.11+, ``errno`` or
-    ``args[0]`` for MySQL and MariaDB drivers, and ``args[0].code`` for Oracle
-    ``oracledb``.
+    ``args[0]`` for MySQL and MariaDB drivers, ``args[0].code`` for Oracle
+    ``oracledb``, and the native error number in the ``args[-1]`` message for
+    SQL Server ``pyodbc`` / ``aioodbc``.
 
     Args:
         orig: The underlying DBAPI exception, if present.
@@ -381,6 +401,9 @@ def _get_error_key_by_code(orig: Optional[BaseException], dialect_name: str) -> 
         oracle_code = getattr(driver_args[0], "code", None)
         if isinstance(oracle_code, int) and not isinstance(oracle_code, bool):
             dialect_key = ORACLE_ERROR_CODE_TO_ERROR_KEY.get(oracle_code)
+    elif dialect_name == "mssql" and driver_args and isinstance(driver_args[-1], str):
+        if (match := MSSQL_ERROR_NUMBER_REGEX.search(driver_args[-1])) is not None:
+            dialect_key = MSSQL_ERROR_NUMBER_TO_ERROR_KEY.get(int(match["number"]))
     return dialect_key
 
 

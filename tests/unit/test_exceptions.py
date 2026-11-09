@@ -471,6 +471,150 @@ def test_wrap_sqlalchemy_exception_oracle_unmapped_or_non_oracle_is_generic(
     assert str(excinfo.value) == "integrity"
 
 
+_MSSQL_PREFIX = "[23000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "some error (2627) (SQLExecDirectW)",
+        "some error (2601) (SQLExecute)",
+        "some error (2627) (SQLExecDirectW); [01000] some other error (3621)",
+    ],
+    ids=["2627", "2601-sqlexecute", "2627-multiple-records"],
+)
+def test_wrap_sqlalchemy_exception_integrity_error_by_mssql_number(message: str) -> None:
+    """Verify mapped native error numbers are classified without relying on the regex fallback."""
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(
+            dialect_name="mssql",
+            error_messages={
+                "duplicate_key": "duplicate",
+                "foreign_key": "foreign",
+                "check_constraint": "check",
+                "integrity": "integrity",
+            },
+        ),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError("23000", message))
+
+    assert excinfo.type is DuplicateKeyError
+    assert str(excinfo.value) == "duplicate"
+
+
+@pytest.mark.parametrize(
+    ("message", "expected", "expected_detail"),
+    [
+        (
+            f"{_MSSQL_PREFIX}Violation of PRIMARY KEY constraint 'PK__parent__3213E83F6F227CE8'. "
+            "Cannot insert duplicate key in object 'dbo.parent'. The duplicate key value is (1).",
+            DuplicateKeyError,
+            "duplicate",
+        ),
+        (
+            f"{_MSSQL_PREFIX}Violation of UNIQUE KEY constraint 'uq_parent_code'. "
+            "Cannot insert duplicate key in object 'dbo.parent'. The duplicate key value is (a).",
+            DuplicateKeyError,
+            "duplicate",
+        ),
+        (
+            f"{_MSSQL_PREFIX}Cannot insert duplicate key row in object 'dbo.plain' with unique index 'ix_plain_v'. "
+            "The duplicate key value is (1).",
+            DuplicateKeyError,
+            "duplicate",
+        ),
+        (
+            f'{_MSSQL_PREFIX}The INSERT statement conflicted with the FOREIGN KEY constraint "fk_child_parent". '
+            'The conflict occurred in database "master", table "dbo.parent", column \'id\'. (547) (SQLExecDirectW)',
+            ForeignKeyError,
+            "foreign",
+        ),
+        (
+            f'{_MSSQL_PREFIX}The DELETE statement conflicted with the REFERENCE constraint "fk_child_parent". '
+            'The conflict occurred in database "master", table "dbo.child", column \'parent_id\'. '
+            "(547) (SQLExecDirectW)",
+            ForeignKeyError,
+            "foreign",
+        ),
+        (
+            f'{_MSSQL_PREFIX}The INSERT statement conflicted with the CHECK constraint "ck_child_qty". '
+            'The conflict occurred in database "master", table "dbo.child", column \'qty\'. (547) (SQLExecDirectW)',
+            IntegrityError,
+            "check",
+        ),
+    ],
+    ids=["primary-key", "unique-constraint", "unique-index", "fk-insert-547", "fk-delete-547", "check-547"],
+)
+def test_wrap_sqlalchemy_exception_mssql_regex_fallback(
+    message: str, expected: type[IntegrityError], expected_detail: str
+) -> None:
+    """Verify SQL Server 2022 messages without a mapped error number fall back to regex, including 547 FK vs CHECK."""
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(
+            dialect_name="mssql",
+            error_messages={
+                "duplicate_key": "duplicate",
+                "foreign_key": "foreign",
+                "check_constraint": "check",
+                "integrity": "integrity",
+            },
+        ),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError("23000", message))
+
+    assert excinfo.type is expected
+    assert str(excinfo.value) == expected_detail
+
+
+@pytest.mark.parametrize(
+    ("dialect_name", "orig"),
+    [
+        (
+            "mssql",
+            _DriverError(
+                "23000",
+                f"{_MSSQL_PREFIX}Cannot insert the value NULL into column 'label', table 'master.dbo.child'; "
+                "column does not allow nulls. INSERT fails. (515) (SQLExecDirectW)",
+            ),
+        ),
+        (
+            "mssql",
+            _DriverError(
+                "23000",
+                f"{_MSSQL_PREFIX}Cannot insert the value NULL into column '(2627) (SQLExecDirectW)', table "
+                "'master.dbo.child'; column does not allow nulls. INSERT fails. (515) (SQLExecDirectW)",
+            ),
+        ),
+        ("mssql", _DriverError("23000", "some error (2627)")),
+        ("mssql", _DriverError("23000")),
+        ("postgresql", _DriverError("23000", "some error (2627) (SQLExecDirectW)")),
+    ],
+    ids=["unmapped-515", "unanchored-number", "no-marker", "no-message", "non-mssql-dialect"],
+)
+def test_wrap_sqlalchemy_exception_mssql_unmapped_or_non_mssql_is_generic(
+    dialect_name: str, orig: BaseException
+) -> None:
+    """Verify unmapped or unanchored MSSQL numbers, missing messages, and mismatched dialects stay generic."""
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(
+            dialect_name=dialect_name,
+            error_messages={
+                "duplicate_key": "duplicate",
+                "foreign_key": "foreign",
+                "check_constraint": "check",
+                "integrity": "integrity",
+            },
+        ),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, orig)
+
+    assert excinfo.type is IntegrityError
+    assert str(excinfo.value) == "integrity"
+
+
 @pytest.mark.parametrize(
     ("message", "expected"),
     [
