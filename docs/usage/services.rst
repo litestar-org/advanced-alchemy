@@ -193,6 +193,7 @@ Services work with all five major Python schema libraries—normalizing partial 
 Related Guides
 --------------
 
+* :doc:`/usage/service_composition` — Coordinate multiple services on one shared session with ``ServiceGroup`` and ``provide_services``.
 * :doc:`/usage/frameworks/litestar` — Inject services directly into Litestar controllers.
 * :doc:`/usage/frameworks/fastapi` — Inject services into FastAPI routes with ``Depends``.
 * :doc:`/reference/service` — Full service API reference.
