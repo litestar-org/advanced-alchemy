@@ -24,6 +24,7 @@ from advanced_alchemy.repository._util import (  # noqa: E402
     get_primary_key_info,
     model_from_dict,
     partial_model_from_dict,
+    supports_partial_hydration,
 )
 from advanced_alchemy.service import SQLAlchemySyncRepositoryService  # noqa: E402
 from advanced_alchemy.utils.serialization import (  # noqa: E402
@@ -385,7 +386,7 @@ class HeroDefaultService(SQLAlchemySyncRepositoryService[HeroWithDefaultModel]):
 
 
 def test_sqlmodel_partial_update_and_explicit_none_semantics(hero_session: "Session") -> None:
-    """Partial updates preserve omitted fields, clear nullable defaults on None, and reject None on NOT NULL."""
+    """Partial updates preserve omitted fields and apply explicit None semantics with deprecation warnings."""
     SQLModel.metadata.create_all(hero_session.get_bind())
     service = HeroDefaultService(session=hero_session)
     created = service.create(
@@ -410,10 +411,20 @@ def test_sqlmodel_partial_update_and_explicit_none_semantics(hero_session: "Sess
     assert after_direct.nickname == "webhead"
     assert after_direct.age == 25
 
-    cleared = service.update({"nickname": None, "age": None}, item_id=created.id, auto_commit=True)
-    assert cleared.nickname is None
+    with pytest.warns(DeprecationWarning, match=r"HeroWithDefaultModel\.nickname"):
+        cleared = service.update({"nickname": None, "age": None}, item_id=created.id, auto_commit=True)
+    assert cleared.nickname == "webhead"
     assert cleared.age is None
     assert cleared.rank == "veteran"
 
+    with pytest.warns(DeprecationWarning, match=r"HeroWithDefaultModel\.rank"):
+        kept = service.update({"rank": None}, item_id=created.id, auto_commit=True)
+    assert kept.rank == "veteran"
+
     with pytest.raises(IntegrityError):
-        service.update({"rank": None}, item_id=created.id, auto_commit=True)
+        service.update({"name": None}, item_id=created.id, auto_commit=True)
+
+
+def test_sqlmodel_table_supports_partial_hydration() -> None:
+    """SQLModel table models use partial hydration for updates."""
+    assert supports_partial_hydration(HeroModel) is True

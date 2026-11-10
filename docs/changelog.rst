@@ -3,6 +3,59 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.13.0
+
+    .. change:: deprecate ignoring explicit None for columns with defaults on update
+        :type: misc
+        :pr: 824
+
+        ``Repository.update`` and ``Service.update`` continue to ignore an explicit
+        ``None`` assigned to a column that defines a ``default``, ``server_default``,
+        ``onupdate``, or ``server_onupdate``, and now emit a ``DeprecationWarning``
+        naming the model and field. In v2.0 the ``None`` will be written, clearing
+        nullable columns and raising ``IntegrityError`` on ``NOT NULL`` columns. Omit
+        the field from the update payload to keep the stored value. The in-memory mock
+        repositories follow the same behavior.
+
+    .. change:: partial update hydration and single-query service updates
+        :type: bugfix
+        :pr: 824
+
+        ``Service.update`` now builds the update model with
+        ``partial_model_from_dict`` so omitted fields stay unset instead of being
+        filled with constructor defaults, fixing ``MappedAsDataclass`` and SQLModel
+        table models where defaults overwrote stored values or required fields raised
+        ``TypeError``. Models that define their own ``__init__`` keep calling it so
+        constructor-derived attributes are still applied. ``Service.update(item_id=...)``
+        delegates directly to ``Repository.update``, removing a duplicate ``SELECT``,
+        and ``item_id`` takes precedence over an identifier present in the payload.
+
+    .. change:: mock repository filter parity
+        :type: bugfix
+        :pr: 824
+
+        ``SQLAlchemyAsyncMockRepository`` and ``SQLAlchemySyncMockRepository`` support
+        ``NotInCollectionFilter``, ``NotInSearchFilter``, ``ComparisonFilter``,
+        ``ExistsFilter``, ``NotExistsFilter``, ``MultiFilter``, ``between()``, and
+        ``is_(None)``. ``LimitOffset`` slices ``offset:offset + limit``, ``BeforeAfter``
+        applies both bounds, and ``get_many_and_count`` returns the count before
+        pagination. Unsupported SQL expressions now raise ``RepositoryError`` instead of
+        silently returning no rows, so tests that relied on the previous results may
+        need to be updated.
+
+    .. change:: infer service model and repository types from generic parameters
+        :type: feature
+        :pr: 824
+
+        ``SQLAlchemyAsyncRepositoryService[Model]`` and
+        ``SQLAlchemySyncRepositoryService[Model]`` subclasses no longer need an inline
+        ``repository_type``; the model and a default repository are inferred from the
+        generic parameters, and ``model_type=`` / ``repository_type=`` can be passed
+        when instantiating directly. ``Service.repository`` is now typed as the SQL or
+        mock repository for the model instead of ``Any``. To type custom repository
+        methods, pass the repository as the second generic parameter, for example
+        ``SQLAlchemyAsyncRepositoryService[Widget, WidgetRepository]``.
+
 .. changelog:: 1.12.0
     :date: 2026-10-19
 
