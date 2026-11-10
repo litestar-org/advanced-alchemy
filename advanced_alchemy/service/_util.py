@@ -9,11 +9,12 @@ from collections.abc import Sequence
 from enum import Enum
 from functools import lru_cache, partial
 from pathlib import Path, PurePath
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast, overload
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast, get_args, get_origin, overload
 from uuid import UUID
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.filters import LimitOffset, StatementFilter
+from advanced_alchemy.repository._util import ModelRepositoryMixin, resolve_generic_type_args
 from advanced_alchemy.repository.typing import PrimaryKeyType
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.typing import (
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.base import ModelProtocol
     from advanced_alchemy.repository.typing import ModelOrRowMappingT
 
-__all__ = ("ResultConverter", "find_filter", "resolve_item_ids")
+__all__ = ("ResultConverter", "configure_service_subclass", "find_filter", "resolve_item_ids")
 
 DEFAULT_TYPE_DECODERS = [  # pyright: ignore[reportUnknownVariableType]
     (lambda x: x is UUID, lambda t, v: t(v.hex)),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
@@ -51,6 +52,50 @@ DEFAULT_TYPE_DECODERS = [  # pyright: ignore[reportUnknownVariableType]
     (lambda x: x is datetime.time, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
     (lambda x: x is Enum, lambda t, v: t(v.value)),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
 ]
+
+
+def configure_service_subclass(cls: type[Any], service_base: type[Any], default_repo_base: type[Any]) -> None:
+    """Resolve and attach generic model and repository types on a service subclass."""
+    args = resolve_generic_type_args(cls, service_base)
+    model_cls: Optional[type[Any]] = (
+        args[0]
+        if len(args) >= 1 and args[0] is not Any and isinstance(args[0], type)
+        else getattr(cls, "_model_type", None)
+    )
+    raw_repo = args[1] if len(args) > 1 else None
+    origin_repo = get_origin(raw_repo)
+    candidate_repo: Any = origin_repo if isinstance(origin_repo, type) else raw_repo
+    repo_cls = (
+        cast("type[Any]", candidate_repo)
+        if isinstance(candidate_repo, type) and issubclass(candidate_repo, ModelRepositoryMixin)
+        else None
+    )
+    if model_cls is None and repo_cls is not None:
+        repo_args = get_args(raw_repo)
+        model_cls = (
+            repo_args[0]
+            if repo_args and repo_args[0] is not Any and isinstance(repo_args[0], type)
+            else getattr(repo_cls, "model_type", None)
+        )
+    if model_cls is not None and "_model_type" not in cls.__dict__:
+        cls._model_type = model_cls
+    if getattr(cls, "repository_type", None) is not None:
+        return
+    if repo_cls is not None:
+        if getattr(repo_cls, "model_type", None) is not None or model_cls is None:
+            cls.repository_type = repo_cls
+        else:
+            cls.repository_type = type(
+                f"{model_cls.__name__}{repo_cls.__name__}",
+                (repo_cls,),
+                {"model_type": model_cls},
+            )
+    elif model_cls is not None:
+        cls.repository_type = type(
+            f"{model_cls.__name__}Repository",
+            (default_repo_base,),
+            {"model_type": model_cls},
+        )
 
 
 def find_filter(
@@ -246,20 +291,14 @@ class ResultConverter:
                         obj=data,
                         type=schema_type,
                         from_attributes=True,
-                        dec_hook=partial(
-                            _default_msgspec_deserializer,
-                            type_decoders=DEFAULT_TYPE_DECODERS,
-                        ),
+                        dec_hook=_DEFAULT_MSGSPEC_DEC_HOOK,
                     ),
                 )
             converted_items = convert(
                 obj=data,
-                type=list[schema_type],  # type: ignore[valid-type]
+                type=_get_list_schema_type(schema_type),
                 from_attributes=True,
-                dec_hook=partial(
-                    _default_msgspec_deserializer,
-                    type_decoders=DEFAULT_TYPE_DECODERS,
-                ),
+                dec_hook=_DEFAULT_MSGSPEC_DEC_HOOK,
             )
             return cast("OffsetPagination[ModelDTOT]", _create_pagination(converted_items, filters, total))
 
@@ -269,7 +308,9 @@ class ResultConverter:
                     "ModelDTOT",
                     get_type_adapter(schema_type).validate_python(data, from_attributes=True),
                 )
-            validated_items = get_type_adapter(list[schema_type]).validate_python(data, from_attributes=True)  # type: ignore[valid-type] # pyright: ignore[reportUnknownArgumentType]
+            validated_items = get_type_adapter(_get_list_schema_type(schema_type)).validate_python(
+                data, from_attributes=True
+            )
             return cast("OffsetPagination[ModelDTOT]", _create_pagination(validated_items, filters, total))
         if CATTRS_INSTALLED and is_attrs_schema(schema_type):
             if not isinstance(data, Sequence):
@@ -278,7 +319,6 @@ class ResultConverter:
             return cast("OffsetPagination[ModelDTOT]", _create_pagination(structured_items, filters, total))
 
         if ATTRS_INSTALLED and is_attrs_schema(schema_type):
-            # Cache field names for performance
             field_names = _get_attrs_field_names(schema_type)  # type: ignore[arg-type]
 
             if not isinstance(data, Sequence):
@@ -293,9 +333,6 @@ class ResultConverter:
 
         msg = "`schema_type` should be a valid Pydantic, Msgspec, or attrs schema"
         raise AdvancedAlchemyError(msg)
-
-
-# Private helper functions
 
 
 def _default_msgspec_deserializer(
@@ -333,6 +370,18 @@ def _default_msgspec_deserializer(
     except Exception as e:
         msg = f"Unsupported type: {type(value)!r}"
         raise TypeError(msg) from e
+
+
+_DEFAULT_MSGSPEC_DEC_HOOK = partial(
+    _default_msgspec_deserializer,
+    type_decoders=DEFAULT_TYPE_DECODERS,
+)
+
+
+@lru_cache(maxsize=256)
+def _get_list_schema_type(schema_type: "type[Any]") -> Any:
+    """Return and cache ``list[schema_type]`` generic alias."""
+    return list[schema_type]  # type: ignore[valid-type]
 
 
 @lru_cache(maxsize=128)
@@ -382,5 +431,5 @@ def _create_pagination(items: Any, filters: Any, total: "Optional[int]") -> "Off
         items=items,
         limit=limit_offset.limit,
         offset=limit_offset.offset,
-        total=total or len(items),
+        total=total if total is not None else len(items),
     )

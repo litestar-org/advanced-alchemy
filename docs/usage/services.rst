@@ -56,14 +56,10 @@ Let's connect a ``BlogPost`` table, Pydantic request/response schemas, and a ``B
 
         .. code-block:: python
 
-            from advanced_alchemy.repository import SQLAlchemyAsyncRepository
             from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
 
             class BlogPostService(SQLAlchemyAsyncRepositoryService[BlogPost]):
-                class Repo(SQLAlchemyAsyncRepository[BlogPost]):
-                    model_type = BlogPost
-
-                repository_type = Repo
+                pass
 
 Creating, Updating, and Returning Schemas
 -----------------------------------------
@@ -90,12 +86,7 @@ Need to auto-generate a unique URL slug whenever a tag is created or renamed? Ov
     from advanced_alchemy.repository import SQLAlchemyAsyncSlugRepository
     from advanced_alchemy.service import ModelDictT, is_dict_with_field, is_dict_without_field, schema_dump
 
-    class BlogTagService(SQLAlchemyAsyncRepositoryService[BlogTag]):
-        class Repo(SQLAlchemyAsyncSlugRepository[BlogTag]):
-            model_type = BlogTag
-
-        repository_type = Repo
-
+    class BlogTagService(SQLAlchemyAsyncRepositoryService[BlogTag, SQLAlchemyAsyncSlugRepository[BlogTag]]):
         async def to_model(self, data: ModelDictT[BlogTag], operation: Optional[str] = None) -> BlogTag:
             dumped = schema_dump(data)
             if is_dict_without_field(dumped, "slug") and is_dict_with_field(dumped, "name"):
@@ -186,9 +177,7 @@ Services work with all five major Python schema libraries—normalizing partial 
                 title: str
 
             class ArticleService(SQLAlchemyAsyncRepositoryService[ArticleRow]):
-                class Repo(SQLAlchemyAsyncRepository[ArticleRow]):
-                    model_type = ArticleRow
-                repository_type = Repo
+                pass
 
 Related Guides
 --------------

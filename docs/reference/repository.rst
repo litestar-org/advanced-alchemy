@@ -18,7 +18,7 @@ Async Repositories
     :show-inheritance:
 
 .. autoclass:: advanced_alchemy.repository.SQLAlchemyAsyncQueryRepository
-    :members: get_one, list, list_and_count
+    :members: get_one, list
     :no-inherited-members:
     :show-inheritance:
 
@@ -26,7 +26,7 @@ Sync Repositories
 -----------------
 
 .. autoclass:: advanced_alchemy.repository.SQLAlchemySyncRepository
-    :members: id_attribute, match_fields
+    :no-members:
     :no-inherited-members:
     :show-inheritance:
 
@@ -69,6 +69,11 @@ Protocols & Base Mixins
     :show-inheritance:
 
 .. autoclass:: advanced_alchemy.repository.FilterableRepositoryProtocol
+    :no-members:
+    :no-inherited-members:
+    :show-inheritance:
+
+.. autoclass:: advanced_alchemy.repository.ModelRepositoryMixin
     :no-members:
     :no-inherited-members:
     :show-inheritance:

@@ -17,8 +17,16 @@ from sqlmodel import Field as SQLModelField  # noqa: E402
 from sqlmodel import SQLModel  # noqa: E402
 
 from advanced_alchemy.base import ModelProtocol, model_to_dict  # noqa: E402
+from advanced_alchemy.exceptions import IntegrityError  # noqa: E402
 from advanced_alchemy.repository import SQLAlchemySyncRepository  # noqa: E402
-from advanced_alchemy.repository._util import get_instrumented_attr, get_primary_key_info, model_from_dict  # noqa: E402
+from advanced_alchemy.repository._util import (  # noqa: E402
+    get_instrumented_attr,
+    get_primary_key_info,
+    model_from_dict,
+    partial_model_from_dict,
+    supports_partial_hydration,
+)
+from advanced_alchemy.service import SQLAlchemySyncRepositoryService  # noqa: E402
 from advanced_alchemy.utils.serialization import (  # noqa: E402
     is_pydantic_model,
     is_schema,
@@ -359,3 +367,64 @@ def test_repo_upsert_fallback_match_by_all_fields(hero_session: "Session") -> No
     hero_session.commit()
     assert result.name == "Spider-Boy"
     assert result.id is not None
+
+
+class HeroWithDefaultModel(SQLModel, table=True):
+    """SQLModel table model with nullable and non-nullable default fields."""
+
+    __tablename__ = "test_hero_defaults"  # type: ignore[assignment]
+
+    id: Optional[int] = SQLModelField(default=None, primary_key=True)
+    name: str
+    rank: str = SQLModelField(default="rookie")
+    nickname: Optional[str] = SQLModelField(default="spidey")
+    age: Optional[int] = None
+
+
+class HeroDefaultService(SQLAlchemySyncRepositoryService[HeroWithDefaultModel]):
+    """Service bound to HeroWithDefaultModel via generic auto-binding."""
+
+
+def test_sqlmodel_partial_update_and_explicit_none_semantics(hero_session: "Session") -> None:
+    """Partial updates preserve omitted fields and apply explicit None semantics with deprecation warnings."""
+    SQLModel.metadata.create_all(hero_session.get_bind())
+    service = HeroDefaultService(session=hero_session)
+    created = service.create(
+        HeroWithDefaultModel(name="Peter", rank="veteran", nickname="webhead", age=25),
+        auto_commit=True,
+    )
+    assert created.id is not None
+
+    partial_patch = partial_model_from_dict(HeroWithDefaultModel, name="Peter Parker")
+    assert partial_patch.name == "Peter Parker"
+
+    after_partial = service.update({"name": "Peter Parker"}, item_id=created.id, auto_commit=True)
+    assert after_partial.name == "Peter Parker"
+    assert after_partial.rank == "veteran"
+    assert after_partial.nickname == "webhead"
+    assert after_partial.age == 25
+
+    direct_instance = HeroWithDefaultModel(id=created.id, name="Spider-Man")
+    after_direct = service.repository.update(direct_instance, auto_commit=True)
+    assert after_direct.name == "Spider-Man"
+    assert after_direct.rank == "veteran"
+    assert after_direct.nickname == "webhead"
+    assert after_direct.age == 25
+
+    with pytest.warns(DeprecationWarning, match=r"HeroWithDefaultModel\.nickname"):
+        cleared = service.update({"nickname": None, "age": None}, item_id=created.id, auto_commit=True)
+    assert cleared.nickname == "webhead"
+    assert cleared.age is None
+    assert cleared.rank == "veteran"
+
+    with pytest.warns(DeprecationWarning, match=r"HeroWithDefaultModel\.rank"):
+        kept = service.update({"rank": None}, item_id=created.id, auto_commit=True)
+    assert kept.rank == "veteran"
+
+    with pytest.raises(IntegrityError):
+        service.update({"name": None}, item_id=created.id, auto_commit=True)
+
+
+def test_sqlmodel_table_supports_partial_hydration() -> None:
+    """SQLModel table models use partial hydration for updates."""
+    assert supports_partial_hydration(HeroModel) is True
