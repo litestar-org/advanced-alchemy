@@ -26,7 +26,7 @@ from advanced_alchemy.repository import (
     SQLAlchemySyncRepository,
     SQLAlchemySyncSlugRepository,
 )
-from advanced_alchemy.repository._util import get_primary_key_info
+from advanced_alchemy.repository._util import get_primary_key_info, supports_partial_hydration
 from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository
 from advanced_alchemy.repository.typing import PrimaryKeyType
 from advanced_alchemy.service import SchemaDumpConfig, SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
@@ -688,7 +688,7 @@ class DataclassMappedArticleService(SQLAlchemySyncRepositoryService[DataclassMap
 
 
 def test_dataclass_mapped_model_partial_update_and_explicit_none() -> None:
-    """Partial updates on MappedAsDataclass omit required/default fields and honor explicit None."""
+    """Partial updates on MappedAsDataclass omit required/default fields and apply explicit None semantics."""
     engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
     DataclassMappedBase.metadata.create_all(engine)
     try:
@@ -710,13 +710,82 @@ def test_dataclass_mapped_model_partial_update_and_explicit_none() -> None:
             assert updated.subtitle == "custom-sub"
             assert updated.notes == "keep-me"
 
-            cleared = service.update({"subtitle": None, "notes": None}, item_id=article_id, auto_commit=True)
+            with pytest.warns(DeprecationWarning, match=r"DataclassMappedArticle\.subtitle"):
+                cleared = service.update({"subtitle": None, "notes": None}, item_id=article_id, auto_commit=True)
             assert cleared.title == "Renamed"
             assert cleared.status == "published"
-            assert cleared.subtitle is None
+            assert cleared.subtitle == "custom-sub"
             assert cleared.notes is None
 
+            with pytest.warns(DeprecationWarning, match=r"DataclassMappedArticle\.status"):
+                kept = service.update({"status": None}, item_id=article_id, auto_commit=True)
+            assert kept.status == "published"
+
             with pytest.raises(IntegrityError):
-                service.update({"status": None}, item_id=article_id, auto_commit=True)
+                service.update({"title": None}, item_id=article_id, auto_commit=True)
+    finally:
+        engine.dispose()
+
+
+class CustomInitBase(DeclarativeBase):
+    """Base for models with constructor-derived attributes."""
+
+
+class DefaultInitArticle(CustomInitBase):
+    """Model using the default declarative constructor."""
+
+    __tablename__ = "service_default_init_article"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str]
+
+
+class SluggedArticle(CustomInitBase):
+    """Model whose constructor derives ``slug`` from ``name``."""
+
+    __tablename__ = "service_slugged_article"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str]
+    slug: Mapped[str]
+    body: Mapped[Optional[str]] = mapped_column(nullable=True)
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        if "name" in kwargs:
+            self.slug = str(kwargs["name"]).lower().replace(" ", "-")
+
+
+class SluggedArticleService(SQLAlchemySyncRepositoryService[SluggedArticle]):
+    """Auto-bound sync service for SluggedArticle."""
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        pytest.param(DefaultInitArticle, True, id="declarative-constructor"),
+        pytest.param(DataclassMappedArticle, True, id="mapped-as-dataclass"),
+        pytest.param(SluggedArticle, False, id="custom-init"),
+    ],
+)
+def test_supports_partial_hydration(model: type[Any], expected: bool) -> None:
+    """Partial hydration applies only when the model constructor has no side effects to preserve."""
+    assert supports_partial_hydration(model) is expected
+
+
+def test_custom_init_model_update_applies_constructor_side_effects() -> None:
+    """Updates on models with a custom ``__init__`` still apply constructor-derived attributes."""
+    engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+    CustomInitBase.metadata.create_all(engine)
+    try:
+        with Session(engine, expire_on_commit=False) as session:
+            service = SluggedArticleService(session=session)
+            session.add(SluggedArticle(id=1, name="First Post", body="keep-me"))
+            session.commit()
+
+            updated = service.update({"name": "Renamed Post"}, item_id=1, auto_commit=True)
+            assert updated.name == "Renamed Post"
+            assert updated.slug == "renamed-post"
+            assert updated.body == "keep-me"
     finally:
         engine.dispose()

@@ -48,6 +48,7 @@ from advanced_alchemy.filters import (
 from advanced_alchemy.repository._util import (
     compare_values,
     get_primary_key_info,
+    skip_explicit_none_update,
     was_attribute_set,
 )
 from advanced_alchemy.repository.typing import (
@@ -253,7 +254,9 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
             existing_value = getattr(existing, attr, MISSING)
             if new_value is None:
                 prop: Any = mapper.attrs.get(attr)
-                prop_columns: Iterable[Column[Any]] = getattr(prop, "columns", ())
+                prop_columns: list[Column[Any]] = list(getattr(prop, "columns", ()))
+                if prop_columns and skip_explicit_none_update(prop_columns[0], existing.__class__.__name__, attr):
+                    continue
                 if any(not col.nullable and not col.primary_key for col in prop_columns):
                     msg = f"Column '{attr}' on {existing.__class__.__name__} cannot be None"
                     raise IntegrityError(msg)

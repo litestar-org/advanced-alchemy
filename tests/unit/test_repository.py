@@ -3315,6 +3315,8 @@ class RenamedColumnModel(ContractSQLBase):
     title: Mapped[str] = mapped_column("title_col", default="untitled")
     subtitle: Mapped[Union[str, None]] = mapped_column("subtitle_col", default="default-sub", nullable=True)
     status: Mapped[str] = mapped_column(default="draft", nullable=False)
+    note: Mapped[Union[str, None]] = mapped_column("note_col", nullable=True)
+    code: Mapped[str] = mapped_column("code_col", nullable=False)
 
 
 class UniquifyParentModel(ContractSQLBase):
@@ -3337,7 +3339,11 @@ class UniquifyChildModel(ContractSQLBase):
 
 
 def test_update_renamed_columns_and_explicit_none_semantics() -> None:
-    """SQL and mock repositories update renamed columns, clear nullable defaults on None, and reject NOT NULL None."""
+    """SQL and mock repositories update renamed columns and apply explicit None semantics.
+
+    Explicit None clears nullable columns without defaults and raises on NOT NULL columns without
+    defaults. Columns with defaults keep their stored value and emit a DeprecationWarning until v2.0.
+    """
 
     class RenamedSQLRepo(SQLAlchemySyncRepository[RenamedColumnModel]):
         pass
@@ -3355,7 +3361,9 @@ def test_update_renamed_columns_and_explicit_none_semantics() -> None:
             service = RenamedService(session=session)
             repo = RenamedSQLRepo(session=session)
 
-            session.add(RenamedColumnModel(id=1, title="old", subtitle="custom-sub", status="published"))
+            session.add(
+                RenamedColumnModel(id=1, title="old", subtitle="custom-sub", status="published", note="n", code="c")
+            )
             session.commit()
 
             service.update({"title": "new"}, item_id=1, auto_commit=True)
@@ -3366,25 +3374,28 @@ def test_update_renamed_columns_and_explicit_none_semantics() -> None:
             assert fetched.subtitle == "custom-sub"
             assert fetched.status == "published"
 
-            service.update({"subtitle": None}, item_id=1, auto_commit=True)
+            service.update({"note": None}, item_id=1, auto_commit=True)
             session.expire_all()
             fetched = session.get(RenamedColumnModel, 1)
             assert fetched is not None
-            assert fetched.subtitle is None
+            assert fetched.note is None
 
-            repo.update(RenamedColumnModel(id=1, subtitle="restored"), auto_commit=True)
-            repo.update(RenamedColumnModel(id=1, subtitle=None), auto_commit=True)
+            with pytest.warns(DeprecationWarning, match=r"RenamedColumnModel\.subtitle"):
+                service.update({"subtitle": None}, item_id=1, auto_commit=True)
+            with pytest.warns(DeprecationWarning, match=r"RenamedColumnModel\.status"):
+                repo.update(RenamedColumnModel(id=1, status=None), auto_commit=True)
             session.expire_all()
             fetched = session.get(RenamedColumnModel, 1)
             assert fetched is not None
-            assert fetched.subtitle is None
+            assert fetched.subtitle == "custom-sub"
+            assert fetched.status == "published"
 
             with pytest.raises(IntegrityError):
-                service.update({"status": None}, item_id=1, auto_commit=True)
+                service.update({"code": None}, item_id=1, auto_commit=True)
             session.rollback()
 
             with pytest.raises(IntegrityError):
-                repo.update(RenamedColumnModel(id=1, status=None), auto_commit=True)
+                repo.update(RenamedColumnModel(id=1, code=None), auto_commit=True)
             session.rollback()
     finally:
         engine.dispose()
@@ -3392,7 +3403,7 @@ def test_update_renamed_columns_and_explicit_none_semantics() -> None:
     RenamedMockRepo.__database_clear__()
     try:
         mock_repo = RenamedMockRepo(session=MagicMock(spec=Session, bind=MagicMock()))
-        added = mock_repo.add(RenamedColumnModel(id=1))
+        added = mock_repo.add(RenamedColumnModel(id=1, note="n", code="c"))
         assert added.title == "untitled"
         assert added.subtitle == "default-sub"
         assert added.status == "draft"
@@ -3401,11 +3412,15 @@ def test_update_renamed_columns_and_explicit_none_semantics() -> None:
         assert updated_mock.title == "mock-new"
         assert updated_mock.subtitle == "default-sub"
 
-        cleared_mock = mock_repo.update(partial_model_from_dict(RenamedColumnModel, id=1, subtitle=None))
-        assert cleared_mock.subtitle is None
+        cleared_mock = mock_repo.update(partial_model_from_dict(RenamedColumnModel, id=1, note=None))
+        assert cleared_mock.note is None
+
+        with pytest.warns(DeprecationWarning, match=r"RenamedColumnModel\.subtitle"):
+            kept_mock = mock_repo.update(partial_model_from_dict(RenamedColumnModel, id=1, subtitle=None))
+        assert kept_mock.subtitle == "default-sub"
 
         with pytest.raises(IntegrityError):
-            mock_repo.update(partial_model_from_dict(RenamedColumnModel, id=1, status=None))
+            mock_repo.update(partial_model_from_dict(RenamedColumnModel, id=1, code=None))
     finally:
         RenamedMockRepo.__database_clear__()
 

@@ -70,6 +70,7 @@ from advanced_alchemy.repository._util import (
     get_instrumented_attr,
     get_primary_key_info,
     pk_values_present,
+    skip_explicit_none_update,
     snapshot_and_detach_relationships,
     was_attribute_set,
 )
@@ -2174,6 +2175,8 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 continue
             new_field_value = getattr(data, field_name, MISSING)
             if new_field_value is MISSING or not was_attribute_set(data, mapper, field_name):
+                continue
+            if new_field_value is None and skip_explicit_none_update(column, type(data).__name__, field_name):
                 continue
             existing_field_value = getattr(existing_instance, field_name, MISSING)
             if existing_field_value is not MISSING and not compare_values(existing_field_value, new_field_value):

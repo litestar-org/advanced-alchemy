@@ -23,7 +23,12 @@ from advanced_alchemy.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.exceptions import AdvancedAlchemyError, ErrorMessages, ImproperConfigurationError, RepositoryError
 from advanced_alchemy.filters import StatementFilter
 from advanced_alchemy.repository import SQLAlchemySyncQueryRepository, SQLAlchemySyncRepository
-from advanced_alchemy.repository._util import LoadSpec, model_from_dict, partial_model_from_dict
+from advanced_alchemy.repository._util import (
+    LoadSpec,
+    model_from_dict,
+    partial_model_from_dict,
+    supports_partial_hydration,
+)
 from advanced_alchemy.repository.typing import ModelT, OrderingPair, PrimaryKeyType, SQLAlchemySyncRepositoryT
 from advanced_alchemy.service._util import ResultConverter, configure_service_subclass, resolve_item_ids
 from advanced_alchemy.utils.dataclass import Empty, EmptyType
@@ -507,7 +512,8 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             data = self.to_model_on_delete(data)
         elif operation == "upsert":
             data = self.to_model_on_upsert(data)
-        hydrator = partial_model_from_dict if operation == "update" else model_from_dict
+        partial_update = operation == "update" and supports_partial_hydration(self.model_type)
+        hydrator = partial_model_from_dict if partial_update else model_from_dict
         if isinstance(data, self.model_type):
             return data
         if is_dict(data):
@@ -521,7 +527,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             )
 
         if is_dto_data(data):
-            if operation == "update":
+            if partial_update:
                 return partial_model_from_dict(self.model_type, **cast("dict[str, Any]", data.as_builtins()))
             return cast("ModelT", data.create_instance())
 

@@ -1,6 +1,7 @@
 # ruff: noqa: PLR0911
 import dataclasses
 import hashlib
+import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Generic, Literal, Optional, Protocol, Union, cast, get_args, get_origin, overload
 
@@ -27,6 +28,7 @@ from sqlalchemy.orm import (
     object_session,
     selectinload,
 )
+from sqlalchemy.orm.decl_base import _declarative_constructor  # pyright: ignore[reportPrivateUsage]
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 from sqlalchemy.sql.base import ExecutableOption
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
@@ -77,7 +79,9 @@ __all__ = (
     "model_from_dict",
     "partial_model_from_dict",
     "resolve_generic_type_args",
+    "skip_explicit_none_update",
     "snapshot_and_detach_relationships",
+    "supports_partial_hydration",
     "was_attribute_set",
 )
 
@@ -346,6 +350,29 @@ def partial_model_from_dict(model: type[ModelT], /, **kwargs: Any) -> ModelT:
     return _hydrate_model_dict(model, kwargs, partial=True)
 
 
+def supports_partial_hydration(model: type[Any]) -> bool:
+    """Return whether ``model`` can be hydrated for partial updates without calling ``__init__``.
+
+    Models using the default declarative constructor produce identical results either way, and
+    ``MappedAsDataclass`` and ``SQLModel`` table models require partial hydration so omitted fields
+    are not filled with constructor defaults. Models that define their own ``__init__`` keep calling
+    it so derived attributes computed in the constructor are still applied on update.
+
+    Args:
+        model: The SQLAlchemy model class to inspect.
+
+    Returns:
+        bool: True if partial hydration preserves the model's constructor behavior.
+    """
+    original_init = class_mapper(model).class_manager.original_init
+    if original_init is _declarative_constructor:
+        return True
+    if getattr(original_init, "__module__", "").startswith("sqlmodel"):
+        return True
+    init_code = getattr(original_init, "__code__", None)
+    return dataclasses.is_dataclass(model) and getattr(init_code, "co_filename", None) == "<string>"
+
+
 def get_abstract_loader_options(
     loader_options: Union[LoadSpec, None],
     default_loader_options: Union[list[Load], None] = None,
@@ -469,6 +496,34 @@ def column_has_defaults(column: Any) -> bool:
         or getattr(column, "onupdate", None) is not None
         or getattr(column, "server_onupdate", None) is not None
     )
+
+
+def skip_explicit_none_update(column: Any, model_name: str, field_name: str) -> bool:
+    """Return whether an explicit ``None`` update is ignored for a column with defaults.
+
+    In v1.x, ``update()`` ignores an explicit ``None`` assigned to a column that defines a
+    default or update handler and emits a :class:`DeprecationWarning`. In v2.0 the ``None`` is
+    written, clearing nullable columns and raising ``IntegrityError`` on ``NOT NULL`` columns.
+    Omit the field from the update payload to keep the stored value without a warning.
+
+    Args:
+        column: SQLAlchemy column receiving the ``None`` value.
+        model_name: Name of the model being updated, used in the warning message.
+        field_name: ORM attribute key mapped to ``column``.
+
+    Returns:
+        bool: True if the ``None`` value should be ignored.
+    """
+    if not column_has_defaults(column):
+        return False
+    warnings.warn(
+        f"Ignoring explicit None for '{model_name}.{field_name}' during update because the column defines a "
+        "default or update handler. In v2.0, explicit None will be written to the column. Omit the field "
+        "from the update payload to keep the stored value.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return True
 
 
 def snapshot_and_detach_relationships(instance: Any, mapper: Any) -> dict[str, Any]:
