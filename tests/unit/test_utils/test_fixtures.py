@@ -8,13 +8,20 @@ import os
 import tempfile
 import zipfile
 import zlib
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from advanced_alchemy.utils.fixtures import open_fixture, open_fixture_async, open_fixture_sync
+from advanced_alchemy.utils.fixtures import (
+    _FixtureFile,
+    iter_fixture_async,
+    iter_fixture_sync,
+    open_fixture,
+    open_fixture_async,
+    open_fixture_sync,
+)
 
 
 @pytest.fixture
@@ -1207,3 +1214,167 @@ class TestFixtureShards:
             {"id": 4},
             {"id": 5},
         ]
+
+
+class TestIterFixture:
+    """Test cases for iter_fixture_sync and iter_fixture_async batch streaming."""
+
+    @pytest.fixture
+    def sharded_users(self, tmp_path: Path) -> Path:
+        """Create two numbered shards spanning gzipped and plain JSONL."""
+        _write_fixture(tmp_path / "users.001.jsonl.gz", '{"id": 1}\n{"id": 2}\n{"id": 3}\n')
+        _write_fixture(tmp_path / "users.002.jsonl", '{"id": 4}\n{"id": 5}\n')
+        return tmp_path
+
+    @pytest.mark.parametrize(
+        ("batch_size", "expected_sizes"),
+        [
+            (4, [4, 1]),
+            (5, [5]),
+            (2, [2, 2, 1]),
+            (1, [1, 1, 1, 1, 1]),
+            (1000, [5]),
+        ],
+    )
+    def test_iter_fixture_sync_batches(self, sharded_users: Path, batch_size: int, expected_sizes: "list[int]") -> None:
+        """Test iter_fixture_sync yields non-empty batches of at most batch_size across shards."""
+        assert [
+            len(batch) for batch in iter_fixture_sync(sharded_users, "users", batch_size=batch_size)
+        ] == expected_sizes
+
+    def test_iter_fixture_sync_preserves_order(self, sharded_users: Path) -> None:
+        """Test iter_fixture_sync preserves record order across shard boundaries."""
+        assert list(iter_fixture_sync(sharded_users, "users", batch_size=4)) == [
+            [{"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}],
+            [{"id": 5}],
+        ]
+
+    @pytest.mark.asyncio
+    async def test_iter_fixture_async_batches(self, sharded_users: Path) -> None:
+        """Test iter_fixture_async yields ordered batches across shards."""
+        batches = [batch async for batch in iter_fixture_async(sharded_users, "users", batch_size=4)]
+        assert batches == [
+            [{"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}],
+            [{"id": 5}],
+        ]
+
+    @pytest.mark.parametrize(
+        ("file_name", "content", "batch_size", "expected"),
+        [
+            (
+                "users.json",
+                '[{"id": 1}, {"id": 2}, {"id": 3}]',
+                2,
+                [[{"id": 1}, {"id": 2}], [{"id": 3}]],
+            ),
+            (
+                "users.csv.zip",
+                "id\n1\n2\n3\n",
+                2,
+                [[{"id": "1"}, {"id": "2"}], [{"id": "3"}]],
+            ),
+        ],
+    )
+    def test_iter_fixture_sync_formats(
+        self, tmp_path: Path, file_name: str, content: str, batch_size: int, expected: "list[list[dict[str, Any]]]"
+    ) -> None:
+        """Test iter_fixture_sync streams JSON array and compressed CSV fixtures."""
+        _write_fixture(tmp_path / file_name, content)
+        assert list(iter_fixture_sync(tmp_path, "users", batch_size=batch_size)) == expected
+
+    @pytest.mark.parametrize(
+        ("file_name", "content"),
+        [
+            ("users.jsonl", ""),
+            ("users.json", "[]"),
+            ("users.csv", "id\n"),
+        ],
+    )
+    def test_iter_fixture_empty_yields_nothing(self, tmp_path: Path, file_name: str, content: str) -> None:
+        """Test iter_fixture_sync yields no batches for empty fixtures."""
+        _write_fixture(tmp_path / file_name, content)
+        assert list(iter_fixture_sync(tmp_path, "users")) == []
+
+    @pytest.mark.parametrize("batch_size", [0, -1])
+    def test_iter_fixture_sync_rejects_batch_size(self, tmp_path: Path, batch_size: int) -> None:
+        """Test iter_fixture_sync validates batch_size eagerly at call time."""
+        _write_fixture(tmp_path / "users.jsonl", '{"id": 1}\n')
+        with pytest.raises(ValueError, match="batch_size must be at least 1"):
+            iter_fixture_sync(tmp_path, "users", batch_size=batch_size)
+
+    @pytest.mark.asyncio
+    async def test_iter_fixture_async_rejects_batch_size(self, tmp_path: Path) -> None:
+        """Test iter_fixture_async rejects non-positive batch_size on first iteration."""
+        _write_fixture(tmp_path / "users.jsonl", '{"id": 1}\n')
+        agen = iter_fixture_async(tmp_path, "users", batch_size=0)
+        with pytest.raises(ValueError, match="batch_size must be at least 1"):
+            await agen.__anext__()
+
+    def test_iter_fixture_sync_missing_fixture_raises_on_call(self, tmp_path: Path) -> None:
+        """Test iter_fixture_sync raises FileNotFoundError eagerly at call time."""
+        with pytest.raises(FileNotFoundError, match="Could not find the users fixture"):
+            iter_fixture_sync(tmp_path, "users")
+
+    def test_iter_fixture_non_array_json_raises(self, tmp_path: Path) -> None:
+        """Test iter_fixture_sync rejects non-array top-level JSON values."""
+        _write_fixture(tmp_path / "config.json", '{"a": 1}')
+        with pytest.raises(ValueError, match="must contain a JSON array, got dict"):
+            list(iter_fixture_sync(tmp_path, "config"))
+
+    def test_iter_fixture_sync_close_releases_handles(
+        self, sharded_users: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test closing iter_fixture_sync early closes the opened file handle."""
+        opened: list[Any] = []
+        original = _FixtureFile._open_text
+
+        def spy(self: _FixtureFile) -> Any:
+            handle = original(self)
+            opened.append(handle)
+            return handle
+
+        monkeypatch.setattr(_FixtureFile, "_open_text", spy)
+        gen = iter_fixture_sync(sharded_users, "users", batch_size=1)
+        assert isinstance(gen, Generator)
+        next(gen)
+        gen.close()
+        assert len(opened) == 1
+        assert all(handle.closed for handle in opened)
+
+    @pytest.mark.asyncio
+    async def test_iter_fixture_async_aclose_releases_handles(
+        self, sharded_users: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test closing iter_fixture_async early via aclose() closes the opened file handle."""
+        opened: list[Any] = []
+        original = _FixtureFile._open_text
+
+        def spy(self: _FixtureFile) -> Any:
+            handle = original(self)
+            opened.append(handle)
+            return handle
+
+        monkeypatch.setattr(_FixtureFile, "_open_text", spy)
+        agen = iter_fixture_async(sharded_users, "users", batch_size=1)
+        assert isinstance(agen, AsyncGenerator)
+        await agen.__anext__()
+        await agen.aclose()
+        assert len(opened) == 1
+        assert all(handle.closed for handle in opened)
+
+    def test_iter_fixture_sync_consumed_releases_handles(
+        self, sharded_users: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test exhausting iter_fixture_sync closes every opened shard handle."""
+        opened: list[Any] = []
+        original = _FixtureFile._open_text
+
+        def spy(self: _FixtureFile) -> Any:
+            handle = original(self)
+            opened.append(handle)
+            return handle
+
+        monkeypatch.setattr(_FixtureFile, "_open_text", spy)
+        list(iter_fixture_sync(sharded_users, "users", batch_size=2))
+        assert len(opened) == 2
+        assert all(handle.closed for handle in opened)

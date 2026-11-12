@@ -14,13 +14,21 @@ from advanced_alchemy.utils.serialization import decode_json
 from advanced_alchemy.utils.sync_tools import async_
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import AsyncIterator, Generator, Iterator
     from contextlib import AbstractContextManager
     from typing import TextIO
 
     from anyio import Path as AsyncPath
 
-__all__ = ("FixtureCompression", "FixtureFormat", "open_fixture", "open_fixture_async", "open_fixture_sync")
+__all__ = (
+    "FixtureCompression",
+    "FixtureFormat",
+    "iter_fixture_async",
+    "iter_fixture_sync",
+    "open_fixture",
+    "open_fixture_async",
+    "open_fixture_sync",
+)
 
 FixtureFormat = Literal["json", "jsonl", "csv"]
 """Fixture file format: ``"json"`` (array), ``"jsonl"`` (one JSON value per line), or ``"csv"`` (header row plus rows)."""
@@ -125,6 +133,76 @@ def open_fixture(fixtures_path: "Union[Path, AsyncPath]", fixture_name: str) -> 
         Any: Decoded JSON data or a list of records.
     """
     return open_fixture_sync(fixtures_path, fixture_name)
+
+
+def iter_fixture_sync(
+    fixtures_path: "Union[Path, AsyncPath]", fixture_name: str, *, batch_size: int = 1000
+) -> "Iterator[list[Any]]":
+    """Stream decoded fixture records in non-empty batches synchronously.
+
+    Validates ``batch_size`` and resolves the fixture file or numbered shards
+    eagerly at call time, then yields non-empty batches of at most
+    ``batch_size`` records across shard boundaries. Closing the returned
+    iterator early releases any open file handle immediately.
+
+    Args:
+        fixtures_path: Directory path containing fixture files. Can be a
+            :class:`pathlib.Path` or :class:`anyio.Path` instance.
+        fixture_name: Fixture base name without file extension.
+        batch_size: Maximum number of records per yielded batch. Must be at least 1.
+
+    Raises:
+        FileNotFoundError: If no matching fixture file exists.
+        OSError: If an I/O or decompression error occurs while reading a file.
+        ValueError: If ``batch_size`` is less than 1, both an unsharded file and
+            numbered shards exist, shard validation fails, a zip archive contains
+            no matching member, a JSONL line contains invalid JSON, or a JSON
+            fixture is not an array.
+
+    Returns:
+        Iterator[list[Any]]: Iterator yielding non-empty lists of records.
+    """
+    return _FixtureLocator(Path(fixtures_path), fixture_name).iter_batches(batch_size)
+
+
+async def iter_fixture_async(
+    fixtures_path: "Union[Path, AsyncPath]", fixture_name: str, *, batch_size: int = 1000
+) -> "AsyncIterator[list[Any]]":
+    """Stream decoded fixture records in non-empty batches asynchronously.
+
+    Offloads fixture resolution, batch reads, and generator teardown to worker
+    threads via :func:`~advanced_alchemy.utils.sync_tools.async_`. Validation
+    and resolution run on the first iteration step. Callers exiting early must
+    call ``aclose()`` or consume the iterator completely so underlying file
+    handles are closed promptly.
+
+    Args:
+        fixtures_path: Directory path containing fixture files. Can be a
+            :class:`pathlib.Path` or :class:`anyio.Path` instance.
+        fixture_name: Fixture base name without file extension.
+        batch_size: Maximum number of records per yielded batch. Must be at least 1.
+
+    Raises:
+        FileNotFoundError: If no matching fixture file exists.
+        OSError: If an I/O or decompression error occurs while reading a file.
+        ValueError: If ``batch_size`` is less than 1, both an unsharded file and
+            numbered shards exist, shard validation fails, a zip archive contains
+            no matching member, a JSONL line contains invalid JSON, or a JSON
+            fixture is not an array.
+
+    Yields:
+        list[Any]: Non-empty batch of decoded records.
+    """
+    locator = _FixtureLocator(Path(str(fixtures_path)), fixture_name)
+    batches = await async_(locator.iter_batches)(batch_size)
+    try:
+        while True:
+            batch = await async_(_FixtureLocator.next_batch)(batches)
+            if batch is None:
+                return
+            yield batch
+    finally:
+        await async_(batches.close)()
 
 
 class _FixtureFile:
@@ -279,6 +357,18 @@ class _FixtureLocator:
         self.base_path = base_path
         self.fixture_name = fixture_name
 
+    @staticmethod
+    def next_batch(batches: "Iterator[list[Any]]") -> "Optional[list[Any]]":
+        """Return the next batch from a batch iterator, or ``None`` when exhausted.
+
+        Args:
+            batches: Synchronous batch iterator.
+
+        Returns:
+            Optional[list[Any]]: Next batch of records, or ``None`` at end of stream.
+        """
+        return next(batches, None)
+
     def resolve(self) -> "list[_FixtureFile]":
         """Resolve the highest-priority fixture file or shards for the configured name.
 
@@ -306,6 +396,56 @@ class _FixtureLocator:
             "(tried .json, .jsonl, .csv with optional .gz/.zip compression, numbered shards, and case variations)"
         )
         raise FileNotFoundError(msg)
+
+    def iter_batches(self, batch_size: int) -> "Generator[list[Any], None, None]":
+        """Validate ``batch_size`` and resolve files eagerly, then stream record batches.
+
+        Args:
+            batch_size: Maximum number of records per yielded batch. Must be at least 1.
+
+        Raises:
+            ValueError: If ``batch_size`` is less than 1, or if fixture/shard resolution fails.
+            FileNotFoundError: If no matching fixture file or shard is found.
+
+        Returns:
+            Generator[list[Any], None, None]: Generator yielding non-empty record batches.
+        """
+        if batch_size < 1:
+            msg = f"batch_size must be at least 1, got {batch_size}"
+            raise ValueError(msg)
+        return self._batches(self.resolve(), batch_size)
+
+    def _unsharded_candidates(self, file_format: FixtureFormat) -> "list[_FixtureFile]":
+        """Collect existing unsharded fixture candidates for a format in priority order.
+
+        Args:
+            file_format: Fixture format to probe.
+
+        Returns:
+            list[_FixtureFile]: Existing deduplicated candidate fixture files.
+        """
+        upper_name = self.fixture_name.upper()
+        variants: list[tuple[str, Optional[FixtureCompression]]] = [
+            (f"{self.fixture_name}.{file_format}", None),
+        ]
+        if file_format == "csv":
+            variants.append((f"{upper_name}.{file_format}", None))
+        for comp, suffix in _COMPRESSION_SUFFIXES.items():
+            variants.append((f"{upper_name}.{file_format}{suffix}", comp))
+            variants.append((f"{self.fixture_name}.{file_format}{suffix}", comp))
+
+        candidates: list[_FixtureFile] = []
+        seen: set[Union[tuple[int, int], str]] = set()
+        for name, compression in variants:
+            path = self.base_path / name
+            if not path.is_file():
+                continue
+            identity = self._identity(path)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            candidates.append(_FixtureFile(path, self.fixture_name, file_format, compression, None))
+        return candidates
 
     def _shard_matches(self, file_format: FixtureFormat) -> "list[_FixtureFile]":
         """Collect matching numbered shard files for a format without index validation.
@@ -379,37 +519,29 @@ class _FixtureLocator:
 
         return [by_index[index][0] for index in indexes]
 
-    def _unsharded_candidates(self, file_format: FixtureFormat) -> "list[_FixtureFile]":
-        """Collect existing unsharded fixture candidates for a format in priority order.
+    def _batches(self, files: "list[_FixtureFile]", batch_size: int) -> "Generator[list[Any], None, None]":
+        """Yield non-empty batches of at most ``batch_size`` records across resolved files.
 
         Args:
-            file_format: Fixture format to probe.
+            files: Ordered fixture file descriptors to stream.
+            batch_size: Positive maximum batch size.
 
-        Returns:
-            list[_FixtureFile]: Existing deduplicated candidate fixture files.
+        Yields:
+            list[Any]: Non-empty list of decoded records.
         """
-        upper_name = self.fixture_name.upper()
-        variants: list[tuple[str, Optional[FixtureCompression]]] = [
-            (f"{self.fixture_name}.{file_format}", None),
-        ]
-        if file_format == "csv":
-            variants.append((f"{upper_name}.{file_format}", None))
-        for comp, suffix in _COMPRESSION_SUFFIXES.items():
-            variants.append((f"{upper_name}.{file_format}{suffix}", comp))
-            variants.append((f"{self.fixture_name}.{file_format}{suffix}", comp))
-
-        candidates: list[_FixtureFile] = []
-        seen: set[Union[tuple[int, int], str]] = set()
-        for name, compression in variants:
-            path = self.base_path / name
-            if not path.is_file():
-                continue
-            identity = self._identity(path)
-            if identity in seen:
-                continue
-            seen.add(identity)
-            candidates.append(_FixtureFile(path, self.fixture_name, file_format, compression, None))
-        return candidates
+        batch: list[Any] = []
+        for fixture_file in files:
+            records = fixture_file.iter_records()
+            try:
+                for record in records:
+                    batch.append(record)
+                    if len(batch) == batch_size:
+                        yield batch
+                        batch = []
+            finally:
+                records.close()
+        if batch:
+            yield batch
 
     @staticmethod
     def _identity(path: "Path") -> "Union[tuple[int, int], str]":
