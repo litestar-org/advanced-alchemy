@@ -101,7 +101,8 @@ async def dump_tables(
     ``yield_per=batch_size`` so joined collection eager loaders remain
     compatible with ``yield_per`` and do not trigger extra queries while a
     server-side cursor is open. Async dialects without server-side cursor
-    support are read through buffered :meth:`AsyncSession.scalars`.
+    support are read through buffered
+    :meth:`AsyncSession.scalars <sqlalchemy.ext.asyncio.AsyncSession.scalars>`.
 
     Args:
         dump_dir: Directory where fixture files are written.
