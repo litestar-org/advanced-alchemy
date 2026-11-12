@@ -3,6 +3,7 @@
 import csv
 import gzip
 import io
+import re
 import zipfile
 import zlib
 from pathlib import Path
@@ -28,6 +29,7 @@ FixtureCompression = Literal["gzip", "zip"]
 
 _FORMAT_PRIORITY: "tuple[FixtureFormat, ...]" = ("json", "jsonl", "csv")
 _COMPRESSION_SUFFIXES: "dict[FixtureCompression, str]" = {"gzip": ".gz", "zip": ".zip"}
+_SUFFIX_COMPRESSIONS: "dict[str, FixtureCompression]" = {".gz": "gzip", ".zip": "zip"}
 _TEXT_ENCODING = "utf-8-sig"
 _READ_ERRORS = (OSError, zipfile.BadZipFile, gzip.BadGzipFile, EOFError, zlib.error)
 
@@ -278,16 +280,25 @@ class _FixtureLocator:
         self.fixture_name = fixture_name
 
     def resolve(self) -> "list[_FixtureFile]":
-        """Resolve the highest-priority fixture file for the configured name.
+        """Resolve the highest-priority fixture file or shards for the configured name.
 
         Raises:
-            FileNotFoundError: If no matching fixture file is found.
+            FileNotFoundError: If no matching fixture file or shard is found.
+            ValueError: If both an unsharded file and numbered shards exist for the
+                resolved format, or if shard validation fails.
 
         Returns:
-            list[_FixtureFile]: Ordered list containing the resolved fixture file.
+            list[_FixtureFile]: Ordered list containing the resolved fixture file or shards.
         """
         for file_format in _FORMAT_PRIORITY:
             candidates = self._unsharded_candidates(file_format)
+            shards = self._shards(file_format)
+            if candidates and shards:
+                paths = ", ".join(str(fixture_file.path) for fixture_file in [*candidates, *shards])
+                msg = f"Fixture {self.fixture_name!r} has both an unsharded file and numbered shards: {paths}"
+                raise ValueError(msg)
+            if shards:
+                return shards
             if candidates:
                 return candidates[:1]
         msg = (
@@ -295,6 +306,78 @@ class _FixtureLocator:
             "(tried .json, .jsonl, .csv with optional .gz/.zip compression, numbered shards, and case variations)"
         )
         raise FileNotFoundError(msg)
+
+    def _shard_matches(self, file_format: FixtureFormat) -> "list[_FixtureFile]":
+        """Collect matching numbered shard files for a format without index validation.
+
+        Args:
+            file_format: Fixture format to probe.
+
+        Returns:
+            list[_FixtureFile]: Deduplicated matching shard descriptors in directory sort order.
+        """
+        if not self.base_path.is_dir():
+            return []
+        pattern = re.compile(
+            rf"^(?P<name>{re.escape(self.fixture_name)}|{re.escape(self.fixture_name.upper())})"
+            rf"\.(?P<index>\d+)\.(?P<fmt>json|jsonl|csv)(?P<comp>\.gz|\.zip)?$"
+        )
+        matches: list[_FixtureFile] = []
+        seen: set[Union[tuple[int, int], str]] = set()
+        for path in sorted(self.base_path.iterdir()):
+            match = pattern.match(path.name)
+            if match is None or match["fmt"] != file_format or not path.is_file():
+                continue
+            identity = self._identity(path)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            compression = _SUFFIX_COMPRESSIONS.get(match["comp"] or "")
+            matches.append(_FixtureFile(path, self.fixture_name, file_format, compression, int(match["index"])))
+        return matches
+
+    def _shards(self, file_format: FixtureFormat) -> "list[_FixtureFile]":
+        """Validate and return numbered shards for a format in numeric index order.
+
+        Args:
+            file_format: Fixture format to validate.
+
+        Raises:
+            ValueError: If duplicate shard indexes exist, index 0 is present, or any
+                shard index in ``1..N`` is missing.
+
+        Returns:
+            list[_FixtureFile]: Validated shard descriptors sorted by shard index.
+        """
+        by_index: dict[int, list[_FixtureFile]] = {}
+        for fixture_file in self._shard_matches(file_format):
+            if fixture_file.shard_index is None:
+                continue
+            by_index.setdefault(fixture_file.shard_index, []).append(fixture_file)
+        if not by_index:
+            return []
+
+        indexes = sorted(by_index)
+        for index in indexes:
+            group = by_index[index]
+            if len(group) > 1:
+                paths = ", ".join(str(fixture_file.path) for fixture_file in group)
+                msg = f"Fixture {self.fixture_name!r} has multiple shards with index {index}: {paths}"
+                raise ValueError(msg)
+
+        if indexes[0] == 0:
+            paths = ", ".join(str(fixture_file.path) for fixture_file in by_index[0])
+            msg = f"Fixture {self.fixture_name!r} shard indexes start at 1, found index 0: {paths}"
+            raise ValueError(msg)
+
+        missing_indexes = sorted(set(range(1, indexes[-1] + 1)) - set(indexes))
+        if missing_indexes:
+            missing = ", ".join(str(index) for index in missing_indexes)
+            paths = ", ".join(str(by_index[index][0].path) for index in indexes)
+            msg = f"Fixture {self.fixture_name!r} is missing shard index(es) {missing}: {paths}"
+            raise ValueError(msg)
+
+        return [by_index[index][0] for index in indexes]
 
     def _unsharded_candidates(self, file_format: FixtureFormat) -> "list[_FixtureFile]":
         """Collect existing unsharded fixture candidates for a format in priority order.

@@ -4,6 +4,7 @@ import csv
 import gzip
 import io
 import json
+import os
 import tempfile
 import zipfile
 import zlib
@@ -1038,3 +1039,171 @@ class TestOpenFixtureJSONL:
         monkeypatch.setattr(gzip, "decompress", _raise)
         monkeypatch.setattr(Path, "read_bytes", _raise)
         assert open_fixture_sync(tmp_path, "users") == [{"id": 1}]
+
+
+class TestFixtureShards:
+    """Test cases for numbered shard discovery, validation, and concatenation."""
+
+    def test_open_sharded_jsonl_gzip(self, tmp_path: Path) -> None:
+        """Test loading numbered gzipped JSONL shards returns concatenated records."""
+        _write_fixture(tmp_path / "users.001.jsonl.gz", '{"id": 1}\n{"id": 2}\n{"id": 3}\n')
+        _write_fixture(tmp_path / "users.002.jsonl.gz", '{"id": 4}\n{"id": 5}\n')
+        assert open_fixture_sync(tmp_path, "users") == [
+            {"id": 1},
+            {"id": 2},
+            {"id": 3},
+            {"id": 4},
+            {"id": 5},
+        ]
+
+    @pytest.mark.parametrize(
+        ("files", "expected"),
+        [
+            (
+                {"users.001.jsonl.gz": '{"id": 1}\n', "users.002.jsonl": '{"id": 2}\n'},
+                [{"id": 1}, {"id": 2}],
+            ),
+            (
+                {"USERS.001.jsonl.zip": '{"id": 1}\n', "users.002.jsonl.gz": '{"id": 2}\n'},
+                [{"id": 1}, {"id": 2}],
+            ),
+            (
+                {"users.1.jsonl": '{"id": 1}\n', "users.02.jsonl": '{"id": 2}\n', "users.003.jsonl": '{"id": 3}\n'},
+                [{"id": 1}, {"id": 2}, {"id": 3}],
+            ),
+            (
+                {"users.001.json": '[{"id": 1}]', "users.002.json.gz": '[{"id": 2}, {"id": 3}]'},
+                [{"id": 1}, {"id": 2}, {"id": 3}],
+            ),
+            (
+                {"users.001.csv": "id\n1\n", "users.002.csv.zip": "id\n2\n"},
+                [{"id": "1"}, {"id": "2"}],
+            ),
+        ],
+    )
+    def test_open_shard_layouts(
+        self, tmp_path: Path, files: "dict[str, str]", expected: "list[dict[str, Any]]"
+    ) -> None:
+        """Test mixed compression, case variants, variable digit widths, and formats across shards."""
+        for name, content in files.items():
+            _write_fixture(tmp_path / name, content)
+        assert open_fixture_sync(tmp_path, "users") == expected
+
+    def test_open_shards_in_numeric_order(self, tmp_path: Path) -> None:
+        """Test shards are ordered numerically so shard 10 follows shard 9."""
+        files = {f"users.{i}.jsonl": f'{{"id": {i}}}\n' for i in range(1, 11)}
+        for name, content in files.items():
+            _write_fixture(tmp_path / name, content)
+        assert open_fixture_sync(tmp_path, "users") == [{"id": i} for i in range(1, 11)]
+
+    @pytest.mark.parametrize(
+        ("files", "message", "named"),
+        [
+            (
+                {"users.json": "[]", "users.001.json": "[]"},
+                "has both an unsharded file and numbered shards",
+                ("users.json", "users.001.json"),
+            ),
+            (
+                {"users.001.jsonl": "{}\n", "users.003.jsonl": "{}\n"},
+                "is missing shard index(es) 2",
+                ("users.001.jsonl", "users.003.jsonl"),
+            ),
+            (
+                {"users.000.jsonl": "{}\n", "users.001.jsonl": "{}\n"},
+                "shard indexes start at 1, found index 0",
+                ("users.000.jsonl",),
+            ),
+            (
+                {"users.1.json": "[]", "users.001.json.gz": "[]"},
+                "has multiple shards with index 1",
+                ("users.1.json", "users.001.json.gz"),
+            ),
+            (
+                {"users.001.json": '{"a": 1}'},
+                "must contain a JSON array, got dict",
+                ("users.001.json",),
+            ),
+        ],
+    )
+    def test_shard_validation_errors(
+        self, tmp_path: Path, files: "dict[str, str]", message: str, named: "tuple[str, ...]"
+    ) -> None:
+        """Test invalid shard layouts raise ValueError naming the fixture and offending paths."""
+        for name, content in files.items():
+            _write_fixture(tmp_path / name, content)
+        with pytest.raises(ValueError) as exc_info:
+            open_fixture_sync(tmp_path, "users")
+        exc_text = str(exc_info.value)
+        assert "Fixture 'users'" in exc_text
+        assert message in exc_text
+        assert all(name in exc_text for name in named)
+
+    @pytest.mark.parametrize(
+        ("files", "expected"),
+        [
+            (
+                {"users.json": '[{"src": "json"}]', "users.001.csv": "src\ncsv\n"},
+                [{"src": "json"}],
+            ),
+            (
+                {"users.jsonl": '{"src": "jsonl"}\n', "users.001.csv": "src\na\n", "users.003.csv": "src\nb\n"},
+                [{"src": "jsonl"}],
+            ),
+        ],
+    )
+    def test_lower_priority_shards_are_ignored(
+        self, tmp_path: Path, files: "dict[str, str]", expected: "list[dict[str, str]]"
+    ) -> None:
+        """Test shards of a lower-priority format are ignored even when invalid."""
+        for name, content in files.items():
+            _write_fixture(tmp_path / name, content)
+        assert open_fixture_sync(tmp_path, "users") == expected
+
+    def test_shard_name_is_matched_literally(self, tmp_path: Path) -> None:
+        """Test regex metacharacters in fixture_name are matched literally."""
+        _write_fixture(tmp_path / "a.b+c.001.jsonl", '{"id": 1}\n')
+        _write_fixture(tmp_path / "aXbbc.002.jsonl", '{"id": 2}\n')
+        _write_fixture(tmp_path / "a.bbc.002.jsonl", '{"id": 3}\n')
+        assert open_fixture_sync(tmp_path, "a.b+c") == [{"id": 1}]
+
+    def test_non_shard_entries_are_ignored(self, tmp_path: Path) -> None:
+        """Test directories and files with extra suffixes do not count as shards."""
+        (tmp_path / "users.001.jsonl").mkdir()
+        _write_fixture(tmp_path / "users.001.jsonl.bak", '{"id": 9}\n')
+        _write_fixture(tmp_path / "users.jsonl", '{"id": 1}\n')
+        assert open_fixture_sync(tmp_path, "users") == [{"id": 1}]
+
+    def test_hard_linked_shard_names_load_once(self, tmp_path: Path) -> None:
+        """Test hard-linked case-variant shard names are deduplicated by inode."""
+        _write_fixture(tmp_path / "users.001.jsonl", '{"id": 1}\n')
+        os.link(tmp_path / "users.001.jsonl", tmp_path / "USERS.001.jsonl")
+        _write_fixture(tmp_path / "users.002.jsonl", '{"id": 2}\n')
+        assert open_fixture_sync(tmp_path, "users") == [{"id": 1}, {"id": 2}]
+
+    def test_hard_linked_unsharded_name_reported_once(self, tmp_path: Path) -> None:
+        """Test hard-linked unsharded case variants are reported once in conflict errors."""
+        _write_fixture(tmp_path / "users.json.gz", "[]")
+        os.link(tmp_path / "users.json.gz", tmp_path / "USERS.json.gz")
+        _write_fixture(tmp_path / "users.001.json", "[]")
+        with pytest.raises(ValueError) as exc_info:
+            open_fixture_sync(tmp_path, "users")
+        assert str(exc_info.value).count(".json.gz") == 1
+
+    def test_missing_fixtures_directory(self, tmp_path: Path) -> None:
+        """Test missing fixtures directory raises FileNotFoundError."""
+        with pytest.raises(FileNotFoundError, match="Could not find the users fixture"):
+            open_fixture_sync(tmp_path / "missing", "users")
+
+    @pytest.mark.asyncio
+    async def test_open_sharded_async(self, tmp_path: Path) -> None:
+        """Test open_fixture_async loads numbered shards in order."""
+        _write_fixture(tmp_path / "users.001.jsonl.gz", '{"id": 1}\n{"id": 2}\n{"id": 3}\n')
+        _write_fixture(tmp_path / "users.002.jsonl.gz", '{"id": 4}\n{"id": 5}\n')
+        assert await open_fixture_async(tmp_path, "users") == [
+            {"id": 1},
+            {"id": 2},
+            {"id": 3},
+            {"id": 4},
+            {"id": 5},
+        ]
