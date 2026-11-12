@@ -6,13 +6,14 @@ import io
 import json
 import tempfile
 import zipfile
+import zlib
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from advanced_alchemy.utils.fixtures import open_fixture, open_fixture_async
+from advanced_alchemy.utils.fixtures import open_fixture, open_fixture_async, open_fixture_sync
 
 
 @pytest.fixture
@@ -134,6 +135,18 @@ def temp_fixtures_dir(
         yield fixtures_path
 
 
+def _write_fixture(path: Path, text: str) -> None:
+    """Write text as a plain, gzip, or zip fixture chosen by the file suffix."""
+    data = text.encode("utf-8")
+    if path.suffix == ".gz":
+        path.write_bytes(gzip.compress(data))
+    elif path.suffix == ".zip":
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr(path.stem, data)
+    else:
+        path.write_bytes(data)
+
+
 class TestOpenFixture:
     """Test cases for synchronous open_fixture function."""
 
@@ -233,7 +246,10 @@ class TestOpenFixture:
             open_fixture(temp_fixtures_dir, "nonexistent")
 
         assert "Could not find the nonexistent fixture" in str(exc_info.value)
-        assert "(tried .json, .json.gz, .json.zip, .csv, .csv.gz, .csv.zip with case variations)" in str(exc_info.value)
+        assert (
+            "(tried .json, .jsonl, .csv with optional .gz/.zip compression, numbered shards, and case variations)"
+            in str(exc_info.value)
+        )
 
     def test_empty_zip_file(self, temp_fixtures_dir: Path) -> None:
         """Test error handling for empty zip file."""
@@ -585,7 +601,10 @@ class TestOpenFixtureAsync:
             await open_fixture_async(temp_fixtures_dir, "nonexistent")
 
         assert "Could not find the nonexistent fixture" in str(exc_info.value)
-        assert "(tried .json, .json.gz, .json.zip, .csv, .csv.gz, .csv.zip with case variations)" in str(exc_info.value)
+        assert (
+            "(tried .json, .jsonl, .csv with optional .gz/.zip compression, numbered shards, and case variations)"
+            in str(exc_info.value)
+        )
 
     @pytest.mark.asyncio
     async def test_empty_zip_file_async(self, temp_fixtures_dir: Path) -> None:
@@ -891,3 +910,131 @@ class TestIntegration:
 
         assert json_result == sample_data
         assert csv_result == sample_csv_data
+
+
+class TestOpenFixtureJSONL:
+    """Test cases for JSONL fixture loading and streaming reads via open_fixture_sync."""
+
+    @pytest.mark.parametrize(
+        "file_name",
+        [
+            "users.jsonl",
+            "users.jsonl.gz",
+            "users.jsonl.zip",
+            "USERS.jsonl.gz",
+            "USERS.jsonl.zip",
+        ],
+    )
+    def test_open_jsonl_variants(self, tmp_path: Path, file_name: str) -> None:
+        """Test loading plain, gzipped, and zipped JSONL fixtures including case variants."""
+        _write_fixture(tmp_path / file_name, '{"id": 1}\n{"id": 2}\n')
+        assert open_fixture_sync(tmp_path, "users") == [{"id": 1}, {"id": 2}]
+
+    @pytest.mark.parametrize(
+        ("content", "expected"),
+        [
+            ("{}\n\n{}\n  \n", [{}, {}]),
+            ('{"a": 1}\r\n{"a": 2}\r\n', [{"a": 1}, {"a": 2}]),
+            ('\ufeff{"id": 1}\n', [{"id": 1}]),
+            ('1\n"two"\nnull\n', [1, "two", None]),
+            ("", []),
+            ('{"id": 1}', [{"id": 1}]),
+        ],
+    )
+    def test_open_jsonl_line_handling(self, tmp_path: Path, content: str, expected: "list[Any]") -> None:
+        """Test blank lines, CRLF endings, UTF-8 BOM, scalar JSON values, empty files, and missing trailing newline."""
+        _write_fixture(tmp_path / "users.jsonl", content)
+        assert open_fixture_sync(tmp_path, "users") == expected
+
+    @pytest.mark.parametrize("file_name", ["users.json", "users.json.gz"])
+    def test_open_json_with_bom(self, tmp_path: Path, file_name: str) -> None:
+        """Test loading JSON fixtures with a UTF-8 BOM."""
+        _write_fixture(tmp_path / file_name, "\ufeff[1, 2]")
+        assert open_fixture_sync(tmp_path, "users") == [1, 2]
+
+    def test_open_unsharded_json_returns_non_array_value(self, tmp_path: Path) -> None:
+        """Test unsharded JSON files return non-array top-level values unchanged."""
+        _write_fixture(tmp_path / "config.json", '{"a": 1}')
+        assert open_fixture_sync(tmp_path, "config") == {"a": 1}
+
+    def test_jsonl_malformed_line_raises_value_error(self, tmp_path: Path) -> None:
+        """Test malformed JSONL line raises ValueError with path and 1-based line number."""
+        fixture_path = tmp_path / "users.jsonl"
+        _write_fixture(fixture_path, '{"id": 1}\n{bad\n')
+        with pytest.raises(ValueError) as exc_info:
+            open_fixture_sync(tmp_path, "users")
+        assert "at line 2" in str(exc_info.value)
+        assert str(fixture_path) in str(exc_info.value)
+
+    @pytest.mark.parametrize(
+        ("files", "expected"),
+        [
+            (
+                {"users.json": '[{"src": "json"}]', "users.jsonl": '{"src": "jsonl"}\n', "users.csv": "src\ncsv\n"},
+                [{"src": "json"}],
+            ),
+            (
+                {"users.jsonl.gz": '{"src": "jsonl"}\n', "users.csv": "src\ncsv\n"},
+                [{"src": "jsonl"}],
+            ),
+            (
+                {"users.csv": "src\ncsv\n"},
+                [{"src": "csv"}],
+            ),
+        ],
+    )
+    def test_jsonl_format_priority(
+        self, tmp_path: Path, files: "dict[str, str]", expected: "list[dict[str, str]]"
+    ) -> None:
+        """Test format resolution priority is json > jsonl > csv."""
+        for name, content in files.items():
+            _write_fixture(tmp_path / name, content)
+        assert open_fixture_sync(tmp_path, "users") == expected
+
+    def test_jsonl_zip_prefers_matching_member(self, tmp_path: Path) -> None:
+        """Test zipped JSONL prefers the member matching the fixture name."""
+        zip_path = tmp_path / "users.jsonl.zip"
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("other.jsonl", '{"src": "other"}\n')
+            archive.writestr("users.jsonl", '{"src": "users"}\n')
+        assert open_fixture_sync(tmp_path, "users") == [{"src": "users"}]
+
+    @pytest.mark.parametrize("member", ["readme.txt", "users.json"])
+    def test_jsonl_zip_without_jsonl_member_raises(self, tmp_path: Path, member: str) -> None:
+        """Test zipped JSONL without any .jsonl member raises ValueError."""
+        zip_path = tmp_path / "users.jsonl.zip"
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr(member, "content")
+        with pytest.raises(ValueError, match="No JSONL files found in zip archive"):
+            open_fixture_sync(tmp_path, "users")
+
+    @pytest.mark.parametrize("corruption", ["truncated", "deflate-body"])
+    def test_corrupt_jsonl_gzip_raises_os_error(self, tmp_path: Path, corruption: str) -> None:
+        """Test truncated and deflate-corrupted gzipped JSONL files raise OSError."""
+        data = bytearray(gzip.compress(b'{"id": 1}\n' * 1000))
+        if corruption == "truncated":
+            corrupt_bytes = bytes(data[: len(data) // 2])
+        else:
+            data[10] |= 0x06
+            corrupt_bytes = bytes(data)
+        (tmp_path / "users.jsonl.gz").write_bytes(corrupt_bytes)
+        with pytest.raises(OSError, match="Error reading fixture file") as exc_info:
+            open_fixture_sync(tmp_path, "users")
+        if corruption == "deflate-body":
+            assert isinstance(exc_info.value.__cause__, zlib.error)
+
+    @pytest.mark.parametrize("file_name", ["users.json.gz", "users.jsonl.gz", "users.jsonl.zip"])
+    def test_reader_streams_without_whole_file_decompression(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, file_name: str
+    ) -> None:
+        """Test fixture loading streams without calling gzip.decompress or Path.read_bytes."""
+        content = '[{"id": 1}]' if file_name == "users.json.gz" else '{"id": 1}\n'
+        _write_fixture(tmp_path / file_name, content)
+
+        def _raise(*args: Any, **kwargs: Any) -> Any:
+            msg = "whole-file read"
+            raise AssertionError(msg)
+
+        monkeypatch.setattr(gzip, "decompress", _raise)
+        monkeypatch.setattr(Path, "read_bytes", _raise)
+        assert open_fixture_sync(tmp_path, "users") == [{"id": 1}]

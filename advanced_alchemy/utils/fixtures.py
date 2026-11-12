@@ -1,312 +1,344 @@
+"""Utilities for loading fixture data from JSON, JSONL, and CSV files."""
+
 import csv
 import gzip
 import io
 import zipfile
-from functools import partial
-from typing import TYPE_CHECKING, Any, Union
+import zlib
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
-from advanced_alchemy.exceptions import MissingDependencyError
+from advanced_alchemy.utils.deprecation import deprecated
 from advanced_alchemy.utils.serialization import decode_json
+from advanced_alchemy.utils.sync_tools import async_
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Generator
+    from contextlib import AbstractContextManager
+    from typing import TextIO
 
     from anyio import Path as AsyncPath
 
-__all__ = ("open_fixture", "open_fixture_async")
+__all__ = ("FixtureCompression", "FixtureFormat", "open_fixture", "open_fixture_async", "open_fixture_sync")
+
+FixtureFormat = Literal["json", "jsonl", "csv"]
+"""Fixture file format: ``"json"`` (array), ``"jsonl"`` (one JSON value per line), or ``"csv"`` (header row plus rows)."""
+FixtureCompression = Literal["gzip", "zip"]
+"""Fixture compression: ``"gzip"`` (``.gz``) or ``"zip"`` (``.zip``); ``None`` means uncompressed."""
+
+_FORMAT_PRIORITY: "tuple[FixtureFormat, ...]" = ("json", "jsonl", "csv")
+_COMPRESSION_SUFFIXES: "dict[FixtureCompression, str]" = {"gzip": ".gz", "zip": ".zip"}
+_TEXT_ENCODING = "utf-8-sig"
+_READ_ERRORS = (OSError, zipfile.BadZipFile, gzip.BadGzipFile, EOFError, zlib.error)
 
 
-def open_fixture(fixtures_path: "Union[Path, AsyncPath]", fixture_name: str) -> Any:
-    """Loads JSON or CSV file with the specified fixture name.
+def open_fixture_sync(fixtures_path: "Union[Path, AsyncPath]", fixture_name: str) -> Any:
+    """Load a JSON, JSONL, or CSV fixture synchronously.
 
-    Supports plain files, gzipped files (.json.gz, .csv.gz), and zipped files (.json.zip, .csv.zip).
-    The function automatically detects the file format based on file extension and handles
-    decompression transparently. JSON files take priority over CSV files. Supports both
-    lowercase and uppercase variations for better compatibility with database exports.
+    Supports plain files, gzip-compressed files (``.gz``), and zip archives (``.zip``).
+    Formats are resolved in priority order: ``json`` > ``jsonl`` > ``csv``. Both
+    lowercase and uppercase fixture names are checked according to format and
+    compression rules. Text is decoded using ``utf-8-sig``.
 
-    For CSV files, returns a list of dictionaries using csv.DictReader where each row
-    becomes a dictionary with column headers as keys. Note that CSV values are always
-    strings, unlike JSON which preserves data types.
+    Unsharded ``json`` fixtures return the decoded top-level JSON value unchanged.
+    Unsharded ``jsonl`` and ``csv`` fixtures return a list of decoded records or
+    dictionaries.
 
     Args:
-        fixtures_path: The path to look for fixtures. Can be a :class:`pathlib.Path` or
-            :class:`anyio.Path` instance.
-        fixture_name: The fixture name to load (without file extension).
+        fixtures_path: Directory path containing fixture files. Can be a
+            :class:`pathlib.Path` or :class:`anyio.Path` instance.
+        fixture_name: Fixture base name without file extension.
 
     Raises:
-        FileNotFoundError: If no fixture file is found with any supported extension.
-        OSError: If there's an error reading or decompressing the file.
-        ValueError: If the JSON content is invalid, or if a zip file doesn't contain
-                    the expected JSON/CSV files.
-        zipfile.BadZipFile: If the zip file is corrupted.
-        gzip.BadGzipFile: If the gzip file is corrupted.
-        csv.Error: If the CSV content is malformed.
+        FileNotFoundError: If no matching fixture file exists.
+        OSError: If an I/O or decompression error occurs while reading the file.
+        ValueError: If a zip archive contains no matching member, a JSONL line
+            contains invalid JSON, or a JSON fixture read as records is not an array.
 
     Returns:
-        Any: The parsed data from the fixture file (JSON data or list of dictionaries from CSV).
+        Any: Decoded JSON data or a list of records.
 
     Examples:
         >>> from pathlib import Path
         >>> fixtures_path = Path("./fixtures")
-
-        # Load JSON fixture
-        >>> data = open_fixture(fixtures_path, "users")
-        # loads users.json, users.json.gz, or users.json.zip
+        >>> data = open_fixture_sync(fixtures_path, "users")
         >>> print(data)
         [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
-
-        # Load CSV fixture
-        >>> data = open_fixture(fixtures_path, "states")
-        # loads states.csv, states.csv.gz, or states.csv.zip
-        >>> print(data)
-        [{"abbreviation": "AL", "name": "Alabama"}, {"abbreviation": "AK", "name": "Alaska"}]
     """
-    from pathlib import Path
-
-    base_path = Path(fixtures_path)
-
-    # Try different file extensions in order of preference
-    # Include both case variations for better compatibility with database exports
-    # JSON formats take priority over CSV for backward compatibility
-    file_variants = [
-        (base_path / f"{fixture_name}.json", "json_plain"),
-        (base_path / f"{fixture_name.upper()}.json.gz", "json_gzip"),  # Uppercase first (common for exports)
-        (base_path / f"{fixture_name}.json.gz", "json_gzip"),
-        (base_path / f"{fixture_name.upper()}.json.zip", "json_zip"),
-        (base_path / f"{fixture_name}.json.zip", "json_zip"),
-        (base_path / f"{fixture_name}.csv", "csv_plain"),
-        (base_path / f"{fixture_name.upper()}.csv", "csv_plain"),  # Uppercase plain CSV
-        (base_path / f"{fixture_name.upper()}.csv.gz", "csv_gzip"),
-        (base_path / f"{fixture_name}.csv.gz", "csv_gzip"),
-        (base_path / f"{fixture_name.upper()}.csv.zip", "csv_zip"),
-        (base_path / f"{fixture_name}.csv.zip", "csv_zip"),
-    ]
-
-    for fixture_path, file_type in file_variants:
-        if fixture_path.exists():
-            try:
-                # JSON handling
-                if file_type == "json_plain":
-                    with fixture_path.open(mode="r", encoding="utf-8") as f:
-                        f_data = f.read()
-                    return decode_json(f_data)
-                if file_type == "json_gzip":
-                    with fixture_path.open(mode="rb") as f:
-                        compressed_data = f.read()
-                    f_data = gzip.decompress(compressed_data).decode("utf-8")
-                    return decode_json(f_data)
-                if file_type == "json_zip":
-                    with zipfile.ZipFile(fixture_path, mode="r") as zf:
-                        # Look for JSON file inside zip
-                        json_files = [name for name in zf.namelist() if name.endswith(".json")]
-                        if not json_files:
-                            msg = f"No JSON files found in zip archive: {fixture_path}"
-                            raise ValueError(msg)
-
-                        # Use the first JSON file found, or prefer one matching the fixture name
-                        json_file = next((name for name in json_files if name == f"{fixture_name}.json"), json_files[0])
-
-                        with zf.open(json_file, mode="r") as f:
-                            f_data = f.read().decode("utf-8")
-                    return decode_json(f_data)
-
-                # CSV handling
-                if file_type == "csv_plain":
-                    with fixture_path.open(mode="r", encoding="utf-8-sig", newline="") as f:
-                        reader = csv.DictReader(f)
-                        return list(reader)
-                if file_type == "csv_gzip":
-                    with fixture_path.open(mode="rb") as f:
-                        compressed_data = f.read()
-                    f_data = gzip.decompress(compressed_data).decode("utf-8-sig")
-                    reader = csv.DictReader(io.StringIO(f_data))
-                    return list(reader)
-                if file_type == "csv_zip":
-                    with zipfile.ZipFile(fixture_path, mode="r") as zf:
-                        # Look for CSV file inside zip
-                        csv_files = [name for name in zf.namelist() if name.endswith(".csv")]
-                        if not csv_files:
-                            msg = f"No CSV files found in zip archive: {fixture_path}"
-                            raise ValueError(msg)
-
-                        # Use the first CSV file found, or prefer one matching the fixture name
-                        csv_file = next((name for name in csv_files if name == f"{fixture_name}.csv"), csv_files[0])
-
-                        with zf.open(csv_file, mode="r") as f:
-                            f_data = f.read().decode("utf-8-sig")
-                    reader = csv.DictReader(io.StringIO(f_data))
-                    return list(reader)
-                continue  # Skip unknown file types
-            except (OSError, zipfile.BadZipFile, gzip.BadGzipFile) as exc:
-                msg = f"Error reading fixture file {fixture_path}: {exc}"
-                raise OSError(msg) from exc
-
-    # No valid fixture file found
-    msg = f"Could not find the {fixture_name} fixture (tried .json, .json.gz, .json.zip, .csv, .csv.gz, .csv.zip with case variations)"
-    raise FileNotFoundError(msg)
-
-
-def _read_zip_file(path: "AsyncPath", name: str) -> str:
-    """Helper function to read JSON zip files."""
-    with zipfile.ZipFile(str(path), mode="r") as zf:
-        # Look for JSON file inside zip
-        json_files = [file for file in zf.namelist() if file.endswith(".json")]
-        if not json_files:
-            error_msg = f"No JSON files found in zip archive: {path}"
-            raise ValueError(error_msg)
-
-        # Use the first JSON file found, or prefer one matching the fixture name
-        json_file = next((file for file in json_files if file == f"{name}.json"), json_files[0])
-
-        with zf.open(json_file, mode="r") as f:
-            return f.read().decode("utf-8")
-
-
-def _read_csv_zip_file(path: "AsyncPath", name: str) -> "list[dict[str, Any]]":
-    """Helper function to read CSV zip files."""
-    with zipfile.ZipFile(str(path), mode="r") as zf:
-        # Look for CSV file inside zip
-        csv_files = [file for file in zf.namelist() if file.endswith(".csv")]
-        if not csv_files:
-            error_msg = f"No CSV files found in zip archive: {path}"
-            raise ValueError(error_msg)
-
-        # Use the first CSV file found, or prefer one matching the fixture name
-        csv_file = next((file for file in csv_files if file == f"{name}.csv"), csv_files[0])
-
-        with zf.open(csv_file, mode="r") as f:
-            f_data = f.read().decode("utf-8-sig")
-
-    reader = csv.DictReader(io.StringIO(f_data))
-    return list(reader)
+    files = _FixtureLocator(Path(fixtures_path), fixture_name).resolve()
+    if len(files) == 1 and files[0].shard_index is None:
+        return files[0].read()
+    return [record for fixture_file in files for record in fixture_file.iter_records()]
 
 
 async def open_fixture_async(fixtures_path: "Union[Path, AsyncPath]", fixture_name: str) -> Any:
-    """Loads JSON or CSV file with the specified fixture name asynchronously.
+    """Load a JSON, JSONL, or CSV fixture asynchronously.
 
-    Supports plain files, gzipped files (.json.gz, .csv.gz), and zipped files (.json.zip, .csv.zip).
-    The function automatically detects the file format based on file extension and handles
-    decompression transparently. JSON files take priority over CSV files. Supports both
-    lowercase and uppercase variations for better compatibility with database exports.
-    For compressed files and CSV parsing, operations are performed in a thread pool to
-    avoid blocking the event loop.
-
-    For CSV files, returns a list of dictionaries using csv.DictReader where each row
-    becomes a dictionary with column headers as keys. Note that CSV values are always
-    strings, unlike JSON which preserves data types.
+    Offloads synchronous fixture resolution, decompression, and parsing to a
+    worker thread via :func:`~advanced_alchemy.utils.sync_tools.async_`.
 
     Args:
-        fixtures_path: The path to look for fixtures. Can be a :class:`pathlib.Path` or
-            :class:`anyio.Path` instance.
-        fixture_name: The fixture name to load (without file extension).
+        fixtures_path: Directory path containing fixture files. Can be a
+            :class:`pathlib.Path` or :class:`anyio.Path` instance.
+        fixture_name: Fixture base name without file extension.
 
     Raises:
-        MissingDependencyError: If the `anyio` library is not installed.
-        FileNotFoundError: If no fixture file is found with any supported extension.
-        OSError: If there's an error reading or decompressing the file.
-        ValueError: If the JSON content is invalid, or if a zip file doesn't contain
-                    the expected JSON/CSV files.
-        zipfile.BadZipFile: If the zip file is corrupted.
-        gzip.BadGzipFile: If the gzip file is corrupted.
-        csv.Error: If the CSV content is malformed.
+        FileNotFoundError: If no matching fixture file exists.
+        OSError: If an I/O or decompression error occurs while reading the file.
+        ValueError: If a zip archive contains no matching member, a JSONL line
+            contains invalid JSON, or a JSON fixture read as records is not an array.
 
     Returns:
-        Any: The parsed data from the fixture file (JSON data or list of dictionaries from CSV).
+        Any: Decoded JSON data or a list of records.
 
     Examples:
-        >>> from anyio import Path as AsyncPath
-        >>> fixtures_path = AsyncPath("./fixtures")
-
-        # Load JSON fixture
+        >>> from pathlib import Path
+        >>> fixtures_path = Path("./fixtures")
         >>> data = await open_fixture_async(fixtures_path, "users")
-        # loads users.json, users.json.gz, or users.json.zip
         >>> print(data)
         [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
-
-        # Load CSV fixture
-        >>> data = await open_fixture_async(fixtures_path, "states")
-        # loads states.csv, states.csv.gz, or states.csv.zip
-        >>> print(data)
-        [{"abbreviation": "AL", "name": "Alabama"}, {"abbreviation": "AK", "name": "Alaska"}]
     """
-    try:
-        from anyio import Path as AsyncPath
-    except ImportError as exc:
-        msg = "The `anyio` library is required to use this function. Please install it with `pip install anyio`."
-        raise MissingDependencyError(msg) from exc
+    return await async_(open_fixture_sync)(Path(str(fixtures_path)), fixture_name)
 
-    from advanced_alchemy.utils.sync_tools import async_
 
-    base_path = AsyncPath(fixtures_path)
+@deprecated("1.13.0", removal_in="2.0", alternative="open_fixture_sync", kind="function")
+def open_fixture(fixtures_path: "Union[Path, AsyncPath]", fixture_name: str) -> Any:
+    """Load a JSON, JSONL, or CSV fixture synchronously.
 
-    # Try different file extensions in order of preference
-    # Include both case variations for better compatibility with database exports
-    # JSON formats take priority over CSV for backward compatibility
-    file_variants = [
-        (base_path / f"{fixture_name}.json", "json_plain"),
-        (base_path / f"{fixture_name.upper()}.json.gz", "json_gzip"),  # Uppercase first (common for exports)
-        (base_path / f"{fixture_name}.json.gz", "json_gzip"),
-        (base_path / f"{fixture_name.upper()}.json.zip", "json_zip"),
-        (base_path / f"{fixture_name}.json.zip", "json_zip"),
-        (base_path / f"{fixture_name}.csv", "csv_plain"),
-        (base_path / f"{fixture_name.upper()}.csv", "csv_plain"),  # Uppercase plain CSV
-        (base_path / f"{fixture_name.upper()}.csv.gz", "csv_gzip"),
-        (base_path / f"{fixture_name}.csv.gz", "csv_gzip"),
-        (base_path / f"{fixture_name.upper()}.csv.zip", "csv_zip"),
-        (base_path / f"{fixture_name}.csv.zip", "csv_zip"),
-    ]
+    Deprecated since 1.13.0 and scheduled for removal in 2.0. Use
+    :func:`open_fixture_sync` instead.
 
-    for fixture_path, file_type in file_variants:
-        if await fixture_path.exists():
-            try:
-                # JSON handling
-                if file_type == "json_plain":
-                    async with await fixture_path.open(mode="r", encoding="utf-8") as f:
-                        f_data = await f.read()
-                    return decode_json(f_data)
-                if file_type == "json_gzip":
-                    # Read gzipped files using binary pattern
-                    async with await fixture_path.open(mode="rb") as f:  # type: ignore[assignment]
-                        compressed_json: bytes = await f.read()  # type: ignore[assignment]
+    Args:
+        fixtures_path: Directory path containing fixture files. Can be a
+            :class:`pathlib.Path` or :class:`anyio.Path` instance.
+        fixture_name: Fixture base name without file extension.
 
-                    # Decompress in thread pool to avoid blocking
-                    def _decompress_gzip(data: bytes) -> str:
-                        return gzip.decompress(data).decode("utf-8")
+    Raises:
+        FileNotFoundError: If no matching fixture file exists.
+        OSError: If an I/O or decompression error occurs while reading the file.
+        ValueError: If a zip archive contains no matching member, a JSONL line
+            contains invalid JSON, or a JSON fixture read as records is not an array.
 
-                    f_data = await async_(partial(_decompress_gzip, compressed_json))()
-                    return decode_json(f_data)
-                if file_type == "json_zip":
-                    # Read zipped files in thread pool to avoid blocking
-                    f_data = await async_(partial(_read_zip_file, fixture_path, fixture_name))()
-                    return decode_json(f_data)
+    Returns:
+        Any: Decoded JSON data or a list of records.
+    """
+    return open_fixture_sync(fixtures_path, fixture_name)
 
-                # CSV handling
-                if file_type == "csv_plain":
-                    async with await fixture_path.open(mode="r", encoding="utf-8-sig") as f:
-                        f_data = await f.read()
 
-                    # Parse CSV in thread pool to avoid blocking
-                    def _parse_csv(data: str) -> "list[dict[str, Any]]":
-                        reader = csv.DictReader(io.StringIO(data))
-                        return list(reader)
+class _FixtureFile:
+    """Streaming reader for a single plain, gzipped, or zipped fixture file."""
 
-                    return await async_(partial(_parse_csv, f_data))()
-                if file_type == "csv_gzip":
-                    async with await fixture_path.open(mode="rb") as f:  # type: ignore[assignment]
-                        compressed_csv: bytes = await f.read()  # type: ignore[assignment]
+    __slots__ = ("compression", "file_format", "fixture_name", "path", "shard_index")
 
-                    def _decompress_and_parse_csv(data: bytes) -> "list[dict[str, Any]]":
-                        decompressed = gzip.decompress(data).decode("utf-8-sig")
-                        reader = csv.DictReader(io.StringIO(decompressed))
-                        return list(reader)
+    def __init__(
+        self,
+        path: "Path",
+        fixture_name: str,
+        file_format: FixtureFormat,
+        compression: "Optional[FixtureCompression]",
+        shard_index: "Optional[int]",
+    ) -> None:
+        """Initialize a fixture file descriptor.
 
-                    return await async_(partial(_decompress_and_parse_csv, compressed_csv))()
-                if file_type == "csv_zip":
-                    return await async_(partial(_read_csv_zip_file, fixture_path, fixture_name))()
-            except (OSError, zipfile.BadZipFile, gzip.BadGzipFile) as exc:
-                msg = f"Error reading fixture file {fixture_path}: {exc}"
-                raise OSError(msg) from exc
+        Args:
+            path: Path to the fixture file on disk.
+            fixture_name: Logical fixture name without extension.
+            file_format: Fixture format (``"json"``, ``"jsonl"``, or ``"csv"``).
+            compression: Compression kind (``"gzip"``, ``"zip"``, or ``None``).
+            shard_index: Optional 1-based shard index, or ``None`` when unsharded.
+        """
+        self.path = path
+        self.fixture_name = fixture_name
+        self.file_format = file_format
+        self.compression = compression
+        self.shard_index = shard_index
 
-    # No valid fixture file found
-    msg = f"Could not find the {fixture_name} fixture (tried .json, .json.gz, .json.zip, .csv, .csv.gz, .csv.zip with case variations)"
-    raise FileNotFoundError(msg)
+    def read(self) -> Any:
+        """Read and decode the entire fixture file.
+
+        Raises:
+            OSError: If reading or decompressing the fixture file fails.
+            ValueError: If a zip archive has no matching member or JSONL content is invalid.
+
+        Returns:
+            Any: The decoded JSON value or a list of records for JSONL/CSV files.
+        """
+        if self.file_format in ("jsonl", "csv"):
+            return list(self.iter_records())
+        try:
+            with self._open_text() as handle:
+                content = handle.read()
+        except _READ_ERRORS as exc:
+            msg = f"Error reading fixture file {self.path}: {exc}"
+            raise OSError(msg) from exc
+        return decode_json(content)
+
+    def iter_records(self) -> "Generator[Any, None, None]":
+        """Stream decoded records from the fixture file one at a time.
+
+        Raises:
+            OSError: If reading or decompressing the fixture file fails.
+            ValueError: If a ``json`` file does not contain a top-level array,
+                a zip archive has no matching member, or a JSONL line is invalid JSON.
+
+        Yields:
+            Any: Each decoded record in the fixture file.
+        """
+        if self.file_format == "json":
+            value = self.read()
+            if not isinstance(value, list):
+                msg = f"Fixture {self.fixture_name!r} file {self.path} must contain a JSON array, got {type(value).__name__}"
+                raise ValueError(msg)
+            yield from value
+            return
+
+        try:
+            with self._open_text() as handle:
+                if self.file_format == "csv":
+                    yield from csv.DictReader(handle)
+                else:
+                    for lineno, line in enumerate(handle, start=1):
+                        if not line.strip():
+                            continue
+                        yield self._decode_line(line, lineno)
+        except _READ_ERRORS as exc:
+            msg = f"Error reading fixture file {self.path}: {exc}"
+            raise OSError(msg) from exc
+
+    def _open_text(self) -> "AbstractContextManager[TextIO]":
+        """Open the fixture file as a streaming UTF-8-SIG text handle.
+
+        Returns:
+            AbstractContextManager[TextIO]: A text stream context manager.
+        """
+        newline = "" if self.file_format == "csv" else None
+        if self.compression == "gzip":
+            return gzip.open(self.path, mode="rt", encoding=_TEXT_ENCODING, newline=newline)
+        if self.compression == "zip":
+            with zipfile.ZipFile(self.path, mode="r") as archive:
+                member = archive.open(self._select_zip_member(archive), mode="r")
+            return io.TextIOWrapper(member, encoding=_TEXT_ENCODING, newline=newline)
+        return self.path.open(mode="r", encoding=_TEXT_ENCODING, newline=newline)
+
+    def _select_zip_member(self, archive: zipfile.ZipFile) -> str:
+        """Select the matching member name inside a zip fixture archive.
+
+        Args:
+            archive: Open zip archive handle.
+
+        Raises:
+            ValueError: If the archive contains no file ending with the fixture suffix.
+
+        Returns:
+            str: Selected zip member name.
+        """
+        suffix = f".{self.file_format}"
+        members = [name for name in archive.namelist() if name.endswith(suffix)]
+        if not members:
+            msg = f"No {self.file_format.upper()} files found in zip archive: {self.path}"
+            raise ValueError(msg)
+        for candidate in (self.path.stem, f"{self.fixture_name}{suffix}"):
+            if candidate in members:
+                return candidate
+        return members[0]
+
+    def _decode_line(self, line: str, lineno: int) -> Any:
+        """Decode one JSONL line and attach file path and line number on failure.
+
+        Args:
+            line: Raw line text from the JSONL file.
+            lineno: 1-based line number within the file.
+
+        Raises:
+            ValueError: If the line is not valid JSON.
+
+        Returns:
+            Any: The decoded JSON value for the line.
+        """
+        try:
+            return decode_json(line)
+        except Exception as exc:
+            msg = f"Invalid JSON in fixture file {self.path} at line {lineno}"
+            raise ValueError(msg) from exc
+
+
+class _FixtureLocator:
+    """Locator that resolves fixture files by format priority and compression."""
+
+    __slots__ = ("base_path", "fixture_name")
+
+    def __init__(self, base_path: "Path", fixture_name: str) -> None:
+        """Initialize a fixture locator.
+
+        Args:
+            base_path: Directory path containing fixture files.
+            fixture_name: Logical fixture name without extension.
+        """
+        self.base_path = base_path
+        self.fixture_name = fixture_name
+
+    def resolve(self) -> "list[_FixtureFile]":
+        """Resolve the highest-priority fixture file for the configured name.
+
+        Raises:
+            FileNotFoundError: If no matching fixture file is found.
+
+        Returns:
+            list[_FixtureFile]: Ordered list containing the resolved fixture file.
+        """
+        for file_format in _FORMAT_PRIORITY:
+            candidates = self._unsharded_candidates(file_format)
+            if candidates:
+                return candidates[:1]
+        msg = (
+            f"Could not find the {self.fixture_name} fixture "
+            "(tried .json, .jsonl, .csv with optional .gz/.zip compression, numbered shards, and case variations)"
+        )
+        raise FileNotFoundError(msg)
+
+    def _unsharded_candidates(self, file_format: FixtureFormat) -> "list[_FixtureFile]":
+        """Collect existing unsharded fixture candidates for a format in priority order.
+
+        Args:
+            file_format: Fixture format to probe.
+
+        Returns:
+            list[_FixtureFile]: Existing deduplicated candidate fixture files.
+        """
+        upper_name = self.fixture_name.upper()
+        variants: list[tuple[str, Optional[FixtureCompression]]] = [
+            (f"{self.fixture_name}.{file_format}", None),
+        ]
+        if file_format == "csv":
+            variants.append((f"{upper_name}.{file_format}", None))
+        for comp, suffix in _COMPRESSION_SUFFIXES.items():
+            variants.append((f"{upper_name}.{file_format}{suffix}", comp))
+            variants.append((f"{self.fixture_name}.{file_format}{suffix}", comp))
+
+        candidates: list[_FixtureFile] = []
+        seen: set[Union[tuple[int, int], str]] = set()
+        for name, compression in variants:
+            path = self.base_path / name
+            if not path.is_file():
+                continue
+            identity = self._identity(path)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            candidates.append(_FixtureFile(path, self.fixture_name, file_format, compression, None))
+        return candidates
+
+    @staticmethod
+    def _identity(path: "Path") -> "Union[tuple[int, int], str]":
+        """Return a filesystem identity key for deduplicating equivalent paths.
+
+        Args:
+            path: Existing file path.
+
+        Returns:
+            Union[tuple[int, int], str]: Device/inode pair when available, else path string.
+        """
+        stat = path.stat()
+        if stat.st_ino:
+            return (stat.st_dev, stat.st_ino)
+        return str(path)
