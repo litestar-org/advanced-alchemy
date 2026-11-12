@@ -1,24 +1,27 @@
-"""Utilities for loading fixture data from JSON, JSONL, and CSV files."""
+"""Utilities for loading and writing fixture data in JSON, JSONL, and CSV formats."""
 
+import contextlib
 import csv
 import gzip
 import io
 import re
 import zipfile
 import zlib
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 from advanced_alchemy.utils.deprecation import deprecated
-from advanced_alchemy.utils.serialization import decode_json
+from advanced_alchemy.utils.serialization import decode_json, encode_json
 from advanced_alchemy.utils.sync_tools import async_
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Generator, Iterator
+    from collections.abc import AsyncIterator, Generator, Iterable, Iterator
     from contextlib import AbstractContextManager
-    from typing import TextIO
+    from typing import IO, BinaryIO, TextIO
 
     from anyio import Path as AsyncPath
+    from typing_extensions import TypeGuard
 
 __all__ = (
     "FixtureCompression",
@@ -28,6 +31,7 @@ __all__ = (
     "open_fixture",
     "open_fixture_async",
     "open_fixture_sync",
+    "write_fixture_sync",
 )
 
 FixtureFormat = Literal["json", "jsonl", "csv"]
@@ -203,6 +207,70 @@ async def iter_fixture_async(
             yield batch
     finally:
         await async_(batches.close)()
+
+
+def write_fixture_sync(
+    fixtures_path: "Union[Path, AsyncPath]",
+    fixture_name: str,
+    records: "Iterable[Any]",
+    *,
+    file_format: FixtureFormat = "json",
+    compression: "Optional[FixtureCompression]" = None,
+    max_bytes: "Optional[int]" = None,
+    max_records: "Optional[int]" = None,
+) -> "list[Path]":
+    """Write fixture records synchronously in JSON, JSONL, or CSV format.
+
+    Streams encoded records into temporary ``.tmp`` files, removes any existing
+    fixture files matching ``fixture_name`` across all formats, compressions,
+    and shard layouts upon completion, and atomically renames temporary files
+    into place.
+
+    Args:
+        fixtures_path: Target directory path for fixture files. Created if it
+            does not exist. Can be a :class:`pathlib.Path` or :class:`anyio.Path`.
+        fixture_name: Fixture base name without file extension.
+        records: Iterable of records to write.
+        file_format: Output format (``"json"``, ``"jsonl"``, or ``"csv"``).
+        compression: Optional compression (``"gzip"``, ``"zip"``, or ``None``).
+        max_bytes: Optional maximum on-disk byte size per shard. Must be at least 1.
+        max_records: Optional maximum record count per shard. Must be at least 1.
+
+    Raises:
+        ValueError: If ``file_format``, ``compression``, ``max_bytes``, or
+            ``max_records`` is invalid, or if CSV records introduce keys absent
+            from the header.
+        TypeError: If ``file_format`` is ``"csv"`` and a record is not a mapping.
+        OSError: If writing, deleting stale files, or renaming files fails.
+
+    Returns:
+        list[Path]: Final written fixture paths in shard order.
+
+    Examples:
+        >>> from pathlib import Path
+        >>> fixtures_path = Path("./fixtures")
+        >>> paths = write_fixture_sync(
+        ...     fixtures_path,
+        ...     "users",
+        ...     [{"id": 1, "name": "Alice"}],
+        ...     file_format="jsonl",
+        ...     compression="gzip",
+        ... )
+    """
+    writer = _FixtureWriter(
+        Path(str(fixtures_path)),
+        fixture_name,
+        file_format=file_format,
+        compression=compression,
+        max_bytes=max_bytes,
+        max_records=max_records,
+    )
+    try:
+        writer.write_many(records)
+        return writer.commit()
+    except BaseException:
+        writer.abort()
+        raise
 
 
 class _FixtureFile:
@@ -415,6 +483,27 @@ class _FixtureLocator:
             raise ValueError(msg)
         return self._batches(self.resolve(), batch_size)
 
+    def existing_paths(self) -> "list[Path]":
+        """Return every existing unsharded or sharded path matching the fixture name.
+
+        Skips shard index validation so broken, gapped, or duplicate layouts can
+        still be discovered for cleanup before replacing a fixture.
+
+        Returns:
+            list[Path]: Sorted deduplicated fixture file paths in ``base_path``.
+        """
+        if not self.base_path.is_dir():
+            return []
+        seen: set[Union[tuple[int, int], str]] = set()
+        paths: list[Path] = []
+        for file_format in _FORMAT_PRIORITY:
+            for fixture_file in [*self._unsharded_candidates(file_format), *self._shard_matches(file_format)]:
+                identity = self._identity(fixture_file.path)
+                if identity not in seen:
+                    seen.add(identity)
+                    paths.append(fixture_file.path)
+        return sorted(paths)
+
     def _unsharded_candidates(self, file_format: FixtureFormat) -> "list[_FixtureFile]":
         """Collect existing unsharded fixture candidates for a format in priority order.
 
@@ -557,3 +646,243 @@ class _FixtureLocator:
         if stat.st_ino:
             return (stat.st_dev, stat.st_ino)
         return str(path)
+
+
+class _FixtureWriter:
+    """Streaming writer for plain, gzipped, and zipped fixture files."""
+
+    __slots__ = (
+        "_archive",
+        "_closed",
+        "_final_paths",
+        "_force_rollover",
+        "_header",
+        "_pending",
+        "_raw",
+        "_record_count",
+        "_shard_records",
+        "_sink",
+        "_temp_paths",
+        "base_path",
+        "compression",
+        "file_format",
+        "fixture_name",
+        "max_bytes",
+        "max_records",
+    )
+
+    def __init__(
+        self,
+        base_path: "Path",
+        fixture_name: str,
+        *,
+        file_format: FixtureFormat,
+        compression: "Optional[FixtureCompression]",
+        max_bytes: "Optional[int]",
+        max_records: "Optional[int]",
+    ) -> None:
+        """Initialize a streaming fixture writer and validate options before disk access.
+
+        Args:
+            base_path: Target directory path for written fixture files.
+            fixture_name: Logical fixture name without extension.
+            file_format: Output format (``"json"``, ``"jsonl"``, or ``"csv"``).
+            compression: Optional compression (``"gzip"``, ``"zip"``, or ``None``).
+            max_bytes: Optional maximum on-disk byte size per shard.
+            max_records: Optional maximum record count per shard.
+
+        Raises:
+            ValueError: If any format, compression, or shard limit argument is invalid.
+        """
+        if file_format not in ("json", "jsonl", "csv"):
+            msg = f"Unsupported fixture format {file_format!r}; expected 'json', 'jsonl', or 'csv'"
+            raise ValueError(msg)
+        if compression not in (None, "gzip", "zip"):
+            msg = f"Unsupported fixture compression {compression!r}; expected 'gzip', 'zip', or None"
+            raise ValueError(msg)
+        if max_bytes is not None and max_bytes < 1:
+            msg = f"max_bytes must be at least 1, got {max_bytes}"
+            raise ValueError(msg)
+        if max_records is not None and max_records < 1:
+            msg = f"max_records must be at least 1, got {max_records}"
+            raise ValueError(msg)
+
+        self.base_path = base_path
+        self.fixture_name = fixture_name
+        self.file_format: FixtureFormat = file_format
+        self.compression: Optional[FixtureCompression] = compression
+        self.max_bytes = max_bytes
+        self.max_records = max_records
+        self.base_path.mkdir(parents=True, exist_ok=True)
+        self._archive: Optional[zipfile.ZipFile] = None
+        self._closed = False
+        self._final_paths: list[Path] = []
+        self._force_rollover = False
+        self._header: Optional[list[Any]] = None
+        self._pending = 0
+        self._raw: Optional[BinaryIO] = None
+        self._record_count = 0
+        self._shard_records = 0
+        self._sink: Optional[Union[IO[bytes], gzip.GzipFile]] = None
+        self._temp_paths: list[Path] = []
+
+    @property
+    def sharded(self) -> bool:
+        """Return whether numbered shard output is enabled."""
+        return self.max_bytes is not None or self.max_records is not None
+
+    def write(self, record: Any) -> None:
+        """Encode and stream a single record to the current shard.
+
+        Args:
+            record: Record value to serialize and write.
+
+        Raises:
+            RuntimeError: If the writer has already been committed or aborted.
+            TypeError: If writing CSV and ``record`` is not a mapping.
+            ValueError: If writing CSV and ``record`` introduces keys absent from the header.
+        """
+        if self._closed:
+            msg = "Fixture writer is closed"
+            raise RuntimeError(msg)
+        if self._raw is None:
+            self._open_shard()
+        self._record_count += 1
+        chunk = self._encode(record, first_in_shard=self._shard_records == 0)
+        self._require_sink().write(chunk)
+        self._pending += len(chunk)
+        self._shard_records += 1
+
+    def write_many(self, records: "Iterable[Any]") -> None:
+        """Stream every record from an iterable into the writer.
+
+        Args:
+            records: Iterable of records to write.
+        """
+        for record in records:
+            self.write(record)
+
+    def commit(self) -> "list[Path]":
+        """Finalize output, delete stale fixture files, and rename temp files into place.
+
+        Returns:
+            list[Path]: Final written fixture file paths in shard order.
+        """
+        if self._raw is None and not self._final_paths:
+            self._open_shard()
+        self._close_shard()
+        for path in _FixtureLocator(self.base_path, self.fixture_name).existing_paths():
+            path.unlink(missing_ok=True)
+        for temp, final in zip(self._temp_paths, self._final_paths):
+            temp.replace(final)
+        self._closed = True
+        return list(self._final_paths)
+
+    def abort(self) -> None:
+        """Close any open streams and delete temporary files idempotently."""
+        self._closed = True
+        if self._sink is not None:
+            with contextlib.suppress(Exception):
+                self._sink.close()
+        if self._archive is not None:
+            with contextlib.suppress(Exception):
+                self._archive.close()
+        if self._raw is not None:
+            with contextlib.suppress(Exception):
+                self._raw.close()
+        self._sink = None
+        self._archive = None
+        self._raw = None
+        for temp in self._temp_paths:
+            temp.unlink(missing_ok=True)
+
+    def _final_path(self, index: int) -> "Path":
+        """Compute the final destination path for a 1-based shard index."""
+        suffix = _COMPRESSION_SUFFIXES.get(self.compression, "") if self.compression is not None else ""
+        if self.sharded:
+            return self.base_path / f"{self.fixture_name}.{index:03d}.{self.file_format}{suffix}"
+        return self.base_path / f"{self.fixture_name}.{self.file_format}{suffix}"
+
+    def _open_shard(self) -> None:
+        """Open the next temporary shard stream with deterministic compression settings."""
+        final = self._final_path(len(self._final_paths) + 1)
+        temp = final.with_name(f"{final.name}.tmp")
+        self._final_paths.append(final)
+        self._temp_paths.append(temp)
+        self._raw = temp.open("wb")
+        if self.compression == "gzip":
+            self._sink = gzip.GzipFile(filename="", mode="wb", fileobj=self._raw, mtime=0)
+        elif self.compression == "zip":
+            self._archive = zipfile.ZipFile(self._raw, mode="w", compression=zipfile.ZIP_DEFLATED)
+            info = zipfile.ZipInfo(final.name[: -len(".zip")], date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            self._sink = self._archive.open(info, mode="w", force_zip64=True)
+        else:
+            self._sink = self._raw
+        self._shard_records = 0
+        self._pending = 0
+
+    def _close_shard(self) -> None:
+        """Write closing delimiters if needed and close the active shard streams."""
+        sink = self._require_sink()
+        if self.file_format == "json":
+            sink.write(b"[]\n" if self._shard_records == 0 else b"\n]\n")
+        raw = self._require_raw()
+        if sink is not raw:
+            sink.close()
+        if self._archive is not None:
+            self._archive.close()
+        raw.close()
+        self._sink = None
+        self._archive = None
+        self._raw = None
+
+    def _encode(self, record: Any, *, first_in_shard: bool) -> bytes:
+        """Encode one record into UTF-8 bytes without mutating shard counters."""
+        if self.file_format == "json":
+            prefix = b"[\n" if first_in_shard else b",\n"
+            return prefix + encode_json(record).encode("utf-8")
+        if self.file_format == "jsonl":
+            return (encode_json(record) + "\n").encode("utf-8")
+        if not self._is_mapping(record):
+            msg = f"CSV fixture records must be mappings, got {type(record).__name__}"
+            raise TypeError(msg)
+        if self._header is None:
+            self._header = list(record.keys())
+        header_keys = set(self._header)
+        extra = [key for key in record if key not in header_keys]
+        if extra:
+            msg = (
+                f"CSV record {self._record_count} of fixture {self.fixture_name!r} "
+                f"has keys not in the header: {extra!r}"
+            )
+            raise ValueError(msg)
+        header_row = self._encode_csv_row(self._header) if first_in_shard else ""
+        data_row = self._encode_csv_row([record.get(key, "") for key in self._header])
+        return (header_row + data_row).encode("utf-8")
+
+    @staticmethod
+    def _is_mapping(value: Any) -> "TypeGuard[Mapping[Any, Any]]":
+        """Narrow an arbitrary record to a typed mapping for static type checkers."""
+        return isinstance(value, Mapping)
+
+    def _encode_csv_row(self, values: "Iterable[Any]") -> str:
+        """Format a single CSV row using Python's excel dialect."""
+        buffer = io.StringIO()
+        csv.writer(buffer).writerow(values)
+        return buffer.getvalue()
+
+    def _require_sink(self) -> "Union[IO[bytes], gzip.GzipFile]":
+        """Return the active byte sink handle or raise if the writer is closed."""
+        if self._sink is None:
+            msg = "Fixture writer is closed"
+            raise RuntimeError(msg)
+        return self._sink
+
+    def _require_raw(self) -> "BinaryIO":
+        """Return the active underlying binary file handle or raise if closed."""
+        if self._raw is None:
+            msg = "Fixture writer is closed"
+            raise RuntimeError(msg)
+        return self._raw

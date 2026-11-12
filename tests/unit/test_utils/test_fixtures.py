@@ -20,11 +20,13 @@ from advanced_alchemy.utils.fixtures import (
     FixtureCompression,
     FixtureFormat,
     _FixtureFile,
+    _FixtureLocator,
     iter_fixture_async,
     iter_fixture_sync,
     open_fixture,
     open_fixture_async,
     open_fixture_sync,
+    write_fixture_sync,
 )
 
 
@@ -954,6 +956,7 @@ class TestIntegration:
             "open_fixture",
             "open_fixture_async",
             "open_fixture_sync",
+            "write_fixture_sync",
         )
         assert get_args(FixtureFormat) == ("json", "jsonl", "csv")
         assert get_args(FixtureCompression) == ("gzip", "zip")
@@ -1417,3 +1420,202 @@ class TestIterFixture:
         list(iter_fixture_sync(sharded_users, "users", batch_size=2))
         assert len(opened) == 2
         assert all(handle.closed for handle in opened)
+
+
+class TestWriteFixtureSync:
+    """Test cases for write_fixture_sync and _FixtureLocator.existing_paths."""
+
+    @pytest.mark.parametrize(
+        ("file_format", "records", "expected_name", "expected_bytes"),
+        [
+            pytest.param(
+                "json",
+                [{"id": 1}, {"id": 2}],
+                "users.json",
+                b'[\n{"id":1},\n{"id":2}\n]\n',
+                id="json",
+            ),
+            pytest.param(
+                "jsonl",
+                [{"id": 1}, {"id": 2}],
+                "users.jsonl",
+                b'{"id":1}\n{"id":2}\n',
+                id="jsonl",
+            ),
+            pytest.param(
+                "csv",
+                [{"id": 1, "name": "A"}, {"id": 2, "name": None}, {"id": 3}],
+                "users.csv",
+                b"id,name\r\n1,A\r\n2,\r\n3,\r\n",
+                id="csv",
+            ),
+            pytest.param(
+                "json",
+                [],
+                "users.json",
+                b"[]\n",
+                id="json-empty",
+            ),
+            pytest.param(
+                "jsonl",
+                [],
+                "users.jsonl",
+                b"",
+                id="jsonl-empty",
+            ),
+            pytest.param(
+                "csv",
+                [],
+                "users.csv",
+                b"",
+                id="csv-empty",
+            ),
+        ],
+    )
+    def test_write_exact_encoding(
+        self,
+        tmp_path: Path,
+        file_format: FixtureFormat,
+        records: "list[dict[str, Any]]",
+        expected_name: str,
+        expected_bytes: bytes,
+    ) -> None:
+        """Test exact byte encoding for JSON, JSONL, CSV, and empty fixtures."""
+        paths = write_fixture_sync(tmp_path, "users", records, file_format=file_format)
+        expected_path = tmp_path / expected_name
+        assert paths == [expected_path]
+        assert expected_path.read_bytes() == expected_bytes
+
+    @pytest.mark.parametrize("file_format", ["json", "jsonl", "csv"])
+    @pytest.mark.parametrize("compression", [None, "gzip", "zip"])
+    def test_write_round_trip(
+        self,
+        tmp_path: Path,
+        sample_data: "list[dict[str, Any]]",
+        sample_csv_data: "list[dict[str, str]]",
+        file_format: FixtureFormat,
+        compression: "FixtureCompression | None",
+    ) -> None:
+        """Test writing and loading back across all formats and compressions."""
+        out_dir = tmp_path / "out" / "nested"
+        rows = sample_csv_data if file_format == "csv" else sample_data
+        suffix = {"gzip": ".gz", "zip": ".zip"}.get(compression or "", "")
+        expected_path = out_dir / f"users.{file_format}{suffix}"
+
+        paths = write_fixture_sync(out_dir, "users", rows, file_format=file_format, compression=compression)
+
+        assert out_dir.is_dir()
+        assert paths == [expected_path]
+        assert open_fixture_sync(out_dir, "users") == rows
+
+    def test_write_gzip_is_deterministic(self, tmp_path: Path, sample_data: "list[dict[str, Any]]") -> None:
+        """Test gzip fixture writes produce deterministic bytes with zeroed header metadata."""
+        paths_a = write_fixture_sync(tmp_path / "a", "users", sample_data, file_format="jsonl", compression="gzip")
+        paths_b = write_fixture_sync(tmp_path / "b", "users", sample_data, file_format="jsonl", compression="gzip")
+
+        data_a = paths_a[0].read_bytes()
+        data_b = paths_b[0].read_bytes()
+        assert data_a == data_b
+        assert data_a[3] == 0
+        assert data_a[4:8] == b"\x00\x00\x00\x00"
+
+    def test_write_zip_member_name_and_determinism(self, tmp_path: Path, sample_data: "list[dict[str, Any]]") -> None:
+        """Test zip fixture writes produce deterministic archives with fixed member metadata."""
+        paths_a = write_fixture_sync(tmp_path / "a", "users", sample_data, file_format="jsonl", compression="zip")
+        paths_b = write_fixture_sync(tmp_path / "b", "users", sample_data, file_format="jsonl", compression="zip")
+
+        assert paths_a[0].read_bytes() == paths_b[0].read_bytes()
+        with zipfile.ZipFile(paths_a[0], "r") as archive:
+            assert archive.namelist() == ["users.jsonl"]
+            assert archive.infolist()[0].date_time == (1980, 1, 1, 0, 0, 0)
+
+    def test_write_removes_stale_fixture_files(self, tmp_path: Path, sample_data: "list[dict[str, Any]]") -> None:
+        """Test commit removes stale fixture files while preserving unrelated files."""
+        (tmp_path / "users.json").write_bytes(b"old")
+        (tmp_path / "USERS.csv").write_bytes(b"old")
+        (tmp_path / "users.001.jsonl.gz").write_bytes(b"old")
+        (tmp_path / "users_extra.json").write_bytes(b"old")
+        (tmp_path / "users.json.bak").write_bytes(b"old")
+
+        write_fixture_sync(tmp_path, "users", sample_data, file_format="jsonl")
+
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["users.json.bak", "users.jsonl", "users_extra.json"]
+
+    def test_write_removes_gapped_old_layout(self, tmp_path: Path) -> None:
+        """Test commit removes gapped old shard layouts that open_fixture_sync rejects."""
+        _write_fixture(tmp_path / "users.001.jsonl", '{"id": 0}\n')
+        _write_fixture(tmp_path / "users.003.jsonl", '{"id": 0}\n')
+        with pytest.raises(ValueError, match="is missing shard index\\(es\\) 2"):
+            open_fixture_sync(tmp_path, "users")
+
+        write_fixture_sync(tmp_path, "users", [{"id": 1}], file_format="json")
+
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["users.json"]
+        assert open_fixture_sync(tmp_path, "users") == [{"id": 1}]
+
+    def test_existing_paths_lists_every_layout(self, tmp_path: Path) -> None:
+        """Test _FixtureLocator.existing_paths returns sorted deduplicated paths across layouts."""
+        for name in (
+            "users.json",
+            "USERS.csv",
+            "users.001.jsonl.gz",
+            "users.1.json",
+            "users.001.json.gz",
+            "users_extra.json",
+        ):
+            (tmp_path / name).write_bytes(b"x")
+
+        assert _FixtureLocator(tmp_path, "users").existing_paths() == [
+            tmp_path / name
+            for name in ("USERS.csv", "users.001.json.gz", "users.001.jsonl.gz", "users.1.json", "users.json")
+        ]
+        assert _FixtureLocator(tmp_path / "missing", "users").existing_paths() == []
+
+    def test_write_aborts_on_iterator_error(self, tmp_path: Path) -> None:
+        """Test iterator errors abort without leaving temp files or modifying existing fixtures."""
+        existing = tmp_path / "users.json"
+        existing.write_bytes(b"old")
+
+        def failing_records() -> "Generator[dict[str, int], None, None]":
+            for i in range(1, 11):
+                yield {"id": i}
+            msg = "boom"
+            raise RuntimeError(msg)
+
+        with pytest.raises(RuntimeError, match="boom"):
+            write_fixture_sync(tmp_path, "users", failing_records(), file_format="jsonl", compression="gzip")
+
+        assert existing.read_bytes() == b"old"
+        assert [p.name for p in tmp_path.iterdir()] == ["users.json"]
+
+    def test_write_csv_rejects_non_mapping(self, tmp_path: Path) -> None:
+        """Test CSV writer rejects non-mapping records without leaving files behind."""
+        with pytest.raises(TypeError, match="CSV fixture records must be mappings, got int"):
+            write_fixture_sync(tmp_path, "users", [1], file_format="csv")
+        assert list(tmp_path.iterdir()) == []
+
+    def test_write_csv_rejects_schema_drift(self, tmp_path: Path) -> None:
+        """Test CSV writer rejects records containing keys absent from the first record."""
+        with pytest.raises(
+            ValueError, match=r"CSV record 2 of fixture 'users' has keys not in the header: \['extra'\]"
+        ):
+            write_fixture_sync(tmp_path, "users", [{"id": 1}, {"id": 2, "extra": "x"}], file_format="csv")
+        assert list(tmp_path.iterdir()) == []
+
+    @pytest.mark.parametrize(
+        ("kwargs", "match"),
+        [
+            ({"max_bytes": 0}, "max_bytes must be at least 1, got 0"),
+            ({"max_records": 0}, "max_records must be at least 1, got 0"),
+            ({"file_format": "xml"}, "Unsupported fixture format 'xml'"),
+            ({"compression": "bz2"}, "Unsupported fixture compression 'bz2'"),
+        ],
+    )
+    def test_write_validates_arguments_before_touching_disk(
+        self, tmp_path: Path, kwargs: "dict[str, Any]", match: str
+    ) -> None:
+        """Test invalid writer options raise ValueError before creating the output directory."""
+        target = tmp_path / "missing"
+        with pytest.raises(ValueError, match=match):
+            write_fixture_sync(target, "users", [], **kwargs)
+        assert target.exists() is False
