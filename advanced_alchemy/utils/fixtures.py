@@ -8,7 +8,7 @@ import re
 import warnings
 import zipfile
 import zlib
-from collections.abc import Mapping
+from collections.abc import AsyncIterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
@@ -32,6 +32,7 @@ __all__ = (
     "open_fixture",
     "open_fixture_async",
     "open_fixture_sync",
+    "write_fixture_async",
     "write_fixture_sync",
 )
 
@@ -271,6 +272,93 @@ def write_fixture_sync(
         return writer.commit()
     except BaseException:
         writer.abort()
+        raise
+
+
+async def write_fixture_async(
+    fixtures_path: "Union[Path, AsyncPath]",
+    fixture_name: str,
+    records: "Union[Iterable[Any], AsyncIterable[Any]]",
+    *,
+    file_format: FixtureFormat = "json",
+    compression: "Optional[FixtureCompression]" = None,
+    max_bytes: "Optional[int]" = None,
+    max_records: "Optional[int]" = None,
+    batch_size: int = 1000,
+) -> "list[Path]":
+    """Write fixture records asynchronously in JSON, JSONL, or CSV format.
+
+    Streams records from a synchronous or asynchronous iterable in batches of
+    ``batch_size`` into temporary ``.tmp`` files, offloads writer construction,
+    batch writes, commit, and abort to worker threads via
+    :func:`~advanced_alchemy.utils.sync_tools.async_`, removes stale fixture
+    files matching ``fixture_name`` on completion, and atomically renames
+    temporary files into place.
+
+    Args:
+        fixtures_path: Target directory path for fixture files. Created if it
+            does not exist. Can be a :class:`pathlib.Path` or :class:`anyio.Path`.
+        fixture_name: Fixture base name without file extension.
+        records: Synchronous or asynchronous iterable of records to write.
+        file_format: Output format (``"json"``, ``"jsonl"``, or ``"csv"``).
+        compression: Optional compression (``"gzip"``, ``"zip"``, or ``None``).
+        max_bytes: Optional maximum on-disk byte size per shard. Must be at least 1.
+        max_records: Optional maximum record count per shard. Must be at least 1.
+        batch_size: Maximum number of records buffered before offloading a batch
+            write to a worker thread. Must be at least 1.
+
+    Raises:
+        ValueError: If ``batch_size``, ``file_format``, ``compression``,
+            ``max_bytes``, or ``max_records`` is invalid, or if CSV records
+            introduce keys absent from the header.
+        TypeError: If ``file_format`` is ``"csv"`` and a record is not a mapping.
+        OSError: If writing, deleting stale files, or renaming files fails.
+
+    Returns:
+        list[Path]: Final written fixture paths in shard order.
+
+    Examples:
+        >>> from pathlib import Path
+        >>> async def stream_users():
+        ...     yield {"id": 1, "name": "Alice"}
+        >>> paths = await write_fixture_async(
+        ...     Path("./fixtures"),
+        ...     "users",
+        ...     stream_users(),
+        ...     file_format="jsonl",
+        ...     compression="gzip",
+        ... )
+    """
+    if batch_size < 1:
+        msg = f"batch_size must be at least 1, got {batch_size}"
+        raise ValueError(msg)
+    writer = await async_(_FixtureWriter)(
+        Path(str(fixtures_path)),
+        fixture_name,
+        file_format=file_format,
+        compression=compression,
+        max_bytes=max_bytes,
+        max_records=max_records,
+    )
+    try:
+        batch: list[Any] = []
+        if isinstance(records, AsyncIterable):
+            async for record in records:
+                batch.append(record)
+                if len(batch) >= batch_size:
+                    await async_(writer.write_many)(batch)
+                    batch = []
+        else:
+            for record in records:
+                batch.append(record)
+                if len(batch) >= batch_size:
+                    await async_(writer.write_many)(batch)
+                    batch = []
+        if batch:
+            await async_(writer.write_many)(batch)
+        return await async_(writer.commit)()
+    except BaseException:
+        await async_(writer.abort)()
         raise
 
 

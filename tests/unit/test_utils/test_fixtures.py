@@ -11,7 +11,7 @@ import sys
 import tempfile
 import zipfile
 import zlib
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, AsyncIterator, Generator
 from pathlib import Path
 from typing import Any, get_args
 
@@ -28,6 +28,7 @@ from advanced_alchemy.utils.fixtures import (
     open_fixture,
     open_fixture_async,
     open_fixture_sync,
+    write_fixture_async,
     write_fixture_sync,
 )
 
@@ -958,6 +959,7 @@ class TestIntegration:
             "open_fixture",
             "open_fixture_async",
             "open_fixture_sync",
+            "write_fixture_async",
             "write_fixture_sync",
         )
         assert get_args(FixtureFormat) == ("json", "jsonl", "csv")
@@ -1817,3 +1819,124 @@ class TestWriteFixtureRollover:
             "users.003.jsonl",
         ]
         assert open_fixture_sync(tmp_path, "users") == [{"id": i} for i in range(1, 7)]
+
+
+class TestWriteFixtureAsync:
+    """Test cases for asynchronous write_fixture_async function."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("batch_size", [1, 2, 1000])
+    async def test_write_async_matches_sync_writer(self, tmp_path: Path, batch_size: int) -> None:
+        """Test write_fixture_async produces byte-identical shards to write_fixture_sync."""
+        records = _random_records(50)
+        sync_paths = write_fixture_sync(
+            tmp_path / "sync",
+            "users",
+            records,
+            file_format="jsonl",
+            compression="gzip",
+            max_records=20,
+        )
+        async_paths = await write_fixture_async(
+            tmp_path / "async",
+            "users",
+            records,
+            file_format="jsonl",
+            compression="gzip",
+            max_records=20,
+            batch_size=batch_size,
+        )
+
+        expected_names = ["users.001.jsonl.gz", "users.002.jsonl.gz", "users.003.jsonl.gz"]
+        assert [p.name for p in sync_paths] == expected_names
+        assert [p.name for p in async_paths] == expected_names
+        assert [p.read_bytes() for p in async_paths] == [p.read_bytes() for p in sync_paths]
+
+    @pytest.mark.asyncio
+    async def test_write_async_async_iterable_round_trip(self, tmp_path: Path) -> None:
+        """Test write_fixture_async streams an async generator and round-trips via iter_fixture_async."""
+
+        async def record_stream() -> "AsyncIterator[dict[str, Any]]":
+            for i in range(1, 6):
+                yield {"id": i}
+
+        paths = await write_fixture_async(
+            tmp_path,
+            "users",
+            record_stream(),
+            file_format="jsonl",
+            max_records=2,
+            batch_size=2,
+        )
+
+        assert paths == [
+            tmp_path / "users.001.jsonl",
+            tmp_path / "users.002.jsonl",
+            tmp_path / "users.003.jsonl",
+        ]
+        batches = [batch async for batch in iter_fixture_async(tmp_path, "users", batch_size=4)]
+        assert batches == [[{"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}], [{"id": 5}]]
+
+    @pytest.mark.asyncio
+    async def test_write_async_sync_generator(self, tmp_path: Path) -> None:
+        """Test write_fixture_async writes a synchronous generator into a plain JSON fixture."""
+        paths = await write_fixture_async(tmp_path, "users", ({"id": i} for i in range(1, 4)))
+
+        assert paths == [tmp_path / "users.json"]
+        assert await open_fixture_async(tmp_path, "users") == [{"id": 1}, {"id": 2}, {"id": 3}]
+
+    @pytest.mark.asyncio
+    async def test_write_async_aborts_on_async_iterator_error(self, tmp_path: Path) -> None:
+        """Test async iterator failures abort without leaving temp files or replacing existing fixtures."""
+        existing = tmp_path / "users.json"
+        existing.write_bytes(b"old")
+
+        async def failing_stream() -> "AsyncIterator[dict[str, Any]]":
+            for i in range(1, 4):
+                yield {"id": i}
+            msg = "boom"
+            raise RuntimeError(msg)
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await write_fixture_async(
+                tmp_path,
+                "users",
+                failing_stream(),
+                file_format="jsonl",
+                batch_size=2,
+            )
+
+        assert existing.read_bytes() == b"old"
+        assert os.listdir(tmp_path) == ["users.json"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("batch_size", [0, -1])
+    async def test_write_async_validates_batch_size(self, tmp_path: Path, batch_size: int) -> None:
+        """Test batch_size less than 1 raises ValueError before creating the target directory."""
+        target = tmp_path / "missing"
+        with pytest.raises(ValueError, match=f"batch_size must be at least 1, got {batch_size}"):
+            await write_fixture_async(target, "users", [{"id": 1}], batch_size=batch_size)
+        assert target.exists() is False
+
+    @pytest.mark.asyncio
+    async def test_write_async_validates_writer_arguments(self, tmp_path: Path) -> None:
+        """Test invalid writer options surface before creating the target directory."""
+        target = tmp_path / "missing"
+        with pytest.raises(ValueError, match="max_bytes must be at least 1, got 0"):
+            await write_fixture_async(target, "users", [], max_bytes=0)
+        assert target.exists() is False
+
+    @pytest.mark.asyncio
+    async def test_write_async_accepts_anyio_path(self, tmp_path: Path) -> None:
+        """Test write_fixture_async accepts an anyio.Path and returns pathlib.Path objects."""
+        anyio = pytest.importorskip("anyio")
+        paths = await write_fixture_async(
+            anyio.Path(tmp_path),
+            "users",
+            [{"id": 1}],
+            file_format="jsonl",
+        )
+
+        assert paths == [tmp_path / "users.jsonl"]
+        assert isinstance(paths[0], Path)
+        assert paths[0].read_bytes() == b'{"id":1}\n'
