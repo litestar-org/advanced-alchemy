@@ -107,6 +107,7 @@ def test_base_module_and_classes_present_in_objects_inv() -> None:
     assert "advanced_alchemy.routing" in modules
     assert "advanced_alchemy.utils" in modules
     assert "advanced_alchemy.utils.dataclass" in modules
+    assert "advanced_alchemy.utils.fixtures" in modules
     assert "advanced_alchemy.extensions" in modules
     assert "advanced_alchemy.extensions.litestar" in modules
     assert "advanced_alchemy.extensions.litestar.plugins" in modules
@@ -141,6 +142,7 @@ def test_base_module_and_classes_present_in_objects_inv() -> None:
         "types.html",
         "cache.html",
         "routing.html",
+        "fixtures.html",
         "utils.html",
         "extensions/litestar/index.html",
         "extensions/litestar/plugins.html",

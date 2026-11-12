@@ -30,8 +30,8 @@ What's Included for Litestar
      - Streams ``UploadFile`` payloads to local disk or S3/GCS and cleans up orphaned files on delete.
      - :doc:`Guide <litestar_storage>` · :doc:`API </reference/types>`
    * - **Database CLI**
-     - Adds ``litestar database make-migrations``, ``upgrade``, and ``dump-data`` commands automatically.
-     - :doc:`API </reference/extensions/litestar/cli>`
+     - Adds ``litestar database make-migrations``, ``upgrade``, and ``dump-data`` commands automatically. ``dump-data`` exports tables as JSON, JSON Lines, or CSV fixtures, with optional compression and size-based sharding.
+     - :doc:`Guide </usage/cli_commands>` · :doc:`API </reference/extensions/litestar/cli>`
 
 Installation
 ------------

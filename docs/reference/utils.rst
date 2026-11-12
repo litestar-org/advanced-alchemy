@@ -127,12 +127,7 @@ Module Loading, Fixtures, Text & Deprecation
 
 .. autofunction:: advanced_alchemy.utils.module_loader.module_to_os_path
 
-.. py:module:: advanced_alchemy.utils.fixtures
-    :no-typesetting:
-
-.. autofunction:: advanced_alchemy.utils.fixtures.open_fixture
-
-.. autofunction:: advanced_alchemy.utils.fixtures.open_fixture_async
+See :doc:`fixtures` for :mod:`advanced_alchemy.utils.fixtures` (``open_fixture_sync``, ``iter_fixture_sync``, ``write_fixture_sync``, and async counterparts).
 
 .. py:module:: advanced_alchemy.utils.text
     :no-typesetting:

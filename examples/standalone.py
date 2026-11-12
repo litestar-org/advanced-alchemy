@@ -10,7 +10,7 @@ from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.config import SQLAlchemySyncConfig, SyncSessionConfig
 from advanced_alchemy.filters import LimitOffset
 from advanced_alchemy.repository import SQLAlchemySyncRepository
-from advanced_alchemy.utils.fixtures import open_fixture
+from advanced_alchemy.utils.fixtures import open_fixture_sync
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Mapped
@@ -44,7 +44,7 @@ def run_script() -> None:
     with alchemy_config.get_session() as db_session:
         # 1) Load the JSON data into the US States table.
         repo = USStateRepository(session=db_session)
-        fixture = open_fixture(here, USStateRepository.model_type.__tablename__)
+        fixture = open_fixture_sync(here, USStateRepository.model_type.__tablename__)
         objs = repo.add_many([USStateRepository.model_type(**raw_obj) for raw_obj in fixture])
         db_session.commit()
         pprint.pp(f"Created {len(objs)} new objects.")
