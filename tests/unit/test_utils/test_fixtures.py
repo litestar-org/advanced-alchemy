@@ -5,6 +5,8 @@ import gzip
 import io
 import json
 import os
+import random
+import string
 import sys
 import tempfile
 import zipfile
@@ -1619,3 +1621,199 @@ class TestWriteFixtureSync:
         with pytest.raises(ValueError, match=match):
             write_fixture_sync(target, "users", [], **kwargs)
         assert target.exists() is False
+
+
+def _random_records(count: int, seed: int = 1234) -> "list[dict[str, Any]]":
+    """Generate deterministic pseudo-random records with realistic compression ratios."""
+    rng = random.Random(seed)
+    alphabet = string.ascii_letters + string.digits
+    return [{"id": i, "payload": "".join(rng.choices(alphabet, k=200))} for i in range(1, count + 1)]
+
+
+class TestWriteFixtureRollover:
+    """Test cases for sharded fixture rollover by max_records and on-disk max_bytes."""
+
+    @pytest.mark.parametrize("file_format", ["json", "jsonl", "csv"])
+    def test_rollover_by_max_records(self, tmp_path: Path, file_format: FixtureFormat) -> None:
+        """Test max_records splits records into contiguous numbered shards."""
+        records: list[dict[str, Any]] = [{"id": str(i)} if file_format == "csv" else {"id": i} for i in range(1, 6)]
+
+        paths = write_fixture_sync(tmp_path, "users", records, file_format=file_format, max_records=2)
+
+        assert [p.name for p in paths] == [
+            f"users.001.{file_format}",
+            f"users.002.{file_format}",
+            f"users.003.{file_format}",
+        ]
+        assert open_fixture_sync(tmp_path, "users") == records
+
+    def test_rollover_by_max_records_shard_contents(self, tmp_path: Path) -> None:
+        """Test max_records writes exact per-shard record counts."""
+        records = [{"id": i} for i in range(1, 6)]
+
+        paths = write_fixture_sync(tmp_path, "users", records, file_format="jsonl", max_records=2)
+
+        assert [p.read_bytes().count(b"\n") for p in paths] == [2, 2, 1]
+
+    @pytest.mark.parametrize("file_format", ["json", "jsonl", "csv"])
+    @pytest.mark.parametrize("compression", [None, "gzip", "zip"])
+    def test_rollover_by_max_bytes_respects_limit(
+        self,
+        tmp_path: Path,
+        file_format: FixtureFormat,
+        compression: "FixtureCompression | None",
+    ) -> None:
+        """Test max_bytes caps every shard on disk and tightly fills plain and gzip shards."""
+        records = _random_records(2000)
+        suffix = {"gzip": ".gz", "zip": ".zip"}.get(compression or "", "")
+
+        paths = write_fixture_sync(
+            tmp_path,
+            "users",
+            records,
+            file_format=file_format,
+            compression=compression,
+            max_bytes=50_000,
+        )
+
+        assert len(paths) > 1
+        assert [p.name for p in paths] == [f"users.{i:03d}.{file_format}{suffix}" for i in range(1, len(paths) + 1)]
+        sizes = [p.stat().st_size for p in paths]
+        assert all(size <= 50_000 for size in sizes)
+        if compression in (None, "gzip"):
+            assert all(size >= 49_600 for size in sizes[:-1])
+        expected = [{"id": str(r["id"]), "payload": r["payload"]} for r in records] if file_format == "csv" else records
+        assert open_fixture_sync(tmp_path, "users") == expected
+
+    def test_rollover_acceptance_gzip_jsonl(self, tmp_path: Path) -> None:
+        """Test gzipped JSONL rollover on 10,000 pseudo-random records against 200 KB shards."""
+        records = _random_records(10_000)
+
+        paths = write_fixture_sync(
+            tmp_path,
+            "users",
+            records,
+            file_format="jsonl",
+            compression="gzip",
+            max_bytes=200_000,
+        )
+
+        assert len(paths) > 1
+        assert [p.name for p in paths] == [f"users.{i:03d}.jsonl.gz" for i in range(1, len(paths) + 1)]
+        sizes = [p.stat().st_size for p in paths]
+        assert all(size <= 200_000 for size in sizes)
+        assert all(size >= 199_600 for size in sizes[:-1])
+        assert open_fixture_sync(tmp_path, "users") == records
+
+    def test_rollover_max_records_wins_over_max_bytes(self, tmp_path: Path) -> None:
+        """Test combining max_records and max_bytes splits on whichever triggers first."""
+        records = _random_records(20)
+
+        paths = write_fixture_sync(
+            tmp_path,
+            "users",
+            records,
+            file_format="jsonl",
+            max_records=3,
+            max_bytes=10_000,
+        )
+
+        assert len(paths) == 7
+        assert [p.read_bytes().count(b"\n") for p in paths] == [3, 3, 3, 3, 3, 3, 2]
+
+    def test_rollover_gzip_is_deterministic(self, tmp_path: Path) -> None:
+        """Test sharded gzip output produces identical shard names and bytes across runs."""
+        records = _random_records(2000)
+
+        paths_a = write_fixture_sync(
+            tmp_path / "a",
+            "users",
+            records,
+            file_format="jsonl",
+            compression="gzip",
+            max_bytes=50_000,
+        )
+        paths_b = write_fixture_sync(
+            tmp_path / "b",
+            "users",
+            records,
+            file_format="jsonl",
+            compression="gzip",
+            max_bytes=50_000,
+        )
+
+        assert [p.name for p in paths_a] == [p.name for p in paths_b]
+        assert [p.read_bytes() for p in paths_a] == [p.read_bytes() for p in paths_b]
+
+    @pytest.mark.parametrize(
+        ("file_format", "expected"),
+        [
+            ("json", b"[]\n"),
+            ("jsonl", b""),
+            ("csv", b""),
+        ],
+    )
+    def test_sharded_empty_write_creates_first_shard(
+        self, tmp_path: Path, file_format: FixtureFormat, expected: bytes
+    ) -> None:
+        """Test sharded write with empty records creates numbered shard 001."""
+        paths = write_fixture_sync(tmp_path, "users", [], file_format=file_format, max_records=10)
+
+        assert paths == [tmp_path / f"users.001.{file_format}"]
+        assert paths[0].read_bytes() == expected
+        assert open_fixture_sync(tmp_path, "users") == []
+
+    def test_single_shard_is_numbered(self, tmp_path: Path) -> None:
+        """Test sharded write with fewer records than the limit still numbers shard 001."""
+        paths = write_fixture_sync(
+            tmp_path,
+            "users",
+            [{"id": 1}, {"id": 2}, {"id": 3}],
+            file_format="jsonl",
+            max_records=100,
+        )
+
+        assert paths == [tmp_path / "users.001.jsonl"]
+
+    def test_oversized_record_gets_own_shard_with_warning(self, tmp_path: Path) -> None:
+        """Test a record exceeding max_bytes on its own emits UserWarning and gets its own shard."""
+        records = [
+            {"id": 1, "p": "x" * 10},
+            {"id": 2, "p": "y" * 500},
+            {"id": 3, "p": "z" * 10},
+        ]
+
+        with pytest.warns(
+            UserWarning,
+            match=r"Record 2 of fixture 'users' exceeds max_bytes=100 on its own \(projected 580 bytes\)",
+        ) as caught:
+            paths = write_fixture_sync(tmp_path, "users", records, file_format="jsonl", max_bytes=100)
+
+        assert len(caught) == 1
+        assert [p.stat().st_size for p in paths] == [26, 516, 26]
+        assert open_fixture_sync(tmp_path, "users") == records
+
+    def test_rollover_rerun_with_fewer_shards_removes_stale(self, tmp_path: Path) -> None:
+        """Test rewriting a sharded fixture with fewer shards deletes higher-numbered stale shards."""
+        write_fixture_sync(
+            tmp_path,
+            "users",
+            [{"id": i} for i in range(1, 11)],
+            file_format="jsonl",
+            max_records=2,
+        )
+
+        write_fixture_sync(
+            tmp_path,
+            "users",
+            [{"id": i} for i in range(1, 7)],
+            file_format="jsonl",
+            max_records=2,
+        )
+
+        assert sorted(p.name for p in tmp_path.iterdir()) == [
+            "users.001.jsonl",
+            "users.002.jsonl",
+            "users.003.jsonl",
+        ]
+        assert open_fixture_sync(tmp_path, "users") == [{"id": i} for i in range(1, 7)]

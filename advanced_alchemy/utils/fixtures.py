@@ -5,6 +5,7 @@ import csv
 import gzip
 import io
 import re
+import warnings
 import zipfile
 import zlib
 from collections.abc import Mapping
@@ -749,6 +750,21 @@ class _FixtureWriter:
             self._open_shard()
         self._record_count += 1
         chunk = self._encode(record, first_in_shard=self._shard_records == 0)
+        if self._shard_records > 0 and self._roll_over_needed_after_flush(len(chunk)):
+            self._close_shard()
+            self._open_shard()
+            chunk = self._encode(record, first_in_shard=True)
+        if self._shard_records == 0 and self.max_bytes is not None:
+            projected = self._projected_size(len(chunk))
+            if projected > self.max_bytes:
+                warnings.warn(
+                    f"Record {self._record_count} of fixture {self.fixture_name!r} exceeds "
+                    f"max_bytes={self.max_bytes} on its own (projected {projected} bytes); "
+                    "writing it to its own shard",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                self._force_rollover = True
         self._require_sink().write(chunk)
         self._pending += len(chunk)
         self._shard_records += 1
@@ -822,6 +838,7 @@ class _FixtureWriter:
             self._sink = self._raw
         self._shard_records = 0
         self._pending = 0
+        self._force_rollover = False
 
     def _close_shard(self) -> None:
         """Write closing delimiters if needed and close the active shard streams."""
@@ -886,3 +903,31 @@ class _FixtureWriter:
             msg = "Fixture writer is closed"
             raise RuntimeError(msg)
         return self._raw
+
+    def _projected_size(self, chunk_size: int) -> int:
+        """Estimate the on-disk shard size in bytes after writing ``chunk_size`` bytes."""
+        raw_pos = self._require_raw().tell()
+        if self.compression is None:
+            return raw_pos + chunk_size + 64
+        pending = self._pending + chunk_size
+        if self.compression == "gzip":
+            reserve = 64
+        else:
+            member_name = self._final_paths[-1].name[: -len(".zip")]
+            reserve = 256 + 2 * len(member_name.encode("utf-8"))
+        return raw_pos + pending + 5 * (pending // 16383 + 1) + reserve
+
+    def _roll_over_needed_after_flush(self, chunk_size: int) -> bool:
+        """Determine whether to open a new shard before writing, flushing gzip if needed."""
+        if self._force_rollover:
+            return True
+        if self.max_records is not None and self._shard_records >= self.max_records:
+            return True
+        if self.max_bytes is not None:
+            projected = self._projected_size(chunk_size)
+            if projected > self.max_bytes and self.compression == "gzip" and self._pending > 0:
+                self._require_sink().flush()
+                self._pending = 0
+                projected = self._projected_size(chunk_size)
+            return projected > self.max_bytes
+        return False
