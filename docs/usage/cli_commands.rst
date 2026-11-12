@@ -92,7 +92,7 @@ Adopting an Existing Database or Exporting Data
             alchemy ensure-version
             alchemy stamp head
 
-    .. tab-item:: Export JSON Seed Files
+    .. tab-item:: Export Seed Files
 
         .. code-block:: bash
 
@@ -107,5 +107,33 @@ Adopting an Existing Database or Exporting Data
 .. warning::
 
     ``drop-all`` permanently deletes every mapped table in the target database. Only run it against disposable local or test databases.
+
+Exporting Large Tables as Sharded Fixtures
+------------------------------------------
+
+``dump-data`` writes one ``<table>.json`` file per table by default. Four options change the output:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 32 68
+
+   * - Option
+     - Effect
+   * - ``--format [json|jsonl|csv]``
+     - File format. Defaults to ``json``.
+   * - ``--compression [none|gzip|zip]``
+     - Compression. Defaults to ``none``.
+   * - ``--max-file-size SIZE``
+     - Starts a new shard before a file would grow past this size on disk. Accepts bytes or a number with a ``K``, ``M``, or ``G`` suffix in 1024 units, optionally followed by ``B`` or ``iB`` (for example ``50M``, ``50MiB``, or ``1g``).
+   * - ``--max-records INTEGER``
+     - Starts a new shard after this many rows. Must be at least 1.
+
+Rows are streamed from the database in batches, so a large table never has to fit in memory. This command writes every table as gzip-compressed JSON Lines shards of at most 50 MiB each, named ``<table>.001.jsonl.gz``, ``<table>.002.jsonl.gz``, and so on:
+
+.. code-block:: bash
+
+    alchemy dump-data --table "*" --dir ./fixtures --format jsonl --compression gzip --max-file-size 50M
+
+Running the command again replaces every existing file for each exported table, including leftover shards from an earlier run. Load the files back with the helpers in :doc:`database_seeding`.
 
 See :doc:`/reference/cli` for every command flag.
