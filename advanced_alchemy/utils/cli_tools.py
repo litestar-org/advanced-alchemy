@@ -15,8 +15,9 @@ Usage:
 """
 
 import inspect
+import re
 from collections.abc import Iterable
-from typing import Any, Callable, Final, Optional
+from typing import Any, Callable, ClassVar, Final, Optional
 
 from typing_extensions import ParamSpec
 
@@ -39,6 +40,7 @@ _RICH_CLICK_AVAILABLE: Final[bool] = _rich_click_available
 _RICH_CLICK_ALIASES_SUPPORTED: Final[bool] = _rich_click_aliases_supported
 
 __all__ = [
+    "BYTE_SIZE",
     "AliasedGroup",
     "click",
     "command",
@@ -105,6 +107,60 @@ class AliasedGroup(click.Group):
             return cmd_name, cmd, remaining_args
         canonical_name = cmd.name or cmd_name
         return canonical_name, cmd, remaining_args
+
+
+class _ByteSizeParamType(click.ParamType):
+    """Click parameter type for byte sizes such as ``1048576``, ``512K``, ``50M``, or ``2GiB``.
+
+    The number is a whole number of bytes, optionally followed by ``K``, ``M``, or ``G``
+    (1024-based) and an optional ``B`` or ``iB``, or by a bare ``B``. Matching is
+    case-insensitive and surrounding whitespace is ignored.
+    """
+
+    __slots__ = ()
+
+    name = "size"
+    _pattern: "ClassVar[re.Pattern[str]]" = re.compile(
+        r"(?P<number>[0-9]+)(?:(?P<unit>[kmg])(?:i?b)?|b)?",
+        re.IGNORECASE,
+    )
+    _multipliers: "ClassVar[dict[str, int]]" = {"k": 1024, "m": 1024**2, "g": 1024**3}
+
+    def convert(self, value: Any, param: "Optional[click.Parameter]", ctx: "Optional[click.Context]") -> int:
+        """Return the size in bytes.
+
+        Args:
+            value: Raw CLI option value.
+            param: Click parameter associated with the option, if any.
+            ctx: Active Click context, if any.
+
+        Returns:
+            Parsed positive integer byte count.
+
+        Raises:
+            click.BadParameter: If ``value`` does not match the size grammar or is below 1 byte.
+        """
+        if isinstance(value, int) and not isinstance(value, bool):
+            size = value
+        else:
+            match = self._pattern.fullmatch(str(value).strip())
+            if match is None:
+                msg = (
+                    f"{value!r} is not a valid size; use a whole number of bytes with an optional "
+                    "K, M, or G suffix, for example 1048576, 512K, 50M, or 2GiB."
+                )
+                self.fail(msg, param, ctx)
+            unit = match.group("unit")
+            multiplier = self._multipliers[unit.lower()] if unit else 1
+            size = int(match.group("number")) * multiplier
+
+        if size < 1:
+            msg = f"{value!r} is not a valid size; the size must be at least 1 byte."
+            self.fail(msg, param, ctx)
+        return size
+
+
+BYTE_SIZE: "Final[_ByteSizeParamType]" = _ByteSizeParamType()
 
 
 def _patch_group_class_for_aliases(group_cls: type[click.Group]) -> None:

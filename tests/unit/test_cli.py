@@ -8,8 +8,9 @@ import uuid
 from collections.abc import Generator, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import click
 import pytest
 from click.testing import CliRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -25,6 +26,7 @@ from advanced_alchemy.cli import (
     resolve_config_sync,
 )
 from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.utils.cli_tools import BYTE_SIZE
 
 if TYPE_CHECKING:
     from click import Group
@@ -208,6 +210,168 @@ def test_dump_data(cli_runner: CliRunner, database_cli: Group, mock_context: Mag
         ["--config", "tests.unit.fixtures.configs", "dump-data", "--table", "test_table", "--dir", str(tmp_path)],
     )
     assert result.exit_code == 0
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("1024", 1024),
+        ("1024b", 1024),
+        ("10K", 10240),
+        ("10kb", 10240),
+        ("512KiB", 524288),
+        ("50M", 52428800),
+        ("50mb", 52428800),
+        ("2GiB", 2147483648),
+        ("2g", 2147483648),
+        (" 7M ", 7340032),
+        (4096, 4096),
+    ],
+    ids=[
+        "bytes-plain",
+        "bytes-suffix-b",
+        "kib-short",
+        "kib-kb",
+        "kib-full",
+        "mib-short",
+        "mib-mb",
+        "gib-full",
+        "gib-short",
+        "whitespace-trimmed",
+        "int-passthrough",
+    ],
+)
+def test_byte_size_param_type_converts(value: object, expected: int) -> None:
+    """BYTE_SIZE converts whole-number byte strings and ints into integer byte counts."""
+    assert BYTE_SIZE.convert(value, None, None) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "match"),
+    [
+        ("abc", "is not a valid size; use a whole number of bytes"),
+        ("1.5K", "is not a valid size; use a whole number of bytes"),
+        ("-5", "is not a valid size; use a whole number of bytes"),
+        ("10T", "is not a valid size; use a whole number of bytes"),
+        ("1024iB", "is not a valid size; use a whole number of bytes"),
+        ("5 M", "is not a valid size; use a whole number of bytes"),
+        ("", "is not a valid size; use a whole number of bytes"),
+        ("M", "is not a valid size; use a whole number of bytes"),
+        ("0", "the size must be at least 1 byte"),
+        ("0K", "the size must be at least 1 byte"),
+        (0, "the size must be at least 1 byte"),
+    ],
+    ids=[
+        "grammar-alpha",
+        "grammar-decimal",
+        "grammar-negative",
+        "grammar-unsupported-unit",
+        "grammar-missing-prefix",
+        "grammar-inner-space",
+        "grammar-empty",
+        "grammar-unit-only",
+        "minimum-str-zero",
+        "minimum-zero-unit",
+        "minimum-int-zero",
+    ],
+)
+def test_byte_size_param_type_rejects(value: object, match: str) -> None:
+    """BYTE_SIZE rejects invalid grammar and sub-byte values with BadParameter."""
+    with pytest.raises(click.BadParameter, match=match):
+        BYTE_SIZE.convert(value, None, None)
+
+
+@pytest.mark.parametrize(
+    ("extra_args", "expected_kwargs"),
+    [
+        (
+            [],
+            {"file_format": "json", "compression": None, "max_bytes": None, "max_records": None},
+        ),
+        (
+            ["--format", "jsonl", "--compression", "gzip", "--max-file-size", "50M"],
+            {"file_format": "jsonl", "compression": "gzip", "max_bytes": 52428800, "max_records": None},
+        ),
+        (
+            ["--format", "csv", "--compression", "zip", "--max-records", "500"],
+            {"file_format": "csv", "compression": "zip", "max_bytes": None, "max_records": 500},
+        ),
+        (
+            ["--compression", "none", "--max-file-size", "1024", "--max-records", "1"],
+            {"file_format": "json", "compression": None, "max_bytes": 1024, "max_records": 1},
+        ),
+    ],
+    ids=["defaults", "jsonl-gzip-50M", "csv-zip-500-records", "none-1024-1"],
+)
+def test_dump_data_passes_fixture_options(
+    cli_runner: CliRunner,
+    database_cli: Group,
+    tmp_path: Path,
+    extra_args: list[str],
+    expected_kwargs: dict[str, object],
+) -> None:
+    """dump-data passes format, compression, max-file-size, and max-records to dump_tables."""
+    base_args = [
+        "--config",
+        "tests.unit.fixtures.configs",
+        "dump-data",
+        "--table",
+        "test_table",
+        "--dir",
+        str(tmp_path),
+    ]
+    with patch("advanced_alchemy.alembic.utils.dump_tables", new_callable=AsyncMock) as mock_dump:
+        result = cli_runner.invoke(database_cli, [*base_args, *extra_args])
+
+    assert result.exit_code == 0, result.output
+    assert mock_dump.await_args is not None
+    assert mock_dump.await_args.args[0] == tmp_path
+    assert mock_dump.await_args.kwargs == expected_kwargs
+
+
+@pytest.mark.parametrize(
+    ("extra_args", "option_name"),
+    [
+        (["--max-file-size", "0"], "--max-file-size"),
+        (["--max-file-size", "abc"], "--max-file-size"),
+        (["--max-file-size", "1.5K"], "--max-file-size"),
+        (["--max-records", "0"], "--max-records"),
+        (["--format", "xml"], "--format"),
+        (["--compression", "bz2"], "--compression"),
+    ],
+    ids=[
+        "max-file-size-zero",
+        "max-file-size-alpha",
+        "max-file-size-decimal",
+        "max-records-zero",
+        "format-xml",
+        "compression-bz2",
+    ],
+)
+def test_dump_data_rejects_invalid_fixture_options(
+    cli_runner: CliRunner,
+    database_cli: Group,
+    tmp_path: Path,
+    extra_args: list[str],
+    option_name: str,
+) -> None:
+    """dump-data rejects invalid option values with exit code 2 without invoking dump_tables."""
+    base_args = [
+        "--config",
+        "tests.unit.fixtures.configs",
+        "dump-data",
+        "--table",
+        "test_table",
+        "--dir",
+        str(tmp_path),
+    ]
+    with patch("advanced_alchemy.alembic.utils.dump_tables", new_callable=AsyncMock) as mock_dump:
+        result = cli_runner.invoke(database_cli, [*base_args, *extra_args])
+
+    assert result.exit_code == 2
+    assert "Invalid value for" in result.output
+    assert option_name in result.output
+    assert mock_dump.await_count == 0
 
 
 def test_stamp(cli_runner: CliRunner, database_cli: Group, mock_context: MagicMock) -> None:
