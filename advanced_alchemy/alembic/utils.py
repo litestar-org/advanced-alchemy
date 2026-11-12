@@ -1,17 +1,24 @@
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from pathlib import Path
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
-from sqlalchemy import Column, Engine, MetaData, String, Table
+from sqlalchemy import Column, Engine, MetaData, String, Table, select
+from sqlalchemy.orm import lazyload
 from typing_extensions import TypeIs
 
 from advanced_alchemy.base import model_to_dict
 from advanced_alchemy.exceptions import MissingDependencyError
+from advanced_alchemy.utils.fixtures import write_fixture_async, write_fixture_sync
 from advanced_alchemy.utils.sync_tools import async_
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Iterable
+
+    from sqlalchemy import Select
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
     from sqlalchemy.orm import DeclarativeBase, Session
+
+    from advanced_alchemy.utils.fixtures import FixtureCompression, FixtureFormat
 
 __all__ = ("drop_all", "dump_tables")
 
@@ -81,10 +88,38 @@ async def dump_tables(
     dump_dir: Path,
     session: "Union[AbstractContextManager[Session], AbstractAsyncContextManager[AsyncSession]]",
     models: "list[type[DeclarativeBase]]",
+    *,
+    file_format: "FixtureFormat" = "json",
+    compression: "Optional[FixtureCompression]" = None,
+    max_bytes: "Optional[int]" = None,
+    max_records: "Optional[int]" = None,
+    batch_size: int = 1000,
 ) -> None:
-    from types import new_class
+    """Stream every row of each model into fixture files under ``dump_dir``.
 
-    from advanced_alchemy.utils.serialization import encode_json
+    Rows are queried in primary-key order with ``lazyload("*")`` and
+    ``yield_per=batch_size`` so joined collection eager loaders remain
+    compatible with ``yield_per`` and do not trigger extra queries while a
+    server-side cursor is open. Async dialects without server-side cursor
+    support are read through buffered :meth:`AsyncSession.scalars`.
+
+    Args:
+        dump_dir: Directory where fixture files are written.
+        session: Sync or async SQLAlchemy session context manager.
+        models: Sequence of declarative model classes to dump.
+        file_format: Output format (``"json"``, ``"jsonl"``, or ``"csv"``).
+        compression: Optional compression (``"gzip"``, ``"zip"``, or ``None``).
+        max_bytes: Optional maximum on-disk byte size per shard.
+        max_records: Optional maximum record count per shard.
+        batch_size: Number of rows fetched and buffered per streaming batch.
+
+    Raises:
+        ValueError: If ``batch_size`` is less than 1, or the writer rejects an argument.
+        MissingDependencyError: If the ``rich`` package is not installed.
+    """
+    if batch_size < 1:
+        msg = f"batch_size must be at least 1, got {batch_size}"
+        raise ValueError(msg)
 
     try:
         from rich import get_console
@@ -94,47 +129,76 @@ async def dump_tables(
 
     console = get_console()
 
+    def _statement(model: "type[DeclarativeBase]") -> "Select[tuple[DeclarativeBase]]":
+        return (
+            select(model)
+            .options(lazyload("*"))
+            .order_by(*model.__mapper__.primary_key)
+            .execution_options(yield_per=batch_size)
+        )
+
+    def _announce(model: "type[DeclarativeBase]") -> None:
+        console.rule(
+            f"[yellow bold]Dumping table '{model.__tablename__}' to '{dump_dir}'",
+            style="yellow",
+            align="left",
+        )
+
+    def _report(paths: "list[Path]") -> None:
+        for path in paths:
+            console.print(
+                f"Wrote {path}",
+                style="green",
+                markup=False,
+                highlight=False,
+                soft_wrap=True,
+            )
+
     def _is_sync(
         session: "Union[AbstractAsyncContextManager[AsyncSession], AbstractContextManager[Session]]",
     ) -> "TypeIs[AbstractContextManager[Session]]":
         return isinstance(session, AbstractContextManager)
 
     def _dump_table_sync(session: "AbstractContextManager[Session]") -> None:
-        from advanced_alchemy.repository import SQLAlchemySyncRepository
-
         with session as _session:
             for model in models:
-                json_path = dump_dir / f"{model.__tablename__}.json"
-                console.rule(
-                    f"[yellow bold]Dumping table '{json_path.stem}' to '{json_path}'",
-                    style="yellow",
-                    align="left",
+                _announce(model)
+                rows = _session.execute(_statement(model)).scalars()
+                _report(
+                    write_fixture_sync(
+                        dump_dir,
+                        model.__tablename__,
+                        (model_to_dict(row) for row in rows),
+                        file_format=file_format,
+                        compression=compression,
+                        max_bytes=max_bytes,
+                        max_records=max_records,
+                    )
                 )
-                repo = new_class(
-                    "repo",
-                    (SQLAlchemySyncRepository,),
-                    exec_body=lambda ns, model=model: ns.setdefault("model_type", model),  # type: ignore[misc]
-                )
-                json_path.write_text(encode_json([model_to_dict(row) for row in repo(session=_session).get_many()]))
 
     async def _dump_table_async(session: "AbstractAsyncContextManager[AsyncSession]") -> None:
-        from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-
         async with session as _session:
             for model in models:
-                json_path = dump_dir / f"{model.__tablename__}.json"
-                console.rule(
-                    f"[yellow bold]Dumping table '{json_path.stem}' to '{json_path}'",
-                    style="yellow",
-                    align="left",
-                )
-                repo = new_class(
-                    "repo",
-                    (SQLAlchemyAsyncRepository,),
-                    exec_body=lambda ns, model=model: ns.setdefault("model_type", model),  # type: ignore[misc]
-                )
-                json_path.write_text(
-                    encode_json([model_to_dict(row) for row in await repo(session=_session).get_many()])
+                _announce(model)
+                statement = _statement(model)
+                records: Union[Iterable[dict[str, Any]], AsyncIterator[dict[str, Any]]]
+                if _session.get_bind(mapper=model).dialect.supports_server_side_cursors:
+                    streamed = await _session.stream_scalars(statement)
+                    records = (model_to_dict(row) async for row in streamed)
+                else:
+                    buffered = await _session.scalars(statement)
+                    records = (model_to_dict(row) for row in buffered)
+                _report(
+                    await write_fixture_async(
+                        dump_dir,
+                        model.__tablename__,
+                        records,
+                        file_format=file_format,
+                        compression=compression,
+                        max_bytes=max_bytes,
+                        max_records=max_records,
+                        batch_size=batch_size,
+                    )
                 )
 
     await async_(dump_dir.mkdir)(exist_ok=True)
