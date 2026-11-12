@@ -5,16 +5,20 @@ import gzip
 import io
 import json
 import os
+import sys
 import tempfile
 import zipfile
 import zlib
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 
+from advanced_alchemy.utils import fixtures as fixtures_module
 from advanced_alchemy.utils.fixtures import (
+    FixtureCompression,
+    FixtureFormat,
     _FixtureFile,
     iter_fixture_async,
     iter_fixture_sync,
@@ -160,31 +164,31 @@ class TestOpenFixture:
 
     def test_open_plain_json_fixture(self, temp_fixtures_dir: Path, sample_data: "list[dict[str, Any]]") -> None:
         """Test loading plain JSON fixture."""
-        result = open_fixture(temp_fixtures_dir, "users")
+        result = open_fixture_sync(temp_fixtures_dir, "users")
         assert result == sample_data
 
     def test_open_gzipped_fixture(self, temp_fixtures_dir: Path, sample_data: "list[dict[str, Any]]") -> None:
         """Test loading gzipped JSON fixture."""
-        result = open_fixture(temp_fixtures_dir, "users_gz")
+        result = open_fixture_sync(temp_fixtures_dir, "users_gz")
         assert result == sample_data
 
     def test_open_zipped_fixture(self, temp_fixtures_dir: Path, sample_data: "list[dict[str, Any]]") -> None:
         """Test loading zipped JSON fixture."""
-        result = open_fixture(temp_fixtures_dir, "users_zip")
+        result = open_fixture_sync(temp_fixtures_dir, "users_zip")
         assert result == sample_data
 
     def test_open_zipped_fixture_multiple_files(
         self, temp_fixtures_dir: Path, sample_data: "list[dict[str, Any]]"
     ) -> None:
         """Test loading zipped JSON fixture with multiple files, should prefer matching name."""
-        result = open_fixture(temp_fixtures_dir, "users_multi")
+        result = open_fixture_sync(temp_fixtures_dir, "users_multi")
         assert result == sample_data
 
     def test_open_zipped_fixture_preferred_name(
         self, temp_fixtures_dir: Path, sample_data: "list[dict[str, Any]]"
     ) -> None:
         """Test loading zipped JSON fixture prefers file with matching name."""
-        result = open_fixture(temp_fixtures_dir, "users_preferred")
+        result = open_fixture_sync(temp_fixtures_dir, "users_preferred")
         assert result == sample_data
 
     def test_case_insensitive_support(self, temp_fixtures_dir: Path, sample_data: "list[dict[str, Any]]") -> None:
@@ -195,7 +199,7 @@ class TestOpenFixture:
             json.dump(sample_data, f)
 
         # Test that uppercase is found
-        result = open_fixture(temp_fixtures_dir, "testcase")
+        result = open_fixture_sync(temp_fixtures_dir, "testcase")
         assert result == sample_data
 
         # Create lowercase version and test priority (uppercase should still win)
@@ -205,12 +209,12 @@ class TestOpenFixture:
             json.dump(lowercase_data, f)
 
         # Should still load uppercase version first
-        result = open_fixture(temp_fixtures_dir, "testcase")
+        result = open_fixture_sync(temp_fixtures_dir, "testcase")
         assert result == sample_data  # Original data, not lowercase_data
 
         # Remove uppercase, should fallback to lowercase
         uppercase_gz_file.unlink()
-        result = open_fixture(temp_fixtures_dir, "testcase")
+        result = open_fixture_sync(temp_fixtures_dir, "testcase")
         assert result == lowercase_data
 
     def test_file_format_priority(self, temp_fixtures_dir: Path, sample_data: "list[dict[str, Any]]") -> None:
@@ -235,23 +239,23 @@ class TestOpenFixture:
             zf.writestr("priority.json", json.dumps(zip_data))
 
         # Should load plain JSON first
-        result = open_fixture(temp_fixtures_dir, "priority")
+        result = open_fixture_sync(temp_fixtures_dir, "priority")
         assert result == plain_data
 
         # Remove plain JSON, should load gzip
         json_file.unlink()
-        result = open_fixture(temp_fixtures_dir, "priority")
+        result = open_fixture_sync(temp_fixtures_dir, "priority")
         assert result == gz_data
 
         # Remove gzip, should load zip
         gz_file.unlink()
-        result = open_fixture(temp_fixtures_dir, "priority")
+        result = open_fixture_sync(temp_fixtures_dir, "priority")
         assert result == zip_data
 
     def test_fixture_not_found(self, temp_fixtures_dir: Path) -> None:
         """Test FileNotFoundError when fixture doesn't exist."""
         with pytest.raises(FileNotFoundError) as exc_info:
-            open_fixture(temp_fixtures_dir, "nonexistent")
+            open_fixture_sync(temp_fixtures_dir, "nonexistent")
 
         assert "Could not find the nonexistent fixture" in str(exc_info.value)
         assert (
@@ -262,14 +266,14 @@ class TestOpenFixture:
     def test_empty_zip_file(self, temp_fixtures_dir: Path) -> None:
         """Test error handling for empty zip file."""
         with pytest.raises(ValueError) as exc_info:
-            open_fixture(temp_fixtures_dir, "empty")
+            open_fixture_sync(temp_fixtures_dir, "empty")
 
         assert "No JSON files found in zip archive" in str(exc_info.value)
 
     def test_zip_with_no_json_files(self, temp_fixtures_dir: Path) -> None:
         """Test error handling for zip file with no JSON files."""
         with pytest.raises(ValueError) as exc_info:
-            open_fixture(temp_fixtures_dir, "no_json")
+            open_fixture_sync(temp_fixtures_dir, "no_json")
 
         assert "No JSON files found in zip archive" in str(exc_info.value)
 
@@ -281,7 +285,7 @@ class TestOpenFixture:
             f.write(b"not a gzip file")
 
         with pytest.raises(OSError) as exc_info:
-            open_fixture(temp_fixtures_dir, "corrupted")
+            open_fixture_sync(temp_fixtures_dir, "corrupted")
 
         assert "Error reading fixture file" in str(exc_info.value)
 
@@ -293,7 +297,7 @@ class TestOpenFixture:
             f.write(b"not a zip file")
 
         with pytest.raises(OSError) as exc_info:
-            open_fixture(temp_fixtures_dir, "corrupted_zip")
+            open_fixture_sync(temp_fixtures_dir, "corrupted_zip")
 
         assert "Error reading fixture file" in str(exc_info.value)
 
@@ -304,7 +308,18 @@ class TestOpenFixture:
             f.write("{ invalid json content")
 
         with pytest.raises(Exception):  # decode_json will raise an appropriate exception
-            open_fixture(temp_fixtures_dir, "invalid")
+            open_fixture_sync(temp_fixtures_dir, "invalid")
+
+    @pytest.mark.parametrize("fixture_name", ["users", "users_csv"])
+    def test_open_fixture_alias_emits_deprecation_warning(self, temp_fixtures_dir: Path, fixture_name: str) -> None:
+        """Test deprecated open_fixture alias emits DeprecationWarning and delegates to open_fixture_sync."""
+        with pytest.warns(DeprecationWarning, match="Use 'open_fixture_sync' instead") as record:
+            result = open_fixture(temp_fixtures_dir, fixture_name)
+        assert result == open_fixture_sync(temp_fixtures_dir, fixture_name)
+        message = str(record[0].message)
+        assert "Call to deprecated function 'open_fixture'" in message
+        assert "Deprecated in advanced-alchemy 1.13.0" in message
+        assert "removed in 2.0" in message
 
 
 class TestOpenFixtureCSV:
@@ -312,7 +327,7 @@ class TestOpenFixtureCSV:
 
     def test_open_plain_csv_fixture(self, temp_fixtures_dir: Path, sample_csv_data: "list[dict[str, str]]") -> None:
         """Test loading plain CSV fixture."""
-        result = open_fixture(temp_fixtures_dir, "users_csv")
+        result = open_fixture_sync(temp_fixtures_dir, "users_csv")
         assert result == sample_csv_data
         # Verify it's a list of dicts
         assert isinstance(result, list)
@@ -320,24 +335,24 @@ class TestOpenFixtureCSV:
 
     def test_open_gzipped_csv_fixture(self, temp_fixtures_dir: Path, sample_csv_data: "list[dict[str, str]]") -> None:
         """Test loading gzipped CSV fixture."""
-        result = open_fixture(temp_fixtures_dir, "users_csv_gz")
+        result = open_fixture_sync(temp_fixtures_dir, "users_csv_gz")
         assert result == sample_csv_data
 
     def test_open_zipped_csv_fixture(self, temp_fixtures_dir: Path, sample_csv_data: "list[dict[str, str]]") -> None:
         """Test loading zipped CSV fixture."""
-        result = open_fixture(temp_fixtures_dir, "users_csv_zip")
+        result = open_fixture_sync(temp_fixtures_dir, "users_csv_zip")
         assert result == sample_csv_data
 
     def test_open_zipped_csv_fixture_multiple_files(
         self, temp_fixtures_dir: Path, sample_csv_data: "list[dict[str, str]]"
     ) -> None:
         """Test loading zipped CSV fixture with multiple files, should prefer matching name."""
-        result = open_fixture(temp_fixtures_dir, "users_csv_multi")
+        result = open_fixture_sync(temp_fixtures_dir, "users_csv_multi")
         assert result == sample_csv_data
 
     def test_csv_values_are_strings(self, temp_fixtures_dir: Path) -> None:
         """Test that CSV values are strings (important difference from JSON)."""
-        result = open_fixture(temp_fixtures_dir, "users_csv")
+        result = open_fixture_sync(temp_fixtures_dir, "users_csv")
         # CSV returns strings, not integers
         assert result[0]["id"] == "1"
         assert isinstance(result[0]["id"], str)
@@ -359,24 +374,24 @@ class TestOpenFixtureCSV:
             writer.writerows(sample_csv_data)
 
         # Should load JSON first
-        result = open_fixture(temp_fixtures_dir, "priority_format")
+        result = open_fixture_sync(temp_fixtures_dir, "priority_format")
         assert result == sample_data  # JSON data, not CSV data
 
         # Remove JSON, should load CSV
         json_file.unlink()
-        result = open_fixture(temp_fixtures_dir, "priority_format")
+        result = open_fixture_sync(temp_fixtures_dir, "priority_format")
         assert result == sample_csv_data
 
     def test_empty_csv_zip_file(self, temp_fixtures_dir: Path) -> None:
         """Test error handling for empty CSV zip file."""
         with pytest.raises(ValueError) as exc_info:
-            open_fixture(temp_fixtures_dir, "empty_csv")
+            open_fixture_sync(temp_fixtures_dir, "empty_csv")
         assert "No CSV files found in zip archive" in str(exc_info.value)
 
     def test_csv_zip_with_no_csv_files(self, temp_fixtures_dir: Path) -> None:
         """Test error handling for zip file with no CSV files."""
         with pytest.raises(ValueError) as exc_info:
-            open_fixture(temp_fixtures_dir, "no_csv")
+            open_fixture_sync(temp_fixtures_dir, "no_csv")
         assert "No CSV files found in zip archive" in str(exc_info.value)
 
     def test_csv_with_special_characters(self, temp_fixtures_dir: Path) -> None:
@@ -393,7 +408,7 @@ class TestOpenFixtureCSV:
             writer.writeheader()
             writer.writerows(special_data)
 
-        result = open_fixture(temp_fixtures_dir, "special")
+        result = open_fixture_sync(temp_fixtures_dir, "special")
         assert result == special_data
 
     def test_csv_with_unicode(self, temp_fixtures_dir: Path) -> None:
@@ -410,7 +425,7 @@ class TestOpenFixtureCSV:
             writer.writeheader()
             writer.writerows(unicode_data)
 
-        result = open_fixture(temp_fixtures_dir, "unicode")
+        result = open_fixture_sync(temp_fixtures_dir, "unicode")
         assert result == unicode_data
 
     def test_csv_with_embedded_newlines(self, temp_fixtures_dir: Path) -> None:
@@ -428,7 +443,7 @@ newlines"
         with open(csv_file, "w", encoding="utf-8", newline="") as f:
             f.write(csv_content)
 
-        result = open_fixture(temp_fixtures_dir, "embedded_newlines")
+        result = open_fixture_sync(temp_fixtures_dir, "embedded_newlines")
         assert len(result) == 3
         assert result[0]["name"] == "Alice"
         assert result[0]["description"] == "Line 1\nLine 2"  # Newline must be preserved
@@ -445,7 +460,7 @@ Line 2"
         with gzip.open(gz_file, "wt", encoding="utf-8", newline="") as f:
             f.write(csv_content)
 
-        result = open_fixture(temp_fixtures_dir, "embedded_newlines_gz")
+        result = open_fixture_sync(temp_fixtures_dir, "embedded_newlines_gz")
         assert len(result) == 1
         assert result[0]["description"] == "Line 1\nLine 2"  # Newline must be preserved
 
@@ -459,7 +474,7 @@ Line 2"
         with zipfile.ZipFile(zip_file, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("embedded_newlines_zip.csv", csv_content)
 
-        result = open_fixture(temp_fixtures_dir, "embedded_newlines_zip")
+        result = open_fixture_sync(temp_fixtures_dir, "embedded_newlines_zip")
         assert len(result) == 1
         assert result[0]["description"] == "Line 1\nLine 2"  # Newline must be preserved
 
@@ -471,7 +486,7 @@ Line 2"
         with open(csv_file, "w", encoding="utf-8", newline="") as f:
             f.write(csv_content)
 
-        result = open_fixture(temp_fixtures_dir, "bom")
+        result = open_fixture_sync(temp_fixtures_dir, "bom")
         assert len(result) == 2
         # BOM should be stripped, so first key should be "name" not "\ufeffname"
         assert "name" in result[0]
@@ -486,7 +501,7 @@ Line 2"
         with gzip.open(gz_file, "wb") as f:
             f.write(csv_content.encode("utf-8"))
 
-        result = open_fixture(temp_fixtures_dir, "bom_gz")
+        result = open_fixture_sync(temp_fixtures_dir, "bom_gz")
         assert len(result) == 1
         assert "name" in result[0]
         assert "\ufeffname" not in result[0]
@@ -499,7 +514,7 @@ Line 2"
             # Write as bytes to preserve BOM
             zf.writestr("bom_zip.csv", csv_content.encode("utf-8"))
 
-        result = open_fixture(temp_fixtures_dir, "bom_zip")
+        result = open_fixture_sync(temp_fixtures_dir, "bom_zip")
         assert len(result) == 1
         assert "name" in result[0]
         assert "\ufeffname" not in result[0]
@@ -511,7 +526,7 @@ Line 2"
         with open(csv_file, "w", encoding="utf-8", newline="") as f:
             f.write(csv_content)
 
-        result = open_fixture(temp_fixtures_dir, "headers_only")
+        result = open_fixture_sync(temp_fixtures_dir, "headers_only")
         assert result == []  # Empty list, no rows
 
     def test_uppercase_plain_csv(self, temp_fixtures_dir: Path) -> None:
@@ -522,7 +537,7 @@ Line 2"
             f.write(csv_content)
 
         # Should find UPPERTEST.csv when searching for "uppertest"
-        result = open_fixture(temp_fixtures_dir, "uppertest")
+        result = open_fixture_sync(temp_fixtures_dir, "uppertest")
         assert len(result) == 1
         assert result[0]["name"] == "UPPER"
 
@@ -635,13 +650,23 @@ class TestOpenFixtureAsync:
 
         assert "Error reading fixture file" in str(exc_info.value)
 
-    @pytest.mark.skip(reason="Import mocking is complex and anyio is required by the project")
     @pytest.mark.asyncio
-    async def test_missing_anyio_dependency(self, temp_fixtures_dir: Path) -> None:
-        """Test MissingDependencyError when anyio is not available."""
-        # Note: This test documents the expected behavior when anyio is not available.
-        # In practice, anyio is a required dependency for this project.
-        pass
+    async def test_missing_anyio_dependency(
+        self, temp_fixtures_dir: Path, sample_data: "list[dict[str, Any]]", monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test async fixture loaders succeed without importing anyio."""
+        monkeypatch.setitem(sys.modules, "anyio", None)
+        assert await open_fixture_async(temp_fixtures_dir, "users") == sample_data
+        batches = [batch async for batch in iter_fixture_async(temp_fixtures_dir, "users", batch_size=2)]
+        assert batches == [sample_data[:2], sample_data[2:]]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("path_kind", ["pathlib", "anyio"])
+    async def test_open_jsonl_async(self, tmp_path: Path, path_kind: str) -> None:
+        """Test open_fixture_async loads JSONL fixtures from both pathlib.Path and anyio.Path."""
+        _write_fixture(tmp_path / "users.jsonl.gz", '{"id": 1}\n{"id": 2}\n')
+        path = pytest.importorskip("anyio").Path(tmp_path) if path_kind == "anyio" else tmp_path
+        assert await open_fixture_async(path, "users") == [{"id": 1}, {"id": 2}]
 
     # Async CSV Tests
     @pytest.mark.asyncio
@@ -799,7 +824,7 @@ class TestIntegration:
     def test_backward_compatibility_sync(self, temp_fixtures_dir: Path, sample_data: "list[dict[str, Any]]") -> None:
         """Test that existing sync code still works as expected."""
         # This mirrors the usage pattern in test_sqlquery_service.py
-        fixture_data = open_fixture(temp_fixtures_dir, "users")
+        fixture_data = open_fixture_sync(temp_fixtures_dir, "users")
         assert fixture_data == sample_data
         assert len(fixture_data) == 3
         assert fixture_data[0]["name"] == "Alice"
@@ -845,14 +870,14 @@ class TestIntegration:
         assert zip_size < json_size
 
         # Verify all formats load the same data
-        json_data = open_fixture(temp_fixtures_dir, "large")
+        json_data = open_fixture_sync(temp_fixtures_dir, "large")
 
         # Remove plain JSON to force loading compressed versions
         json_file.unlink()
-        gz_data = open_fixture(temp_fixtures_dir, "large")
+        gz_data = open_fixture_sync(temp_fixtures_dir, "large")
 
         gz_file.unlink()
-        zip_data = open_fixture(temp_fixtures_dir, "large")
+        zip_data = open_fixture_sync(temp_fixtures_dir, "large")
 
         assert json_data == gz_data == zip_data == large_data
 
@@ -872,7 +897,7 @@ class TestIntegration:
             writer.writerows(states_data)
 
         # Load fixture
-        fixture_data = open_fixture(temp_fixtures_dir, "us_state_lookup")
+        fixture_data = open_fixture_sync(temp_fixtures_dir, "us_state_lookup")
         assert fixture_data == states_data
         assert len(fixture_data) == 3
         assert fixture_data[0]["name"] == "Alabama"
@@ -913,11 +938,25 @@ class TestIntegration:
             writer.writerows(sample_csv_data)
 
         # Both should load correctly
-        json_result = open_fixture(temp_fixtures_dir, "data_json")
-        csv_result = open_fixture(temp_fixtures_dir, "data_csv")
+        json_result = open_fixture_sync(temp_fixtures_dir, "data_json")
+        csv_result = open_fixture_sync(temp_fixtures_dir, "data_csv")
 
         assert json_result == sample_data
         assert csv_result == sample_csv_data
+
+    def test_public_exports(self) -> None:
+        """Test public exports and type aliases exposed by advanced_alchemy.utils.fixtures."""
+        assert fixtures_module.__all__ == (
+            "FixtureCompression",
+            "FixtureFormat",
+            "iter_fixture_async",
+            "iter_fixture_sync",
+            "open_fixture",
+            "open_fixture_async",
+            "open_fixture_sync",
+        )
+        assert get_args(FixtureFormat) == ("json", "jsonl", "csv")
+        assert get_args(FixtureCompression) == ("gzip", "zip")
 
 
 class TestOpenFixtureJSONL:
