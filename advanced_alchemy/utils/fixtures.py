@@ -37,9 +37,9 @@ __all__ = (
 )
 
 FixtureFormat = Literal["json", "jsonl", "csv"]
-"""Fixture file format: ``"json"`` (array), ``"jsonl"`` (one JSON value per line), or ``"csv"`` (header row plus rows)."""
+"""Supported fixture file serialization format (``"json"``, ``"jsonl"``, or ``"csv"``)."""
 FixtureCompression = Literal["gzip", "zip"]
-"""Fixture compression: ``"gzip"`` (``.gz``) or ``"zip"`` (``.zip``); ``None`` means uncompressed."""
+"""Supported fixture archive compression format (``"gzip"``, ``"zip"``, or ``None``)."""
 
 _FORMAT_PRIORITY: "tuple[FixtureFormat, ...]" = ("json", "jsonl", "csv")
 _COMPRESSION_SUFFIXES: "dict[FixtureCompression, str]" = {"gzip": ".gz", "zip": ".zip"}
