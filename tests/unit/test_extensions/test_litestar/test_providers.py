@@ -52,6 +52,7 @@ from advanced_alchemy.service import (
     SQLAlchemySyncRepositoryService,
 )
 from advanced_alchemy.types.identity import BigIntIdentity
+from advanced_alchemy.utils.dependencies import resolve_filter_aliases
 from tests.helpers import anext_
 
 if sys.version_info >= (3, 11):
@@ -1306,6 +1307,22 @@ def test_dependency_defaults_prefix() -> None:
     defaults_custom = DependencyDefaults(prefix="user", search_filter_key="custom_search")
     assert defaults_custom.SEARCH_FILTER_DEPENDENCY_KEY == "user_custom_search"
 
+    class UsersDefaults(DependencyDefaults):
+        prefix = "users"
+
+    subclass_defaults = UsersDefaults()
+    assert subclass_defaults.prefix == "users"
+    assert subclass_defaults.FILTERS_DEPENDENCY_KEY == "users_filters"
+    assert subclass_defaults.CREATED_FILTER_DEPENDENCY_KEY == "users_created_filter"
+    assert subclass_defaults.ID_FILTER_DEPENDENCY_KEY == "users_id_filter"
+    assert subclass_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY == "users_limit_offset_filter"
+    assert subclass_defaults.UPDATED_FILTER_DEPENDENCY_KEY == "users_updated_filter"
+    assert subclass_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY == "users_order_by_filter"
+    assert subclass_defaults.SEARCH_FILTER_DEPENDENCY_KEY == "users_search_filter"
+
+    underscore_defaults = DependencyDefaults(prefix="_")
+    assert underscore_defaults.FILTERS_DEPENDENCY_KEY == "filters"
+
 
 def test_create_service_dependencies_scoped_filters() -> None:
     with patch("advanced_alchemy.extensions.litestar.providers.create_service_provider") as mock_create_provider:
@@ -1355,7 +1372,6 @@ def test_create_service_dependencies_merge_collision_prevented() -> None:
         )
 
         merged_deps = {**user_deps, **course_deps}
-        # Verify no keys were overwritten or lost during merge
         assert len(merged_deps) == len(user_deps) + len(course_deps)
         assert "user_service_filters" in merged_deps
         assert "course_service_filters" in merged_deps
@@ -1370,16 +1386,74 @@ def test_create_service_dependencies_merge_collision_prevented() -> None:
             course_service_filters: NamedDependency[SkipValidation[list[FilterTypes]]],
         ) -> dict[str, Any]:
             return {
-                "user_filters": [type(f).__name__ for f in user_service_filters],
-                "course_filters": [type(f).__name__ for f in course_service_filters],
+                "user_filters": {type(f).__name__: asdict(f) for f in user_service_filters},
+                "course_filters": {type(f).__name__: asdict(f) for f in course_service_filters},
             }
 
         app = Litestar(route_handlers=[handler], dependencies=merged_deps, debug=True)
         with TestClient(app) as client:
-            resp = client.get("/combined", params={"searchString": "test", "pageSize": 10})
+            resp = client.get(
+                "/combined",
+                params={
+                    "userServiceSearchString": "alice",
+                    "userServicePageSize": 5,
+                    "userServiceCurrentPage": 2,
+                    "courseServiceSearchString": "math",
+                    "courseServicePageSize": 12,
+                    "courseServiceCurrentPage": 3,
+                },
+            )
             assert resp.status_code == 200, resp.text
             data = resp.json()
-            assert "SearchFilter" in data["user_filters"]
-            assert "LimitOffset" in data["user_filters"]
-            assert "SearchFilter" in data["course_filters"]
-            assert "LimitOffset" in data["course_filters"]
+            assert data["user_filters"]["SearchFilter"]["value"] == "alice"
+            assert data["user_filters"]["LimitOffset"] == {"limit": 5, "offset": 5}
+            assert data["course_filters"]["SearchFilter"]["value"] == "math"
+            assert data["course_filters"]["LimitOffset"] == {"limit": 12, "offset": 24}
+
+
+def test_scoped_filters_prefix_subclass_and_pagination_isolation() -> None:
+    class UsersDefaults(DependencyDefaults):
+        prefix = "users"
+
+    class RolesDefaults(DependencyDefaults):
+        prefix = "roles"
+
+    user_filters_deps = create_filter_dependencies(
+        cast(FilterConfig, {"pagination_type": "limit_offset"}),
+        dep_defaults=UsersDefaults(),
+    )
+    role_filters_deps = create_filter_dependencies(
+        cast(FilterConfig, {"pagination_type": "limit_offset"}),
+        dep_defaults=RolesDefaults(),
+    )
+
+    @get("/scoped-pages")
+    def handler(
+        users_filters: NamedDependency[SkipValidation[list[FilterTypes]]],
+        roles_filters: NamedDependency[SkipValidation[list[FilterTypes]]],
+    ) -> dict[str, Any]:
+        return {
+            "users": {type(f).__name__: asdict(f) for f in users_filters},
+            "roles": {type(f).__name__: asdict(f) for f in roles_filters},
+        }
+
+    app = Litestar(route_handlers=[handler], dependencies={**user_filters_deps, **role_filters_deps}, debug=True)
+    with TestClient(app) as client:
+        resp = client.get("/scoped-pages", params={"usersCurrentPage": 2, "rolesCurrentPage": 5})
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["users"]["LimitOffset"] == {"limit": 20, "offset": 20}
+        assert data["roles"]["LimitOffset"] == {"limit": 20, "offset": 80}
+
+
+def test_scoped_filters_snake_case_query_aliases() -> None:
+    aliases = resolve_filter_aliases(
+        cast(FilterConfig, {"pagination_type": "limit_offset", "search": "name", "alias_generator": "snake_case"}),
+        prefix="users",
+    )
+    assert aliases == {
+        "current_page": "users_current_page",
+        "page_size": "users_page_size",
+        "search_string": "users_search_string",
+        "search_ignore_case": "users_search_ignore_case",
+    }

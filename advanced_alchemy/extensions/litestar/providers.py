@@ -8,6 +8,7 @@ You should not have modify this module very often and should only be invoked und
 
 import datetime
 import inspect
+import re
 from collections.abc import AsyncGenerator, Callable, Generator
 from functools import partial
 from typing import (
@@ -130,40 +131,23 @@ class DependencyDefaults:
     ) -> None:
         if prefix is not None:
             self.prefix = prefix
-        prefix_clean = f"{self.prefix.rstrip('_')}_" if self.prefix else ""
+        clean_prefix = self.prefix.rstrip("_") if self.prefix else ""
+        prefix_clean = f"{clean_prefix}_" if clean_prefix else ""
+        has_prefix = bool(prefix_clean)
         cls = type(self)
 
-        if filters_key is not None or prefix:
-            base = filters_key if filters_key is not None else cls.FILTERS_DEPENDENCY_KEY
-            object.__setattr__(self, "FILTERS_DEPENDENCY_KEY", f"{prefix_clean}{base}" if prefix else base)
-
-        if created_filter_key is not None or prefix:
-            base = created_filter_key if created_filter_key is not None else cls.CREATED_FILTER_DEPENDENCY_KEY
-            object.__setattr__(self, "CREATED_FILTER_DEPENDENCY_KEY", f"{prefix_clean}{base}" if prefix else base)
-
-        if id_filter_key is not None or prefix:
-            base = id_filter_key if id_filter_key is not None else cls.ID_FILTER_DEPENDENCY_KEY
-            object.__setattr__(self, "ID_FILTER_DEPENDENCY_KEY", f"{prefix_clean}{base}" if prefix else base)
-
-        if limit_offset_filter_key is not None or prefix:
-            base = (
-                limit_offset_filter_key
-                if limit_offset_filter_key is not None
-                else cls.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY
-            )
-            object.__setattr__(self, "LIMIT_OFFSET_FILTER_DEPENDENCY_KEY", f"{prefix_clean}{base}" if prefix else base)
-
-        if updated_filter_key is not None or prefix:
-            base = updated_filter_key if updated_filter_key is not None else cls.UPDATED_FILTER_DEPENDENCY_KEY
-            object.__setattr__(self, "UPDATED_FILTER_DEPENDENCY_KEY", f"{prefix_clean}{base}" if prefix else base)
-
-        if order_by_filter_key is not None or prefix:
-            base = order_by_filter_key if order_by_filter_key is not None else cls.ORDER_BY_FILTER_DEPENDENCY_KEY
-            object.__setattr__(self, "ORDER_BY_FILTER_DEPENDENCY_KEY", f"{prefix_clean}{base}" if prefix else base)
-
-        if search_filter_key is not None or prefix:
-            base = search_filter_key if search_filter_key is not None else cls.SEARCH_FILTER_DEPENDENCY_KEY
-            object.__setattr__(self, "SEARCH_FILTER_DEPENDENCY_KEY", f"{prefix_clean}{base}" if prefix else base)
+        for attr, explicit_key in (
+            ("FILTERS_DEPENDENCY_KEY", filters_key),
+            ("CREATED_FILTER_DEPENDENCY_KEY", created_filter_key),
+            ("ID_FILTER_DEPENDENCY_KEY", id_filter_key),
+            ("LIMIT_OFFSET_FILTER_DEPENDENCY_KEY", limit_offset_filter_key),
+            ("UPDATED_FILTER_DEPENDENCY_KEY", updated_filter_key),
+            ("ORDER_BY_FILTER_DEPENDENCY_KEY", order_by_filter_key),
+            ("SEARCH_FILTER_DEPENDENCY_KEY", search_filter_key),
+        ):
+            if explicit_key is not None or has_prefix:
+                base = explicit_key if explicit_key is not None else cast("str", getattr(cls, attr))
+                object.__setattr__(self, attr, f"{prefix_clean}{base}" if has_prefix else base)
 
         if default_pagination_size is not None:
             object.__setattr__(self, "DEFAULT_PAGINATION_SIZE", default_pagination_size)
@@ -395,7 +379,8 @@ def create_filter_dependencies(
     Returns:
         A dependency provider function for the combined filter function.
     """
-    aliases = resolve_filter_aliases(config)
+    prefix = getattr(dep_defaults, "prefix", None)
+    aliases = resolve_filter_aliases(config, prefix=prefix)
     cache_key = filter_cache_key(_CACHE_NAMESPACE, config, dep_defaults, aliases)
     deps = cast("Optional[dict[str, Provide]]", dep_cache.get_dependencies(cache_key))
     if deps is not None:
@@ -454,8 +439,11 @@ def _create_statement_filters(  # noqa: C901, PLR0915
     """
     filters: dict[str, Provide] = {}
     prefix = getattr(dep_defaults, "prefix", None)
-    prefix_str = f"{prefix.rstrip('_')}_" if prefix else ""
-    alias_for = (resolve_filter_aliases(config) if aliases is None else aliases).__getitem__
+    clean_prefix = prefix.rstrip("_") if isinstance(prefix, str) else ""
+    prefix_str = f"{clean_prefix}_" if clean_prefix else ""
+    alias_for = (
+        resolve_filter_aliases(config, prefix=clean_prefix or None) if aliases is None else aliases
+    ).__getitem__
 
     if config.get("id_filter", False):
 
@@ -726,6 +714,11 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                 choices_provider, sync_to_thread=False
             )
 
+    if clean_prefix and filters:
+        ident = re.sub(r"\W+", "_", clean_prefix).strip("_")
+        param_prefix = f"p_{ident}_" if ident and ident[0].isdigit() else (f"{ident}_" if ident else "scoped_")
+        filters = {dep_key: _scope_filter_provider(provide, param_prefix) for dep_key, provide in filters.items()}
+
     if filters and include_aggregate:
         aggregate = _create_filter_aggregate_function(config, dep_defaults, filters)
         dependency = Provide(aggregate, sync_to_thread=False)
@@ -735,6 +728,35 @@ def _create_statement_filters(  # noqa: C901, PLR0915
         filters[dep_defaults.FILTERS_DEPENDENCY_KEY] = dependency
 
     return filters
+
+
+def _scope_filter_provider(provide: Provide, param_prefix: str) -> Provide:
+    """Namespace a filter dependency callable's parameter names to avoid DI collisions."""
+    dependency = provide.dependency
+    signature = inspect.signature(dependency)
+    annotations = getattr(dependency, "__annotations__", {})
+    param_map: list[tuple[str, str]] = []
+    parameters: list[inspect.Parameter] = []
+    scoped_annotations: dict[str, Any] = {}
+    for parameter in signature.parameters.values():
+        scoped_name = f"{param_prefix}{parameter.name}"
+        param_map.append((parameter.name, scoped_name))
+        parameters.append(parameter.replace(name=scoped_name))
+        if parameter.name in annotations:
+            scoped_annotations[scoped_name] = annotations[parameter.name]
+    if "return" in annotations:
+        scoped_annotations["return"] = annotations["return"]
+
+    def scoped_dependency(**kwargs: Any) -> Any:
+        return dependency(**{orig: kwargs[scoped] for orig, scoped in param_map})
+
+    scoped_dependency.__name__ = f"{param_prefix}{dependency.__name__}"
+    scoped_signature = inspect.Signature(parameters, return_annotation=signature.return_annotation)
+    scoped_dependency.__signature__ = scoped_signature  # type: ignore[attr-defined]
+    scoped_dependency.__annotations__ = scoped_annotations
+    scoped_provide = Provide(scoped_dependency, sync_to_thread=False)
+    scoped_provide.parsed_fn_signature = ParsedSignature.from_signature(scoped_signature, scoped_annotations)
+    return scoped_provide
 
 
 def _create_filter_aggregate_function(
