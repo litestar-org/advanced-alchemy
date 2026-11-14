@@ -8,6 +8,7 @@ You should not have modify this module very often and should only be invoked und
 
 import datetime
 import inspect
+import re
 from collections.abc import AsyncGenerator, Callable, Generator
 from functools import partial
 from typing import (
@@ -113,6 +114,43 @@ class DependencyDefaults:
     """Key for the search filter dependency."""
     DEFAULT_PAGINATION_SIZE: int = 20
     """Default pagination size."""
+    prefix: Optional[str] = None
+    """Optional namespace prefix for dependency keys."""
+
+    def __init__(
+        self,
+        filters_key: Optional[str] = None,
+        created_filter_key: Optional[str] = None,
+        id_filter_key: Optional[str] = None,
+        limit_offset_filter_key: Optional[str] = None,
+        updated_filter_key: Optional[str] = None,
+        order_by_filter_key: Optional[str] = None,
+        search_filter_key: Optional[str] = None,
+        default_pagination_size: Optional[int] = None,
+        prefix: Optional[str] = None,
+    ) -> None:
+        if prefix is not None:
+            self.prefix = prefix
+        clean_prefix = self.prefix.rstrip("_") if self.prefix else ""
+        prefix_clean = f"{clean_prefix}_" if clean_prefix else ""
+        has_prefix = bool(prefix_clean)
+        cls = type(self)
+
+        for attr, explicit_key in (
+            ("FILTERS_DEPENDENCY_KEY", filters_key),
+            ("CREATED_FILTER_DEPENDENCY_KEY", created_filter_key),
+            ("ID_FILTER_DEPENDENCY_KEY", id_filter_key),
+            ("LIMIT_OFFSET_FILTER_DEPENDENCY_KEY", limit_offset_filter_key),
+            ("UPDATED_FILTER_DEPENDENCY_KEY", updated_filter_key),
+            ("ORDER_BY_FILTER_DEPENDENCY_KEY", order_by_filter_key),
+            ("SEARCH_FILTER_DEPENDENCY_KEY", search_filter_key),
+        ):
+            if explicit_key is not None or has_prefix:
+                base = explicit_key if explicit_key is not None else cast("str", getattr(cls, attr))
+                object.__setattr__(self, attr, f"{prefix_clean}{base}" if has_prefix else base)
+
+        if default_pagination_size is not None:
+            object.__setattr__(self, "DEFAULT_PAGINATION_SIZE", default_pagination_size)
 
 
 DEPENDENCY_DEFAULTS = DependencyDefaults()
@@ -260,7 +298,8 @@ def create_service_dependencies(
     filters: "Optional[FilterConfig]" = None,
     uniquify: Optional[bool] = None,
     count_with_window_function: Optional[bool] = None,
-    dep_defaults: "DependencyDefaults" = DEPENDENCY_DEFAULTS,
+    dep_defaults: "Optional[DependencyDefaults]" = None,
+    scoped_filters: bool = False,
 ) -> dict[str, Provide]:
     """Create a dependency provider for the combined filter function.
 
@@ -276,6 +315,7 @@ def create_service_dependencies(
         uniquify: Whether to uniquify the service.
         count_with_window_function: Whether to count with a window function.
         dep_defaults: The dependency defaults to use for the service.
+        scoped_filters: Whether to scope the filter dependency keys to the service key.
 
     Returns:
         A dictionary of dependency providers for the service.
@@ -305,8 +345,25 @@ def create_service_dependencies(
             count_with_window_function,
         )
         deps = {key: Provide(svc, sync_to_thread=False)}
+    if dep_defaults is None:
+        effective_dep_defaults = DependencyDefaults(prefix=key) if scoped_filters else DEPENDENCY_DEFAULTS
+    elif scoped_filters and not getattr(dep_defaults, "prefix", None):
+        cls = type(dep_defaults)
+        effective_dep_defaults = cls(
+            filters_key=dep_defaults.FILTERS_DEPENDENCY_KEY,
+            created_filter_key=dep_defaults.CREATED_FILTER_DEPENDENCY_KEY,
+            id_filter_key=dep_defaults.ID_FILTER_DEPENDENCY_KEY,
+            limit_offset_filter_key=dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY,
+            updated_filter_key=dep_defaults.UPDATED_FILTER_DEPENDENCY_KEY,
+            order_by_filter_key=dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY,
+            search_filter_key=dep_defaults.SEARCH_FILTER_DEPENDENCY_KEY,
+            default_pagination_size=dep_defaults.DEFAULT_PAGINATION_SIZE,
+            prefix=key,
+        )
+    else:
+        effective_dep_defaults = dep_defaults
     if filters:
-        deps.update(create_filter_dependencies(filters, dep_defaults))
+        deps.update(create_filter_dependencies(filters, effective_dep_defaults))
     return deps
 
 
@@ -322,7 +379,8 @@ def create_filter_dependencies(
     Returns:
         A dependency provider function for the combined filter function.
     """
-    aliases = resolve_filter_aliases(config)
+    prefix = getattr(dep_defaults, "prefix", None)
+    aliases = resolve_filter_aliases(config, prefix=prefix)
     cache_key = filter_cache_key(_CACHE_NAMESPACE, config, dep_defaults, aliases)
     deps = cast("Optional[dict[str, Provide]]", dep_cache.get_dependencies(cache_key))
     if deps is not None:
@@ -380,7 +438,12 @@ def _create_statement_filters(  # noqa: C901, PLR0915
         dict[str, Provide]: Dictionary of filter provider functions
     """
     filters: dict[str, Provide] = {}
-    alias_for = (resolve_filter_aliases(config) if aliases is None else aliases).__getitem__
+    prefix = getattr(dep_defaults, "prefix", None)
+    clean_prefix = prefix.rstrip("_") if isinstance(prefix, str) else ""
+    prefix_str = f"{clean_prefix}_" if clean_prefix else ""
+    alias_for = (
+        resolve_filter_aliases(config, prefix=clean_prefix or None) if aliases is None else aliases
+    ).__getitem__
 
     if config.get("id_filter", False):
 
@@ -513,7 +576,7 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                 return provide_not_in_filter  # pyright: ignore
 
             provider = create_not_in_filter_provider(field_def)  # pyright: ignore
-            filters[f"{field_def.name}_not_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
+            filters[f"{prefix_str}{field_def.name}_not_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
 
     # Add in filter providers
     if in_fields := config.get("in_fields"):
@@ -565,7 +628,7 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                 return provide_in_filter  # pyright: ignore
 
             provider = create_in_filter_provider(field_def)  # type: ignore
-            filters[f"{field_def.name}_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
+            filters[f"{prefix_str}{field_def.name}_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
 
     if boolean_fields := config.get("boolean_fields"):
         for boolean_field_def in normalize_field_name_types(boolean_fields):
@@ -602,7 +665,9 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                 return provide_boolean_filter
 
             boolean_provider = create_boolean_filter_provider(boolean_field_def)
-            filters[f"{boolean_field_def.name}_boolean_filter"] = Provide(boolean_provider, sync_to_thread=False)
+            filters[f"{prefix_str}{boolean_field_def.name}_boolean_filter"] = Provide(
+                boolean_provider, sync_to_thread=False
+            )
 
     if choice_fields := config.get("choice_fields"):
         for choice_field_def in normalize_choice_field_types(choice_fields):
@@ -643,7 +708,14 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                 return provide_choices_filter
 
             choices_provider = create_choices_filter_provider(choice_field_def)
-            filters[f"{choice_field_def.name}_choices_filter"] = Provide(choices_provider, sync_to_thread=False)
+            filters[f"{prefix_str}{choice_field_def.name}_choices_filter"] = Provide(
+                choices_provider, sync_to_thread=False
+            )
+
+    if clean_prefix and filters:
+        ident = re.sub(r"\W+", "_", clean_prefix).strip("_")
+        param_prefix = f"p_{ident}_" if ident and ident[0].isdigit() else (f"{ident}_" if ident else "scoped_")
+        filters = {dep_key: _scope_filter_provider(provide, param_prefix) for dep_key, provide in filters.items()}
 
     if filters and include_aggregate:
         aggregate = _create_filter_aggregate_function(config, dep_defaults, filters)
@@ -654,6 +726,35 @@ def _create_statement_filters(  # noqa: C901, PLR0915
         filters[dep_defaults.FILTERS_DEPENDENCY_KEY] = dependency
 
     return filters
+
+
+def _scope_filter_provider(provide: Provide, param_prefix: str) -> Provide:
+    """Namespace a filter dependency callable's parameter names to avoid DI collisions."""
+    dependency = provide.dependency
+    signature = inspect.signature(dependency)
+    annotations = getattr(dependency, "__annotations__", {})
+    param_map: list[tuple[str, str]] = []
+    parameters: list[inspect.Parameter] = []
+    scoped_annotations: dict[str, Any] = {}
+    for parameter in signature.parameters.values():
+        scoped_name = f"{param_prefix}{parameter.name}"
+        param_map.append((parameter.name, scoped_name))
+        parameters.append(parameter.replace(name=scoped_name))
+        if parameter.name in annotations:
+            scoped_annotations[scoped_name] = annotations[parameter.name]
+    if "return" in annotations:
+        scoped_annotations["return"] = annotations["return"]
+
+    def scoped_dependency(**kwargs: Any) -> Any:
+        return dependency(**{orig: kwargs[scoped] for orig, scoped in param_map})
+
+    scoped_dependency.__name__ = f"{param_prefix}{dependency.__name__}"
+    scoped_signature = inspect.Signature(parameters, return_annotation=signature.return_annotation)
+    scoped_dependency.__signature__ = scoped_signature  # type: ignore[attr-defined]
+    scoped_dependency.__annotations__ = scoped_annotations
+    scoped_provide = Provide(scoped_dependency, sync_to_thread=False)
+    scoped_provide.parsed_fn_signature = ParsedSignature.from_signature(scoped_signature, scoped_annotations)
+    return scoped_provide
 
 
 def _create_filter_aggregate_function(
