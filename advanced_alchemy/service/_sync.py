@@ -321,6 +321,44 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             ),
         )
 
+    def get_or_none(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        auto_expunge: Optional[bool] = None,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        bind_group: Optional[str] = None,
+    ) -> Optional[ModelT]:
+        """Retrieve an instance by ``item_id`` or return ``None`` if not found.
+
+        Args:
+            item_id: Identifier of instance to be retrieved.
+            statement: To facilitate customization of the underlying select query.
+            id_attribute: Unique identifier attribute name or column to match against.
+            auto_expunge: Remove object from session before returning.
+            load: Set relationships to be loaded.
+            execution_options: Set default execution options.
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
+            bind_group: The bind group to use for the operation.
+
+        Returns:
+            Instance with identifier ``item_id``, or ``None`` if no matching row exists.
+        """
+        return self.repository.get_or_none(
+            item_id=item_id,
+            auto_expunge=auto_expunge,
+            statement=statement,
+            id_attribute=id_attribute,
+            load=load,
+            execution_options=execution_options,
+            uniquify=self._get_uniquify(uniquify),
+            bind_group=bind_group,
+        )
+
     def get_one(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],

@@ -62,23 +62,24 @@ Let's connect a ``BlogPost`` table, Pydantic request/response schemas, and a ``B
             class BlogPostService(SQLAlchemyAsyncRepositoryService[BlogPost]):
                 class Repo(SQLAlchemyAsyncRepository[BlogPost]):
                     model_type = BlogPost
-
                 repository_type = Repo
 
 Creating, Updating, and Returning Schemas
 -----------------------------------------
 
-Pass dictionaries, Pydantic models, ``msgspec`` structs, dataclasses, ``attrs`` classes, or ``SQLModel`` objects straight into ``create`` and ``update``, then call ``to_schema`` to format the response:
+Pass dictionaries, Pydantic models, ``msgspec`` structs, dataclasses, ``attrs`` classes, or ``SQLModel`` objects straight into ``create`` and ``update``, then call ``to_schema`` to format the response (or ``get_or_none`` when missing IDs should return ``None``):
 
 .. code-block:: python
 
     async def create_post(service: BlogPostService, payload: BlogPostCreate) -> BlogPostResponse:
         post = await service.create(data=payload, auto_commit=True)
         return service.to_schema(post, schema_type=BlogPostResponse)
-
     async def update_post(service: BlogPostService, post_id: int, payload: BlogPostUpdate) -> BlogPostResponse:
         post = await service.update(data=payload, item_id=post_id, auto_commit=True)
         return service.to_schema(post, schema_type=BlogPostResponse)
+    async def find_post(service: BlogPostService, post_id: int) -> Optional[BlogPostResponse]:
+        post = await service.get_or_none(item_id=post_id)
+        return service.to_schema(post, schema_type=BlogPostResponse) if post is not None else None
 
 Adding Custom Business Rules
 ----------------------------
@@ -93,7 +94,6 @@ Need to auto-generate a unique URL slug whenever a tag is created or renamed? Ov
     class BlogTagService(SQLAlchemyAsyncRepositoryService[BlogTag]):
         class Repo(SQLAlchemyAsyncSlugRepository[BlogTag]):
             model_type = BlogTag
-
         repository_type = Repo
 
         async def to_model(self, data: ModelDictT[BlogTag], operation: Optional[str] = None) -> BlogTag:

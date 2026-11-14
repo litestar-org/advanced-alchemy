@@ -44,7 +44,7 @@ from advanced_alchemy.repository._util import (
     column_has_defaults,
     model_from_dict,
 )
-from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
+from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository
 from advanced_alchemy.utils.serialization import (
     is_msgspec_struct,
     is_pydantic_model,
@@ -635,6 +635,37 @@ async def test_sqlalchemy_repo_get_member(
     instance = await maybe_async(mock_repo.get("instance-id"))
 
     assert instance is mock_instance
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+
+
+async def test_sqlalchemy_repo_get_or_none_member(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    monkeypatch: MonkeyPatch,
+    mock_repo_execute: AnyMock,
+) -> None:
+    """Test expected method calls for member get_or_none operation (found)."""
+    mock_instance = MagicMock()
+    mock_repo_execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=mock_instance))
+
+    instance = await maybe_async(mock_repo.get_or_none("instance-id"))
+
+    assert instance is mock_instance
+    mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+    mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
+
+
+async def test_sqlalchemy_repo_get_or_none_not_found(
+    mock_repo: SQLAlchemyAsyncRepository[Any],
+    monkeypatch: MonkeyPatch,
+    mock_repo_execute: AnyMock,
+) -> None:
+    """Test expected method calls for member get_or_none operation (Not found)."""
+    mock_repo_execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+
+    instance = await maybe_async(mock_repo.get_or_none("instance-id"))
+
+    assert instance is None
     mock_repo.session.expunge.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
     mock_repo.session.commit.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
@@ -2789,3 +2820,33 @@ def test_mock_repository_search_honors_escape_wildcards(filter_type: type[Search
     expected_literal = [1] if filter_type is SearchFilter else [2]
     assert [item.id for item in literal] == expected_literal
     assert sorted(item.id for item in pattern) == ([1, 2] if filter_type is SearchFilter else [])
+
+
+@pytest.mark.parametrize(("lookup_id", "should_find"), [(1, True), (999, False)])
+def test_sync_mock_repository_get_or_none(lookup_id: int, should_find: bool) -> None:
+    """Test SQLAlchemySyncMockRepository get_or_none returns matching instance or None."""
+
+    class Repo(SQLAlchemySyncMockRepository[SearchableTitleModel]):
+        model_type = SearchableTitleModel
+
+    Repo.__database_clear__()
+    repo = Repo(session=MagicMock(spec=Session, bind=MagicMock()))
+    item = SearchableTitleModel(id=1, title="Test")
+    repo.add(item)
+
+    assert repo.get_or_none(lookup_id) is (item if should_find else None)
+
+
+@pytest.mark.parametrize(("lookup_id", "should_find"), [(1, True), (999, False)])
+async def test_async_mock_repository_get_or_none(lookup_id: int, should_find: bool) -> None:
+    """Test SQLAlchemyAsyncMockRepository get_or_none returns matching instance or None."""
+
+    class Repo(SQLAlchemyAsyncMockRepository[SearchableTitleModel]):
+        model_type = SearchableTitleModel
+
+    Repo.__database_clear__()
+    repo = Repo(session=AsyncMock(spec=AsyncSession, bind=MagicMock()))
+    item = SearchableTitleModel(id=1, title="Test")
+    await repo.add(item)
+
+    assert await repo.get_or_none(lookup_id) is (item if should_find else None)

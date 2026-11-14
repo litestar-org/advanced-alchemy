@@ -62,6 +62,18 @@ Suppose our blog has ``Post`` and ``Tag`` tables. Subclass ``SQLAlchemyAsyncRepo
         )
         return await repo.get(saved.id)
 
+When missing records are expected, use ``get_or_none`` to return ``None`` instead of raising
+``NotFoundError``:
+
+.. code-block:: python
+
+    from typing import Optional
+
+
+    async def find_post_or_none(db_session: AsyncSession, post_id: int) -> Optional[Post]:
+        repo = PostRepository(session=db_session)
+        return await repo.get_or_none(post_id)
+
 Saving, Updating, and Deleting in Bulk
 --------------------------------------
 

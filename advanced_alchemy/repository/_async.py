@@ -226,6 +226,19 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         bind_group: Optional[str] = None,
     ) -> ModelT: ...
 
+    async def get_or_none(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        auto_expunge: Optional[bool] = None,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        with_for_update: ForUpdateParameter = None,
+        bind_group: Optional[str] = None,
+    ) -> Optional[ModelT]: ...
+
     async def get_one(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
@@ -1833,6 +1846,53 @@ class SQLAlchemyAsyncRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT], Filte
             with_for_update=with_for_update,
             bind_group=bind_group,
         )
+
+    async def get_or_none(
+        self,
+        item_id: PrimaryKeyType,
+        *,
+        auto_expunge: Optional[bool] = None,
+        statement: Optional[Select[tuple[ModelT]]] = None,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+        with_for_update: ForUpdateParameter = None,
+        use_cache: bool = True,
+        bind_group: Optional[str] = None,
+    ) -> Optional[ModelT]:
+        """Get instance identified by ``item_id`` or return ``None`` if not found.
+
+        Args:
+            item_id: Primary key of the instance to retrieve.
+            auto_expunge: Remove object from session before returning.
+            statement: To facilitate customization of the underlying select query.
+            id_attribute: Unique identifier attribute name or column to match against.
+            load: Set relationships to be loaded.
+            execution_options: Set default execution options.
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
+            with_for_update: Optional locking mode to apply to the query.
+            use_cache: Whether to use the repository cache if enabled.
+            bind_group: The bind group to use for the operation.
+
+        Returns:
+            Model instance matching ``item_id``, or ``None`` if no matching row exists.
+        """
+        try:
+            return await self.get(
+                item_id,
+                auto_expunge=auto_expunge,
+                statement=statement,
+                id_attribute=id_attribute,
+                load=load,
+                execution_options=execution_options,
+                uniquify=uniquify,
+                with_for_update=with_for_update,
+                use_cache=use_cache,
+                bind_group=bind_group,
+            )
+        except NotFoundError:
+            return None
 
     async def get_one(
         self,
