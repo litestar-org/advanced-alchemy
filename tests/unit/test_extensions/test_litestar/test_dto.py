@@ -13,7 +13,7 @@ from litestar.dto.field import DTO_FIELD_META_KEY
 from litestar.enums import MediaType
 from litestar.plugins.pydantic import PydanticInitPlugin
 from litestar.serialization import encode_json
-from litestar.testing import RequestFactory
+from litestar.testing import RequestFactory, create_test_client
 from litestar.typing import FieldDefinition
 from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, declared_attr, mapped_column, relationship
@@ -850,5 +850,159 @@ dto_type = SQLAlchemyDTO[Annotated[TestModel, SQLAlchemyDTOConfig()]]
         b'{"id": 2, "children": [{"id": 1, "test_model_id": 2}]}',
     )
     assert isinstance(model, module.TestModel)
-    # WriteOnlyMapped relationships can only be written to, not read from
-    # So we can only verify the model was created successfully
+
+
+def test_dto_exclude_and_include_skip_untyped_descriptors(
+    create_module: Callable[[str], ModuleType],
+) -> None:
+    """Verify excluded or unincluded untyped descriptors do not break handler DTO serialization (#236)."""
+    module = create_module(
+        """
+from __future__ import annotations
+
+from typing import Optional
+from typing_extensions import Annotated
+import sqlalchemy
+from litestar import get
+from sqlalchemy import ForeignKey
+from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
+
+
+class Base(DeclarativeBase):
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+
+class RelatedItem(Base):
+    __tablename__ = "related_item_236"
+    title: Mapped[str] = mapped_column(sqlalchemy.String)
+
+
+class ItemWithUntypedDescriptors(Base):
+    __tablename__ = "item_untyped_236"
+    name: Mapped[str] = mapped_column(sqlalchemy.String)
+    related_id: Mapped[int] = mapped_column(ForeignKey("related_item_236.id"))
+    related: Mapped[RelatedItem] = relationship(RelatedItem)
+    untyped_proxy = association_proxy("related", "title")
+    untyped_hybrid = hybrid_property(lambda self: self.name)
+
+    @property
+    def untyped_prop(self):
+        return self.name
+
+
+exclude_dto = SQLAlchemyDTO[
+    Annotated[
+        ItemWithUntypedDescriptors,
+        SQLAlchemyDTOConfig(exclude={"untyped_hybrid", "untyped_proxy", "untyped_prop"}),
+    ]
+]
+include_dto = SQLAlchemyDTO[
+    Annotated[
+        ItemWithUntypedDescriptors,
+        SQLAlchemyDTOConfig(include={"id", "name", "related.title"}),
+    ]
+]
+
+
+@get("/excluded", return_dto=exclude_dto, sync_to_thread=False)
+def get_excluded() -> ItemWithUntypedDescriptors:
+    return ItemWithUntypedDescriptors(
+        id=1,
+        name="widget",
+        related_id=10,
+        related=RelatedItem(id=10, title="parent"),
+    )
+
+
+@get("/included", return_dto=include_dto, sync_to_thread=False)
+def get_included() -> ItemWithUntypedDescriptors:
+    return ItemWithUntypedDescriptors(
+        id=1,
+        name="widget",
+        related_id=10,
+        related=RelatedItem(id=10, title="parent"),
+    )
+""",
+    )
+
+    with create_test_client(route_handlers=[module.get_excluded, module.get_included]) as client:
+        excluded_response = client.get("/excluded")
+        assert excluded_response.status_code == 200
+        assert excluded_response.json() == {
+            "id": 1,
+            "name": "widget",
+            "related_id": 10,
+            "related": {"id": 10, "title": "parent"},
+        }
+
+        included_response = client.get("/included")
+        assert included_response.status_code == 200
+        assert included_response.json() == {
+            "id": 1,
+            "name": "widget",
+            "related": {"title": "parent"},
+        }
+
+
+@pytest.mark.parametrize(
+    ("config_expr", "expected"),
+    [
+        (
+            'SQLAlchemyDTOConfig(exclude={"id", "parent_id"})',
+            {"name": "root", "children": [{"id": 2, "parent_id": 1, "name": "child"}]},
+        ),
+        (
+            'SQLAlchemyDTOConfig(include={"id", "children.0.name"})',
+            {"id": 1, "children": [{"name": "child"}]},
+        ),
+    ],
+)
+def test_dto_root_filters_do_not_apply_to_nested_same_type(
+    create_module: Callable[[str], ModuleType],
+    config_expr: str,
+    expected: dict[str, Any],
+) -> None:
+    """Verify root exclude and include settings do not strip fields from nested occurrences of the same model."""
+    module = create_module(
+        f"""
+from __future__ import annotations
+
+from typing import Optional
+from typing_extensions import Annotated
+import sqlalchemy
+from litestar import get
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
+
+
+class Base(DeclarativeBase):
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+
+class Node(Base):
+    __tablename__ = "self_ref_node"
+    name: Mapped[str] = mapped_column(sqlalchemy.String)
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("self_ref_node.id"), default=None)
+    children: Mapped[list[Node]] = relationship("Node")
+
+
+dto_type = SQLAlchemyDTO[Annotated[Node, {config_expr}]]
+
+
+@get("/tree", return_dto=dto_type, sync_to_thread=False)
+def get_tree() -> Node:
+    child = Node(id=2, name="child", parent_id=1, children=[])
+    return Node(id=1, name="root", parent_id=None, children=[child])
+""",
+    )
+
+    with create_test_client(route_handlers=[module.get_tree]) as client:
+        response = client.get("/tree")
+        assert response.status_code == 200
+        assert response.json() == expected
