@@ -1,4 +1,3 @@
-# ruff: noqa: C901
 import logging
 from collections.abc import Collection, Generator
 from collections.abc import Set as AbstractSet
@@ -353,8 +352,9 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         """Generate DTO field definitions from a SQLAlchemy model.
 
         Duplicates of hybrid property descriptors across bound method names are deduplicated,
-        and descriptors excluded or omitted by ``SQLAlchemyDTOConfig`` on the root model are
-        skipped prior to type inspection.
+        and unreflectable descriptors excluded or omitted by ``SQLAlchemyDTOConfig`` on the
+        root model are skipped prior to transfer-type resolution while preserving path-scoped
+        nested filtering.
 
         Args:
             model_type: The SQLAlchemy model type to generate field definitions from.
@@ -382,22 +382,17 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         )
 
         seen_hybrid_descriptors: set[hybrid_property] = set()  # pyright: ignore[reportUnknownVariableType,reportMissingTypeArgument]
-        skipped_descriptors: set[str] = set()
-        processed_fields: set[str] = set()
-        for composite_property in mapper.composites:  # pragma: no cover
-            for attr in composite_property.attrs:
-                if isinstance(attr, (MappedColumn, Column)):
-                    skipped_descriptors.add(attr.name)
-                elif isinstance(attr, str):
-                    skipped_descriptors.add(attr)
-
-        processed_fields.update(skipped_descriptors)
-
+        skipped_descriptors = cls._collect_composite_keys(mapper)
+        processed_fields: set[str] = set(skipped_descriptors)
         yielded_sqla_keys: set[str] = set()
 
         for key, orm_descriptor in mapper.all_orm_descriptors.items():
             processed_fields.add(key)
-            if key in skipped_descriptors or key in excluded_keys or (included_keys and key not in included_keys):
+            if key in skipped_descriptors:
+                continue
+
+            is_filtered_out = cls._is_filtered_out(key, excluded_keys, included_keys)
+            if is_filtered_out and isinstance(orm_descriptor, AssociationProxy) and key not in model_type_hints:
                 continue
 
             if is_hybrid_property := isinstance(orm_descriptor, hybrid_property):
@@ -406,26 +401,13 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
 
                 seen_hybrid_descriptors.add(orm_descriptor)  # pyright: ignore[reportUnknownMemberType]
 
-            should_skip_descriptor = False
-            dto_field: Optional[DTOField] = None
-            if hasattr(orm_descriptor, "property"):  # pyright: ignore[reportUnknownArgumentType]
-                prop = getattr(orm_descriptor, "property", None)  # pyright: ignore[reportUnknownArgumentType]
-                if prop and hasattr(prop, "info"):
-                    dto_field = prop.info.get(DTO_FIELD_META_KEY)
-                elif hasattr(orm_descriptor, "info"):  # pyright: ignore[reportUnknownArgumentType]
-                    dto_field = orm_descriptor.info.get(DTO_FIELD_META_KEY)  # pyright: ignore[reportUnknownArgumentType,reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownVariableType]
-
-            is_field_marked_not_private = dto_field and dto_field.mark is not Mark.PRIVATE  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
-            should_exclude_anything_implicit = not include_implicit_fields and key not in model_type_hints
-            should_exclude_non_hybrid_only = (
-                not is_hybrid_property and include_implicit_fields == "hybrid-only" and key not in model_type_hints
-            )
-
-            should_skip_descriptor = not is_field_marked_not_private and (
-                should_exclude_anything_implicit or should_exclude_non_hybrid_only
-            )
-
-            if should_skip_descriptor:
+            if cls._should_skip_implicit_descriptor(
+                key,
+                orm_descriptor,
+                is_hybrid_property=is_hybrid_property,
+                include_implicit_fields=include_implicit_fields,
+                model_type_hints=model_type_hints,
+            ):
                 continue
 
             definitions = cls.handle_orm_descriptor(
@@ -436,16 +418,18 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
                 model_name,
             )
             for definition in definitions:
+                if is_filtered_out and definition.annotation is Empty:
+                    continue
                 yielded_sqla_keys.add(definition.name)
                 yield definition
 
-        property_fields = cls._get_property_fields(model_type, processed_fields | excluded_keys, namespace=namespace)
+        property_fields = cls._get_property_fields(model_type, processed_fields, namespace=namespace)
         for key, property_field_definition in property_fields.items():
+            if key.startswith("_") or key in yielded_sqla_keys:
+                continue
             if (
-                key.startswith("_")
-                or key in yielded_sqla_keys
-                or key in excluded_keys
-                or (included_keys and key not in included_keys)
+                cls._is_filtered_out(key, excluded_keys, included_keys)
+                and property_field_definition.annotation is Empty
             ):
                 continue
 
@@ -463,6 +447,48 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
     @classmethod
     def detect_nested_field(cls, field_definition: FieldDefinition) -> bool:
         return field_definition.is_subclass_of(DeclarativeBase)
+
+    @staticmethod
+    def _is_filtered_out(key: str, excluded_keys: set[str], included_keys: set[str]) -> bool:
+        """Return whether ``key`` is excluded or omitted from root ``include`` keys."""
+        return key in excluded_keys or bool(included_keys and key not in included_keys)
+
+    @staticmethod
+    def _collect_composite_keys(mapper: Any) -> set[str]:
+        """Collect underlying column keys owned by composite properties on ``mapper``."""
+        skipped: set[str] = set()
+        for composite_property in mapper.composites:  # pragma: no cover
+            for attr in composite_property.attrs:
+                if isinstance(attr, (MappedColumn, Column)):
+                    skipped.add(attr.name)
+                elif isinstance(attr, str):
+                    skipped.add(attr)
+        return skipped
+
+    @staticmethod
+    def _should_skip_implicit_descriptor(
+        key: str,
+        orm_descriptor: Any,
+        *,
+        is_hybrid_property: bool,
+        include_implicit_fields: Union[bool, Literal["hybrid-only"]],
+        model_type_hints: dict[str, Any],
+    ) -> bool:
+        """Return whether an unannotated ORM descriptor is skipped under ``include_implicit_fields``."""
+        dto_field: Optional[DTOField] = None
+        if hasattr(orm_descriptor, "property"):
+            prop = getattr(orm_descriptor, "property", None)
+            if prop and hasattr(prop, "info"):
+                dto_field = prop.info.get(DTO_FIELD_META_KEY)
+            elif hasattr(orm_descriptor, "info"):
+                dto_field = orm_descriptor.info.get(DTO_FIELD_META_KEY)
+
+        is_field_marked_not_private = bool(dto_field and dto_field.mark is not Mark.PRIVATE)
+        should_exclude_anything_implicit = not include_implicit_fields and key not in model_type_hints
+        should_exclude_non_hybrid_only = (
+            not is_hybrid_property and include_implicit_fields == "hybrid-only" and key not in model_type_hints
+        )
+        return not is_field_marked_not_private and (should_exclude_anything_implicit or should_exclude_non_hybrid_only)
 
 
 def _detect_defaults(elem: ElementType) -> tuple[Any, Any]:

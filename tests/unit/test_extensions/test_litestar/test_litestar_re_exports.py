@@ -63,13 +63,13 @@ def test_litestar_submodule_lazy_re_exports(submodule_name: str) -> None:
     submod_dir = set(dir(litestar_submod))
     assert set(litestar_submod.__all__).issubset(submod_dir)
 
-    for symbol in litestar_submod.__all__:
-        resolved = getattr(litestar_submod, symbol)
-        assert resolved is getattr(core_mod, symbol)
-        assert getattr(litestar_submod, symbol) is resolved
+    resolved_map = {symbol: getattr(litestar_submod, symbol) for symbol in litestar_submod.__all__}
+    expected_map = {symbol: getattr(core_mod, symbol) for symbol in litestar_submod.__all__}
+    assert all(resolved_map[symbol] is expected_map[symbol] for symbol in litestar_submod.__all__)
+    assert all(getattr(litestar_submod, symbol) is resolved_map[symbol] for symbol in litestar_submod.__all__)
 
     with pytest.raises(AttributeError, match="has no attribute"):
-        _ = litestar_submod.__non_existent_attribute__
+        _ = getattr(litestar_submod, "__non_existent_attribute__")
 
 
 def test_litestar_direct_from_imports() -> None:
@@ -113,8 +113,7 @@ def test_litestar_package_dir_and_getattr() -> None:
     """Verify package-level __dir__ and __getattr__ on advanced_alchemy.extensions.litestar."""
     ext_dir = set(dir(litestar_ext))
     assert set(litestar_ext.__all__).issubset(ext_dir)
-    for submod in RE_EXPORTED_SUBMODULES:
-        assert submod in ext_dir
+    assert set(RE_EXPORTED_SUBMODULES).issubset(ext_dir)
 
     with pytest.raises(AttributeError, match="has no attribute"):
-        _ = litestar_ext.__non_existent_attribute__
+        _ = getattr(litestar_ext, "__non_existent_attribute__")

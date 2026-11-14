@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import importlib
-from typing import TYPE_CHECKING, Any
-
-from typing_extensions import TypeAlias
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from advanced_alchemy.base import (
@@ -24,6 +22,7 @@ if TYPE_CHECKING:
         NanoIDBase,
         NanoIDBaseT,
         SQLQuery,
+        TableArgsType,  # pyright: ignore[reportPrivateUsage]
         UUIDAuditBase,
         UUIDBase,
         UUIDBaseT,
@@ -41,8 +40,6 @@ if TYPE_CHECKING:
         orm_registry,
         table_name_regexp,
     )
-
-    TableArgsType: TypeAlias = Any
 
 __all__ = (
     "AdvancedDeclarativeBase",
@@ -80,15 +77,17 @@ __all__ = (
 )
 
 
-def __getattr__(attr_name: str) -> object:
-    """Lazily resolve exported attributes from ``advanced_alchemy.base``."""
-    if attr_name in __all__:
-        module = importlib.import_module("advanced_alchemy.base")
-        value = getattr(module, attr_name)
-        globals()[attr_name] = value
-        return value
-    msg = f"module {__name__!r} has no attribute {attr_name!r}"
-    raise AttributeError(msg)
+if not TYPE_CHECKING:
+
+    def __getattr__(attr_name: str) -> object:
+        """Lazily resolve exported attributes from ``advanced_alchemy.base``."""
+        if attr_name in __all__:
+            module = importlib.import_module("advanced_alchemy.base")
+            value = getattr(module, attr_name)
+            globals()[attr_name] = value
+            return value
+        msg = f"module {__name__!r} has no attribute {attr_name!r}"
+        raise AttributeError(msg)
 
 
 def __dir__() -> list[str]:

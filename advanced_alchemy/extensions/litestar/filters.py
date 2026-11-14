@@ -67,15 +67,17 @@ __all__ = (
 )
 
 
-def __getattr__(attr_name: str) -> object:
-    """Lazily resolve exported attributes from ``advanced_alchemy.filters``."""
-    if attr_name in __all__:
-        module = importlib.import_module("advanced_alchemy.filters")
-        value = getattr(module, attr_name)
-        globals()[attr_name] = value
-        return value
-    msg = f"module {__name__!r} has no attribute {attr_name!r}"
-    raise AttributeError(msg)
+if not TYPE_CHECKING:
+
+    def __getattr__(attr_name: str) -> object:
+        """Lazily resolve exported attributes from ``advanced_alchemy.filters``."""
+        if attr_name in __all__:
+            module = importlib.import_module("advanced_alchemy.filters")
+            value = getattr(module, attr_name)
+            globals()[attr_name] = value
+            return value
+        msg = f"module {__name__!r} has no attribute {attr_name!r}"
+        raise AttributeError(msg)
 
 
 def __dir__() -> list[str]:

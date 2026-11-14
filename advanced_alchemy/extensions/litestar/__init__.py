@@ -108,14 +108,16 @@ __all__ = (
 )
 
 
-def __getattr__(attr_name: str) -> object:
-    """Lazily import Litestar extension submodules."""
-    if attr_name in _LAZY_SUBMODULES:
-        module = importlib.import_module(f"advanced_alchemy.extensions.litestar.{attr_name}")
-        globals()[attr_name] = module
-        return module
-    msg = f"module {__name__!r} has no attribute {attr_name!r}"
-    raise AttributeError(msg)
+if not TYPE_CHECKING:
+
+    def __getattr__(attr_name: str) -> object:
+        """Lazily import Litestar extension submodules."""
+        if attr_name in _LAZY_SUBMODULES:
+            module = importlib.import_module(f"advanced_alchemy.extensions.litestar.{attr_name}")
+            globals()[attr_name] = module
+            return module
+        msg = f"module {__name__!r} has no attribute {attr_name!r}"
+        raise AttributeError(msg)
 
 
 def __dir__() -> list[str]:
