@@ -8,6 +8,7 @@ input normalization before repository delegation.
 from __future__ import annotations
 
 import datetime
+import warnings
 from typing import Any, Generic, Optional, TypeVar, Union, cast
 from unittest.mock import AsyncMock, MagicMock
 
@@ -679,7 +680,7 @@ def test_service_generic_subclass_auto_binds_repository_type() -> None:
 
 
 def test_inherited_repository_type_survives_extra_generic_parameters() -> None:
-    """Service subclasses with custom generic parameters preserve inherited repository_type."""
+    """Service subclasses with custom or reordered generic parameters resolve mapped models and preserve repository_type."""
     model_var = TypeVar("model_var")
     schema_var = TypeVar("schema_var")
 
@@ -692,7 +693,19 @@ def test_inherited_repository_type_survives_extra_generic_parameters() -> None:
     class LeafService(ParentService):
         pass
 
+    class ReorderedBaseService(SQLAlchemySyncRepositoryService[model_var], Generic[schema_var, model_var]):  # type: ignore[type-var]
+        pass
+
+    class ReorderedLeafService(ReorderedBaseService[dict[str, Any], MockModel]):
+        pass
+
+    reordered_repo_type = getattr(ReorderedLeafService, "repository_type", None)
     assert LeafService.repository_type is MockSyncRepository
+    assert ReorderedLeafService._model_type is MockModel
+    assert reordered_repo_type is not None
+    assert issubclass(reordered_repo_type, SQLAlchemySyncRepository)
+    assert getattr(reordered_repo_type, "model_type", None) is MockModel
+    assert reordered_repo_type.__module__ == __name__
 
 
 class DataclassMappedBase(MappedAsDataclass, DeclarativeBase):
@@ -708,6 +721,7 @@ class DataclassMappedArticle(DataclassMappedBase):
     title: Mapped[str]
     status: Mapped[str] = mapped_column(default="draft")
     subtitle: Mapped[Optional[str]] = mapped_column(default="default-sub", nullable=True)
+    server_tag: Mapped[Optional[str]] = mapped_column(default=None, server_default="srv-tag", nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(default=None, nullable=True)
 
 
@@ -716,7 +730,7 @@ class DataclassMappedArticleService(SQLAlchemySyncRepositoryService[DataclassMap
 
 
 def test_dataclass_mapped_model_partial_update_and_explicit_none() -> None:
-    """Partial updates on MappedAsDataclass omit required/default fields and apply explicit None semantics."""
+    """Service item_id updates write explicit None while repository instance updates preserve defaults silently."""
     engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
     DataclassMappedBase.metadata.create_all(engine)
     try:
@@ -726,28 +740,38 @@ def test_dataclass_mapped_model_partial_update_and_explicit_none() -> None:
                 title="Initial",
                 status="published",
                 subtitle="custom-sub",
+                server_tag="keep-srv",
                 notes="keep-me",
             )
             session.add(article)
             session.commit()
             article_id = article.id
 
-            updated = service.update({"title": "Renamed"}, item_id=article_id, auto_commit=True)
-            assert updated.title == "Renamed"
-            assert updated.status == "published"
-            assert updated.subtitle == "custom-sub"
-            assert updated.notes == "keep-me"
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                updated = service.update({"title": "Renamed"}, item_id=article_id, auto_commit=True)
+                assert updated.title == "Renamed"
+                assert updated.status == "published"
+                assert updated.subtitle == "custom-sub"
+                assert updated.server_tag == "keep-srv"
+                assert updated.notes == "keep-me"
 
-            with pytest.warns(DeprecationWarning, match=r"DataclassMappedArticle\.subtitle"):
+                repo_input = DataclassMappedArticle(title="Repo Renamed", status="published")
+                repo_input.id = article_id
+                repo_updated = service.repository.update(repo_input, auto_commit=True)
+                assert repo_updated.title == "Repo Renamed"
+                assert repo_updated.server_tag == "keep-srv"
+
                 cleared = service.update({"subtitle": None, "notes": None}, item_id=article_id, auto_commit=True)
-            assert cleared.title == "Renamed"
-            assert cleared.status == "published"
-            assert cleared.subtitle == "custom-sub"
-            assert cleared.notes is None
+                assert cleared.title == "Repo Renamed"
+                assert cleared.status == "published"
+                assert cleared.subtitle is None
+                assert cleared.notes is None
+                assert not [w for w in caught if issubclass(w.category, DeprecationWarning)]
 
-            with pytest.warns(DeprecationWarning, match=r"DataclassMappedArticle\.status"):
-                kept = service.update({"status": None}, item_id=article_id, auto_commit=True)
-            assert kept.status == "published"
+            with pytest.raises(IntegrityError):
+                service.update({"status": None}, item_id=article_id, auto_commit=True)
+            session.rollback()
 
             with pytest.raises(IntegrityError):
                 service.update({"title": None}, item_id=article_id, auto_commit=True)

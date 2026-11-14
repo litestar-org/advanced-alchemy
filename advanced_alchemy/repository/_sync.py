@@ -40,9 +40,10 @@ from sqlalchemy import (
 )
 from sqlalchemy import func as sql_func
 from sqlalchemy.exc import MissingGreenlet, NoInspectionAvailable
-from sqlalchemy.orm import InstrumentedAttribute, Load, Session
+from sqlalchemy.orm import InstrumentedAttribute, Session
 from sqlalchemy.orm.scoping import scoped_session
 from sqlalchemy.sql import ColumnElement
+from sqlalchemy.sql.base import ExecutableOption
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from sqlalchemy.sql.selectable import ForUpdateArg, ForUpdateParameter
 
@@ -66,12 +67,13 @@ from advanced_alchemy.repository._util import (
     FilterableRepositoryProtocol,
     LoadSpec,
     _build_cache_key,  # pyright: ignore
+    allows_explicit_none_update,
+    column_has_defaults,
     compare_values,
     get_abstract_loader_options,
     get_instrumented_attr,
     get_primary_key_info,
     pk_values_present,
-    skip_explicit_none_update,
     snapshot_and_detach_relationships,
     was_attribute_set,
 )
@@ -350,7 +352,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: Optional[List[Load]],
+        loader_options: Optional[Sequence[ExecutableOption]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]: ...
 
@@ -739,7 +741,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         self,
         loader_options: Optional[LoadSpec],
         uniquify: Optional[bool] = None,
-    ) -> Union[tuple[List[Load], bool], tuple[None, bool]]:
+    ) -> Union[tuple[List[ExecutableOption], bool], tuple[None, bool]]:
         resolved_uniquify = self._get_uniquify(uniquify)
         if loader_options is None:
             return self._default_loader_options, self._loader_options_have_wildcards or resolved_uniquify
@@ -1285,7 +1287,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
     def _get_base_stmt(
         *,
         statement: StatementTypeT,
-        loader_options: Optional[List[Load]],
+        loader_options: Optional[Sequence[ExecutableOption]],
         execution_options: Optional[dict[str, Any]],
     ) -> StatementTypeT:
         """Get base statement with options applied.
@@ -1337,7 +1339,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         id_chunk: List[Any],
         supports_returning: bool,
         statement_type: Literal["delete", "select"] = "delete",
-        loader_options: Optional[List[Load]],
+        loader_options: Optional[Sequence[ExecutableOption]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Select[tuple[ModelT]], Delete, ReturningDelete[tuple[ModelT]]]:
         statement = self._get_base_stmt(
@@ -2226,6 +2228,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         lookup_attr_names: set[str],
         relationship_values: dict[str, Any],
     ) -> None:
+        explicit_none = allows_explicit_none_update(mapper)
         for column in mapper.mapper.columns:
             field_name = mapper.mapper.get_property_by_column(column).key
             if field_name in lookup_attr_names:
@@ -2233,7 +2236,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
             new_field_value = getattr(data, field_name, MISSING)
             if new_field_value is MISSING or not was_attribute_set(data, mapper, field_name):
                 continue
-            if new_field_value is None and skip_explicit_none_update(column, type(data).__name__, field_name):
+            if new_field_value is None and not explicit_none and column_has_defaults(column):
                 continue
             existing_field_value = getattr(existing_instance, field_name, MISSING)
             if existing_field_value is not MISSING and not compare_values(existing_field_value, new_field_value):
@@ -2388,7 +2391,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: Union[List[Load], None],
+        loader_options: Union[Sequence[ExecutableOption], None],
         execution_options: Union[dict[str, Any], None],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]:
         statement = self._get_base_stmt(
@@ -2706,7 +2709,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
     @staticmethod
     def _get_count_stmt(
         statement: Select[tuple[ModelT]],
-        loader_options: Optional[List[Load]],  # noqa: ARG004
+        loader_options: Optional[Sequence[ExecutableOption]],  # noqa: ARG004
         execution_options: Optional[dict[str, Any]],  # noqa: ARG004
     ) -> Select[tuple[int]]:
         return (
@@ -3098,7 +3101,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         conflict_columns: List[str],
         update_columns: List[str],
         execution_options: Optional[dict[str, Any]],
-        loader_options: Optional[List[Load]],
+        loader_options: Optional[Sequence[ExecutableOption]],
     ) -> Optional[List[ModelT]]:
         """Execute one chunk of a native upsert.
 

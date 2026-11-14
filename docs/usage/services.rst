@@ -88,7 +88,11 @@ Need to auto-generate a unique URL slug whenever a tag is created or renamed? Ov
     from advanced_alchemy.repository import SQLAlchemyAsyncSlugRepository
     from advanced_alchemy.service import ModelDictT, is_dict_with_field, is_dict_without_field, schema_dump
 
-    class BlogTagService(SQLAlchemyAsyncRepositoryService[BlogTag, SQLAlchemyAsyncSlugRepository[BlogTag]]):
+    class BlogTagService(SQLAlchemyAsyncRepositoryService[BlogTag]):
+        class Repo(SQLAlchemyAsyncSlugRepository[BlogTag]):
+            model_type = BlogTag
+
+        repository_type = Repo
         async def to_model(self, data: ModelDictT[BlogTag], operation: Optional[str] = None) -> BlogTag:
             dumped = schema_dump(data)
             if is_dict_without_field(dumped, "slug") and is_dict_with_field(dumped, "name"):

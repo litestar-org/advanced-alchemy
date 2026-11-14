@@ -14,7 +14,11 @@ from uuid import UUID
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError
 from advanced_alchemy.filters import LimitOffset, StatementFilter
-from advanced_alchemy.repository._util import ModelRepositoryMixin, resolve_generic_type_args
+from advanced_alchemy.repository._util import (
+    ModelRepositoryMixin,
+    is_mapped_model_class,
+    resolve_generic_type_args,
+)
 from advanced_alchemy.repository.typing import PrimaryKeyType
 from advanced_alchemy.service.pagination import OffsetPagination
 from advanced_alchemy.typing import (
@@ -58,9 +62,7 @@ def configure_service_subclass(cls: type[Any], service_base: type[Any], default_
     """Resolve and attach generic model and repository types on a service subclass."""
     args = resolve_generic_type_args(cls, service_base)
     model_cls: Optional[type[Any]] = (
-        args[0]
-        if len(args) >= 1 and args[0] is not Any and isinstance(args[0], type)
-        else getattr(cls, "_model_type", None)
+        args[0] if len(args) >= 1 and is_mapped_model_class(args[0]) else getattr(cls, "_model_type", None)
     )
     raw_repo = args[1] if len(args) > 1 else None
     origin_repo = get_origin(raw_repo)
@@ -73,9 +75,7 @@ def configure_service_subclass(cls: type[Any], service_base: type[Any], default_
     if model_cls is None and repo_cls is not None:
         repo_args = get_args(raw_repo)
         model_cls = (
-            repo_args[0]
-            if repo_args and repo_args[0] is not Any and isinstance(repo_args[0], type)
-            else getattr(repo_cls, "model_type", None)
+            repo_args[0] if repo_args and is_mapped_model_class(repo_args[0]) else getattr(repo_cls, "model_type", None)
         )
     if model_cls is not None and "_model_type" not in cls.__dict__:
         cls._model_type = model_cls
@@ -88,13 +88,21 @@ def configure_service_subclass(cls: type[Any], service_base: type[Any], default_
             cls.repository_type = type(
                 f"{model_cls.__name__}{repo_cls.__name__}",
                 (repo_cls,),
-                {"model_type": model_cls},
+                {
+                    "model_type": model_cls,
+                    "__module__": cls.__module__,
+                    "__qualname__": f"{cls.__qualname__}.{model_cls.__name__}{repo_cls.__name__}",
+                },
             )
     elif model_cls is not None:
         cls.repository_type = type(
             f"{model_cls.__name__}Repository",
             (default_repo_base,),
-            {"model_type": model_cls},
+            {
+                "model_type": model_cls,
+                "__module__": cls.__module__,
+                "__qualname__": f"{cls.__qualname__}.{model_cls.__name__}Repository",
+            },
         )
 
 

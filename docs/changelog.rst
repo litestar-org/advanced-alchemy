@@ -5,18 +5,6 @@
 
 .. changelog:: 1.13.0
 
-    .. change:: deprecate ignoring explicit None for columns with defaults on update
-        :type: misc
-        :pr: 824
-
-        ``Repository.update`` and ``Service.update`` continue to ignore an explicit
-        ``None`` assigned to a column that defines a ``default``, ``server_default``,
-        ``onupdate``, or ``server_onupdate``, and now emit a ``DeprecationWarning``
-        naming the model and field. In v2.0 the ``None`` will be written, clearing
-        nullable columns and raising ``IntegrityError`` on ``NOT NULL`` columns. Omit
-        the field from the update payload to keep the stored value. The in-memory mock
-        repositories follow the same behavior.
-
     .. change:: partial update hydration and single-query service updates
         :type: bugfix
         :pr: 824
@@ -40,7 +28,7 @@
         ``is_(None)``. ``LimitOffset`` slices ``offset:offset + limit``, ``BeforeAfter``
         applies both bounds, and ``get_many_and_count`` returns the count before
         pagination. Unsupported SQL expressions now raise ``RepositoryError`` instead of
-        silently returning no rows, so tests that relied on the previous results may
+        returning unfiltered rows, so tests that relied on the previous results may
         need to be updated.
 
     .. change:: infer service model and repository types from generic parameters
@@ -51,9 +39,8 @@
         ``SQLAlchemySyncRepositoryService[Model]`` subclasses no longer need an inline
         ``repository_type``; the model and a default repository are inferred from the
         generic parameters, and ``model_type=`` / ``repository_type=`` can be passed
-        when instantiating directly. ``Service.repository`` is now typed as the SQL or
-        mock repository for the model instead of ``Any``. To type custom repository
-        methods, pass the repository as the second generic parameter, for example
+        when instantiating directly. To type custom repository methods, pass the
+        repository as the second generic parameter, for example
         ``SQLAlchemyAsyncRepositoryService[Widget, WidgetRepository]``.
 
 .. changelog:: 1.12.0

@@ -46,9 +46,10 @@ from advanced_alchemy.filters import (
     StatementFilter,
 )
 from advanced_alchemy.repository._util import (
+    allows_explicit_none_update,
+    column_has_defaults,
     compare_values,
     get_primary_key_info,
-    skip_explicit_none_update,
     was_attribute_set,
 )
 from advanced_alchemy.repository.typing import (
@@ -251,13 +252,14 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
     def update(self, obj: ModelT) -> ModelT:
         existing = self.get(self.key(obj))
         mapper = object_mapper(existing)
+        explicit_none = allows_explicit_none_update(inspect(obj, raiseerr=False))
         for attr in self.changed_attrs(obj):
             new_value = getattr(obj, attr, MISSING)
             existing_value = getattr(existing, attr, MISSING)
             if new_value is None:
                 prop: Any = mapper.attrs.get(attr)
                 prop_columns: list[Column[Any]] = list(getattr(prop, "columns", ()))
-                if prop_columns and skip_explicit_none_update(prop_columns[0], existing.__class__.__name__, attr):
+                if prop_columns and not explicit_none and column_has_defaults(prop_columns[0]):
                     continue
                 if any(not col.nullable and not col.primary_key for col in prop_columns):
                     msg = f"Column '{attr}' on {existing.__class__.__name__} cannot be None"
@@ -437,11 +439,11 @@ class InMemoryFilterEvaluator:
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         values: abc.Collection[Any],
     ) -> List[ModelT]:
-        """Filter items whose field value is not in `values`."""
+        """Filter items whose field value is non-null and not in `values`."""
         if not values:
             return result
         field_str = cls.extract_field_name(field_name)
-        return [item for item in result if getattr(item, field_str) not in values]
+        return [item for item in result if (val := getattr(item, field_str, None)) is not None and val not in values]
 
     @classmethod
     def filter_on_datetime_field(
@@ -471,53 +473,52 @@ class InMemoryFilterEvaluator:
             result_.append(item)
         return result_
 
-    @staticmethod
+    @classmethod
     def filter_by_like(
+        cls,
         result: List[ModelT],
         field_name: Union[str, set[str]],
         value: str,
         ignore_case: bool,
         escape_wildcards: bool = False,
     ) -> List[ModelT]:
-        """Filter items matching a substring pattern across one or more fields (`OR` semantics)."""
-        if escape_wildcards:
-            value = re.escape(value)
-        pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
+        """Filter items matching a SQL LIKE substring pattern across one or more fields (`OR` semantics)."""
+        pattern = cls._build_search_regex(value, ignore_case=ignore_case, escape_wildcards=escape_wildcards)
         fields = {field_name} if isinstance(field_name, str) else field_name
-        matched_ids: set[int] = set()
-        filtered: List[ModelT] = []
-        for item in result:
-            if id(item) in matched_ids:
-                continue
-            for field in fields:
-                attr_val = getattr(item, field, None)
-                if isinstance(attr_val, str) and pattern.match(attr_val):
-                    matched_ids.add(id(item))
-                    filtered.append(item)
-                    break
-        return filtered
+        return [
+            item
+            for item in result
+            if any(
+                isinstance(attr_val := getattr(item, field, None), str) and bool(pattern.match(attr_val))
+                for field in fields
+            )
+        ]
 
-    @staticmethod
+    @classmethod
     def filter_by_not_like(
+        cls,
         result: List[ModelT],
         field_name: Union[str, set[str]],
         value: str,
         ignore_case: bool,
         escape_wildcards: bool = False,
     ) -> List[ModelT]:
-        """Exclude items matching a substring pattern across any of the specified fields (`AND NOT` semantics)."""
-        if escape_wildcards:
-            value = re.escape(value)
-        pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
+        """Exclude items matching a SQL LIKE substring pattern or NULL across specified fields (`AND NOT` semantics)."""
+        if not result:
+            return []
+        pattern = cls._build_search_regex(value, ignore_case=ignore_case, escape_wildcards=escape_wildcards)
         fields = {field_name} if isinstance(field_name, str) else field_name
-        excluded_ids: set[int] = set()
-        for item in result:
-            for field in fields:
-                attr_val = getattr(item, field, None)
-                if isinstance(attr_val, str) and pattern.match(attr_val):
-                    excluded_ids.add(id(item))
-                    break
-        return [item for item in result if id(item) not in excluded_ids]
+        present_fields = [field for field in fields if hasattr(type(result[0]), field)]
+        if not present_fields:
+            return result
+        return [
+            item
+            for item in result
+            if all(
+                isinstance(attr_val := getattr(item, field, None), str) and not pattern.match(attr_val)
+                for field in present_fields
+            )
+        ]
 
     @classmethod
     def filter_comparison(cls, result: List[ModelT], filter_: ComparisonFilter) -> List[ModelT]:
@@ -606,7 +607,7 @@ class InMemoryFilterEvaluator:
         is_and = filter_.operator == "and"
         matched: List[ModelT] = []
         for item in result:
-            outcomes = [bool(cls.evaluate_sql_expression(item, expr)) for expr in filter_.values]
+            outcomes = [cls.evaluate_sql_expression(item, expr) is True for expr in filter_.values]
             exists_match = all(outcomes) if is_and else any(outcomes)
             if (not exists_match) if negate else exists_match:
                 matched.append(item)
@@ -626,15 +627,22 @@ class InMemoryFilterEvaluator:
         if isinstance(expr, BindParameter):
             return expr.value  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
         if isinstance(expr, BooleanClauseList):
+            outcomes = [cls.evaluate_sql_expression(item, clause) for clause in expr.clauses]
             if expr.operator is sql_op.or_:
-                return any(bool(cls.evaluate_sql_expression(item, clause)) for clause in expr.clauses)
-            return all(bool(cls.evaluate_sql_expression(item, clause)) for clause in expr.clauses)
+                if any(outcome is True for outcome in outcomes):
+                    return True
+                return None if any(outcome is None for outcome in outcomes) else False
+            if any(outcome is False for outcome in outcomes):
+                return False
+            return None if any(outcome is None for outcome in outcomes) else True
         if isinstance(expr, (ClauseList, ExpressionClauseList)):
             return tuple(cls.evaluate_sql_expression(item, clause) for clause in expr.clauses)
         if isinstance(expr, UnaryExpression):
             inner = cls.evaluate_sql_expression(item, expr.element)
-            if expr.operator is sql_op.inv:
-                return not bool(inner)
+            if expr.operator in (sql_op.inv, sql_op.is_false):
+                return None if inner is None else not bool(inner)
+            if expr.operator is sql_op.is_true:
+                return False if inner is None else bool(inner)
             return inner
         if isinstance(expr, InstrumentedAttribute):
             return getattr(item, expr.key, None)
@@ -681,13 +689,18 @@ class InMemoryFilterEvaluator:
         apply_pagination: bool = True,
     ) -> List[ModelT]:
         """Apply `StatementFilter` instances and SQLAlchemy boolean expressions to `result`."""
+        order_filters: List[OrderBy] = []
         pagination_filters: List[LimitOffset] = []
         for filter_ in filters:
             if isinstance(filter_, LimitOffset):
                 if apply_pagination:
                     pagination_filters.append(filter_)
+            elif isinstance(filter_, OrderBy):
+                order_filters.append(filter_)
             else:
                 result = cls._apply_statement_filter(result, filter_)
+        for order_filter in reversed(order_filters):
+            result = cls._apply_statement_filter(result, order_filter)
         for pag in pagination_filters:
             result = cls.apply_limit_offset_pagination(result, pag.limit, pag.offset)
         return result
@@ -783,9 +796,22 @@ class InMemoryFilterEvaluator:
         if isinstance(filter_, (ExistsFilter, NotExistsFilter)):
             return cls.filter_exists(result, filter_)
         if isinstance(filter_, ColumnElement):
-            return [item for item in result if bool(cls.evaluate_sql_expression(item, filter_))]
+            return [item for item in result if cls.evaluate_sql_expression(item, filter_) is True]
         msg = f"Unexpected filter: {filter_}"
         raise RepositoryError(msg)
+
+    @classmethod
+    def _build_search_regex(
+        cls,
+        value: str,
+        *,
+        ignore_case: bool = False,
+        escape_wildcards: bool = False,
+    ) -> re.Pattern[str]:
+        if escape_wildcards:
+            flags = re.IGNORECASE | re.DOTALL if ignore_case else re.DOTALL
+            return re.compile(rf"^.*{re.escape(value)}.*$", flags)
+        return cls._like_to_regex(f"%{value}%", ignore_case=ignore_case)
 
     @staticmethod
     def _like_to_regex(pattern_str: str, ignore_case: bool = False) -> re.Pattern[str]:
@@ -829,12 +855,12 @@ class InMemoryFilterEvaluator:
 
     @classmethod
     def _eval_comparison_op(cls, val: Any, op_name: str, target: Any) -> bool:
+        if val is None:
+            return False
         if op_name == "eq":
             return bool(val == target)
         if op_name == "ne":
-            return bool(val != target)
-        if val is None:
-            return False
+            return False if target is None else bool(val != target)
         value_op = cls._COMPARISON_VALUE_OPS.get(op_name)
         if value_op is not None:
             return value_op(val, target)
@@ -854,22 +880,36 @@ class InMemoryFilterEvaluator:
     }
 
     @staticmethod
-    def _eval_null_aware_binary_op(left: Any, right: Any, operator: Any) -> Optional[bool]:
-        if operator in (sql_op.is_, sql_op.eq):
-            if right is None and operator is sql_op.is_:
-                return left is None
-            return bool(compare_values(left, right) if not isinstance(left, (int, str, float, bool)) else left == right)
-        if operator in (sql_op.is_not, sql_op.ne):
-            if right is None and operator is sql_op.is_not:
-                return left is not None
-            return bool(
-                not compare_values(left, right) if not isinstance(left, (int, str, float, bool)) else left != right
-            )
+    def _eval_equality_value(left: Any, right: Any) -> bool:
+        return bool(compare_values(left, right) if not isinstance(left, (int, str, float, bool)) else left == right)
+
+    @classmethod
+    def _eval_null_aware_binary_op(cls, left: Any, right: Any, operator: Any) -> tuple[bool, Optional[bool]]:
+        if operator is sql_op.is_:
+            if right is None:
+                return True, left is None
+            return True, False if left is None else cls._eval_equality_value(left, right)
+        if operator is sql_op.is_not:
+            if right is None:
+                return True, left is not None
+            return True, True if left is None else not cls._eval_equality_value(left, right)
+        if operator is sql_op.eq:
+            return True, None if (left is None or right is None) else cls._eval_equality_value(left, right)
+        if operator is sql_op.ne:
+            return True, None if (left is None or right is None) else not cls._eval_equality_value(left, right)
         if operator is sql_op.in_op:
-            return False if right is None else bool(left in right)
+            if right is None or not right:
+                return True, False
+            if left is None:
+                return True, None
+            return True, True if left in right else (None if None in right else False)
         if operator is sql_op.notin_op:
-            return True if right is None else bool(left not in right)
-        return None
+            if right is None or not right:
+                return True, True
+            if left is None:
+                return True, None
+            return True, False if left in right else (None if None in right else True)
+        return False, None
 
     @classmethod
     def _eval_string_binary_op(cls, left: Any, right_str: str, operator: Any) -> Optional[bool]:
@@ -890,18 +930,20 @@ class InMemoryFilterEvaluator:
         return None
 
     @classmethod
-    def _eval_binary_operator(cls, left: Any, right: Any, operator: Any) -> bool:
-        null_aware_result = cls._eval_null_aware_binary_op(left, right, operator)
-        if null_aware_result is not None:
+    def _eval_binary_operator(cls, left: Any, right: Any, operator: Any) -> Optional[bool]:
+        handled, null_aware_result = cls._eval_null_aware_binary_op(left, right, operator)
+        if handled:
             return null_aware_result
-        if left is None:
-            return False
+        if left is None or right is None:
+            return None
         order_op = cls._BINARY_ORDER_OPS.get(operator)
         if order_op is not None:
             return order_op(left, right)
         if operator is sql_op.between_op and isinstance(right, tuple):
             right_tuple: tuple[Any, ...] = right  # pyright: ignore[reportUnknownVariableType]
             if len(right_tuple) > 1:
+                if right_tuple[0] is None or right_tuple[1] is None:
+                    return None
                 return bool(right_tuple[0] <= left <= right_tuple[1])
         string_result = cls._eval_string_binary_op(left, str(cast("Any", right)), operator)
         if string_result is not None:

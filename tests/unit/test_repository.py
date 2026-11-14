@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import datetime
 import decimal
+import warnings
 from collections.abc import AsyncGenerator, Collection, Generator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Union, cast
@@ -18,7 +19,21 @@ from pytest_lazy_fixtures import lf
 from sqlalchemy import ForeignKey, Integer, String, column, create_engine, false, func, or_, select, true
 from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute, Mapped, Session, mapped_column, relationship
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    InstrumentedAttribute,
+    Mapped,
+    Session,
+    defer,
+    joinedload,
+    mapped_column,
+    raiseload,
+    relationship,
+    selectinload,
+    undefer_group,
+    with_loader_criteria,
+)
+from sqlalchemy.orm.strategy_options import _AbstractLoad
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.sql.selectable import ForUpdateArg
 from sqlalchemy.types import TypeEngine
@@ -61,6 +76,7 @@ from advanced_alchemy.repository._util import (
     _build_cache_key,
     _normalize_cache_key_value,
     column_has_defaults,
+    get_abstract_loader_options,
     model_from_dict,
     partial_model_from_dict,
 )
@@ -2838,15 +2854,19 @@ def test_mock_repository_search_honors_escape_wildcards(filter_type: type[Search
     class Repo(SQLAlchemySyncMockRepository[SearchableTitleModel]):
         model_type = SearchableTitleModel
 
-    repo = Repo(session=MagicMock(spec=Session, bind=MagicMock()))
-    repo.add_many([SearchableTitleModel(id=1, title="a 50% b"), SearchableTitleModel(id=2, title="a 50X b")])
+    Repo.__database_clear__()
+    try:
+        repo = Repo(session=MagicMock(spec=Session, bind=MagicMock()))
+        repo.add_many([SearchableTitleModel(id=1, title="a 50% b"), SearchableTitleModel(id=2, title="a 50X b")])
 
-    literal = repo.list(filter_type("title", "50%", escape_wildcards=True))
-    pattern = repo.list(filter_type("title", "50."))
+        literal = repo.list(filter_type("title", "50%", escape_wildcards=True))
+        pattern = repo.list(filter_type("title", "50_"))
 
-    expected_literal = [1] if filter_type is SearchFilter else [2]
-    assert [item.id for item in literal] == expected_literal
-    assert sorted(item.id for item in pattern) == ([1, 2] if filter_type is SearchFilter else [])
+        expected_literal = [1] if filter_type is SearchFilter else [2]
+        assert [item.id for item in literal] == expected_literal
+        assert sorted(item.id for item in pattern) == ([1, 2] if filter_type is SearchFilter else [])
+    finally:
+        Repo.__database_clear__()
 
 
 @pytest.mark.parametrize(("lookup_id", "should_find"), [(1, True), (999, False)])
@@ -3017,7 +3037,7 @@ def test_repository_generic_subclass_auto_binds_model_type() -> None:
 
 
 def test_repository_generic_any_subclass_preserves_inherited_model_type() -> None:
-    """Subclassing a repository parameterized with typing.Any preserves an inherited model_type."""
+    """Subclassing an explicitly bound repository preserves its inherited model_type."""
 
     class BaseRepo(SQLAlchemyAsyncRepository[Any]):
         model_type = UUIDModel
@@ -3025,7 +3045,14 @@ def test_repository_generic_any_subclass_preserves_inherited_model_type() -> Non
     class SubRepo(BaseRepo):
         pass
 
+    class ExplicitOverrideRepo(SQLAlchemyAsyncRepository[UUIDModel]):
+        model_type = cast("Any", BigIntModel)
+
+    class ChildOfExplicitRepo(ExplicitOverrideRepo):
+        pass
+
     assert SubRepo.model_type is UUIDModel
+    assert ChildOfExplicitRepo.model_type is BigIntModel
 
 
 def test_repository_direct_instantiation_with_model_type_kwarg() -> None:
@@ -3400,11 +3427,7 @@ class UniquifyChildModel(ContractSQLBase):
 
 
 def test_update_renamed_columns_and_explicit_none_semantics() -> None:
-    """SQL and mock repositories update renamed columns and apply explicit None semantics.
-
-    Explicit None clears nullable columns without defaults and raises on NOT NULL columns without
-    defaults. Columns with defaults keep their stored value and emit a DeprecationWarning until v2.0.
-    """
+    """Service item_id updates write explicit None while direct repository updates preserve column defaults."""
 
     class RenamedSQLRepo(SQLAlchemySyncRepository[RenamedColumnModel]):
         pass
@@ -3414,6 +3437,9 @@ def test_update_renamed_columns_and_explicit_none_semantics() -> None:
 
     class RenamedService(SQLAlchemySyncRepositoryService[RenamedColumnModel]):
         pass
+
+    class RenamedMockService(SQLAlchemySyncRepositoryService[RenamedColumnModel, RenamedMockRepo]):
+        repository_type = RenamedMockRepo
 
     engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
     ContractSQLBase.metadata.create_all(engine)
@@ -3427,29 +3453,33 @@ def test_update_renamed_columns_and_explicit_none_semantics() -> None:
             )
             session.commit()
 
-            service.update({"title": "new"}, item_id=1, auto_commit=True)
-            session.expire_all()
-            fetched = session.get(RenamedColumnModel, 1)
-            assert fetched is not None
-            assert fetched.title == "new"
-            assert fetched.subtitle == "custom-sub"
-            assert fetched.status == "published"
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                service.update({"title": "new"}, item_id=1, auto_commit=True)
+                session.expire_all()
+                fetched = session.get(RenamedColumnModel, 1)
+                assert fetched is not None
+                assert fetched.title == "new"
+                assert fetched.subtitle == "custom-sub"
+                assert fetched.status == "published"
 
-            service.update({"note": None}, item_id=1, auto_commit=True)
-            session.expire_all()
-            fetched = session.get(RenamedColumnModel, 1)
-            assert fetched is not None
-            assert fetched.note is None
+                service.update({"note": None, "subtitle": None}, item_id=1, auto_commit=True)
+                session.expire_all()
+                fetched = session.get(RenamedColumnModel, 1)
+                assert fetched is not None
+                assert fetched.note is None
+                assert fetched.subtitle is None
 
-            with pytest.warns(DeprecationWarning, match=r"RenamedColumnModel\.subtitle"):
-                service.update({"subtitle": None}, item_id=1, auto_commit=True)
-            with pytest.warns(DeprecationWarning, match=r"RenamedColumnModel\.status"):
                 repo.update(RenamedColumnModel(id=1, status=None), auto_commit=True)
-            session.expire_all()
-            fetched = session.get(RenamedColumnModel, 1)
-            assert fetched is not None
-            assert fetched.subtitle == "custom-sub"
-            assert fetched.status == "published"
+                session.expire_all()
+                fetched = session.get(RenamedColumnModel, 1)
+                assert fetched is not None
+                assert fetched.status == "published"
+                assert not [w for w in caught if issubclass(w.category, DeprecationWarning)]
+
+            with pytest.raises(IntegrityError):
+                service.update({"status": None}, item_id=1, auto_commit=True)
+            session.rollback()
 
             with pytest.raises(IntegrityError):
                 service.update({"code": None}, item_id=1, auto_commit=True)
@@ -3463,7 +3493,9 @@ def test_update_renamed_columns_and_explicit_none_semantics() -> None:
 
     RenamedMockRepo.__database_clear__()
     try:
-        mock_repo = RenamedMockRepo(session=MagicMock(spec=Session, bind=MagicMock()))
+        mock_session = MagicMock(spec=Session, bind=MagicMock())
+        mock_repo = RenamedMockRepo(session=mock_session)
+        mock_service = RenamedMockService(session=mock_session)
         added = mock_repo.add(RenamedColumnModel(id=1, note="n", code="c"))
         assert added.title == "untitled"
         assert added.subtitle == "default-sub"
@@ -3476,9 +3508,14 @@ def test_update_renamed_columns_and_explicit_none_semantics() -> None:
         cleared_mock = mock_repo.update(partial_model_from_dict(RenamedColumnModel, id=1, note=None))
         assert cleared_mock.note is None
 
-        with pytest.warns(DeprecationWarning, match=r"RenamedColumnModel\.subtitle"):
-            kept_mock = mock_repo.update(partial_model_from_dict(RenamedColumnModel, id=1, subtitle=None))
+        kept_mock = mock_repo.update(partial_model_from_dict(RenamedColumnModel, id=1, subtitle=None))
         assert kept_mock.subtitle == "default-sub"
+
+        service_cleared = mock_service.update({"subtitle": None}, item_id=1)
+        assert service_cleared.subtitle is None
+
+        with pytest.raises(IntegrityError):
+            mock_service.update({"status": None}, item_id=1)
 
         with pytest.raises(IntegrityError):
             mock_repo.update(partial_model_from_dict(RenamedColumnModel, id=1, code=None))
@@ -3698,3 +3735,311 @@ async def test_async_mock_and_sync_cascade_delete_operations() -> None:
     assert sync_repo.delete_many([1, 2]) == [p1, p2]
     assert sync_repo.delete_where() == [p1, p2]
     assert sync_session.delete.call_count == 4
+
+
+class _OpaqueLoad(_AbstractLoad):
+    """Minimal _AbstractLoad subclass lacking strategy and context attributes."""
+
+
+@pytest.mark.parametrize(
+    ("load_spec", "use_default", "merge_with_default", "default_wildcards", "expected_len", "expected_uniquify"),
+    [
+        pytest.param(raiseload("*"), False, True, False, 1, False, id="raiseload-wildcard"),
+        pytest.param(joinedload("*"), False, True, False, 1, True, id="joinedload-wildcard"),
+        pytest.param(defer("*"), False, True, False, 1, False, id="defer-wildcard"),
+        pytest.param(undefer_group("g"), False, True, False, 1, False, id="undefer-group"),
+        pytest.param([[raiseload("*")]], False, True, False, 1, False, id="nested-wildcard-list"),
+        pytest.param([[]], False, True, False, 0, False, id="empty-nested-list"),
+        pytest.param(
+            with_loader_criteria(UniquifyChildModel, UniquifyChildModel.id > 0),
+            False,
+            True,
+            False,
+            1,
+            False,
+            id="loader-criteria-option",
+        ),
+        pytest.param(
+            joinedload(UniquifyParentModel.children),
+            False,
+            True,
+            False,
+            1,
+            True,
+            id="joinedload-collection-option",
+        ),
+        pytest.param(
+            selectinload(UniquifyParentModel.children),
+            True,
+            True,
+            False,
+            2,
+            False,
+            id="single-option-merges-with-defaults",
+        ),
+        pytest.param(
+            selectinload(UniquifyParentModel.children),
+            True,
+            False,
+            False,
+            1,
+            False,
+            id="single-option-replaces-defaults-when-merge-false",
+        ),
+        pytest.param(
+            CascadeChildModel.parent,
+            False,
+            True,
+            False,
+            1,
+            False,
+            id="many-to-one-shorthand-no-uniquify",
+        ),
+        pytest.param(
+            _OpaqueLoad(),
+            False,
+            True,
+            True,
+            1,
+            True,
+            id="opaque-load-preserves-fallback-uniquify",
+        ),
+    ],
+)
+def test_get_abstract_loader_options_matrix(
+    load_spec: Any,
+    use_default: bool,
+    merge_with_default: bool,
+    default_wildcards: bool,
+    expected_len: int,
+    expected_uniquify: bool,
+) -> None:
+    """Verify get_abstract_loader_options handles wildcards, criteria, collection joins, defaults, and scalar shorthands."""
+    defaults = [raiseload("*")] if use_default else None
+    options, requires_unique = get_abstract_loader_options(
+        loader_options=load_spec,
+        default_loader_options=defaults,
+        default_options_have_wildcards=default_wildcards,
+        merge_with_default=merge_with_default,
+    )
+    assert len(options) == expected_len
+    assert requires_unique is expected_uniquify
+
+
+def test_repository_loader_options_sqlite_execution() -> None:
+    """Verify joinedload on collections auto-uniquifies and with_loader_criteria filters loaded children."""
+
+    class ParentRepo(SQLAlchemySyncRepository[UniquifyParentModel]):
+        pass
+
+    engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+    ContractSQLBase.metadata.create_all(engine)
+    try:
+        with Session(engine, expire_on_commit=False) as session:
+            session.add(
+                UniquifyParentModel(
+                    id=1,
+                    name="parent",
+                    children=[UniquifyChildModel(id=1), UniquifyChildModel(id=2)],
+                )
+            )
+            session.commit()
+            session.expire_all()
+
+            repository = ParentRepo(session=session)
+            parents = repository.get_many(
+                load=[
+                    joinedload(UniquifyParentModel.children),
+                    with_loader_criteria(UniquifyChildModel, UniquifyChildModel.id == 2),
+                ]
+            )
+            assert len(parents) == 1
+            assert [child.id for child in parents[0].children] == [2]
+    finally:
+        engine.dispose()
+
+
+class ParityProbeModel(ContractSQLBase):
+    """Model with nullable columns used to compare SQLite and mock repository evaluation."""
+
+    __tablename__ = "unit_contract_parity_probe"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    slug: Mapped[str] = mapped_column(String(100))
+    name: Mapped[Union[str, None]] = mapped_column(String(100), nullable=True)
+    grp: Mapped[Union[str, None]] = mapped_column(String(50), nullable=True)
+    score: Mapped[Union[int, None]] = mapped_column(Integer, nullable=True)
+    active: Mapped[Union[bool, None]] = mapped_column(nullable=True)
+
+
+@pytest.fixture(params=["async", "sync"])
+def mock_parity_repo(
+    request: FixtureRequest,
+) -> Generator[
+    Union[SQLAlchemyAsyncMockSlugRepository[ParityProbeModel], SQLAlchemySyncMockSlugRepository[ParityProbeModel]],
+    None,
+    None,
+]:
+    """Yield parametrized async and sync mock slug repositories seeded with parity probe rows."""
+
+    class AsyncProbeMockRepo(SQLAlchemyAsyncMockSlugRepository[ParityProbeModel]):
+        pass
+
+    class SyncProbeMockRepo(SQLAlchemySyncMockSlugRepository[ParityProbeModel]):
+        pass
+
+    AsyncProbeMockRepo.__database_clear__()
+    SyncProbeMockRepo.__database_clear__()
+    repo: Union[SQLAlchemyAsyncMockSlugRepository[ParityProbeModel], SQLAlchemySyncMockSlugRepository[ParityProbeModel]]
+    if request.param == "async":
+        repo = AsyncProbeMockRepo(session=AsyncMock(spec=AsyncSession, bind=MagicMock()))
+    else:
+        repo = SyncProbeMockRepo(session=MagicMock(spec=Session, bind=MagicMock()))
+    try:
+        yield repo
+    finally:
+        AsyncProbeMockRepo.__database_clear__()
+        SyncProbeMockRepo.__database_clear__()
+
+
+def _build_parity_seed() -> list[ParityProbeModel]:
+    return [
+        ParityProbeModel(id=1, slug="s1", name="a.b", grp="g2", score=10, active=True),
+        ParityProbeModel(id=2, slug="s2", name="axb", grp="g1", score=20, active=False),
+        ParityProbeModel(id=3, slug="s3", name="a_b", grp="g1", score=30, active=None),
+        ParityProbeModel(id=4, slug="s4", name=None, grp="g2", score=None, active=False),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("filters", "ordered"),
+    [
+        pytest.param([~ParityProbeModel.active], False, id="negated-bool-column"),
+        pytest.param([OrderBy("grp", "asc"), OrderBy("score", "desc")], True, id="multi-orderby-precedence"),
+        pytest.param([ParityProbeModel.score != 20], False, id="sql-ne-excludes-null"),
+        pytest.param([ParityProbeModel.score.notin_([20])], False, id="sql-notin-excludes-null"),
+        pytest.param(
+            [ComparisonFilter(field_name="score", operator="ne", value=20)],
+            False,
+            id="comparison-ne-excludes-null",
+        ),
+        pytest.param(
+            [NotInCollectionFilter(field_name="score", values=[20])],
+            False,
+            id="not-in-collection-excludes-null",
+        ),
+        pytest.param(
+            [NotInSearchFilter(field_name="name", value="axb")],
+            False,
+            id="not-in-search-excludes-null",
+        ),
+        pytest.param(
+            [SearchFilter(field_name="name", value="a.b", escape_wildcards=False)],
+            False,
+            id="search-dot-literal-under-like",
+        ),
+        pytest.param(
+            [SearchFilter(field_name="name", value="a_b", escape_wildcards=False)],
+            False,
+            id="search-underscore-wildcard-under-like",
+        ),
+        pytest.param(
+            [SearchFilter(field_name="name", value="a_b", escape_wildcards=True)],
+            False,
+            id="search-underscore-escaped",
+        ),
+        pytest.param(
+            [~(ParityProbeModel.name == "axb")],
+            False,
+            id="negated-equality-excludes-null",
+        ),
+    ],
+)
+async def test_mock_repository_filter_parity_with_sqlite(
+    mock_parity_repo: Any,
+    filters: list[Any],
+    ordered: bool,
+) -> None:
+    """Verify both async and sync mock repositories match SQLite results across NULL, LIKE, negation, and multi-sort cases."""
+
+    class SQLProbeRepo(SQLAlchemySyncRepository[ParityProbeModel]):
+        pass
+
+    await maybe_async(mock_parity_repo.add_many(_build_parity_seed()))
+    mock_rows = await maybe_async(mock_parity_repo.get_many(*filters))
+    mock_ids = [row.id for row in mock_rows] if ordered else sorted(row.id for row in mock_rows)
+
+    engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+    ContractSQLBase.metadata.create_all(engine)
+    try:
+        with Session(engine, expire_on_commit=False) as session:
+            sql_repo = SQLProbeRepo(session=session)
+            sql_repo.add_many(_build_parity_seed(), auto_commit=True)
+            sql_rows = sql_repo.get_many(*filters)
+            sql_ids = [row.id for row in sql_rows] if ordered else sorted(row.id for row in sql_rows)
+    finally:
+        engine.dispose()
+
+    assert mock_ids == sql_ids
+
+
+async def test_mock_repository_async_and_sync_crud_lifecycle(mock_parity_repo: Any) -> None:
+    """Exercise full CRUD, upsert, delete, and slug methods across both async and sync mock repositories."""
+    created, was_created = await maybe_async(
+        mock_parity_repo.get_or_upsert(id=1, slug="alpha", name="Alpha", score=10, match_fields=["slug"])
+    )
+    assert was_created is True
+    assert created.id == 1
+
+    existing, was_created_again = await maybe_async(
+        mock_parity_repo.get_or_upsert(id=1, slug="alpha", name="Alpha Updated", score=15, match_fields=["slug"])
+    )
+    assert was_created_again is False
+    assert existing.name == "Alpha Updated"
+
+    updated, was_updated = await maybe_async(
+        mock_parity_repo.get_and_update(slug="alpha", name="Alpha V3", match_fields=["slug"])
+    )
+    assert was_updated is True
+    assert updated.name == "Alpha V3"
+
+    upserted_batch = await maybe_async(
+        mock_parity_repo.upsert_many(
+            [
+                ParityProbeModel(id=1, slug="alpha", name="Alpha V4", score=18),
+                ParityProbeModel(id=2, slug="beta", name="Beta", score=20),
+                ParityProbeModel(id=3, slug="gamma", name="Gamma", score=30),
+            ]
+        )
+    )
+    assert len(upserted_batch) == 3
+
+    updated_batch = await maybe_async(
+        mock_parity_repo.update_many([partial_model_from_dict(ParityProbeModel, id=2, name="Beta V2")])
+    )
+    assert [row.name for row in updated_batch] == ["Beta V2"]
+
+    assert await maybe_async(mock_parity_repo.exists(slug="beta")) is True
+    assert (await maybe_async(mock_parity_repo.get(2))).name == "Beta V2"
+    assert (await maybe_async(mock_parity_repo.get_one(slug="gamma"))).id == 3
+    by_slug = await maybe_async(mock_parity_repo.get_by_slug("alpha"))
+    assert by_slug is not None
+    assert by_slug.id == 1
+    assert await maybe_async(mock_parity_repo.get_available_slug("alpha")) != "alpha"
+    assert await maybe_async(mock_parity_repo.check_health(mock_parity_repo.session)) is True
+
+    page, total = await maybe_async(
+        mock_parity_repo.get_many_and_count(OrderBy("id", "asc"), LimitOffset(limit=2, offset=0))
+    )
+    assert [row.id for row in page] == [1, 2]
+    assert total == 3
+
+    deleted_by_slug = await maybe_async(mock_parity_repo.delete_many(["beta"], id_attribute="slug"))
+    assert [row.id for row in deleted_by_slug] == [2]
+
+    deleted_one = await maybe_async(mock_parity_repo.delete(1))
+    assert deleted_one.id == 1
+
+    deleted_rest = await maybe_async(mock_parity_repo.delete_where(ParityProbeModel.id == 3))
+    assert [row.id for row in deleted_rest] == [3]
+    assert await maybe_async(mock_parity_repo.count()) == 0

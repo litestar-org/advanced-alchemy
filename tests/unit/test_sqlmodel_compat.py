@@ -3,6 +3,7 @@
 Validates that SQLModel table=True models can be used with AA repositories and services.
 """
 
+import warnings
 from collections.abc import Generator
 from typing import Optional, cast
 from unittest.mock import MagicMock
@@ -386,7 +387,7 @@ class HeroDefaultService(SQLAlchemySyncRepositoryService[HeroWithDefaultModel]):
 
 
 def test_sqlmodel_partial_update_and_explicit_none_semantics(hero_session: "Session") -> None:
-    """Partial updates preserve omitted fields and apply explicit None semantics with deprecation warnings."""
+    """Service item_id updates write explicit None while repository instance updates preserve defaults silently."""
     SQLModel.metadata.create_all(hero_session.get_bind())
     service = HeroDefaultService(session=hero_session)
     created = service.create(
@@ -398,31 +399,39 @@ def test_sqlmodel_partial_update_and_explicit_none_semantics(hero_session: "Sess
     partial_patch = partial_model_from_dict(HeroWithDefaultModel, name="Peter Parker")
     assert partial_patch.name == "Peter Parker"
 
-    after_partial = service.update({"name": "Peter Parker"}, item_id=created.id, auto_commit=True)
-    assert after_partial.name == "Peter Parker"
-    assert after_partial.rank == "veteran"
-    assert after_partial.nickname == "webhead"
-    assert after_partial.age == 25
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        after_partial = service.update({"name": "Peter Parker"}, item_id=created.id, auto_commit=True)
+        assert after_partial.name == "Peter Parker"
+        assert after_partial.rank == "veteran"
+        assert after_partial.nickname == "webhead"
+        assert after_partial.age == 25
 
-    direct_instance = HeroWithDefaultModel(id=created.id, name="Spider-Man")
-    after_direct = service.repository.update(direct_instance, auto_commit=True)
-    assert after_direct.name == "Spider-Man"
-    assert after_direct.rank == "veteran"
-    assert after_direct.nickname == "webhead"
-    assert after_direct.age == 25
+        direct_instance = HeroWithDefaultModel(id=created.id, name="Spider-Man")
+        after_direct = service.repository.update(direct_instance, auto_commit=True)
+        assert after_direct.name == "Spider-Man"
+        assert after_direct.rank == "veteran"
+        assert after_direct.nickname == "webhead"
+        assert after_direct.age == 25
 
-    with pytest.warns(DeprecationWarning, match=r"HeroWithDefaultModel\.nickname"):
+        direct_explicit_none = HeroWithDefaultModel(id=created.id, name="Spider-Man", nickname=None)
+        after_direct_none = service.repository.update(direct_explicit_none, auto_commit=True)
+        assert after_direct_none.nickname == "webhead"
+        assert after_direct_none.rank == "veteran"
+
         cleared = service.update({"nickname": None, "age": None}, item_id=created.id, auto_commit=True)
-    assert cleared.nickname == "webhead"
-    assert cleared.age is None
-    assert cleared.rank == "veteran"
+        assert cleared.nickname is None
+        assert cleared.age is None
+        assert cleared.rank == "veteran"
+        assert not [w for w in caught if issubclass(w.category, DeprecationWarning)]
 
-    with pytest.warns(DeprecationWarning, match=r"HeroWithDefaultModel\.rank"):
-        kept = service.update({"rank": None}, item_id=created.id, auto_commit=True)
-    assert kept.rank == "veteran"
+    with pytest.raises(IntegrityError):
+        service.update({"rank": None}, item_id=created.id, auto_commit=True)
+    hero_session.rollback()
 
     with pytest.raises(IntegrityError):
         service.update({"name": None}, item_id=created.id, auto_commit=True)
+    hero_session.rollback()
 
 
 def test_sqlmodel_table_supports_partial_hydration() -> None:

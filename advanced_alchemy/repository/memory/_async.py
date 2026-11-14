@@ -1,5 +1,5 @@
 import datetime
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any, List, Optional, Union, cast, overload
 from unittest.mock import create_autospec
 
@@ -12,7 +12,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio.scoping import async_scoped_session
-from sqlalchemy.orm import InstrumentedAttribute, Load
+from sqlalchemy.orm import InstrumentedAttribute
+from sqlalchemy.sql.base import ExecutableOption
 from sqlalchemy.sql.dml import ReturningUpdate
 from sqlalchemy.sql.selectable import ForUpdateParameter
 from typing_extensions import Self
@@ -697,7 +698,7 @@ class SQLAlchemyAsyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemyAsyn
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: Optional[List[Load]],
+        loader_options: Optional[Sequence[ExecutableOption]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]:
         return self.statement  # type: ignore[no-any-return] # pyright: ignore[reportReturnType]

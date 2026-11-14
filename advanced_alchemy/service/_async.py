@@ -27,6 +27,7 @@ from advanced_alchemy.repository import (
 )
 from advanced_alchemy.repository._util import (
     LoadSpec,
+    mark_explicit_none_update,
     model_from_dict,
     partial_model_from_dict,
     supports_partial_hydration,
@@ -955,6 +956,7 @@ class SQLAlchemyAsyncRepositoryService(
         data = await self.to_model(data, "update", schema_dump_config=schema_dump_config)
 
         if item_id is not None:
+            mark_explicit_none_update(data)
             if id_attribute is None and self.repository.has_composite_pk:
                 self.repository.set_primary_key_value(data, item_id)
             else:

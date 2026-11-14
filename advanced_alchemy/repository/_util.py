@@ -1,7 +1,6 @@
 # ruff: noqa: PLR0911
 import dataclasses
 import hashlib
-import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Generic, Literal, Optional, Protocol, Union, cast, get_args, get_origin, overload
 
@@ -18,7 +17,6 @@ from sqlalchemy import (
 from sqlalchemy.exc import NoInspectionAvailable
 from sqlalchemy.orm import (
     InstrumentedAttribute,
-    Load,
     Mapper,
     MapperProperty,
     RelationshipProperty,
@@ -29,6 +27,7 @@ from sqlalchemy.orm import (
     selectinload,
 )
 from sqlalchemy.orm.decl_base import _declarative_constructor  # pyright: ignore[reportPrivateUsage]
+from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 from sqlalchemy.sql.base import ExecutableOption
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
@@ -70,24 +69,28 @@ __all__ = (
     "WhereClauseT",
     "_UpsertPlanningMixin",
     "_build_cache_key",
+    "allows_explicit_none_update",
     "column_has_defaults",
     "compare_values",
     "get_abstract_loader_options",
     "get_instrumented_attr",
     "get_primary_key_info",
     "has_upsert_update_intent",
+    "is_mapped_model_class",
+    "mark_explicit_none_update",
     "model_from_dict",
     "partial_model_from_dict",
     "resolve_generic_type_args",
-    "skip_explicit_none_update",
     "snapshot_and_detach_relationships",
     "supports_partial_hydration",
     "was_attribute_set",
 )
 
+_EXPLICIT_NONE_UPDATE_KEY = "_aa_explicit_none_update"
+
 WhereClauseT = ColumnExpressionArgument[bool]
 SingleLoad: TypeAlias = Union[
-    Load,
+    _AbstractLoad,
     Literal["*"],
     InstrumentedAttribute[Any],
     RelationshipProperty[Any],
@@ -375,56 +378,55 @@ def supports_partial_hydration(model: type[Any]) -> bool:
 
 def get_abstract_loader_options(
     loader_options: Union[LoadSpec, None],
-    default_loader_options: Union[list[Load], None] = None,
+    default_loader_options: Union[Sequence[ExecutableOption], None] = None,
     default_options_have_wildcards: bool = False,
     merge_with_default: bool = True,
     inherit_lazy_relationships: bool = True,
     cycle_count: int = 0,
-) -> tuple[list[Load], bool]:
-    """Generate SQLAlchemy loader options for eager loading relationships.
+) -> tuple[list[ExecutableOption], bool]:
+    """Generate SQLAlchemy statement options for eager loading relationships and loader criteria.
 
     Args:
-        loader_options :class:`~advanced_alchemy.repository.typing.LoadSpec`|:class:`None`  Specification for how to load relationships. Can be:
+        loader_options: Specification for how to load relationships. Can be:
             - None: Use defaults
-            - :class:`sqlalchemy.orm.Load`: Direct SQLAlchemy loader option
+            - :class:`sqlalchemy.sql.base.ExecutableOption`: Direct SQLAlchemy loader or criteria option
             - :class:`sqlalchemy.orm.InstrumentedAttribute`: Model relationship attribute
             - :class:`sqlalchemy.orm.RelationshipProperty`: SQLAlchemy relationship
             - str: "*" for wildcard loading
             - :class:`typing.Sequence` of the above
-        default_loader_options: :class:`typing.Sequence` of :class:`sqlalchemy.orm.Load` loader options to start with.
-        default_options_have_wildcards: Whether the default options contain wildcards.
-        merge_with_default: Whether to merge the default options with the loader options.
+        default_loader_options: Sequence of :class:`sqlalchemy.sql.base.ExecutableOption` options to start with.
+        default_options_have_wildcards: Whether the default options require ``Result.unique()``.
+        merge_with_default: Whether to merge the default options with ``loader_options``.
         inherit_lazy_relationships: Whether to inherit the ``lazy`` configuration from the model's relationships.
         cycle_count: Number of times this function has been called recursively.
 
     Returns:
-        tuple[:class:`list`[:class:`sqlalchemy.orm.Load`], bool]: A tuple containing:
-            - :class:`list` of :class:`sqlalchemy.orm.Load` SQLAlchemy loader option objects
-            - Boolean indicating if any wildcard loaders are present
+        tuple[list[:class:`sqlalchemy.sql.base.ExecutableOption`], bool]: A tuple containing:
+            - :class:`list` of :class:`sqlalchemy.sql.base.ExecutableOption` statement options
+            - Boolean indicating whether ``Result.unique()`` is required for joined collection loads
     """
-    loads: list[Load] = []
+    loads: list[ExecutableOption] = []
     if cycle_count == 0 and not inherit_lazy_relationships:
-        loads.append(cast("Load", lazyload("*")))
+        loads.append(lazyload("*"))
     if cycle_count == 0 and merge_with_default and default_loader_options is not None:
         loads.extend(default_loader_options)
     options_have_wildcards = default_options_have_wildcards
     if loader_options is None:
         return (loads, options_have_wildcards)
-    if isinstance(loader_options, Load):
-        return ([loader_options], options_have_wildcards)
+    if isinstance(loader_options, ExecutableOption):
+        loads.append(loader_options)
+        return (loads, options_have_wildcards or _joins_collection(loader_options, fallback=options_have_wildcards))
     if isinstance(loader_options, InstrumentedAttribute):
-        loader_options = [loader_options.property]
+        loader_options = loader_options.property
     if isinstance(loader_options, RelationshipProperty):
         class_ = loader_options.class_attribute
-        return (
-            [cast("Load", selectinload(class_))]
-            if loader_options.uselist
-            else [cast("Load", joinedload(class_, innerjoin=loader_options.innerjoin))],
-            options_have_wildcards if loader_options.uselist else True,
+        loads.append(
+            selectinload(class_) if loader_options.uselist else joinedload(class_, innerjoin=loader_options.innerjoin)
         )
+        return (loads, options_have_wildcards)
     if isinstance(loader_options, str) and loader_options == "*":
-        options_have_wildcards = True
-        return ([cast("Load", joinedload("*"))], options_have_wildcards)
+        loads.append(joinedload("*"))
+        return (loads, True)
     if isinstance(loader_options, (list, tuple)):
         for attribute in loader_options:  # pyright: ignore[reportUnknownVariableType]
             if isinstance(attribute, (list, tuple)):
@@ -435,9 +437,11 @@ def get_abstract_loader_options(
                     merge_with_default=merge_with_default,
                     cycle_count=cycle_count + 1,
                 )
+                if not load_chain:
+                    continue
                 loader = load_chain[-1]
                 for sub_load in load_chain[-2::-1]:
-                    loader = sub_load.options(loader)
+                    loader = cast("Any", sub_load).options(loader)
                 loads.append(loader)
             else:
                 load_chain, options_have_wildcards = get_abstract_loader_options(
@@ -451,25 +455,80 @@ def get_abstract_loader_options(
     return (loads, options_have_wildcards)
 
 
-def resolve_generic_type_args(cls: type[Any], target_origin: type[Any]) -> tuple[Any, ...]:
-    """Extract concrete generic type arguments for ``target_origin`` from ``cls.__mro__``.
+def is_mapped_model_class(candidate: Any) -> bool:
+    """Return whether ``candidate`` is a mapped SQLAlchemy model class."""
+    if candidate is Any or not isinstance(candidate, type):
+        return False
+    try:
+        return inspect(candidate, raiseerr=False) is not None
+    except (NoInspectionAvailable, TypeError, ValueError):
+        return False
+
+
+def resolve_generic_type_args(
+    cls: type[Any],
+    target_origin: type[Any],
+    *,
+    own_bases_only: bool = False,
+) -> tuple[Any, ...]:
+    """Extract concrete generic type arguments for ``target_origin`` from ``cls``.
+
+    Propagates ``TypeVar`` substitutions across intermediate user generic base classes
+    even when type parameter positions are reordered.
 
     Args:
         cls: The subclass being inspected.
         target_origin: The generic base class or protocol to match.
+        own_bases_only: When ``True``, inspect only ``cls.__orig_bases__`` instead of walking ``__mro__``.
 
     Returns:
-        Tuple of type arguments from the first matching generic base with concrete arguments.
+        Tuple of type arguments bound to ``target_origin``.
     """
-    for current_cls in cls.__mro__:
-        for base in getattr(current_cls, "__orig_bases__", ()):
+
+    def substitute(args: tuple[Any, ...], mapping: Mapping[Any, Any]) -> tuple[Any, ...]:
+        resolved_items: list[Any] = []
+        for arg in args:
+            if arg in mapping:
+                resolved_items.append(mapping[arg])
+            else:
+                origin = get_origin(arg)
+                sub_args = get_args(arg)
+                if origin is not None and sub_args:
+                    new_sub = substitute(sub_args, mapping)
+                    copy_with = getattr(arg, "copy_with", None)
+                    resolved_items.append(copy_with(new_sub) if callable(copy_with) else arg)
+                else:
+                    resolved_items.append(arg)
+        return tuple(resolved_items)
+
+    def has_concrete(args: tuple[Any, ...]) -> bool:
+        return bool(
+            args
+            and any(arg is not Any and (isinstance(arg, type) or isinstance(get_origin(arg), type)) for arg in args)
+        )
+
+    def resolve_bases(bases: Iterable[Any], mapping: Mapping[Any, Any]) -> tuple[Any, ...]:
+        for base in bases:
             origin = get_origin(base)
-            if origin is not None and isinstance(origin, type) and issubclass(origin, target_origin):
-                args = get_args(base)
-                if args and any(
-                    arg is not Any and (isinstance(arg, type) or isinstance(get_origin(arg), type)) for arg in args
-                ):
-                    return args
+            if origin is None or not isinstance(origin, type) or not issubclass(origin, target_origin):
+                continue
+            raw_args = substitute(get_args(base), mapping)
+            if origin is target_origin and has_concrete(raw_args):
+                return raw_args
+            params = getattr(origin, "__parameters__", ())
+            next_mapping = {**mapping, **dict(zip(params, raw_args))}
+            nested = resolve_bases(origin.__dict__.get("__orig_bases__", ()), next_mapping)
+            if nested:
+                return nested
+            if has_concrete(raw_args):
+                return raw_args
+        return ()
+
+    classes: Iterable[type[Any]] = (cls,) if own_bases_only else cls.__mro__
+    for current_cls in classes:
+        resolved = resolve_bases(current_cls.__dict__.get("__orig_bases__", ()), {})
+        if resolved:
+            return resolved
     return ()
 
 
@@ -498,32 +557,22 @@ def column_has_defaults(column: Any) -> bool:
     )
 
 
-def skip_explicit_none_update(column: Any, model_name: str, field_name: str) -> bool:
-    """Return whether an explicit ``None`` update is ignored for a column with defaults.
+def mark_explicit_none_update(instance: Any) -> None:
+    """Mark a transient update model so explicit ``None`` values write to columns with defaults."""
+    try:
+        state = inspect(instance, raiseerr=False)
+    except (NoInspectionAvailable, TypeError, ValueError):
+        return
+    if state is not None and hasattr(state, "info"):
+        state.info[_EXPLICIT_NONE_UPDATE_KEY] = True
 
-    In v1.x, ``update()`` ignores an explicit ``None`` assigned to a column that defines a
-    default or update handler and emits a :class:`DeprecationWarning`. In v2.0 the ``None`` is
-    written, clearing nullable columns and raising ``IntegrityError`` on ``NOT NULL`` columns.
-    Omit the field from the update payload to keep the stored value without a warning.
 
-    Args:
-        column: SQLAlchemy column receiving the ``None`` value.
-        model_name: Name of the model being updated, used in the warning message.
-        field_name: ORM attribute key mapped to ``column``.
-
-    Returns:
-        bool: True if the ``None`` value should be ignored.
-    """
-    if not column_has_defaults(column):
+def allows_explicit_none_update(state: Any) -> bool:
+    """Return whether ``state`` was marked by ``Service.update(..., item_id=...)`` to write explicit ``None``."""
+    info: Any = getattr(state, "info", None)
+    if not isinstance(info, Mapping):
         return False
-    warnings.warn(
-        f"Ignoring explicit None for '{model_name}.{field_name}' during update because the column defines a "
-        "default or update handler. In v2.0, explicit None will be written to the column. Omit the field "
-        "from the update payload to keep the stored value.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return True
+    return bool(cast("Mapping[str, Any]", info).get(_EXPLICIT_NONE_UPDATE_KEY))
 
 
 def snapshot_and_detach_relationships(instance: Any, mapper: Any) -> dict[str, Any]:
@@ -599,10 +648,15 @@ class ModelRepositoryMixin(FilterableRepositoryProtocol[ModelT], Generic[ModelT]
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        if "model_type" not in cls.__dict__:
-            args = resolve_generic_type_args(cls, ModelRepositoryMixin)
-            if args and args[0] is not Any and isinstance(args[0], type):
-                cls.model_type = cast("type[ModelT]", args[0])
+        if "model_type" in cls.__dict__:
+            return
+        args = resolve_generic_type_args(
+            cls,
+            ModelRepositoryMixin,
+            own_bases_only=getattr(cls, "model_type", None) is not None,
+        )
+        if args and is_mapped_model_class(args[0]):
+            cls.model_type = cast("type[ModelT]", args[0])
 
     @property
     def pk_attr_names(self) -> tuple[str, ...]:
@@ -1200,3 +1254,34 @@ def _build_cache_key(  # pyright: ignore[reportUnusedFunction]
 
     digest = hashlib.sha256(encoded).hexdigest()
     return f"{model_name}:{method}:{digest}"
+
+
+def _strategy_is_joined(strategy: Any) -> bool:
+    if not isinstance(strategy, Iterable):
+        return False
+    return ("lazy", "joined") in strategy  # pyright: ignore[reportUnknownArgumentType]
+
+
+def _joins_collection(option: ExecutableOption, *, fallback: bool = False) -> bool:
+    if not isinstance(option, _AbstractLoad):
+        return False
+    has_strategy = hasattr(option, "strategy")
+    has_context = hasattr(option, "context")
+    if not has_strategy and not has_context:
+        return fallback
+    strategy: Any = getattr(option, "strategy", None)
+    path: Any = getattr(option, "path", None)
+    if _strategy_is_joined(strategy) and path == ("relationship:_sa_default",):
+        return True
+    context: Any = getattr(option, "context", ())
+    if isinstance(context, Iterable):
+        for entry in context:  # pyright: ignore[reportUnknownVariableType]
+            if not _strategy_is_joined(getattr(entry, "strategy", None)):  # pyright: ignore[reportUnknownArgumentType]
+                continue
+            entry_path: Any = getattr(entry, "path", None)  # pyright: ignore[reportUnknownArgumentType]
+            path_tuple: Any = getattr(entry_path, "path", entry_path)  # pyright: ignore[reportUnknownArgumentType]
+            if isinstance(path_tuple, Sequence) and len(path_tuple) >= 2:  # noqa: PLR2004  # pyright: ignore[reportUnknownArgumentType]
+                prop: Any = path_tuple[-2]  # pyright: ignore[reportUnknownVariableType]
+                if getattr(prop, "uselist", False):  # pyright: ignore[reportUnknownArgumentType]
+                    return True
+    return False
