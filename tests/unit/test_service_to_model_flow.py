@@ -8,7 +8,7 @@ input normalization before repository delegation.
 from __future__ import annotations
 
 import datetime
-from typing import Any, Optional, cast
+from typing import Any, Optional, Union, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -21,6 +21,7 @@ from advanced_alchemy.repository._util import get_primary_key_info
 from advanced_alchemy.repository.typing import PrimaryKeyType
 from advanced_alchemy.service import SchemaDumpConfig, SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
 from advanced_alchemy.utils.serialization import ATTRS_INSTALLED, MSGSPEC_INSTALLED, PYDANTIC_INSTALLED, ModelDictT
+from tests.helpers import maybe_async
 
 pytestmark = [pytest.mark.unit]
 
@@ -557,3 +558,30 @@ def test_sync_update_preserves_existing_instance_attributes() -> None:
     # Existing ID should be preserved from existing instance
     assert result.name == "New Name"
     assert result.id == "existing-id"  # From mock repository's get()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("service_cls", "mock_cls"),
+    [(TrackingService, AsyncMock), (TrackingSyncService, MagicMock)],
+)
+@pytest.mark.parametrize("lookup_id", ["existing-id", "missing-id"])
+async def test_service_get_or_none_delegates_to_repository(
+    service_cls: type[Union[TrackingService, TrackingSyncService]],
+    mock_cls: type[Union[AsyncMock, MagicMock]],
+    lookup_id: str,
+) -> None:
+    """Ensure sync and async service get_or_none forward lookups without error_messages."""
+    service = service_cls()
+    sentinel = MockModel()
+    sentinel.id = "existing-id"  # type: ignore[assignment]
+    expected = sentinel if lookup_id == "existing-id" else None
+    mock_get_or_none = mock_cls(return_value=expected)
+    service.repository.get_or_none = mock_get_or_none  # type: ignore[method-assign]
+
+    result = await maybe_async(service.get_or_none(lookup_id))
+
+    assert result is expected
+    mock_get_or_none.assert_called_once()
+    assert mock_get_or_none.call_args.kwargs["item_id"] == lookup_id
+    assert "error_messages" not in mock_get_or_none.call_args.kwargs
