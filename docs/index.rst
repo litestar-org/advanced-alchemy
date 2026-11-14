@@ -131,6 +131,7 @@ Advanced Alchemy gives your tables ready-made IDs and timestamps, provides ready
     Alembic <reference/alembic/index>
     CLI Commands <reference/cli>
     Exceptions <reference/exceptions>
+    Fixtures <reference/fixtures>
     Utilities <reference/utils>
 
 .. toctree::

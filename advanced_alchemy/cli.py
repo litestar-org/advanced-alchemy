@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from click import Group
 
     from advanced_alchemy.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+    from advanced_alchemy.utils.fixtures import FixtureCompression, FixtureFormat
 
 __all__ = (
     "add_migration_commands",
@@ -253,7 +254,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     Returns:
         The database group with the migration commands added.
     """
-    from advanced_alchemy.utils.cli_tools import click
+    from advanced_alchemy.utils.cli_tools import BYTE_SIZE, click
 
     console = _ConsoleProxy()
 
@@ -813,7 +814,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         if input_confirmed:
             run(_drop_all, configs)
 
-    @database_group.command(name="dump-data", help="Dump specified tables from the database to JSON files.")
+    @database_group.command(name="dump-data", help="Dump specified tables from the database to fixture files.")
     @config_option
     @validate_config_option
     @bind_key_option
@@ -828,13 +829,51 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @click.option(
         "--dir",
         "dump_dir",
-        help="Directory to save the JSON files. Defaults to WORKDIR/fixtures",
+        help="Directory to save the fixture files. Defaults to WORKDIR/fixtures",
         type=click.Path(path_type=Path),
         default=Path.cwd() / "fixtures",
         required=False,
     )
-    def dump_table_data(bind_key: Optional[str], table_names: tuple[str, ...], dump_dir: Path) -> None:  # pyright: ignore[reportUnusedFunction]
-        """Dump table data to JSON files."""
+    @click.option(
+        "--format",
+        "file_format",
+        type=click.Choice(["json", "jsonl", "csv"]),
+        default="json",
+        show_default=True,
+        help="Fixture file format.",
+    )
+    @click.option(
+        "--compression",
+        "compression",
+        type=click.Choice(["none", "gzip", "zip"]),
+        default="none",
+        show_default=True,
+        help="Compression applied to each fixture file.",
+    )
+    @click.option(
+        "--max-file-size",
+        "max_file_size",
+        type=BYTE_SIZE,
+        default=None,
+        help="Start a new numbered shard before a file would exceed this on-disk size, in bytes or with a K, M, or G suffix (1024-based), for example 50M.",
+    )
+    @click.option(
+        "--max-records",
+        "max_records",
+        type=click.IntRange(min=1),
+        default=None,
+        help="Start a new numbered shard after this many records.",
+    )
+    def dump_table_data(  # pyright: ignore[reportUnusedFunction]
+        bind_key: Optional[str],
+        table_names: tuple[str, ...],
+        dump_dir: Path,
+        file_format: str,
+        compression: str,
+        max_file_size: Optional[int],
+        max_records: Optional[int],
+    ) -> None:
+        """Dump table data to fixture files."""
         from anyio import run
         from rich.prompt import Confirm
 
@@ -868,7 +907,15 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
                 models = [
                     mapper.class_ for mapper in orm_registry.mappers if mapper.class_.__table__.name in target_tables
                 ]
-                await dump_tables(dump_dir, config.get_session(), models)
+                await dump_tables(
+                    dump_dir,
+                    config.get_session(),
+                    models,
+                    file_format=cast("FixtureFormat", file_format),
+                    compression=None if compression == "none" else cast("FixtureCompression", compression),
+                    max_bytes=max_file_size,
+                    max_records=max_records,
+                )
                 console.rule("[green bold]Data dump complete", align="left")
 
         return run(_dump_tables)

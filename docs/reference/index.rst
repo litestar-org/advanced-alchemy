@@ -105,8 +105,14 @@ Frameworks, CLI & Utilities
 
       ``RepositoryError``, ``IntegrityError``, ``DuplicateKeyError``, ``ForeignKeyError``, ``NotFoundError``, and error wrappers.
 
+    .. grid-item-card:: :octicon:`file-directory` Fixtures
+      :link: fixtures
+      :link-type: doc
+
+      Streaming JSON, JSON Lines, and CSV fixture loaders, batch iterators, and sharded writers.
+
     .. grid-item-card:: :octicon:`tools` Utilities
       :link: utils
       :link-type: doc
 
-      Dataclass sentinels, dependency caches, fixture loaders, sync-to-async portals, and text helpers.
+      Dataclass sentinels, dependency caches, sync-to-async portals, and text helpers.
