@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, IntEnum
 from typing import Annotated, Any, Optional, Union, cast
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from uuid import UUID
 
 import pytest
@@ -20,7 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.exceptions import ImproperConfigurationError
-from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig
+from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.fastapi.providers import (
     DEPENDENCY_DEFAULTS,
     ChoiceField,
@@ -28,7 +28,10 @@ from advanced_alchemy.extensions.fastapi.providers import (
     DependencyDefaults,
     FieldNameType,
     FilterConfig,
+    _clear_request_state,  # pyright: ignore[reportPrivateUsage]
     _create_filter_aggregate_function_fastapi,  # pyright: ignore[reportPrivateUsage]
+    _is_async_service_target,  # pyright: ignore[reportPrivateUsage]
+    _should_commit_for_status,  # pyright: ignore[reportPrivateUsage]
     dep_cache,  # Import the global cache instance
     provide_filters,
 )
@@ -43,7 +46,7 @@ from advanced_alchemy.filters import (
     SearchFilter,
 )
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
+from advanced_alchemy.service import ServiceGroup, SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.utils.dependencies import filter_cache_key, resolve_filter_aliases
 from advanced_alchemy.utils.singleton import SingletonMeta
 
@@ -1161,3 +1164,67 @@ def test_equal_dependency_defaults_still_share_a_dependency() -> None:
     assert provide_filters(_cached_config(), DependencyDefaults()) is provide_filters(
         _cached_config(), DependencyDefaults()
     )
+
+
+class _FastAPIPlainHelper:
+    """Plain helper service whose async mode cannot be inferred without an extension config."""
+
+    def __init__(self, session: Any) -> None:
+        self.session = session
+
+
+class _FastAPIUndeterminedGroup(ServiceGroup):
+    """ServiceGroup composed strictly of plain helpers with undetermined execution mode."""
+
+    helper: _FastAPIPlainHelper
+
+
+@pytest.mark.parametrize(
+    ("status_code", "commit_mode", "expected"),
+    [
+        (200, "manual", False),
+        (200, "autocommit", True),
+        (404, "autocommit", False),
+        (307, "autocommit_include_redirect", True),
+        (400, "autocommit_include_redirect", False),
+        (200, "unknown", False),
+    ],
+)
+def test_should_commit_for_status_modes(status_code: int, commit_mode: str, expected: bool) -> None:
+    """Verify FastAPI auto-commit status code policy across all commit modes."""
+    assert _should_commit_for_status(status_code, commit_mode) is expected
+
+
+def test_clear_request_state_removes_present_key_safely() -> None:
+    """Clear stored session state attributes whether present or already absent."""
+    request = Request({"type": "http", "headers": []})
+    request.state.db_session = "sentinel"
+    _clear_request_state(request, "db_session")
+    assert not hasattr(request.state, "db_session")
+    _clear_request_state(request, "db_session")
+
+
+def test_is_async_service_target_uses_extension_for_undetermined_group() -> None:
+    """Inspect extension session provider when a ServiceGroup declares no SQLAlchemy services."""
+    async_ext = AdvancedAlchemy(SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:"), app=FastAPI())
+    sync_ext = AdvancedAlchemy(SQLAlchemySyncConfig(connection_string="sqlite:///:memory:"), app=FastAPI())
+
+    assert _is_async_service_target(_FastAPIUndeterminedGroup, async_ext, None) is True
+    assert _is_async_service_target(_FastAPIUndeterminedGroup, sync_ext, None) is False
+
+    async def _async_session_gen() -> AsyncGenerator[Any, None]:
+        yield None
+
+    custom_ext = MagicMock()
+    custom_ext.get_config.return_value = object()
+    custom_ext.provide_session.return_value = _async_session_gen
+    assert _is_async_service_target(_FastAPIUndeterminedGroup, custom_ext, None) is True
+
+
+def test_fastapi_aggregate_filter_flattens_list_values() -> None:
+    """Extend aggregated filter output when a sub-dependency returns a list of filters."""
+    agg = _create_filter_aggregate_function_fastapi({"id_filter": int})
+    first = CollectionFilter(field_name="id", values=[1])
+    second = CollectionFilter(field_name="id", values=[2])
+    result = agg(id_filter=cast("Any", [first, second]))
+    assert result == [first, second]
