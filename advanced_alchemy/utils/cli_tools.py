@@ -121,7 +121,7 @@ class _ByteSizeParamType(click.ParamType):
 
     name = "size"
     _pattern: "ClassVar[re.Pattern[str]]" = re.compile(
-        r"(?P<number>[0-9]+)(?:(?P<unit>[kmg])(?:i?b)?|b)?",
+        r"(?P<number>\d+)(?:(?P<unit>[kmg])(?:i?b)?|b)?",
         re.IGNORECASE,
     )
     _multipliers: "ClassVar[dict[str, int]]" = {"k": 1024, "m": 1024**2, "g": 1024**3}
@@ -140,27 +140,31 @@ class _ByteSizeParamType(click.ParamType):
         Raises:
             click.BadParameter: If ``value`` does not match the size grammar or is below 1 byte.
         """
-        if isinstance(value, int) and not isinstance(value, bool):
-            size = value
-        else:
-            match = self._pattern.fullmatch(str(value).strip())
-            if match is None:
-                msg = (
-                    f"{value!r} is not a valid size; use a whole number of bytes with an optional "
-                    "K, M, or G suffix, for example 1048576, 512K, 50M, or 2GiB."
-                )
-                self.fail(msg, param, ctx)
-            unit = match.group("unit")
-            multiplier = self._multipliers[unit.lower()] if unit else 1
-            size = int(match.group("number")) * multiplier
-
+        size = self._parse_bytes(value)
+        if size is None:
+            msg = (
+                f"{value!r} is not a valid size; use a whole number of bytes with an optional "
+                "K, M, or G suffix, for example 1048576, 512K, 50M, or 2GiB."
+            )
+            return self.fail(msg, param, ctx)
         if size < 1:
             msg = f"{value!r} is not a valid size; the size must be at least 1 byte."
-            self.fail(msg, param, ctx)
+            return self.fail(msg, param, ctx)
         return size
 
+    def _parse_bytes(self, value: Any) -> Optional[int]:
+        """Parse an integer or byte-size string, returning ``None`` on invalid syntax."""
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+        match = self._pattern.fullmatch(str(value).strip())
+        if match is None:
+            return None
+        unit = match.group("unit")
+        multiplier = self._multipliers[unit.lower()] if unit else 1
+        return int(match.group("number")) * multiplier
 
-BYTE_SIZE: "Final[_ByteSizeParamType]" = _ByteSizeParamType()
+
+BYTE_SIZE: Final[_ByteSizeParamType] = _ByteSizeParamType()
 
 
 def _patch_group_class_for_aliases(group_cls: type[click.Group]) -> None:

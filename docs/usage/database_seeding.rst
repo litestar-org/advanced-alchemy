@@ -173,7 +173,7 @@ Writing Fixtures With Automatic Rollover
         assert open_fixture_sync(Path(tmp_dir), "users") == users
         assert [len(batch) for batch in iter_fixture_sync(Path(tmp_dir), "users", batch_size=4)] == [4, 1]
 
-Files are written to temporary names first. Only after every record is written does the writer remove the old files for that fixture name, in any format or shard layout, and move the new files into place. If writing fails, the existing fixture is left untouched. A single record larger than ``max_bytes`` is written to its own shard with a ``UserWarning``. ``write_fixture_async`` also accepts an async iterable of records.
+Files are written to temporary names first. Only after every record is written does the writer move the new files into place and remove any stale files for that fixture name across formats and shard layouts. If writing fails, the existing fixture is left untouched. A single record larger than ``max_bytes`` is written to its own shard with a ``UserWarning``. ``write_fixture_async`` also accepts an async iterable of records.
 
 Safe Re-Runs Across Deployments
 -------------------------------

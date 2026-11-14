@@ -44,6 +44,7 @@ FixtureCompression = Literal["gzip", "zip"]
 _FORMAT_PRIORITY: "tuple[FixtureFormat, ...]" = ("json", "jsonl", "csv")
 _COMPRESSION_SUFFIXES: "dict[FixtureCompression, str]" = {"gzip": ".gz", "zip": ".zip"}
 _SUFFIX_COMPRESSIONS: "dict[str, FixtureCompression]" = {".gz": "gzip", ".zip": "zip"}
+_SHARD_INDEX_WIDTH = 3
 _TEXT_ENCODING = "utf-8-sig"
 _READ_ERRORS = (OSError, zipfile.BadZipFile, gzip.BadGzipFile, EOFError, zlib.error)
 
@@ -223,10 +224,10 @@ def write_fixture_sync(
 ) -> "list[Path]":
     """Write fixture records synchronously in JSON, JSONL, or CSV format.
 
-    Streams encoded records into temporary ``.tmp`` files, removes any existing
-    fixture files matching ``fixture_name`` across all formats, compressions,
-    and shard layouts upon completion, and atomically renames temporary files
-    into place.
+    Streams encoded records into temporary ``.tmp`` files, atomically renames
+    temporary files into place upon completion, and removes any stale fixture
+    files matching ``fixture_name`` across all formats, compressions, and shard
+    layouts.
 
     Args:
         fixtures_path: Target directory path for fixture files. Created if it
@@ -291,9 +292,9 @@ async def write_fixture_async(
     Streams records from a synchronous or asynchronous iterable in batches of
     ``batch_size`` into temporary ``.tmp`` files, offloads writer construction,
     batch writes, commit, and abort to worker threads via
-    :func:`~advanced_alchemy.utils.sync_tools.async_`, removes stale fixture
-    files matching ``fixture_name`` on completion, and atomically renames
-    temporary files into place.
+    :func:`~advanced_alchemy.utils.sync_tools.async_`, atomically renames
+    temporary files into place on completion, and removes stale fixture files
+    matching ``fixture_name``.
 
     Args:
         fixtures_path: Target directory path for fixture files. Created if it
@@ -434,13 +435,16 @@ class _FixtureFile:
                 if self.file_format == "csv":
                     yield from csv.DictReader(handle)
                 else:
-                    for lineno, line in enumerate(handle, start=1):
-                        if not line.strip():
-                            continue
-                        yield self._decode_line(line, lineno)
+                    yield from self._iter_jsonl(handle)
         except _READ_ERRORS as exc:
             msg = f"Error reading fixture file {self.path}: {exc}"
             raise OSError(msg) from exc
+
+    def _iter_jsonl(self, handle: "TextIO") -> "Generator[Any, None, None]":
+        """Yield decoded JSON values from each non-blank JSONL line in ``handle``."""
+        for lineno, line in enumerate(handle, start=1):
+            if line.strip():
+                yield self._decode_line(line, lineno)
 
     def _open_text(self) -> "AbstractContextManager[TextIO]":
         """Open the fixture file as a streaming UTF-8-SIG text handle.
@@ -502,17 +506,44 @@ class _FixtureFile:
 class _FixtureLocator:
     """Locator that resolves fixture files by format priority and compression."""
 
-    __slots__ = ("base_path", "fixture_name")
+    __slots__ = ("base_path", "display_name", "fixture_name")
 
     def __init__(self, base_path: "Path", fixture_name: str) -> None:
         """Initialize a fixture locator.
 
         Args:
             base_path: Directory path containing fixture files.
-            fixture_name: Logical fixture name without extension.
+            fixture_name: Logical fixture name or relative subpath without extension.
+
+        Raises:
+            ValueError: If ``fixture_name`` is empty, absolute, or traverses parent directories.
         """
-        self.base_path = base_path
-        self.fixture_name = fixture_name
+        self.display_name = fixture_name
+        self.base_path, self.fixture_name = self.split_target(base_path, fixture_name)
+
+    @staticmethod
+    def split_target(base_path: "Path", fixture_name: str) -> "tuple[Path, str]":
+        """Resolve a fixture name or relative subpath into its directory and leaf name.
+
+        Args:
+            base_path: Root directory path for fixtures.
+            fixture_name: Fixture name or relative subpath without extension.
+
+        Raises:
+            ValueError: If ``fixture_name`` is empty, ends with a path separator, is absolute,
+                or contains ``..`` traversal segments.
+
+        Returns:
+            tuple[Path, str]: Resolved target directory and leaf fixture name.
+        """
+        if not fixture_name or fixture_name.endswith(("/", "\\")):
+            msg = f"Invalid fixture name {fixture_name!r}"
+            raise ValueError(msg)
+        relative = Path(fixture_name)
+        if relative.is_absolute() or not relative.name or relative.name in {".", ".."} or ".." in relative.parts:
+            msg = f"Invalid fixture name {fixture_name!r}"
+            raise ValueError(msg)
+        return base_path / relative.parent, relative.name
 
     @staticmethod
     def next_batch(batches: "Iterator[list[Any]]") -> "Optional[list[Any]]":
@@ -525,6 +556,21 @@ class _FixtureLocator:
             Optional[list[Any]]: Next batch of records, or ``None`` at end of stream.
         """
         return next(batches, None)
+
+    @staticmethod
+    def path_identity(path: "Path") -> "Union[tuple[int, int], str]":
+        """Return a filesystem identity key for deduplicating equivalent paths.
+
+        Args:
+            path: Existing file path.
+
+        Returns:
+            Union[tuple[int, int], str]: Device/inode pair when available, else path string.
+        """
+        stat = path.stat()
+        if stat.st_ino:
+            return (stat.st_dev, stat.st_ino)
+        return str(path)
 
     def resolve(self) -> "list[_FixtureFile]":
         """Resolve the highest-priority fixture file or shards for the configured name.
@@ -542,14 +588,14 @@ class _FixtureLocator:
             shards = self._shards(file_format)
             if candidates and shards:
                 paths = ", ".join(str(fixture_file.path) for fixture_file in [*candidates, *shards])
-                msg = f"Fixture {self.fixture_name!r} has both an unsharded file and numbered shards: {paths}"
+                msg = f"Fixture {self.display_name!r} has both an unsharded file and numbered shards: {paths}"
                 raise ValueError(msg)
             if shards:
                 return shards
             if candidates:
                 return candidates[:1]
         msg = (
-            f"Could not find the {self.fixture_name} fixture "
+            f"Could not find the {self.display_name} fixture "
             "(tried .json, .jsonl, .csv with optional .gz/.zip compression, numbered shards, and case variations)"
         )
         raise FileNotFoundError(msg)
@@ -575,8 +621,9 @@ class _FixtureLocator:
     def existing_paths(self) -> "list[Path]":
         """Return every existing unsharded or sharded path matching the fixture name.
 
-        Skips shard index validation so broken, gapped, or duplicate layouts can
-        still be discovered for cleanup before replacing a fixture.
+        Skips contiguous index validation so broken, gapped, or duplicate shard
+        sets (anchored by shard ``001``) can still be discovered for cleanup when
+        replacing a fixture, while ignoring unrelated dotted-numeric siblings.
 
         Returns:
             list[Path]: Sorted deduplicated fixture file paths in ``base_path``.
@@ -587,7 +634,7 @@ class _FixtureLocator:
         paths: list[Path] = []
         for file_format in _FORMAT_PRIORITY:
             for fixture_file in [*self._unsharded_candidates(file_format), *self._shard_matches(file_format)]:
-                identity = self._identity(fixture_file.path)
+                identity = self.path_identity(fixture_file.path)
                 if identity not in seen:
                     seen.add(identity)
                     paths.append(fixture_file.path)
@@ -618,7 +665,7 @@ class _FixtureLocator:
             path = self.base_path / name
             if not path.is_file():
                 continue
-            identity = self._identity(path)
+            identity = self.path_identity(path)
             if identity in seen:
                 continue
             seen.add(identity)
@@ -626,13 +673,13 @@ class _FixtureLocator:
         return candidates
 
     def _shard_matches(self, file_format: FixtureFormat) -> "list[_FixtureFile]":
-        """Collect matching numbered shard files for a format without index validation.
+        """Collect canonical numbered shard files for a format when shard ``001`` is present.
 
         Args:
             file_format: Fixture format to probe.
 
         Returns:
-            list[_FixtureFile]: Deduplicated matching shard descriptors in directory sort order.
+            list[_FixtureFile]: Deduplicated matching shard descriptors, or ``[]`` when no shard ``001`` exists.
         """
         if not self.base_path.is_dir():
             return []
@@ -644,14 +691,18 @@ class _FixtureLocator:
         seen: set[Union[tuple[int, int], str]] = set()
         for path in sorted(self.base_path.iterdir()):
             match = pattern.match(path.name)
-            if match is None or match["fmt"] != file_format or not path.is_file():
+            if match is None or match["fmt"] != file_format or not self._is_canonical_index(match["index"]):
                 continue
-            identity = self._identity(path)
+            if not path.is_file():
+                continue
+            identity = self.path_identity(path)
             if identity in seen:
                 continue
             seen.add(identity)
             compression = _SUFFIX_COMPRESSIONS.get(match["comp"] or "")
             matches.append(_FixtureFile(path, self.fixture_name, file_format, compression, int(match["index"])))
+        if not any(fixture_file.shard_index == 1 for fixture_file in matches):
+            return []
         return matches
 
     def _shards(self, file_format: FixtureFormat) -> "list[_FixtureFile]":
@@ -680,24 +731,24 @@ class _FixtureLocator:
             group = by_index[index]
             if len(group) > 1:
                 paths = ", ".join(str(fixture_file.path) for fixture_file in group)
-                msg = f"Fixture {self.fixture_name!r} has multiple shards with index {index}: {paths}"
+                msg = f"Fixture {self.display_name!r} has multiple shards with index {index}: {paths}"
                 raise ValueError(msg)
 
         if indexes[0] == 0:
             paths = ", ".join(str(fixture_file.path) for fixture_file in by_index[0])
-            msg = f"Fixture {self.fixture_name!r} shard indexes start at 1, found index 0: {paths}"
+            msg = f"Fixture {self.display_name!r} shard indexes start at 1, found index 0: {paths}"
             raise ValueError(msg)
 
-        missing_indexes = sorted(set(range(1, indexes[-1] + 1)) - set(indexes))
-        if missing_indexes:
-            missing = ", ".join(str(index) for index in missing_indexes)
-            paths = ", ".join(str(by_index[index][0].path) for index in indexes)
-            msg = f"Fixture {self.fixture_name!r} is missing shard index(es) {missing}: {paths}"
-            raise ValueError(msg)
+        for expected, actual in enumerate(indexes, start=1):
+            if actual != expected:
+                paths = ", ".join(str(by_index[index][0].path) for index in indexes)
+                msg = f"Fixture {self.display_name!r} is missing shard index(es) {expected}: {paths}"
+                raise ValueError(msg)
 
         return [by_index[index][0] for index in indexes]
 
-    def _batches(self, files: "list[_FixtureFile]", batch_size: int) -> "Generator[list[Any], None, None]":
+    @staticmethod
+    def _batches(files: "list[_FixtureFile]", batch_size: int) -> "Generator[list[Any], None, None]":
         """Yield non-empty batches of at most ``batch_size`` records across resolved files.
 
         Args:
@@ -722,19 +773,9 @@ class _FixtureLocator:
             yield batch
 
     @staticmethod
-    def _identity(path: "Path") -> "Union[tuple[int, int], str]":
-        """Return a filesystem identity key for deduplicating equivalent paths.
-
-        Args:
-            path: Existing file path.
-
-        Returns:
-            Union[tuple[int, int], str]: Device/inode pair when available, else path string.
-        """
-        stat = path.stat()
-        if stat.st_ino:
-            return (stat.st_dev, stat.st_ino)
-        return str(path)
+    def _is_canonical_index(digits: str) -> bool:
+        """Return whether ``digits`` matches the writer's zero-padded shard index format."""
+        return len(digits) >= _SHARD_INDEX_WIDTH and digits == f"{int(digits):0{_SHARD_INDEX_WIDTH}d}"
 
 
 class _FixtureWriter:
@@ -754,6 +795,7 @@ class _FixtureWriter:
         "_temp_paths",
         "base_path",
         "compression",
+        "display_name",
         "file_format",
         "fixture_name",
         "max_bytes",
@@ -774,14 +816,14 @@ class _FixtureWriter:
 
         Args:
             base_path: Target directory path for written fixture files.
-            fixture_name: Logical fixture name without extension.
+            fixture_name: Logical fixture name or relative subpath without extension.
             file_format: Output format (``"json"``, ``"jsonl"``, or ``"csv"``).
             compression: Optional compression (``"gzip"``, ``"zip"``, or ``None``).
             max_bytes: Optional maximum on-disk byte size per shard.
             max_records: Optional maximum record count per shard.
 
         Raises:
-            ValueError: If any format, compression, or shard limit argument is invalid.
+            ValueError: If any fixture name, format, compression, or shard limit argument is invalid.
         """
         if file_format not in ("json", "jsonl", "csv"):
             msg = f"Unsupported fixture format {file_format!r}; expected 'json', 'jsonl', or 'csv'"
@@ -796,8 +838,8 @@ class _FixtureWriter:
             msg = f"max_records must be at least 1, got {max_records}"
             raise ValueError(msg)
 
-        self.base_path = base_path
-        self.fixture_name = fixture_name
+        self.display_name = fixture_name
+        self.base_path, self.fixture_name = _FixtureLocator.split_target(base_path, fixture_name)
         self.file_format: FixtureFormat = file_format
         self.compression: Optional[FixtureCompression] = compression
         self.max_bytes = max_bytes
@@ -846,7 +888,7 @@ class _FixtureWriter:
             projected = self._projected_size(len(chunk))
             if projected > self.max_bytes:
                 warnings.warn(
-                    f"Record {self._record_count} of fixture {self.fixture_name!r} exceeds "
+                    f"Record {self._record_count} of fixture {self.display_name!r} exceeds "
                     f"max_bytes={self.max_bytes} on its own (projected {projected} bytes); "
                     "writing it to its own shard",
                     UserWarning,
@@ -867,7 +909,7 @@ class _FixtureWriter:
             self.write(record)
 
     def commit(self) -> "list[Path]":
-        """Finalize output, delete stale fixture files, and rename temp files into place.
+        """Finalize output, rename temp files into place, and remove stale fixture files.
 
         Returns:
             list[Path]: Final written fixture file paths in shard order.
@@ -875,10 +917,17 @@ class _FixtureWriter:
         if self._raw is None and not self._final_paths:
             self._open_shard()
         self._close_shard()
-        for path in _FixtureLocator(self.base_path, self.fixture_name).existing_paths():
-            path.unlink(missing_ok=True)
+        stale_paths = _FixtureLocator(self.base_path, self.fixture_name).existing_paths()
         for temp, final in zip(self._temp_paths, self._final_paths):
             temp.replace(final)
+        final_set = set(self._final_paths)
+        final_identities = {_FixtureLocator.path_identity(final) for final in self._final_paths if final.exists()}
+        for path in stale_paths:
+            if path in final_set or not path.exists():
+                continue
+            if _FixtureLocator.path_identity(path) in final_identities:
+                continue
+            path.unlink(missing_ok=True)
         self._closed = True
         return list(self._final_paths)
 
@@ -959,7 +1008,7 @@ class _FixtureWriter:
         extra = [key for key in record if key not in header_keys]
         if extra:
             msg = (
-                f"CSV record {self._record_count} of fixture {self.fixture_name!r} "
+                f"CSV record {self._record_count} of fixture {self.display_name!r} "
                 f"has keys not in the header: {extra!r}"
             )
             raise ValueError(msg)
@@ -972,7 +1021,8 @@ class _FixtureWriter:
         """Narrow an arbitrary record to a typed mapping for static type checkers."""
         return isinstance(value, Mapping)
 
-    def _encode_csv_row(self, values: "Iterable[Any]") -> str:
+    @staticmethod
+    def _encode_csv_row(values: "Iterable[Any]") -> str:
         """Format a single CSV row using Python's excel dialect."""
         buffer = io.StringIO()
         csv.writer(buffer).writerow(values)

@@ -1121,10 +1121,6 @@ class TestFixtureShards:
                 [{"id": 1}, {"id": 2}],
             ),
             (
-                {"users.1.jsonl": '{"id": 1}\n', "users.02.jsonl": '{"id": 2}\n', "users.003.jsonl": '{"id": 3}\n'},
-                [{"id": 1}, {"id": 2}, {"id": 3}],
-            ),
-            (
                 {"users.001.json": '[{"id": 1}]', "users.002.json.gz": '[{"id": 2}, {"id": 3}]'},
                 [{"id": 1}, {"id": 2}, {"id": 3}],
             ),
@@ -1137,14 +1133,14 @@ class TestFixtureShards:
     def test_open_shard_layouts(
         self, tmp_path: Path, files: "dict[str, str]", expected: "list[dict[str, Any]]"
     ) -> None:
-        """Test mixed compression, case variants, variable digit widths, and formats across shards."""
+        """Test mixed compression, case variants, and formats across canonical shards."""
         for name, content in files.items():
             _write_fixture(tmp_path / name, content)
         assert open_fixture_sync(tmp_path, "users") == expected
 
     def test_open_shards_in_numeric_order(self, tmp_path: Path) -> None:
-        """Test shards are ordered numerically so shard 10 follows shard 9."""
-        files = {f"users.{i}.jsonl": f'{{"id": {i}}}\n' for i in range(1, 11)}
+        """Test shards are ordered numerically including 4-digit indexes beyond 999."""
+        files = {f"users.{i:03d}.jsonl": f'{{"id": {i}}}\n' for i in range(1, 11)}
         for name, content in files.items():
             _write_fixture(tmp_path / name, content)
         assert open_fixture_sync(tmp_path, "users") == [{"id": i} for i in range(1, 11)]
@@ -1163,14 +1159,19 @@ class TestFixtureShards:
                 ("users.001.jsonl", "users.003.jsonl"),
             ),
             (
+                {"users.001.jsonl": "{}\n", "users.99999999999.jsonl": "{}\n"},
+                "is missing shard index(es) 2",
+                ("users.001.jsonl", "users.99999999999.jsonl"),
+            ),
+            (
                 {"users.000.jsonl": "{}\n", "users.001.jsonl": "{}\n"},
                 "shard indexes start at 1, found index 0",
                 ("users.000.jsonl",),
             ),
             (
-                {"users.1.json": "[]", "users.001.json.gz": "[]"},
+                {"users.001.json": "[]", "users.001.json.gz": "[]"},
                 "has multiple shards with index 1",
-                ("users.1.json", "users.001.json.gz"),
+                ("users.001.json", "users.001.json.gz"),
             ),
             (
                 {"users.001.json": '{"a": 1}'},
@@ -1242,6 +1243,34 @@ class TestFixtureShards:
         with pytest.raises(ValueError) as exc_info:
             open_fixture_sync(tmp_path, "users")
         assert str(exc_info.value).count(".json.gz") == 1
+
+    @pytest.mark.parametrize(
+        ("files", "fixture_name", "expected"),
+        [
+            ({"report.json": '[{"id": 1}]', "report.2024.json": '[{"id": 2024}]'}, "report", [{"id": 1}]),
+            ({"report.json": '[{"id": 1}]', "report.2024.json": '[{"id": 2024}]'}, "report.2024", [{"id": 2024}]),
+            ({"users.json": '[{"id": 1}]', "users.1.json": '[{"id": 2}]'}, "users", [{"id": 1}]),
+            ({"users.json": '[{"id": 1}]', "users.0001.json": '[{"id": 2}]'}, "users", [{"id": 1}]),
+        ],
+    )
+    def test_dotted_numeric_siblings_without_shard_001_are_ignored(
+        self,
+        tmp_path: Path,
+        files: "dict[str, str]",
+        fixture_name: str,
+        expected: "list[dict[str, int]]",
+    ) -> None:
+        """Test dotted-numeric sibling files do not block unsharded loads unless canonical shard 001 exists."""
+        for name, content in files.items():
+            _write_fixture(tmp_path / name, content)
+        assert open_fixture_sync(tmp_path, fixture_name) == expected
+
+    @pytest.mark.parametrize("sibling", ["only.2024.json", "only.2.json", "only.0001.json", "only.002.json"])
+    def test_dotted_numeric_file_without_shard_001_raises_not_found(self, tmp_path: Path, sibling: str) -> None:
+        """Test a lone dotted-numeric file without shard 001 raises FileNotFoundError."""
+        _write_fixture(tmp_path / sibling, '[{"id": 1}]')
+        with pytest.raises(FileNotFoundError, match="Could not find the only fixture"):
+            open_fixture_sync(tmp_path, "only")
 
     def test_missing_fixtures_directory(self, tmp_path: Path) -> None:
         """Test missing fixtures directory raises FileNotFoundError."""
@@ -1563,17 +1592,71 @@ class TestWriteFixtureSync:
             "users.json",
             "USERS.csv",
             "users.001.jsonl.gz",
-            "users.1.json",
+            "users.001.json",
             "users.001.json.gz",
+            "users.2.json",
+            "users.2024.csv",
             "users_extra.json",
         ):
             (tmp_path / name).write_bytes(b"x")
 
         assert _FixtureLocator(tmp_path, "users").existing_paths() == [
             tmp_path / name
-            for name in ("USERS.csv", "users.001.json.gz", "users.001.jsonl.gz", "users.1.json", "users.json")
+            for name in ("USERS.csv", "users.001.json", "users.001.json.gz", "users.001.jsonl.gz", "users.json")
         ]
         assert _FixtureLocator(tmp_path / "missing", "users").existing_paths() == []
+
+    @pytest.mark.parametrize("sibling", ["users.2.json", "users.2024.json", "users.0001.json", "users.002.json"])
+    def test_write_preserves_unrelated_dotted_numeric_siblings(self, tmp_path: Path, sibling: str) -> None:
+        """Test writing a fixture preserves dotted-numeric siblings that are not anchored by shard 001."""
+        (tmp_path / "users.json").write_text('[{"id": 1}]', encoding="utf-8")
+        (tmp_path / sibling).write_text('[{"id": 99}]', encoding="utf-8")
+
+        write_fixture_sync(tmp_path, "users", [{"id": 2}], file_format="jsonl")
+
+        assert (tmp_path / sibling).exists()
+        assert open_fixture_sync(tmp_path, "users") == [{"id": 2}]
+
+    @pytest.mark.parametrize("compression", [None, "gzip", "zip"])
+    def test_nested_subpath_round_trip(self, tmp_path: Path, compression: "FixtureCompression | None") -> None:
+        """Test reading and writing fixtures addressed with a relative subdirectory path."""
+        records = [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
+        paths = write_fixture_sync(
+            tmp_path,
+            "nested/sub/users",
+            records,
+            file_format="jsonl",
+            compression=compression,
+        )
+        assert paths[0].parent == tmp_path / "nested" / "sub"
+        assert open_fixture_sync(tmp_path, "nested/sub/users") == records
+
+    @pytest.mark.parametrize("bad_name", ["", ".", "..", "sub/", "/abs/users", "../outside", "sub/../outside"])
+    def test_invalid_fixture_name_rejected_before_touching_disk(self, tmp_path: Path, bad_name: str) -> None:
+        """Test invalid or traversing fixture names raise ValueError before creating directories."""
+        target = tmp_path / "missing"
+        with pytest.raises(ValueError, match="Invalid fixture name"):
+            open_fixture_sync(target, bad_name)
+        with pytest.raises(ValueError, match="Invalid fixture name"):
+            write_fixture_sync(target, bad_name, [{"id": 1}])
+        assert target.exists() is False
+
+    def test_commit_rename_failure_preserves_existing_fixture(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test a failure while renaming temp files leaves the previous fixture readable and removes temp files."""
+        (tmp_path / "users.json").write_text('[{"id": 1}]', encoding="utf-8")
+
+        def fail_replace(self: Path, target: Path) -> Path:
+            msg = "rename failed"
+            raise OSError(msg)
+
+        monkeypatch.setattr(Path, "replace", fail_replace)
+        with pytest.raises(OSError, match="rename failed"):
+            write_fixture_sync(tmp_path, "users", [{"id": 2}], file_format="jsonl")
+
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["users.json"]
+        assert open_fixture_sync(tmp_path, "users") == [{"id": 1}]
 
     def test_write_aborts_on_iterator_error(self, tmp_path: Path) -> None:
         """Test iterator errors abort without leaving temp files or modifying existing fixtures."""
