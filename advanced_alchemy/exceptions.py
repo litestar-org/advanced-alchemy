@@ -156,14 +156,22 @@ ORACLE_ERROR_CODE_TO_ERROR_KEY = {
     2290: "check_constraint",
 }
 
-# 547 is shared by FOREIGN KEY, REFERENCE, and CHECK conflicts, so it is left to the regex fallback.
 MSSQL_ERROR_NUMBER_TO_ERROR_KEY = {
     2601: "duplicate_key",
     2627: "duplicate_key",
 }
+"""SQL Server native error numbers mapped to error keys.
 
-# pyodbc has no native error attribute; the number precedes the ODBC function marker of the first diagnostic record.
+``547`` is omitted because SQL Server uses it for FOREIGN KEY, REFERENCE, and CHECK conflicts;
+the ``mssql`` regex tables classify those.
+"""
+
 MSSQL_ERROR_NUMBER_REGEX = re.compile(r"\((?P<number>\d+)\)\s+\(SQL\w+\)(?:;|$)")
+"""Native error number in a ``pyodbc`` / ``aioodbc`` message.
+
+``pyodbc`` exposes no native error attribute; the number precedes the ODBC function marker of the
+first diagnostic record.
+"""
 
 DUCKDB_ERROR_TYPE_TO_KEY = {
     "duplicate_key": "duplicate_key",
