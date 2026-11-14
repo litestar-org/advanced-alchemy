@@ -22,7 +22,8 @@ See Also:
 import datetime
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Collection
+from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from operator import attrgetter
 from typing import (
@@ -50,6 +51,7 @@ from sqlalchemy import (
     case,
     exists,
     false,
+    inspect,
     literal_column,
     not_,
     or_,
@@ -58,21 +60,27 @@ from sqlalchemy import (
     true,
 )
 from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.orm import InstrumentedAttribute, aliased
 from sqlalchemy.sql import operators as op
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from sqlalchemy.sql.elements import UnaryExpression
 from typing_extensions import TypeAlias, TypedDict, TypeVar
 
 from advanced_alchemy.base import ModelProtocol
+from advanced_alchemy.operations import validate_identifier
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import InstrumentedAttribute
+    from sqlalchemy.orm import RelationshipProperty
 
     FilterFieldName: TypeAlias = Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]
     InstrumentedField: TypeAlias = Union[ColumnElement[Any], InstrumentedAttribute[Any]]
+    RelationshipHop: TypeAlias = Union[str, InstrumentedAttribute[Any]]
+    RelationshipPath: TypeAlias = Union[RelationshipHop, Sequence[RelationshipHop]]
 else:
     FilterFieldName: TypeAlias = Any
     InstrumentedField: TypeAlias = Any
+    RelationshipHop: TypeAlias = Any
+    RelationshipPath: TypeAlias = Any
 
 __all__ = (
     "LIKE_ESCAPE_CHAR",
@@ -97,6 +105,7 @@ __all__ = (
     "OnBeforeAfter",
     "OrderBy",
     "PaginationFilter",
+    "RelationshipFilter",
     "SearchFilter",
     "StatementFilter",
     "StatementFilterT",
@@ -152,6 +161,8 @@ class FilterMap(TypedDict):
     """Correlated ``NOT EXISTS`` subquery filter class."""
     filter_group: "type[FilterGroup]"
     """Logical ``AND`` / ``OR`` filter group class."""
+    relationship: "type[RelationshipFilter]"
+    """Correlated ``EXISTS`` / ``NOT EXISTS`` relationship filter class."""
 
 
 class LogicalOperatorMap(TypedDict):
@@ -199,19 +210,25 @@ class StatementFilter(ABC):
 
     @staticmethod
     def _get_instrumented_attr(model: Any, key: FilterFieldName) -> InstrumentedField:
-        """Get SQLAlchemy instrumented attribute from model.
+        """Get SQLAlchemy instrumented attribute from model or aliased entity.
 
         Args:
-            model: SQLAlchemy model class or instance
-            key: Attribute name or instrumented attribute
+            model: SQLAlchemy model class, aliased class, or instance.
+            key: Attribute name or instrumented attribute.
 
         Returns:
-            InstrumentedAttribute[Any]: SQLAlchemy instrumented attribute
+            InstrumentedField: SQLAlchemy attribute or column expression bound to ``model``.
 
         See Also:
             :class:`sqlalchemy.orm.attributes.InstrumentedAttribute`: SQLAlchemy attribute
         """
-        return cast("InstrumentedAttribute[Any]", getattr(model, key)) if isinstance(key, str) else key
+        if isinstance(key, str):
+            return cast("InstrumentedAttribute[Any]", getattr(model, key))
+        if isinstance(key, InstrumentedAttribute) and not isinstance(model, type):
+            model_inspector = inspect(model, raiseerr=False)
+            if model_inspector is not None and issubclass(model_inspector.mapper.class_, key.parent.class_):
+                return cast("InstrumentedField", getattr(model, key.key))
+        return key
 
 
 @dataclass
@@ -298,6 +315,41 @@ class InAnyFilter(StatementFilter, ABC):
     membership in a collection using either the SQL IN operator or the ANY operator.
     """
 
+    def _append_relationship_collection(
+        self,
+        statement: StatementTypeT,
+        model: type[ModelT],
+        field: InstrumentedField,
+        values: Collection[Any],
+        *,
+        negate: bool,
+    ) -> Optional[StatementTypeT]:
+        """Delegate collection membership on relationship attributes to :class:`RelationshipFilter`.
+
+        Raises:
+            ValueError: If the related model defines a composite primary key.
+        """
+        prop = getattr(field, "property", None)
+        mapper = getattr(prop, "mapper", None)
+        if mapper is None:
+            return None
+        related_pk = list(mapper.primary_key)
+        if len(related_pk) != 1:
+            msg = (
+                f"{type(self).__name__} does not support relationship filters against related models with composite "
+                f"primary keys (relationship={getattr(field, 'key', getattr(self, 'field_name', None))!r}). "
+                "Use RelationshipFilter with explicit filters instead."
+            )
+            raise ValueError(msg)
+        pk_attr_key = mapper.get_property_by_column(related_pk[0]).key
+        relationship_attr = cast("InstrumentedAttribute[Any]", field)
+        rel_filter = RelationshipFilter(
+            relationship=relationship_attr,
+            filters=(CollectionFilter(field_name=pk_attr_key, values=values),),
+            negate=negate,
+        )
+        return rel_filter.append_to_statement(statement, model)
+
 
 @dataclass
 class CollectionFilter(InAnyFilter, Generic[T]):
@@ -306,7 +358,9 @@ class CollectionFilter(InAnyFilter, Generic[T]):
     This filter restricts records based on a field's presence in a collection of values.
 
     The filter supports both ``IN`` and ``ANY`` operators for collection membership testing.
-    Use ``prefer_any=True`` in ``append_to_statement`` to use the ``ANY`` operator.
+    Use ``prefer_any=True`` in ``append_to_statement`` to use the ``ANY`` operator. When
+    ``field_name`` refers to a relationship attribute on a related model with a single
+    primary key, filtering delegates to :class:`RelationshipFilter`.
     """
 
     field_name: FilterFieldName
@@ -337,6 +391,9 @@ class CollectionFilter(InAnyFilter, Generic[T]):
             return statement
         if not self.values:
             return cast("StatementTypeT", statement.where(text("1=-1")))
+        rel_statement = self._append_relationship_collection(statement, model, field, self.values, negate=False)
+        if rel_statement is not None:
+            return rel_statement
         if prefer_any:
             return cast("StatementTypeT", statement.where(any_(self.values) == field))  # type: ignore[arg-type]
         return cast("StatementTypeT", statement.where(field.in_(self.values)))
@@ -407,6 +464,9 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
         field = self._get_instrumented_attr(model, self.field_name)
         if not self.values:
             return statement
+        rel_statement = self._append_relationship_collection(statement, model, field, self.values, negate=True)
+        if rel_statement is not None:
+            return rel_statement
         if prefer_any:
             return cast("StatementTypeT", statement.where(any_(self.values) != field))  # type: ignore[arg-type]
         return cast("StatementTypeT", statement.where(field.notin_(self.values)))
@@ -679,8 +739,8 @@ class SearchFilter(StatementFilter):
         - :meth:`sqlalchemy.sql.expression.ColumnOperators.ilike`: Case-insensitive LIKE
     """
 
-    field_name: Union[str, set[str]]
-    """Name or set of names of model attributes to search on."""
+    field_name: "Union[FilterFieldName, AbstractSet[FilterFieldName], Sequence[FilterFieldName]]"
+    """Field name, attribute, expression, or collection of field references to search on."""
     value: str
     """Text to match within the field(s)."""
     ignore_case: Optional[bool] = False
@@ -714,13 +774,16 @@ class SearchFilter(StatementFilter):
         return attrgetter("ilike" if self.ignore_case else "like")
 
     @property
-    def normalized_field_names(self) -> set[str]:
-        """Convert field_name to a set if it's a single string.
+    def normalized_field_names(self) -> "set[FilterFieldName]":
+        """Convert field_name to a set if it is a single field reference.
 
         Returns:
-            set[str]: Set of field names to be searched
+            set[FilterFieldName]: Set of field names or expressions to be searched.
         """
-        return {self.field_name} if isinstance(self.field_name, str) else self.field_name
+        raw_fields: Any = self.field_name
+        if isinstance(raw_fields, (str, ColumnElement, InstrumentedAttribute)):
+            return {raw_fields}
+        return set(cast("Iterable[FilterFieldName]", raw_fields))
 
     def get_search_clauses(self, model: type[ModelT]) -> list[BinaryExpression[bool]]:
         """Generate the LIKE/ILIKE clauses for all specified fields.
@@ -737,13 +800,14 @@ class SearchFilter(StatementFilter):
         search_clause: list[BinaryExpression[bool]] = []
         escape_char = LIKE_ESCAPE_CHAR if self.escape_wildcards else None
         value = escape_like_value(self.value) if self.escape_wildcards else self.value
+        model_name = getattr(model, "__name__", type(model).__name__)
         for field_name in self.normalized_field_names:
             try:
                 field = self._get_instrumented_attr(model, field_name)
                 search_text = f"%{value}%"
                 search_clause.append(self._func(field)(search_text, escape=escape_char))
             except AttributeError:
-                msg = f"Skipping search for field {field_name}.  It is not found in model {model.__name__}"
+                msg = f"Skipping search for field {field_name}.  It is not found in model {model_name}"
                 logger.debug(msg)
                 continue
         return search_clause
@@ -783,7 +847,7 @@ operators_map: dict[str, Callable[[Any, Any], ColumnElement[bool]]] = {
     "startswith": op.startswith_op,
     "istartswith": lambda c, v: c.ilike(v + "%"),
     "endswith": op.endswith_op,
-    "iendswith": lambda c, v: c.ilike(v + "%"),
+    "iendswith": lambda c, v: c.ilike("%" + v),
     "dateeq": lambda c, v: cast("Date", c) == v,
 }
 
@@ -1165,6 +1229,145 @@ class FilterGroup(StatementFilter):
         return statement
 
 
+@dataclass(init=False)
+class RelationshipFilter(StatementFilter):
+    """Filter records based on related model fields via correlated ``EXISTS`` subqueries.
+
+    Supports one-to-many, many-to-one, many-to-many, self-referential, joined-table
+    inheritance, and multi-hop relationship paths in a single database query while preserving
+    loader criteria (such as soft-delete filtering) across aliased inner targets.
+    """
+
+    __slots__ = ("filters", "negate", "relationship")
+
+    relationship: RelationshipPath
+    """Relationship name, instrumented attribute, or sequence of hops."""
+    filters: Sequence[Union[StatementFilter, ColumnElement[bool]]]
+    """Filters or column predicates applied against the related model."""
+    negate: bool
+    """If True, wraps the correlated subquery in ``NOT EXISTS`` instead of ``EXISTS``."""
+
+    def __init__(
+        self,
+        relationship: RelationshipPath,
+        filters: Sequence[Union[StatementFilter, ColumnElement[bool]]] = (),
+        negate: bool = False,
+    ) -> None:
+        self.relationship = (
+            tuple(relationship)
+            if isinstance(relationship, Sequence) and not isinstance(relationship, str)
+            else relationship
+        )
+        self.filters = tuple(filters)
+        self.negate = negate
+
+    def append_to_statement(
+        self,
+        statement: StatementTypeT,
+        model: type[ModelT],
+    ) -> StatementTypeT:
+        """Apply relationship ``EXISTS`` or ``NOT EXISTS`` clause to statement.
+
+        Args:
+            statement: SQLAlchemy statement to modify.
+            model: Parent SQLAlchemy model class or aliased class.
+
+        Returns:
+            StatementTypeT: Modified statement with the correlated subquery filter applied.
+
+        Raises:
+            ValueError: If a relationship hop is missing, invalid, or belongs to an unrelated model.
+        """
+        hops = self._normalize_hops()
+        leaf_clause = self._compile_hops(model, hops, self.filters, negate=self.negate)
+        return cast("StatementTypeT", statement.where(leaf_clause))
+
+    def _normalize_hops(self) -> "tuple[RelationshipHop, ...]":
+        if isinstance(self.relationship, (str, InstrumentedAttribute)):
+            return (self.relationship,)
+        hops = tuple(self.relationship)
+        if not hops:
+            msg = "RelationshipFilter requires at least one relationship hop."
+            raise ValueError(msg)
+        return hops
+
+    def _compile_hops(
+        self,
+        model: Any,
+        hops: "tuple[RelationshipHop, ...]",
+        leaf_filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+        *,
+        negate: bool,
+    ) -> ColumnElement[bool]:
+        head, *tail = hops
+        rel_prop = self._get_relationship_property(model, head)
+        target_cls = rel_prop.mapper.class_
+        target_alias = aliased(target_cls, flat=True)
+        inner_filters: Sequence[Union[StatementFilter, ColumnElement[bool]]] = (
+            (self._compile_hops(target_alias, tuple(tail), leaf_filters, negate=False),) if tail else leaf_filters
+        )
+        return self._build_exists_subquery(model, rel_prop, target_alias, inner_filters, negate=negate)
+
+    @staticmethod
+    def _get_relationship_property(model: Any, hop: RelationshipHop) -> "RelationshipProperty[Any]":
+        mapper = inspect(model).mapper
+        if isinstance(hop, str):
+            validate_identifier(hop, "relationship")
+            rel_name = hop
+        else:
+            owner_cls = hop.parent.class_
+            owner_matches = issubclass(mapper.class_, owner_cls) or issubclass(owner_cls, mapper.class_)
+            if not owner_matches:
+                msg = f"Relationship '{hop.key}' does not belong to model {mapper.class_.__name__}"
+                raise ValueError(msg)
+            rel_name = hop.key
+        if rel_name not in mapper.relationships:
+            msg = f"Relationship '{rel_name}' not found on model {mapper.class_.__name__}"
+            raise ValueError(msg)
+        return cast("RelationshipProperty[Any]", mapper.relationships[rel_name])
+
+    @staticmethod
+    def _build_exists_subquery(
+        model: Any,
+        rel_prop: "RelationshipProperty[Any]",
+        target_alias: Any,
+        filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+        *,
+        negate: bool,
+    ) -> ColumnElement[bool]:
+        parent_info = inspect(model)
+        target_info = inspect(target_alias)
+        primaryjoin, secondaryjoin, _src, _dest, secondary, target_adapter = rel_prop._create_joins(  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+            source_selectable=parent_info.selectable,
+            dest_selectable=target_info.selectable,
+            source_polymorphic=True,
+            of_type_entity=target_info,
+            alias_secondary=True,
+        )
+
+        subquery: Select[Any] = select(1).select_from(target_alias)
+        if secondary is not None:
+            if secondaryjoin is None:
+                msg = "Many-to-many relationship is missing required secondary join configuration."
+                raise ValueError(msg)
+            subquery = subquery.select_from(secondary).where(and_(primaryjoin, secondaryjoin))
+        else:
+            subquery = subquery.where(primaryjoin)
+
+        for filter_ in filters:
+            if isinstance(filter_, ColumnElement):
+                adapted = target_adapter.traverse(filter_) if target_adapter is not None else filter_
+                subquery = subquery.where(adapted)
+            else:
+                subquery = filter_.append_to_statement(subquery, target_alias)
+
+        correlate_keep = (target_info.selectable, secondary) if secondary is not None else (target_info.selectable,)
+        subquery = subquery.correlate_except(*correlate_keep)
+
+        exists_clause: ColumnElement[bool] = exists(subquery)
+        return not_(exists_clause) if negate else exists_clause
+
+
 @dataclass
 class MultiFilter(StatementFilter):
     """Apply multiple filters to a query based on a JSON/dict input.
@@ -1176,6 +1379,10 @@ class MultiFilter(StatementFilter):
 
     filters: dict[str, Any]
     """JSON/dict structure representing the filters."""
+    allowed_relationships: "Optional[AbstractSet[str]]" = None
+    """Optional allowlist of relationship names or dotted paths permitted in ``relationship`` nodes."""
+    max_relationship_depth: Optional[int] = 3
+    """Maximum total relationship nesting depth permitted in ``relationship`` nodes. ``None`` disables the limit."""
 
     _filter_map: ClassVar[FilterMap] = {
         "before_after": BeforeAfter,
@@ -1194,6 +1401,7 @@ class MultiFilter(StatementFilter):
         "comparison": ComparisonFilter,
         "exists": ExistsFilter,
         "not_exists": NotExistsFilter,
+        "relationship": RelationshipFilter,
     }
 
     _logical_map: ClassVar[LogicalOperatorMap] = {
@@ -1218,21 +1426,21 @@ class MultiFilter(StatementFilter):
         for filter_type, conditions in self.filters.items():
             operator = self._logical_map.get(filter_type)
             if operator and isinstance(conditions, list):
-                valid_filters = []
+                valid_filters: list[StatementFilter] = []
                 for cond in conditions:  # pyright: ignore
                     filter_instance = self._create_filter(cond)  # pyright: ignore
                     if filter_instance is not None:
-                        valid_filters.append(filter_instance)  # pyright: ignore
+                        valid_filters.append(filter_instance)
 
                 if valid_filters:
                     filter_group = FilterGroup(
                         logical_operator=operator,  # type: ignore
-                        filters=valid_filters,  # pyright: ignore
+                        filters=valid_filters,
                     )
                     statement = filter_group.append_to_statement(statement, model)
         return statement
 
-    def _create_filter(self, condition: dict[str, Any]) -> Optional[StatementFilter]:
+    def _create_filter(self, condition: dict[str, Any], *, _depth: int = 0) -> Optional[StatementFilter]:
         """Create a filter instance from a condition dictionary.
 
         Args:
@@ -1241,31 +1449,95 @@ class MultiFilter(StatementFilter):
         Returns:
             Optional[StatementFilter]: Filter instance if successfully created, None otherwise
         """
+        nested_group = self._create_nested_filter_group(condition, _depth=_depth)
+        if nested_group is not None:
+            return nested_group
+
+        filter_type = condition.get("type")
+        if not isinstance(filter_type, str):
+            return None
+
+        if filter_type == "relationship":
+            return self._create_relationship_filter(condition, _depth=_depth)
+
+        filter_class = self._filter_map.get(filter_type)
+        if filter_class is not None:
+            try:
+                filter_args = {k: v for k, v in condition.items() if k != "type"}
+                return filter_class(**filter_args)  # type: ignore
+            except Exception:  # noqa: BLE001
+                return None
+        return None
+
+    def _create_nested_filter_group(self, condition: dict[str, Any], *, _depth: int = 0) -> Optional[FilterGroup]:
         logical_keys = set(self._logical_map.keys())
         intersect = logical_keys.intersection(condition.keys())
-        if intersect:
-            for key in intersect:
-                operator = self._logical_map.get(key)
-                if operator and isinstance(condition.get(key), list):
-                    nested_filters = []
-                    for cond in condition[key]:
-                        filter_instance = self._create_filter(cond)
+        for key in intersect:
+            operator = self._logical_map.get(key)
+            nested_conditions = condition.get(key)
+            if operator and isinstance(nested_conditions, list):
+                nested_filters: list[StatementFilter] = []
+                typed_conditions: list[object] = nested_conditions  # pyright: ignore[reportUnknownVariableType]
+                for cond in typed_conditions:
+                    if isinstance(cond, dict):
+                        filter_instance = self._create_filter(cast("dict[str, Any]", cond), _depth=_depth)
                         if filter_instance is not None:
-                            nested_filters.append(filter_instance)  # pyright: ignore
+                            nested_filters.append(filter_instance)
 
-                    if nested_filters:
-                        return FilterGroup(logical_operator=operator, filters=nested_filters)  # type: ignore
-        else:
-            filter_type = condition.get("type")
-            if filter_type is not None and isinstance(filter_type, str):
-                filter_class = self._filter_map.get(filter_type)
-                if filter_class is not None:
-                    try:
-                        filter_args = {k: v for k, v in condition.items() if k != "type"}
-                        return filter_class(**filter_args)  # type: ignore
-                    except Exception:  # noqa: BLE001
-                        return None
+                if nested_filters:
+                    return FilterGroup(logical_operator=operator, filters=nested_filters)  # type: ignore[arg-type]
         return None
+
+    def _create_relationship_filter(
+        self, condition: dict[str, Any], *, _depth: int = 0
+    ) -> Optional[RelationshipFilter]:
+        relationship = condition.get("relationship")
+        nested_conditions = condition.get("filters", [])
+        if not isinstance(nested_conditions, (list, tuple)):
+            msg = "Relationship filter 'filters' must be a list of filter definitions."
+            raise TypeError(msg)
+
+        if isinstance(relationship, str):
+            hops: tuple[str, ...] = (relationship,)
+        elif (
+            isinstance(relationship, (list, tuple))
+            and relationship
+            and all(isinstance(h, str) for h in cast("Sequence[Any]", relationship))
+        ):
+            hops = tuple(cast("Sequence[str]", relationship))
+        else:
+            msg = "Relationship filter requires a relationship name or sequence of relationship names."
+            raise ValueError(msg)
+
+        for hop in hops:
+            validate_identifier(hop, "relationship")
+
+        next_depth = _depth + len(hops)
+        if self.max_relationship_depth is not None and next_depth > self.max_relationship_depth:
+            msg = f"Relationship filter depth {next_depth} exceeds maximum allowed depth {self.max_relationship_depth}."
+            raise ValueError(msg)
+
+        if self.allowed_relationships is not None:
+            dotted_path = ".".join(hops)
+            if dotted_path not in self.allowed_relationships and not all(
+                hop in self.allowed_relationships for hop in hops
+            ):
+                msg = f"Relationship '{dotted_path}' is not permitted by allowed_relationships."
+                raise ValueError(msg)
+
+        nested_filters: list[StatementFilter] = []
+        for nested in cast("Sequence[Any]", nested_conditions):
+            if isinstance(nested, dict):
+                nested_filter = self._create_filter(cast("dict[str, Any]", nested), _depth=next_depth)
+                if nested_filter is not None:
+                    nested_filters.append(nested_filter)
+
+        rel_arg: RelationshipPath = hops[0] if len(hops) == 1 else hops
+        return RelationshipFilter(
+            relationship=rel_arg,
+            filters=nested_filters,
+            negate=bool(condition.get("negate", False)),
+        )
 
 
 FilterTypes: TypeAlias = Union[
@@ -1284,6 +1556,7 @@ FilterTypes: TypeAlias = Union[
     ExistsFilter,
     NotExistsFilter,
     ComparisonFilter,
+    RelationshipFilter,
     MultiFilter,
     FilterGroup,
 ]

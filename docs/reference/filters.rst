@@ -111,6 +111,11 @@ Composite Filters, Type Aliases & Helpers
     :no-inherited-members:
     :show-inheritance:
 
+.. autoclass:: advanced_alchemy.filters.RelationshipFilter
+    :no-members:
+    :no-inherited-members:
+    :show-inheritance:
+
 .. autoclass:: advanced_alchemy.filters.MultiFilter
     :no-members:
     :no-inherited-members:

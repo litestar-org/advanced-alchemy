@@ -706,7 +706,7 @@ def _auto_clean_sync_db(request: FixtureRequest) -> Generator[None, None, None]:
         return
 
     model_fixture = next((name for name in ("uuid_models", "bigint_models") if name in request.fixturenames), None)
-    has_movie_model = "movie_model_sync" in request.fixturenames
+    has_movie_model = any(name in request.fixturenames for name in ("movie_model_sync", "relationship_models_sync"))
     if model_fixture is None and not has_movie_model:
         yield
         return
@@ -747,7 +747,7 @@ async def _auto_clean_async_db(request: FixtureRequest) -> AsyncGenerator[None, 
         return
 
     model_fixture = next((name for name in ("uuid_models", "bigint_models") if name in request.fixturenames), None)
-    has_movie_model = "movie_model_async" in request.fixturenames
+    has_movie_model = any(name in request.fixturenames for name in ("movie_model_async", "relationship_models_async"))
     if model_fixture is None and not has_movie_model:
         yield
         return

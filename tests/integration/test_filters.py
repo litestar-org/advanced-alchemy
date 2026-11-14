@@ -1,12 +1,13 @@
 from collections.abc import AsyncGenerator, Generator
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
+from uuid import UUID
 
 import pytest
 from pytest import FixtureRequest
-from sqlalchemy import Boolean, Engine, ForeignKey, String, create_engine, func, select
+from sqlalchemy import Boolean, Column, Engine, ForeignKey, String, Table, create_engine, func, select
 from sqlalchemy.dialects import mssql, mysql, oracle, postgresql, sqlite
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, joinedload, mapped_column, relationship
 
 try:
@@ -14,7 +15,7 @@ try:
 except ImportError:  # pragma: no cover
     SpannerDialect = None  # type: ignore[assignment,misc]
 
-from advanced_alchemy.base import BigIntBase, UUIDAuditBase
+from advanced_alchemy.base import BigIntBase, CommonTableAttributes, UUIDAuditBase, create_registry
 from advanced_alchemy.filters import (
     BeforeAfter,
     BooleanFilter,
@@ -32,10 +33,12 @@ from advanced_alchemy.filters import (
     NullFilter,
     OnBeforeAfter,
     OrderBy,
+    RelationshipFilter,
     SearchFilter,
     and_,
     or_,
 )
+from advanced_alchemy.mixins import UUIDPrimaryKey
 from tests.integration.helpers import get_worker_id
 
 pytestmark = [
@@ -1731,3 +1734,269 @@ def cleanup_filter_tables(request: FixtureRequest) -> Generator[None, None, None
     for cache_key, model in _movie_model_cache.items():
         # Tables are cleaned up by individual engine fixtures
         pass
+
+
+_relationship_models_cache: dict[str, dict[str, Any]] = {}
+
+
+def get_relationship_models_for_engine(engine_dialect_name: str, worker_id: str) -> dict[str, Any]:
+    """Create isolated UUID relationship test models without unique constraints."""
+    safe_dialect = engine_dialect_name.replace("+", "_").replace("-", "_")
+    cache_key = f"rel_{worker_id}_{safe_dialect}"
+    if cache_key not in _relationship_models_cache:
+        rel_registry = create_registry()
+
+        class RelBase(UUIDPrimaryKey, CommonTableAttributes, DeclarativeBase):
+            __abstract__ = True
+            registry = rel_registry
+            metadata = rel_registry.metadata
+
+        author_table = f"rf_author_{worker_id}_{safe_dialect}"
+        book_table = f"rf_book_{worker_id}_{safe_dialect}"
+        item_table = f"rf_item_{worker_id}_{safe_dialect}"
+        tag_table = f"rf_tag_{worker_id}_{safe_dialect}"
+        item_tag_table = f"rf_item_tag_{worker_id}_{safe_dialect}"
+
+        class RelAuthor(RelBase):
+            __tablename__ = author_table
+
+            name: Mapped[str] = mapped_column(String(length=100))
+
+        class RelBook(RelBase):
+            __tablename__ = book_table
+
+            title: Mapped[str] = mapped_column(String(length=250))
+            author_id: Mapped[UUID] = mapped_column(ForeignKey(f"{author_table}.id"))
+
+        RelAuthor.books = relationship(RelBook, lazy="selectin", back_populates="author", cascade="all, delete")
+        RelBook.author = relationship(RelAuthor, lazy="joined", innerjoin=True, back_populates="books")
+
+        class RelItem(RelBase):
+            __tablename__ = item_table
+
+            name: Mapped[str] = mapped_column(String(length=50))
+
+        class RelTag(RelBase):
+            __tablename__ = tag_table
+
+            name: Mapped[str] = mapped_column(String(length=50))
+
+        rel_item_tag = Table(
+            item_tag_table,
+            RelBase.metadata,
+            Column("item_id", ForeignKey(f"{item_table}.id"), primary_key=True),
+            Column("tag_id", ForeignKey(f"{tag_table}.id"), primary_key=True),
+        )
+
+        RelItem.tags = relationship(RelTag, secondary=rel_item_tag, back_populates="items")
+        RelTag.items = relationship(RelItem, secondary=rel_item_tag, back_populates="tags")
+
+        _relationship_models_cache[cache_key] = {
+            "base": RelBase,
+            "metadata": RelBase.metadata,
+            "author": RelAuthor,
+            "book": RelBook,
+            "item": RelItem,
+            "tag": RelTag,
+        }
+
+    return _relationship_models_cache[cache_key]
+
+
+@pytest.fixture
+def relationship_models_sync(engine: Engine, request: FixtureRequest) -> Generator[dict[str, Any], None, None]:
+    """Provide isolated sync relationship filter test models."""
+    dialect_name = getattr(engine.dialect, "name", "mock")
+    if dialect_name == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    worker_id = get_worker_id(request)
+    models = get_relationship_models_for_engine(dialect_name, worker_id)
+    models["metadata"].create_all(engine)
+    request.node._movie_model_metadata = models["metadata"]
+    yield models
+
+
+@pytest.fixture
+async def relationship_models_async(
+    async_engine: AsyncEngine, request: FixtureRequest
+) -> AsyncGenerator[dict[str, Any], None]:
+    """Provide isolated async relationship filter test models."""
+    dialect_name = getattr(async_engine.dialect, "name", "mock")
+    if dialect_name == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    worker_id = get_worker_id(request)
+    models = get_relationship_models_for_engine(dialect_name, worker_id)
+    async with async_engine.begin() as conn:
+        await conn.run_sync(models["metadata"].create_all)
+    request.node._movie_model_metadata = models["metadata"]
+    yield models
+
+
+def _seed_item_tag_data_sync(session: Session, item_model: Any, tag_model: Any) -> tuple[Any, Any]:
+    tag_python = tag_model(name="python")
+    tag_sa = tag_model(name="sqlalchemy")
+
+    item_1 = item_model(name="item-1")
+    item_2 = item_model(name="item-2")
+    item_3 = item_model(name="item-3")
+
+    item_1.tags.append(tag_python)
+    item_2.tags.extend([tag_python, tag_sa])
+    item_3.tags.append(tag_sa)
+
+    session.add_all([tag_python, tag_sa, item_1, item_2, item_3])
+    session.flush()
+    return tag_python, tag_sa
+
+
+async def _seed_item_tag_data_async(session: Any, item_model: Any, tag_model: Any) -> tuple[Any, Any]:
+    tag_python = tag_model(name="python")
+    tag_sa = tag_model(name="sqlalchemy")
+
+    item_1 = item_model(name="item-1")
+    item_2 = item_model(name="item-2")
+    item_3 = item_model(name="item-3")
+
+    item_1.tags.append(tag_python)
+    item_2.tags.extend([tag_python, tag_sa])
+    item_3.tags.append(tag_sa)
+
+    session.add_all([tag_python, tag_sa, item_1, item_2, item_3])
+    await session.flush()
+    return tag_python, tag_sa
+
+
+def test_relationship_filter_many_to_many_sync(
+    relationship_models_sync: dict[str, Any],
+    session: Session,
+) -> None:
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    item_model: Any = relationship_models_sync["item"]
+    tag_model: Any = relationship_models_sync["tag"]
+    tag_python, _ = _seed_item_tag_data_sync(session, item_model, tag_model)
+
+    pos_stmt = RelationshipFilter(
+        relationship="tags",
+        filters=[CollectionFilter(field_name="name", values=["python"])],
+    ).append_to_statement(select(item_model), item_model)
+    assert {i.name for i in session.execute(pos_stmt).scalars().all()} == {"item-1", "item-2"}
+
+    neg_stmt = RelationshipFilter(
+        relationship="tags",
+        filters=[CollectionFilter(field_name="name", values=["python"])],
+        negate=True,
+    ).append_to_statement(select(item_model), item_model)
+    assert {i.name for i in session.execute(neg_stmt).scalars().all()} == {"item-3"}
+
+    col_stmt = CollectionFilter(field_name="tags", values=[tag_python.id]).append_to_statement(
+        select(item_model),
+        item_model,
+    )
+    assert {i.name for i in session.execute(col_stmt).scalars().all()} == {"item-1", "item-2"}
+
+    not_in_col_stmt = NotInCollectionFilter(field_name="tags", values=[tag_python.id]).append_to_statement(
+        select(item_model),
+        item_model,
+    )
+    assert {i.name for i in session.execute(not_in_col_stmt).scalars().all()} == {"item-3"}
+
+
+def test_multifilter_and_many_to_one_relationship_sync(
+    relationship_models_sync: dict[str, Any],
+    session: Session,
+) -> None:
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    item_model: Any = relationship_models_sync["item"]
+    tag_model: Any = relationship_models_sync["tag"]
+    _seed_item_tag_data_sync(session, item_model, tag_model)
+
+    multi = MultiFilter(
+        filters={
+            "and_": [
+                {
+                    "type": "relationship",
+                    "relationship": "tags",
+                    "filters": [{"type": "collection", "field_name": "name", "values": ["python"]}],
+                }
+            ]
+        }
+    )
+    stmt = multi.append_to_statement(select(item_model), item_model)
+    assert {i.name for i in session.execute(stmt).scalars().all()} == {"item-1", "item-2"}
+
+    author_model: Any = relationship_models_sync["author"]
+    book_model: Any = relationship_models_sync["book"]
+    author = author_model(name="Agatha Christie")
+    book_1 = book_model(title="The Mysterious Affair at Styles", author=author)
+    book_2 = book_model(title="Murder on the Orient Express", author=author)
+    session.add_all([author, book_1, book_2])
+    session.flush()
+
+    m2o_stmt = RelationshipFilter(
+        relationship="author",
+        filters=[ComparisonFilter(field_name="name", operator="eq", value="Agatha Christie")],
+    ).append_to_statement(select(book_model), book_model)
+    assert {b.title for b in session.execute(m2o_stmt).scalars().all()} == {
+        "The Mysterious Affair at Styles",
+        "Murder on the Orient Express",
+    }
+
+
+@pytest.mark.asyncio
+async def test_relationship_filter_many_to_many_async(
+    relationship_models_async: dict[str, Any],
+    async_session: AsyncSession,
+) -> None:
+    if getattr(async_session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    item_model: Any = relationship_models_async["item"]
+    tag_model: Any = relationship_models_async["tag"]
+    await _seed_item_tag_data_async(async_session, item_model, tag_model)
+
+    stmt = RelationshipFilter(
+        relationship="tags",
+        filters=[CollectionFilter(field_name="name", values=["python"])],
+    ).append_to_statement(select(item_model), item_model)
+    items = (await async_session.execute(stmt)).scalars().all()
+    assert {i.name for i in items} == {"item-1", "item-2"}
+
+    multi = MultiFilter(
+        filters={
+            "and_": [
+                {
+                    "type": "relationship",
+                    "relationship": "tags",
+                    "filters": [{"type": "collection", "field_name": "name", "values": ["python"]}],
+                }
+            ]
+        }
+    )
+    multi_stmt = multi.append_to_statement(select(item_model), item_model)
+    multi_items = (await async_session.execute(multi_stmt)).scalars().all()
+    assert {i.name for i in multi_items} == {"item-1", "item-2"}
+
+
+def test_search_filter_attribute_and_iendswith_sync(
+    session: Session,
+    movie_model_sync: type[DeclarativeBase],
+) -> None:
+    Movie = movie_model_sync
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    session.execute(Movie.__table__.delete())
+    session.flush()
+    setup_movie_data(session, Movie)
+
+    search_stmt = SearchFilter(Movie.title, "matrix", ignore_case=True).append_to_statement(select(Movie), Movie)
+    assert [m.title for m in session.execute(search_stmt).scalars().all()] == ["The Matrix"]
+
+    ends_stmt = ComparisonFilter("title", "iendswith", "REDEMPTION").append_to_statement(select(Movie), Movie)
+    assert [m.title for m in session.execute(ends_stmt).scalars().all()] == ["Shawshank Redemption"]

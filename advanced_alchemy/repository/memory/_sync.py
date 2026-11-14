@@ -495,7 +495,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
             elif isinstance(filter_, NotInSearchFilter):
                 result = self._filter_by_not_like(
                     result,
-                    filter_.field_name,
+                    {self._extract_field_name(f) for f in filter_.normalized_field_names},
                     value=filter_.value,
                     ignore_case=bool(filter_.ignore_case),
                     escape_wildcards=filter_.escape_wildcards,
@@ -503,7 +503,7 @@ class SQLAlchemySyncMockRepository(SQLAlchemySyncRepositoryProtocol[ModelT]):
             elif isinstance(filter_, SearchFilter):
                 result = self._filter_by_like(
                     result,
-                    filter_.field_name,
+                    {self._extract_field_name(f) for f in filter_.normalized_field_names},
                     value=filter_.value,
                     ignore_case=bool(filter_.ignore_case),
                     escape_wildcards=filter_.escape_wildcards,

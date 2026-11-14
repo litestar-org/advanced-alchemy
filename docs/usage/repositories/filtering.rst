@@ -13,17 +13,34 @@ Example Setup
 
     import datetime
     from typing import Optional
+    from sqlalchemy import Column, ForeignKey, Table
     from sqlalchemy.ext.asyncio import AsyncSession
-    from sqlalchemy.orm import Mapped, mapped_column
+    from sqlalchemy.orm import Mapped, mapped_column, relationship
     from advanced_alchemy.base import BigIntAuditBase
     from advanced_alchemy.filters import (
         CollectionFilter,
+        ComparisonFilter,
         LimitOffset,
+        NotInCollectionFilter,
         NotNullFilter,
         NullFilter,
+        RelationshipFilter,
         SearchFilter,
     )
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+
+    filtering_post_tag = Table(
+        "filtering_post_tag",
+        BigIntAuditBase.metadata,
+        Column("post_id", ForeignKey("filtering_post.id"), primary_key=True),
+        Column("tag_id", ForeignKey("filtering_tag.id"), primary_key=True),
+    )
+
+
+    class FilteringTag(BigIntAuditBase):
+        __tablename__ = "filtering_tag"
+
+        slug: Mapped[str]
 
 
     class FilteringPost(BigIntAuditBase):
@@ -33,6 +50,7 @@ Example Setup
         content: Mapped[str]
         published: Mapped[bool] = mapped_column(default=False)
         published_at: Mapped[Optional[datetime.datetime]] = mapped_column(default=None)
+        tags: Mapped[list[FilteringTag]] = relationship(secondary=filtering_post_tag)
 
 
     class FilteringPostRepository(SQLAlchemyAsyncRepository[FilteringPost]):
@@ -144,3 +162,23 @@ If you use :doc:`read replicas </usage/routing>`, any read or count call can als
     async def list_for_reporting(db_session: AsyncSession) -> list[FilteringPost]:
         repo = FilteringPostRepository(session=db_session)
         return await repo.get_many(bind_group="analytics")
+
+Filtering Across Relationships
+------------------------------
+
+Use :class:`~advanced_alchemy.filters.RelationshipFilter` to correlate conditions on related tables inside an ``EXISTS`` or ``NOT EXISTS`` subquery, or pass a relationship attribute directly to :class:`~advanced_alchemy.filters.CollectionFilter` and :class:`~advanced_alchemy.filters.NotInCollectionFilter`:
+
+.. code-block:: python
+
+    async def filter_posts_by_tags(
+        db_session: AsyncSession,
+        excluded_tag_ids: list[int],
+    ) -> list[FilteringPost]:
+        repo = FilteringPostRepository(session=db_session)
+        return await repo.get_many(
+            RelationshipFilter(
+                relationship=FilteringPost.tags,
+                filters=[ComparisonFilter(field_name=FilteringTag.slug, operator="eq", value="python")],
+            ),
+            NotInCollectionFilter(field_name=FilteringPost.tags, values=excluded_tag_ids),
+        )

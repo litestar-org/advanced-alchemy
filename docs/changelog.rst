@@ -6,6 +6,24 @@
 .. changelog:: 1.12.0
     :date: 2026-10-19
 
+    .. change:: add RelationshipFilter and relationship collection filtering
+        :type: feature
+        :pr: 639
+        :issue: 364, 505
+
+        Adds :class:`~advanced_alchemy.filters.RelationshipFilter` for correlated
+        ``EXISTS`` / ``NOT EXISTS`` filtering across one-to-many, many-to-one,
+        many-to-many, self-referential, joined-table inheritance, and multi-hop
+        relationships, alongside relationship attribute support in
+        :class:`~advanced_alchemy.filters.CollectionFilter` and
+        :class:`~advanced_alchemy.filters.NotInCollectionFilter`, ``"relationship"``
+        nodes (with ``allowed_relationships`` and ``max_relationship_depth`` guards)
+        in :class:`~advanced_alchemy.filters.MultiFilter`,
+        :class:`~sqlalchemy.orm.attributes.InstrumentedAttribute` field support in
+        :class:`~advanced_alchemy.filters.SearchFilter` and
+        :class:`~advanced_alchemy.filters.NotInSearchFilter`, and a suffix pattern
+        fix for ``operators_map["iendswith"]``.
+
     .. change:: per-dialect optimal upsert_many (MERGE / ON CONFLICT / INSERT OR UPDATE)
         :type: feature
         :pr: 740
