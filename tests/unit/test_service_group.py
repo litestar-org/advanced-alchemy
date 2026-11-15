@@ -831,3 +831,241 @@ def test_fastapi_custom_group_fallback_and_validation(tmp_path: Path) -> None:
 
     with pytest.raises(ImproperConfigurationError, match="load"):
         alchemy.provide_service(CustomInitGroup, load=[])
+
+
+@pytest.mark.parametrize("failure", [RuntimeError, BaseException])
+@pytest.mark.parametrize("failure_stage", ["factory", "init", "nested"])
+@pytest.mark.parametrize("cleanup_raises", [False, True])
+def test_group_acquisition_failure_reaches_managed_contexts(
+    failure: type[BaseException], failure_stage: str, cleanup_raises: bool
+) -> None:
+    events: list[tuple[str, type[BaseException]]] = []
+
+    class Managed:
+        @classmethod
+        @contextmanager
+        def new(cls, session: Any) -> Iterator[Any]:
+            try:
+                yield cls()
+            except BaseException as exc:
+                events.append(("service", type(exc)))
+                if cleanup_raises:
+                    raise ValueError("cleanup") from exc
+                raise
+
+    class BrokenInit:
+        def __init__(self, session: Any) -> None:
+            raise failure("acquisition")
+
+    class BrokenFactory:
+        @classmethod
+        @contextmanager
+        def new(cls, session: Any) -> Iterator[Any]:
+            raise failure("acquisition")
+            yield cls()
+
+    class Nested(ServiceGroup):
+        broken: BrokenInit
+
+    broken_type = {"factory": BrokenFactory, "init": BrokenInit, "nested": Nested}[failure_stage]
+
+    class Group(ServiceGroup):
+        managed: Managed
+        broken: broken_type  # pyright: ignore[reportInvalidTypeForm]
+
+    class Config:
+        @contextmanager
+        def get_session(self) -> Iterator[Session]:
+            with Session() as session:
+                try:
+                    yield session
+                except BaseException as exc:
+                    events.append(("session", type(exc)))
+                    raise
+
+    expected_error = ValueError if cleanup_raises else failure
+    with pytest.raises(expected_error):
+        with Group.new(config=Config()):  # type: ignore[arg-type]
+            pytest.fail("group acquisition must fail")
+    assert events == [("service", failure), ("session", expected_error)]
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+async def test_nested_group_factories_receive_options_and_unwind(asynchronous: bool) -> None:
+    events: list[tuple[str, Any]] = []
+
+    class Managed:
+        def __init__(self, session: Any) -> None:
+            self.session = session
+
+        @classmethod
+        @contextmanager
+        def new(cls, session: Any, *, auto_commit: bool = True) -> Iterator[Any]:
+            events.append(("enter", auto_commit))
+            try:
+                yield cls(session)
+            finally:
+                events.append(("exit", auto_commit))
+
+    class Inner(ServiceGroup):
+        managed: Managed
+
+    class Outer(ServiceGroup):
+        inner: Inner
+
+    if asynchronous:
+        async with AsyncSession() as session:
+            async with Outer.new(session=session, auto_commit=False, uniquify=True) as group:
+                assert group.inner.managed.session is session
+                assert events == [("enter", False)]
+    else:
+        with Session() as session:
+            with Outer.new(session=session, auto_commit=False, uniquify=True) as group:
+                assert group.inner.managed.session is session
+                assert events == [("enter", False)]
+    assert events == [("enter", False), ("exit", False)]
+
+
+def test_quoted_postponed_group_annotations() -> None:
+    namespace = {"ServiceGroup": ServiceGroup, "Annotated": Annotated, "ClassVar": ClassVar}
+    exec(
+        "from __future__ import annotations\n"
+        "def build():\n"
+        "    class LocalService:\n"
+        "        def __init__(self, session): self.session = session\n"
+        "    class Group(ServiceGroup):\n"
+        "        service: 'Annotated[LocalService, \\\"member\\\"]'\n"
+        "        marker: 'ClassVar[str]' = 'ignored'\n"
+        "    return Group, LocalService\n"
+        "Group, LocalService = build()\n",
+        namespace,
+    )
+    assert dict(namespace["Group"].service_fields()) == {"service": namespace["LocalService"]}
+
+
+def test_litestar_group_provider_accepts_sync_config_subclass() -> None:
+    class ApplicationDatabase(LitestarSyncConfig):
+        pass
+
+    config = ApplicationDatabase(connection_string="sqlite://")
+    assert litestar_providers._is_async_provider_target(CustomInitGroup, config) is False
+
+
+@pytest.mark.parametrize("failure_stage", ["factory", "init", "nested"])
+@pytest.mark.parametrize("cleanup_raises", [False, True])
+async def test_async_group_cancellation_unwinds_session_and_services(failure_stage: str, cleanup_raises: bool) -> None:
+    from asyncio import CancelledError
+
+    events: list[tuple[str, type[BaseException]]] = []
+
+    class Managed:
+        @classmethod
+        @asynccontextmanager
+        async def new(cls, session: Any) -> AsyncIterator[Any]:
+            try:
+                yield cls()
+            except BaseException as exc:
+                events.append(("service", type(exc)))
+                if cleanup_raises:
+                    raise ValueError("cleanup") from exc
+                raise
+
+    class BrokenInit:
+        def __init__(self, session: Any) -> None:
+            raise CancelledError("acquisition")
+
+    class BrokenFactory:
+        @classmethod
+        @asynccontextmanager
+        async def new(cls, session: Any) -> AsyncIterator[Any]:
+            raise CancelledError("acquisition")
+            yield cls()
+
+    class Nested(ServiceGroup):
+        broken: BrokenInit
+
+    broken_type = {"factory": BrokenFactory, "init": BrokenInit, "nested": Nested}[failure_stage]
+
+    class Group(ServiceGroup):
+        managed: Managed
+        broken: broken_type  # pyright: ignore[reportInvalidTypeForm]
+
+    class Config:
+        @asynccontextmanager
+        async def get_session(self) -> AsyncIterator[AsyncSession]:
+            async with AsyncSession() as session:
+                try:
+                    yield session
+                except BaseException as exc:
+                    events.append(("session", type(exc)))
+                    raise
+
+    expected_error = ValueError if cleanup_raises else CancelledError
+    with pytest.raises(expected_error):
+        async with Group.new(config=Config()):  # type: ignore[arg-type]
+            pytest.fail("group acquisition must fail")
+    assert events == [("service", CancelledError), ("session", expected_error)]
+
+
+def test_direct_nested_groups_use_constructors_without_entering_factories() -> None:
+    class Managed:
+        def __init__(self, session: Any, *, auto_commit: bool = True) -> None:
+            self.session = session
+            self.auto_commit = auto_commit
+
+        @classmethod
+        def new(cls, session: Any) -> Any:
+            pytest.fail("direct groups must not acquire factory contexts")
+
+    class Nested(ServiceGroup):
+        managed: Managed
+
+    class Group(ServiceGroup):
+        nested: Nested
+
+    with Session() as session:
+        group = Group(session, auto_commit=False)
+        assert group.nested.managed.session is session
+        assert group.nested.managed.auto_commit is False
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+async def test_group_acquisition_failure_cannot_be_suppressed(asynchronous: bool) -> None:
+    class Suppressing:
+        @classmethod
+        @contextmanager
+        def new(cls, session: Any) -> Iterator[Any]:
+            try:
+                yield cls()
+            except RuntimeError:
+                pass
+
+    class Broken:
+        def __init__(self, session: Any) -> None:
+            raise RuntimeError("acquisition")
+
+    class Group(ServiceGroup):
+        suppressing: Suppressing
+        broken: Broken
+
+    with pytest.raises(RuntimeError, match="acquisition"):
+        if asynchronous:
+            async with AsyncSession() as session:
+                async with Group.new(session=session):
+                    pytest.fail("group acquisition must fail")
+        else:
+            with Session() as session:
+                with Group.new(session=session):
+                    pytest.fail("group acquisition must fail")
+
+
+def test_local_forward_reference_inside_annotated_group_field() -> None:
+    class LocalService:
+        def __init__(self, session: Any) -> None:
+            self.session = session
+
+    class Group(ServiceGroup):
+        service: Annotated["LocalService", "member"]
+        marker: Annotated[ClassVar[str], "metadata"] = "ignored"
+
+    assert dict(Group.service_fields()) == {"service": LocalService}

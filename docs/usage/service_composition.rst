@@ -130,6 +130,13 @@ When calling code already owns a session, instantiate ``AuthServices(session)`` 
 
     sync_config.get_engine().dispose()
 
+Managed Member Lifetimes
+------------------------
+
+``Group.new(...)`` enters custom member ``.new()`` contexts and nested groups on the same session. Group options are forwarded when the factory accepts them, including explicit ``False`` values. Members close in reverse acquisition order; acquisition failures and cancellation reach previously entered contexts before propagating.
+
+Direct ``Group(session, ...)`` construction calls member constructors only. Use ``.new()`` when members require managed setup or cleanup. A supplied session remains owned by the caller. Group acquisition shares a session but does not commit it automatically; commit explicitly or configure the session owner to manage transactions.
+
 Litestar Integration
 --------------------
 

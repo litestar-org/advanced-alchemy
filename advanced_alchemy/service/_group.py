@@ -7,7 +7,7 @@ import inspect
 import sys
 from contextlib import AsyncExitStack, ExitStack
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, ClassVar, ForwardRef, Generic, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, ForwardRef, Generic, Literal, NamedTuple, TypeVar, cast, get_type_hints
 from weakref import WeakKeyDictionary
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,9 +58,20 @@ _BUILTIN_NEW_FUNCS: frozenset[Any] = frozenset(
 )
 _IGNORED_ANNOTATION_NAMES: frozenset[str] = frozenset({"session", "_instances"})
 
-_GROUP_FIELDS: WeakKeyDictionary[type[ServiceGroup], dict[str, type[Any]]] = WeakKeyDictionary()
-_GROUP_PLANS: WeakKeyDictionary[type[ServiceGroup], dict[str, tuple[bool, frozenset[str] | None]]] = WeakKeyDictionary()
-_GROUP_MODES: WeakKeyDictionary[type[ServiceGroup], Literal["async", "sync"] | None] = WeakKeyDictionary()
+
+class _FieldPlan(NamedTuple):
+    service_class: type[Any]
+    init: tuple[bool, frozenset[str] | None]
+    factory: tuple[bool, frozenset[str] | None] | None
+
+
+class _GroupMetadata(NamedTuple):
+    fields: Mapping[str, type[Any]]
+    plans: Mapping[str, _FieldPlan]
+    mode: Literal["async", "sync"] | None
+
+
+_GROUP_METADATA: WeakKeyDictionary[type[ServiceGroup], _GroupMetadata] = WeakKeyDictionary()
 _ANNOTATIONLIB: Any = importlib.import_module("annotationlib") if sys.version_info >= (3, 14) else None
 
 
@@ -85,11 +96,19 @@ def _is_classvar_hint(annotation: Any) -> bool:
 
 def _resolve_annotation(raw_annotation: Any, globalns: dict[str, Any], localns: dict[str, Any]) -> Any:
     """Resolve a raw, ForwardRef, or stringified type annotation in module and caller scopes."""
-    source = raw_annotation.__forward_arg__ if isinstance(raw_annotation, ForwardRef) else raw_annotation
-    if not isinstance(source, str):
-        return _unwrap_annotated(source)
-    evaluated = eval(source, globalns, localns)  # noqa: S307
-    return _unwrap_annotated(evaluated)
+    annotation = raw_annotation.__forward_arg__ if isinstance(raw_annotation, ForwardRef) else raw_annotation
+    seen: set[str] = set()
+    while isinstance(annotation, str) and annotation not in seen:
+        seen.add(annotation)
+        annotation = eval(annotation, globalns, localns)  # noqa: S307
+    if get_origin(_unwrap_annotated(annotation)) is ClassVar:
+        return _unwrap_annotated(annotation)
+
+    def hint() -> None:
+        pass
+
+    hint.__annotations__ = {"return": annotation}
+    return _unwrap_annotated(get_type_hints(hint, globalns, localns, include_extras=True)["return"])
 
 
 def _get_own_raw_annotations(cls: type[Any]) -> dict[str, Any]:
@@ -150,7 +169,8 @@ def _classify_service_mode(service_cls: type[Any]) -> Literal["async", "sync"] |
     if issubclass(service_cls, _SYNC_SERVICE_BASES):
         return "sync"
     if issubclass(service_cls, ServiceGroup):
-        return _GROUP_MODES.get(service_cls)
+        metadata = _GROUP_METADATA.get(service_cls)
+        return metadata.mode if metadata is not None else None
 
     custom_new = _get_custom_new_method(service_cls)
     if custom_new is not None:
@@ -186,10 +206,10 @@ def _get_custom_new_method(service_cls: type[Any]) -> Any:
     return None
 
 
-def _build_init_plan(service_cls: type[Any]) -> tuple[bool, frozenset[str] | None]:
-    """Inspect a service constructor once to determine session passing style and accepted kwargs."""
+def _build_call_plan(call: Any) -> tuple[bool, frozenset[str] | None]:
+    """Inspect a constructor or factory once to determine session passing style and accepted kwargs."""
     try:
-        sig = inspect.signature(service_cls.__init__)
+        sig = inspect.signature(call)
     except (TypeError, ValueError):
         return False, None
 
@@ -199,7 +219,15 @@ def _build_init_plan(service_cls: type[Any]) -> tuple[bool, frozenset[str] | Non
     accepts_session_kw = (session_param is not None and session_param.kind != inspect.Parameter.POSITIONAL_ONLY) or (
         session_param is None and has_var_kw
     )
-    accepted_kw = None if has_var_kw else frozenset(name for name in params if name != "self")
+    accepted_kw = (
+        None
+        if has_var_kw
+        else frozenset(
+            name
+            for name, p in params.items()
+            if name != "self" and p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+        )
+    )
     return accepts_session_kw, accepted_kw
 
 
@@ -227,7 +255,7 @@ def _instantiate_service(
     group_kwargs: Mapping[str, Any],
 ) -> Any:
     """Instantiate one declared member service using its cached constructor plan."""
-    accepts_session_kw, accepted_kw = _GROUP_PLANS[group_cls][name]
+    accepts_session_kw, accepted_kw = _GROUP_METADATA[group_cls].plans[name].init
     extra_kwargs = _filter_service_kwargs(accepted_kw, group_kwargs)
     if accepts_session_kw:
         return service_cls(session=session, **extra_kwargs)
@@ -297,7 +325,7 @@ class _ServiceGroupContext(Generic[ServiceGroupT]):
 
     async def __aenter__(self) -> ServiceGroupT:
         """Resolve an async session, enter any custom service contexts, and return the group."""
-        if _GROUP_MODES.get(self._group_cls) == "sync":
+        if _GROUP_METADATA[self._group_cls].mode == "sync":
             msg = "A synchronous ServiceGroup cannot be entered with 'async with'. Use 'with' instead."
             raise ImproperConfigurationError(msg)
 
@@ -308,7 +336,7 @@ class _ServiceGroupContext(Generic[ServiceGroupT]):
             self._async_stack = stack
             return cast("ServiceGroupT", _create_group_from_instances(self._group_cls, session, instances))
         except BaseException:
-            await stack.aclose()
+            await stack.__aexit__(*sys.exc_info())
             raise
 
     async def __aexit__(
@@ -324,7 +352,7 @@ class _ServiceGroupContext(Generic[ServiceGroupT]):
 
     def __enter__(self) -> ServiceGroupT:
         """Resolve a sync session, enter any custom service contexts, and return the group."""
-        if _GROUP_MODES.get(self._group_cls) == "async":
+        if _GROUP_METADATA[self._group_cls].mode == "async":
             msg = "An asynchronous ServiceGroup cannot be entered with 'with'. Use 'async with' instead."
             raise ImproperConfigurationError(msg)
 
@@ -335,7 +363,7 @@ class _ServiceGroupContext(Generic[ServiceGroupT]):
             self._sync_stack = stack
             return cast("ServiceGroupT", _create_group_from_instances(self._group_cls, session, instances))
         except BaseException:
-            stack.close()
+            stack.__exit__(*sys.exc_info())
             raise
 
     def __exit__(
@@ -418,12 +446,16 @@ class _ServiceGroupContext(Generic[ServiceGroupT]):
         stack: AsyncExitStack,
     ) -> dict[str, Any]:
         instances: dict[str, Any] = {}
-        for name, service_cls in _GROUP_FIELDS.get(self._group_cls, {}).items():
-            custom_new = _get_custom_new_method(service_cls)
-            if custom_new is None:
+        for name, plan in _GROUP_METADATA[self._group_cls].plans.items():
+            service_cls = plan.service_class
+            if plan.factory is None:
                 instances[name] = _instantiate_service(self._group_cls, name, service_cls, session, self._group_kwargs)
                 continue
-            ctx = service_cls.new(session=session)
+            accepts_session_kw, accepted_kw = plan.factory
+            kwargs = _filter_service_kwargs(accepted_kw, self._group_kwargs)
+            ctx = (
+                service_cls.new(session=session, **kwargs) if accepts_session_kw else service_cls.new(session, **kwargs)
+            )
             if inspect.isawaitable(ctx):
                 ctx = await ctx
             if hasattr(ctx, "__aenter__"):
@@ -440,12 +472,16 @@ class _ServiceGroupContext(Generic[ServiceGroupT]):
         stack: ExitStack,
     ) -> dict[str, Any]:
         instances: dict[str, Any] = {}
-        for name, service_cls in _GROUP_FIELDS.get(self._group_cls, {}).items():
-            custom_new = _get_custom_new_method(service_cls)
-            if custom_new is None:
+        for name, plan in _GROUP_METADATA[self._group_cls].plans.items():
+            service_cls = plan.service_class
+            if plan.factory is None:
                 instances[name] = _instantiate_service(self._group_cls, name, service_cls, session, self._group_kwargs)
                 continue
-            ctx = service_cls.new(session=session)
+            accepts_session_kw, accepted_kw = plan.factory
+            kwargs = _filter_service_kwargs(accepted_kw, self._group_kwargs)
+            ctx = (
+                service_cls.new(session=session, **kwargs) if accepts_session_kw else service_cls.new(session, **kwargs)
+            )
             if inspect.isawaitable(ctx) or (hasattr(ctx, "__aenter__") and not hasattr(ctx, "__enter__")):
                 if inspect.iscoroutine(ctx):
                     ctx.close()
@@ -480,21 +516,19 @@ class ServiceGroup:
         super().__init_subclass__(**kwargs)
 
         inherited_fields: dict[str, type[Any]] = {}
-        inherited_plans: dict[str, tuple[bool, frozenset[str] | None]] = {}
+        inherited_plans: dict[str, _FieldPlan] = {}
         for base_cls in reversed(cls.__mro__):
             if base_cls is not cls and issubclass(base_cls, ServiceGroup) and base_cls is not ServiceGroup:
-                inherited_fields.update(_GROUP_FIELDS.get(base_cls, {}))
-                inherited_plans.update(_GROUP_PLANS.get(base_cls, {}))
+                inherited_fields.update(_GROUP_METADATA[base_cls].fields)
+                inherited_plans.update(_GROUP_METADATA[base_cls].plans)
 
         raw_annotations = _get_own_raw_annotations(cls)
         module = sys.modules.get(cls.__module__)
         globalns: dict[str, Any] = dict(vars(module)) if module is not None else {}
-        localns = (
-            _collect_caller_locals() if any(isinstance(v, (str, ForwardRef)) for v in raw_annotations.values()) else {}
-        )
+        localns = {**_collect_caller_locals(), **vars(cls)}
 
         new_fields: dict[str, type[Any]] = {}
-        new_plans: dict[str, tuple[bool, frozenset[str] | None]] = {}
+        new_plans: dict[str, _FieldPlan] = {}
         for attr_name, raw_hint in raw_annotations.items():
             if attr_name in _IGNORED_ANNOTATION_NAMES or _is_classvar_hint(raw_hint):
                 continue
@@ -508,8 +542,15 @@ class ServiceGroup:
             if not isinstance(resolved, type):
                 msg = f"ServiceGroup field {attr_name!r} on {cls.__name__} must resolve to a service class, got {resolved!r}."
                 raise ImproperConfigurationError(msg)
-            new_fields[attr_name] = resolved
-            new_plans[attr_name] = _build_init_plan(resolved)
+            service_cls = cast("type[Any]", resolved)
+            new_fields[attr_name] = service_cls
+            new_plans[attr_name] = _FieldPlan(
+                service_cls,
+                _build_call_plan(service_cls.__init__),
+                _build_call_plan(service_cls.new)
+                if issubclass(service_cls, ServiceGroup) or _get_custom_new_method(service_cls) is not None
+                else None,
+            )
 
         merged_fields = {**inherited_fields, **new_fields}
         merged_plans = {**inherited_plans, **new_plans}
@@ -521,9 +562,9 @@ class ServiceGroup:
             msg = f"ServiceGroup {cls.__name__} cannot mix async and sync service classes."
             raise ImproperConfigurationError(msg)
 
-        _GROUP_FIELDS[cls] = merged_fields
-        _GROUP_PLANS[cls] = merged_plans
-        _GROUP_MODES[cls] = next(iter(modes), None)
+        _GROUP_METADATA[cls] = _GroupMetadata(
+            MappingProxyType(merged_fields), MappingProxyType(merged_plans), next(iter(modes), None)
+        )
 
         for attr_name in new_fields:
             setattr(cls, attr_name, _ServiceFieldDescriptor(attr_name))
@@ -543,14 +584,15 @@ class ServiceGroup:
     ) -> None:
         """Instantiate every declared service on the provided SQLAlchemy session."""
         cls = type(self)
-        fields = _GROUP_FIELDS.get(cls)
+        metadata = _GROUP_METADATA.get(cls)
+        fields: Mapping[str, type[Any]] = metadata.fields if metadata is not None else {}
         if not fields:
             msg = f"ServiceGroup subclass {cls.__name__} declares no service attributes."
             raise ImproperConfigurationError(msg)
         if session is None:  # pyright: ignore[reportUnnecessaryComparison]
             msg = f"{cls.__name__} requires an active SQLAlchemy Session or AsyncSession."  # type: ignore[unreachable]
             raise ImproperConfigurationError(msg)
-        group_mode = _GROUP_MODES.get(cls)
+        group_mode = metadata.mode if metadata is not None else None
         if group_mode == "async" and isinstance(session, (Session, scoped_session)):
             msg = f"{cls.__name__} declares async services and cannot accept a synchronous Session."
             raise ImproperConfigurationError(msg)
@@ -591,7 +633,7 @@ class ServiceGroup:
         wrap_exceptions: bool | None = None,
     ) -> _ServiceGroupContext[Self]:
         """Acquire a session-managed or caller-bound context yielding an instance of this group."""
-        if not _GROUP_FIELDS.get(cls):
+        if cls not in _GROUP_METADATA or not _GROUP_METADATA[cls].fields:
             msg = f"ServiceGroup subclass {cls.__name__} declares no service attributes."
             raise ImproperConfigurationError(msg)
         group_kwargs: dict[str, Any] = {
@@ -615,12 +657,14 @@ class ServiceGroup:
     @classmethod
     def service_fields(cls) -> Mapping[str, type[Any]]:
         """Return a read-only mapping of declared service attribute names to service classes."""
-        return MappingProxyType(_GROUP_FIELDS.get(cls, {}))
+        metadata = _GROUP_METADATA.get(cls)
+        return metadata.fields if metadata is not None else MappingProxyType({})
 
     @classmethod
     def is_async_group(cls) -> bool | None:
         """Return ``True`` for async groups, ``False`` for sync groups, or ``None`` when undetermined."""
-        mode = _GROUP_MODES.get(cls)
+        metadata = _GROUP_METADATA.get(cls)
+        mode = metadata.mode if metadata is not None else None
         if mode == "async":
             return True
         if mode == "sync":

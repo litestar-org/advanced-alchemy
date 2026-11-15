@@ -28,6 +28,8 @@ from litestar.di import NamedDependency, Provide
 from litestar.params import QueryParameter, SkipValidation
 from litestar.utils.signature import ParsedSignature
 
+from advanced_alchemy.config import SQLAlchemyAsyncConfig as BaseAsyncConfig
+from advanced_alchemy.config import SQLAlchemySyncConfig as BaseSyncConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.filters import (
     BeforeAfter,
@@ -193,8 +195,10 @@ def _is_async_provider_target(
         group_async = service_class.is_async_group()
         if group_async is not None:
             return group_async
-        if config is not None:
-            return not config.__class__.__name__.endswith("SyncConfig")
+        if isinstance(config, BaseSyncConfig):
+            return False
+        if isinstance(config, BaseAsyncConfig):
+            return True
         return True
     return (
         issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService
