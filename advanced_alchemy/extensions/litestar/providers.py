@@ -804,7 +804,10 @@ def _create_statement_filters(  # noqa: C901, PLR0915
             ]
 
         for rel_path, local_field, group_specs in group_filter_fields(field_specs):
-            group_slug = f"rel_{'_'.join(rel_path)}" if rel_path else local_field.replace(".", "_")
+            # Length-prefix each hop so underscores cannot merge distinct paths.
+            group_slug = (
+                "rel_" + "_".join(f"{len(part)}_{part}" for part in rel_path) if rel_path else f"col_{local_field}"
+            )
             field_provider = create_field_filter_provider(
                 group_specs,
                 rel_path=rel_path,

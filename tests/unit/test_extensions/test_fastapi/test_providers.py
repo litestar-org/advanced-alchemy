@@ -1181,6 +1181,8 @@ class _FastAPIGridAuthor(_FastAPIGridBase):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100))
+    mentor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("fastapi_grid_author.id"), nullable=True)
+    mentor: Mapped[Optional["_FastAPIGridAuthor"]] = relationship(remote_side=[id])
     articles: Mapped[list["_FastAPIGridArticle"]] = relationship(back_populates="author")
 
 
@@ -1191,11 +1193,13 @@ class _FastAPIGridArticle(_FastAPIGridBase):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(150))
+    rel_author: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     views: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(30))
     published_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     author_id: Mapped[int] = mapped_column(ForeignKey("fastapi_grid_author.id"))
     author: Mapped[_FastAPIGridAuthor] = relationship(back_populates="articles")
+    author_mentor: Mapped[_FastAPIGridAuthor] = relationship(viewonly=True, foreign_keys=[author_id])
 
 
 class _FastAPIGridArticleRepo(SQLAlchemyAsyncRepository[_FastAPIGridArticle]):
@@ -1256,6 +1260,57 @@ def _serialize_fastapi_grid_filters(filters: Sequence[Any]) -> list[dict[str, An
         elif isinstance(item, (NullFilter, NotNullFilter)):
             serialized.append({"type": type(item).__name__, "field_name": item.field_name})
     return serialized
+
+
+@pytest.mark.parametrize(
+    ("field_spec", "parameters", "expected"),
+    [
+        (
+            {"rel_author": {"eq"}, "author.name": {"eq"}},
+            {"relAuthorEq": "editor", "authorNameEq": "Ada"},
+            [
+                {"type": "ComparisonFilter", "field_name": "rel_author", "operator": "eq", "value": "editor"},
+                {
+                    "type": "RelationshipFilter",
+                    "relationship": "author",
+                    "filters": [{"type": "ComparisonFilter", "field_name": "name", "operator": "eq", "value": "Ada"}],
+                },
+            ],
+        ),
+        (
+            {"author_mentor.name": {"eq"}, "author.mentor.id": {"eq"}},
+            {"authorMentorNameEq": "Ada", "authorMentorIdEq": "7"},
+            [
+                {
+                    "type": "RelationshipFilter",
+                    "relationship": "author_mentor",
+                    "filters": [{"type": "ComparisonFilter", "field_name": "name", "operator": "eq", "value": "Ada"}],
+                },
+                {
+                    "type": "RelationshipFilter",
+                    "relationship": ["author", "mentor"],
+                    "filters": [{"type": "ComparisonFilter", "field_name": "id", "operator": "eq", "value": 7}],
+                },
+            ],
+        ),
+    ],
+)
+def test_fastapi_field_filter_group_names_do_not_collide(
+    field_spec: FilterFieldsSpec, parameters: dict[str, str], expected: list[dict[str, Any]]
+) -> None:
+    """Direct columns and distinct relationship paths retain their public parameters."""
+    config: FilterConfig = {"filter_fields": field_spec}
+    filter_dep = provide_filters(config, model=_FastAPIGridArticle)
+    app = FastAPI()
+
+    @app.get("/articles")
+    def list_articles(filters: Annotated[list[FilterTypes], Depends(filter_dep)]) -> list[dict[str, Any]]:
+        return _serialize_fastapi_grid_filters(filters)
+
+    with TestClient(app) as client:
+        response = client.get("/articles", params=parameters)
+        assert response.status_code == 200, response.text
+        assert response.json() == expected
 
 
 def test_fastapi_field_filter_fields_and_sort_fields_openapi_and_parsing() -> None:
