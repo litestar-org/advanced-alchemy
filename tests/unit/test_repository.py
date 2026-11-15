@@ -3475,7 +3475,9 @@ def test_update_renamed_columns_and_explicit_none_semantics() -> None:
                 fetched = session.get(RenamedColumnModel, 1)
                 assert fetched is not None
                 assert fetched.status == "published"
-                assert not [w for w in caught if issubclass(w.category, DeprecationWarning)]
+                assert not [w for w in caught if issubclass(w.category, DeprecationWarning)], "\n".join(
+                    f"{w.category.__name__}: {w.message} ({w.filename}:{w.lineno})" for w in caught
+                )
 
             with pytest.raises(IntegrityError):
                 service.update({"status": None}, item_id=1, auto_commit=True)

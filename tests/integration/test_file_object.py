@@ -13,7 +13,7 @@ from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from advanced_alchemy._listeners import set_async_context, setup_file_object_listeners
+from advanced_alchemy._listeners import FileObjectListener, set_async_context, setup_file_object_listeners
 from advanced_alchemy.base import create_registry
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.types.file_object import (
@@ -32,6 +32,31 @@ logger = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.integration,
 ]
+
+
+@pytest.fixture(autouse=True)
+def preserve_global_file_object_listeners() -> Generator[None, None, None]:
+    """Restore legacy listener registrations after each storage test."""
+    listeners = {
+        "before_flush": FileObjectListener.before_flush,
+        "after_commit": FileObjectListener.after_commit,
+        "after_rollback": FileObjectListener.after_rollback,
+    }
+    registrations = [
+        (target, name, listener, event.contains(target, name, listener))
+        for target in (Session, AsyncSession)
+        for name, listener in listeners.items()
+        if target is Session or hasattr(target, name)
+    ]
+    try:
+        yield
+    finally:
+        for target, name, listener, was_registered in registrations:
+            is_registered = event.contains(target, name, listener)
+            if was_registered and not is_registered:
+                event.listen(target, name, listener)
+            elif not was_registered and is_registered:
+                event.remove(target, name, listener)
 
 
 def remove_listeners() -> None:

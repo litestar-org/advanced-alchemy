@@ -423,7 +423,9 @@ def test_sqlmodel_partial_update_and_explicit_none_semantics(hero_session: "Sess
         assert cleared.nickname is None
         assert cleared.age is None
         assert cleared.rank == "veteran"
-        assert not [w for w in caught if issubclass(w.category, DeprecationWarning)]
+        assert not [w for w in caught if issubclass(w.category, DeprecationWarning)], "\n".join(
+            f"{w.category.__name__}: {w.message} ({w.filename}:{w.lineno})" for w in caught
+        )
 
     with pytest.raises(IntegrityError):
         service.update({"rank": None}, item_id=created.id, auto_commit=True)
