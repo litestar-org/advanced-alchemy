@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 import pytest
-from sqlalchemy import Column, ColumnElement, ForeignKey, Integer, String, Table, create_engine, select
+from sqlalchemy import Column, ColumnElement, ForeignKey, Integer, String, Table, create_engine, func, select
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, with_loader_criteria
 
@@ -264,6 +264,29 @@ def test_relationship_filter_multihop_jti_and_loader_criteria(unit_session: Sess
         UnitPost,
     )
     assert unit_session.scalars(filtered_stmt).all() == []
+
+
+@pytest.mark.parametrize(
+    "leaf_filter",
+    [
+        ComparisonFilter(func.lower(UnitTag.name), "eq", "python"),
+        SearchFilter(func.lower(UnitTag.name), "python"),
+    ],
+)
+def test_relationship_filter_expression_fields(
+    unit_session: Session, leaf_filter: ComparisonFilter | SearchFilter
+) -> None:
+    """Expression fields match only tags belonging to the correlated post."""
+    statement = RelationshipFilter(UnitPost.tags, [leaf_filter]).append_to_statement(select(UnitPost), UnitPost)
+    assert [post.title for post in unit_session.scalars(statement)] == ["Notes on Engine"]
+
+
+def test_relationship_filter_self_referential_expression(unit_session: Session) -> None:
+    """Expression adaptation preserves the outer side of a self join."""
+    statement = RelationshipFilter(
+        UnitCategory.children, [ComparisonFilter(func.lower(UnitCategory.name), "eq", "sub")]
+    ).append_to_statement(select(UnitCategory), UnitCategory)
+    assert [category.name for category in unit_session.scalars(statement)] == ["Root"]
 
 
 def test_relationship_filter_validation_errors() -> None:
