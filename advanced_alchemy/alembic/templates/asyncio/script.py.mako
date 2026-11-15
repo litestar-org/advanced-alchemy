@@ -11,9 +11,9 @@ from typing import TYPE_CHECKING
 
 import sqlalchemy as sa
 from alembic import op
-from advanced_alchemy.types import Bool, EncryptedString, EncryptedText, GUID, JsonB, ORA_JSONB, DateTimeUTC, StoredObject, PasswordHash, FernetBackend, TOTPSecret, OneTimeCode
-from advanced_alchemy.types.encrypted_string import PGCryptoBackend
+from advanced_alchemy.types import Bool, EncryptedString, EncryptedText, GUID, JsonB, ORA_JSONB, DateTimeUTC, StoredObject, PasswordHash, FernetBackend, PGCryptoBackend, TOTPSecret, OneTimeCode, Vector
 from advanced_alchemy.types.password_hash.argon2 import Argon2Hasher
+from advanced_alchemy.types.password_hash.bcrypt import BcryptHasher
 from advanced_alchemy.types.password_hash.passlib import PasslibHasher
 from advanced_alchemy.types.password_hash.pwdlib import PwdlibHasher
 from sqlalchemy import Text  # noqa: F401
@@ -34,12 +34,14 @@ sa.EncryptedText = EncryptedText
 sa.StoredObject = StoredObject
 sa.PasswordHash = PasswordHash
 sa.Argon2Hasher = Argon2Hasher
+sa.BcryptHasher = BcryptHasher
 sa.PasslibHasher = PasslibHasher
 sa.PwdlibHasher = PwdlibHasher
 sa.FernetBackend = FernetBackend
 sa.PGCryptoBackend = PGCryptoBackend
 sa.TOTPSecret = TOTPSecret
 sa.OneTimeCode = OneTimeCode
+sa.Vector = Vector
 
 # revision identifiers, used by Alembic.
 revision = ${repr(up_revision)}

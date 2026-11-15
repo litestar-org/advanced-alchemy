@@ -2,11 +2,12 @@
 
 import pytest
 
-from advanced_alchemy.typing import ARGON2_INSTALLED, PASSLIB_INSTALLED, PWDLIB_INSTALLED
+from advanced_alchemy.typing import ARGON2_INSTALLED, BCRYPT_INSTALLED, PASSLIB_INSTALLED, PWDLIB_INSTALLED
 
 
 def test_password_hash_installed_flags_are_bool() -> None:
     assert isinstance(ARGON2_INSTALLED, bool)
+    assert isinstance(BCRYPT_INSTALLED, bool)
     assert isinstance(PASSLIB_INSTALLED, bool)
     assert isinstance(PWDLIB_INSTALLED, bool)
 
@@ -37,6 +38,70 @@ def test_argon2_requires_argon2(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(argon2_module, "ARGON2_INSTALLED", False)
     with pytest.raises(MissingDependencyError):
         argon2_module.Argon2Hasher()
+
+
+def test_bcrypt_requires_bcrypt(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Importing the module is safe; construction guards on the facade flag."""
+    from advanced_alchemy.exceptions import MissingDependencyError
+    from advanced_alchemy.types.password_hash import bcrypt as bcrypt_module
+
+    monkeypatch.setattr(bcrypt_module, "BCRYPT_INSTALLED", False)
+    with pytest.raises(MissingDependencyError):
+        bcrypt_module.BcryptHasher()
+
+
+@pytest.mark.skipif(not BCRYPT_INSTALLED, reason="bcrypt not installed")
+def test_bcrypt_needs_rehash_false_for_current() -> None:
+    from advanced_alchemy.types.password_hash.bcrypt import BcryptHasher
+
+    backend = BcryptHasher(rounds=4)
+    assert backend.needs_rehash(backend.hash("pw")) is False
+
+
+@pytest.mark.skipif(not BCRYPT_INSTALLED, reason="bcrypt not installed")
+def test_bcrypt_needs_rehash_true_for_different_rounds_or_prefix() -> None:
+    from advanced_alchemy.types.password_hash.bcrypt import BcryptHasher
+
+    weak_hash = BcryptHasher(rounds=4, prefix=b"2b").hash("pw")
+    assert BcryptHasher(rounds=5, prefix=b"2b").needs_rehash(weak_hash) is True
+    assert BcryptHasher(rounds=4, prefix=b"2a").needs_rehash(weak_hash) is True
+
+
+@pytest.mark.skipif(not BCRYPT_INSTALLED, reason="bcrypt not installed")
+def test_bcrypt_needs_rehash_false_for_foreign_hash() -> None:
+    from advanced_alchemy.types.password_hash.bcrypt import BcryptHasher
+
+    backend = BcryptHasher(rounds=4)
+    assert backend.needs_rehash("not-a-hash") is False
+    assert backend.needs_rehash("$argon2id$v=19$m=65536,t=3,p=4$c2FsdA$aGFzaA") is False
+    assert backend.needs_rehash("$2b$invalid$saltsaltsaltsaltsalt12hash") is False
+
+
+@pytest.mark.skipif(not BCRYPT_INSTALLED, reason="bcrypt not installed")
+def test_bcrypt_hash_verify_and_update() -> None:
+    from advanced_alchemy.types.password_hash.base import HashedPassword, PasswordHash
+    from advanced_alchemy.types.password_hash.bcrypt import BcryptHasher
+
+    weak_backend = BcryptHasher(rounds=4)
+    hashed = weak_backend.hash("secret-pw")
+    assert weak_backend.verify("secret-pw", hashed) is True
+    assert weak_backend.verify(b"secret-pw", hashed) is True
+    assert weak_backend.verify("wrong-pw", hashed) is False
+    assert weak_backend.verify(123, hashed) is False
+    assert weak_backend.verify(None, hashed) is False
+    assert weak_backend.verify("secret-pw", "not-a-valid-bcrypt-hash") is False
+
+    strong_backend = BcryptHasher(rounds=5)
+    hp = HashedPassword(hashed, strong_backend)
+    ok, upgraded = hp.verify_and_update("secret-pw")
+    assert ok is True
+    assert upgraded is not None
+    assert upgraded != hashed
+    assert strong_backend.verify("secret-pw", upgraded) is True
+    assert strong_backend.needs_rehash(upgraded) is False
+    assert (
+        repr(PasswordHash(backend=strong_backend, length=128)) == "PasswordHash(backend=sa.BcryptHasher(), length=128)"
+    )
 
 
 @pytest.mark.skipif(not ARGON2_INSTALLED, reason="argon2-cffi not installed")

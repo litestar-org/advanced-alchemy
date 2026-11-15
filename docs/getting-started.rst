@@ -2,72 +2,90 @@
 Getting Started
 ===============
 
-Advanced Alchemy is a carefully crafted, thoroughly tested, optimized companion library for :doc:`SQLAlchemy <sqlalchemy:index>`.
+When you build an app with SQLAlchemy from scratch, you end up writing the same plumbing over and over: ID and timestamp columns on every table, ``select()`` and pagination queries in every endpoint, and session cleanup code for every web request.
 
-It provides :doc:`base classes <reference/base>`, :doc:`mixins <reference/mixins/index>`, :doc:`custom column types <usage/modeling/types>`,
-and implementations of the :doc:`repository <usage/repositories/index>` and :doc:`service layer <usage/services>` patterns
-to simplify your database operations.
+Advanced Alchemy handles that repetitive plumbing while keeping plain SQLAlchemy 2.0 front and center:
 
-.. seealso:: It is built on:
-
-    * `SQLAlchemy <https://www.sqlalchemy.org/>`_
-    * `Alembic <https://alembic.sqlalchemy.org/en/latest/>`_
-    * `Typing Extensions <https://typing-extensions.readthedocs.io/en/latest/>`_
-
-It's designed to work on its own or with your favorite web framework.
-
-We've built extensions for some of the most popular frameworks, so you can get the most out of Advanced Alchemy with minimal effort.
-
-* `Litestar <https://docs.litestar.dev/>`_
-* `FastAPI <https://fastapi.tiangolo.com/>`_
-* `Starlette <https://www.starlette.io/>`_
-* `Flask <https://flask.palletsprojects.com/>`_
-* `Sanic <https://sanicframework.org/>`_
-
-If your framework is not listed, don't worry! Advanced Alchemy is designed to be modular and easily integrated with any Python web framework.
-`Join our Discord <https://discord.gg/dSDXd4mKhp>`_ and we'll help you get started.
+* **Models** come with ready-made IDs, ``created_at`` / ``updated_at`` timestamps, and portable column types.
+* **Repositories** give every model ``add``, ``get``, ``list_and_count``, ``upsert``, and ``delete`` methods out of the box.
+* **Services** connect your repositories to Pydantic, Msgspec, or dataclass API schemas.
+* **Framework plugins** manage database engines and per-request sessions automatically.
 
 Installation
 ------------
 
-Install ``advanced-alchemy`` with your favorite Python package manager:
+Install ``advanced-alchemy`` with your preferred package manager and database/framework extras (such as ``asyncpg``, ``psycopg``, ``aiosqlite``, ``litestar``, or ``fastapi``):
 
 .. tab-set::
-
-    .. tab-item:: pip
-        :sync: key1
-
-        .. code-block:: bash
-            :caption: Using pip
-
-            python3 -m pip install advanced-alchemy
+    :sync-group: pkg
 
     .. tab-item:: uv
+        :sync: uv
 
         .. code-block:: bash
-            :caption: Using `UV <https://docs.astral.sh/uv/>`_
 
-            uv add advanced-alchemy
+            uv add "advanced-alchemy[aiosqlite]"
 
-    .. tab-item:: pipx
-        :sync: key2
+    .. tab-item:: pip
+        :sync: pip
 
         .. code-block:: bash
-            :caption: Using `pipx <https://pypa.github.io/pipx/>`_
 
-            pipx install advanced-alchemy
-
+            pip install "advanced-alchemy[aiosqlite]"
 
     .. tab-item:: pdm
+        :sync: pdm
 
         .. code-block:: bash
-            :caption: Using `PDM <https://pdm.fming.dev/>`_
 
-            pdm add advanced-alchemy
+            pdm add "advanced-alchemy[aiosqlite]"
 
-    .. tab-item:: Poetry
+    .. tab-item:: poetry
+        :sync: poetry
 
         .. code-block:: bash
-            :caption: Using `Poetry <https://python-poetry.org/>`_
 
-            poetry add advanced-alchemy
+            poetry add "advanced-alchemy[aiosqlite]"
+
+Your First Model and Repository
+-------------------------------
+
+Imagine you are building a small blog. Define a ``BlogPost`` table using ``UUIDAuditBase`` (which automatically adds a UUID ``id`` plus ``created_at`` and ``updated_at`` columns) and attach a repository to save and query posts:
+
+.. code-block:: python
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import Mapped
+    from advanced_alchemy.base import UUIDAuditBase
+    from advanced_alchemy.repository import SQLAlchemyAsyncRepository
+
+
+    class BlogPost(UUIDAuditBase):
+        __tablename__ = "quickstart_post"
+
+        title: Mapped[str]
+        published: Mapped[bool] = False
+
+
+    class BlogPostRepository(SQLAlchemyAsyncRepository[BlogPost]):
+        model_type = BlogPost
+
+
+    async def run_demo(db_session: AsyncSession) -> None:
+        conn = await db_session.connection()
+        await conn.run_sync(UUIDAuditBase.metadata.create_all)
+
+        repo = BlogPostRepository(session=db_session)
+        await repo.add(BlogPost(title="Hello Advanced Alchemy", published=True))
+        await db_session.commit()
+
+        posts, total = await repo.list_and_count(published=True)
+        assert total == 1
+        assert posts[0].title == "Hello Advanced Alchemy"
+
+Where to Go Next
+----------------
+
+* :doc:`Usage Guide <usage/index>` — Walk through models, repositories, services, caching, and read-replica routing step by step.
+* :doc:`Framework Integrations <usage/frameworks/index>` — Plug Advanced Alchemy into Litestar, FastAPI, Starlette, Flask, or Sanic.
+* `Discord Community <https://discord.gg/dSDXd4mKhp>`_ — Ask questions and get help from the maintainers.

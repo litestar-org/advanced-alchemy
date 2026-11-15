@@ -1,4 +1,6 @@
-import inspect  # Added import
+import contextlib
+import importlib
+import inspect
 import sys
 from typing import TYPE_CHECKING, Any, Optional, TextIO, Union
 
@@ -85,21 +87,22 @@ class AlembicCommandConfig(_AlembicCommandConfig):
         self.compare_type = compare_type
         self.engine = engine
         self.db_url = engine.url.render_as_string(hide_password=False)
+        if engine.dialect.name == "postgresql":
+            with contextlib.suppress(ModuleNotFoundError):
+                importlib.import_module("alembic_postgresql_enum")
 
         _config_args = {} if config_args is None else dict(config_args)
 
-        # Prepare kwargs for super().__init__
         super_init_kwargs: dict[str, Any] = {
             "file_": file_,
             "ini_section": ini_section,
             "output_buffer": output_buffer,
             "stdout": stdout,
             "cmd_opts": cmd_opts,
-            "config_args": _config_args,  # Pass the mutable copy
+            "config_args": _config_args,
             "attributes": attributes,
         }
 
-        # Inspect the parent class __init__ for toml_file parameter
         parent_init_sig = inspect.signature(super().__init__)
         if "toml_file" in parent_init_sig.parameters:
             super_init_kwargs["toml_file"] = toml_file

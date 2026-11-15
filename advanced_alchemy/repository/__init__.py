@@ -18,6 +18,7 @@ from advanced_alchemy.repository._util import (
     FilterableRepository,
     FilterableRepositoryProtocol,
     LoadSpec,
+    ModelRepositoryMixin,
     get_instrumented_attr,
     model_from_dict,
 )
@@ -33,6 +34,7 @@ __all__ = (
     "FilterableRepositoryProtocol",
     "LoadSpec",
     "ModelOrRowMappingT",
+    "ModelRepositoryMixin",
     "ModelT",
     "OrderingPair",
     "SQLAlchemyAsyncQueryRepository",

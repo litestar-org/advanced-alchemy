@@ -31,7 +31,6 @@ class MutableList(SQLMutableList[T]):  # pragma: no cover
         if not isinstance(value, MutableList):
             if isinstance(value, list):
                 return MutableList[T](value)
-            # this call will raise ValueError
             return Mutable.coerce(key, value)
         return cast("MutableList[T]", value)
 
@@ -39,9 +38,8 @@ class MutableList(SQLMutableList[T]):  # pragma: no cover
     def __reduce_ex__(self, proto: int) -> "tuple[type[MutableList[T]], tuple[list[T]]]":  # pragma: no cover
         return self.__class__, (list(self),)
 
-    # needed for backwards compatibility with
-    # older pickles
     def __getstate__(self) -> "tuple[list[T], set[T]]":  # pragma: no cover
+        """Return pickle state for backwards compatibility."""
         return list(self), self._pending_removed
 
     def __setstate__(self, state: "Any") -> None:  # pragma: no cover
@@ -107,5 +105,6 @@ class MutableList(SQLMutableList[T]):  # pragma: no cover
         self.changed()
 
     def _finalize_pending(self) -> None:
-        """Finalize pending changes by clearing the pending append list."""
+        """Finalize pending changes by clearing the pending append and removed collections."""
         self._pending_append.clear()
+        self._pending_removed.clear()

@@ -17,7 +17,7 @@ from advanced_alchemy.repository import (
 from advanced_alchemy.service import SQLAlchemyAsyncQueryService, SQLAlchemySyncQueryService
 from advanced_alchemy.service._async import SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.service._sync import SQLAlchemySyncRepositoryService
-from advanced_alchemy.utils.fixtures import open_fixture, open_fixture_async
+from advanced_alchemy.utils.fixtures import open_fixture_async, open_fixture_sync
 from advanced_alchemy.utils.serialization import (
     is_msgspec_struct,
     is_msgspec_struct_with_field,
@@ -29,7 +29,6 @@ from advanced_alchemy.utils.serialization import (
 
 pytestmark = [  # type: ignore
     pytest.mark.integration,
-    pytest.mark.xdist_group("sqlquery_service"),
 ]
 here = Path(__file__).parent
 fixture_path = here.parent.parent / "examples"
@@ -121,7 +120,6 @@ class StateQueryBaseModel(BaseModel):
     state_name: str
 
 
-@pytest.mark.xdist_group("sqlquery")
 def test_sync_fixture_and_query(engine: Engine, sqlquery_test_tables: None) -> None:
     # Skip mock engines as they don't support proper query operations
     if getattr(engine.dialect, "name", "") == "mock":
@@ -130,7 +128,7 @@ def test_sync_fixture_and_query(engine: Engine, sqlquery_test_tables: None) -> N
     with Session(engine) as session:
         state_service = USStateSyncService(session=session)
         query_service = SQLAlchemySyncQueryService(session=session)
-        fixture = open_fixture(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
+        fixture = open_fixture_sync(fixture_path, USStateSyncRepository.model_type.__tablename__)  # type: ignore[has-type]
         _add_objs = state_service.create_many(
             data=[USStateStruct(**raw_obj) for raw_obj in fixture],
         )
@@ -199,7 +197,6 @@ def test_sync_fixture_and_query(engine: Engine, sqlquery_test_tables: None) -> N
         assert _get_one_or_none is None
 
 
-@pytest.mark.xdist_group("sqlquery")
 async def test_async_fixture_and_query(async_engine: AsyncEngine, sqlquery_test_tables_async: None) -> None:
     # Skip mock engines as they don't support proper query operations
     if getattr(async_engine.dialect, "name", "") == "mock":
@@ -277,7 +274,6 @@ async def test_async_fixture_and_query(async_engine: AsyncEngine, sqlquery_test_
         assert _get_one_or_none is None
 
 
-@pytest.mark.xdist_group("sqlquery")
 async def test_async_query_repository_instantiation(async_engine: AsyncEngine) -> None:
     """Test that SQLAlchemyAsyncQueryRepository can be instantiated without super().__init__() error."""
     from advanced_alchemy.repository import SQLAlchemyAsyncQueryRepository
@@ -299,7 +295,6 @@ async def test_async_query_repository_instantiation(async_engine: AsyncEngine) -
         assert repository_with_params.wrap_exceptions is False
 
 
-@pytest.mark.xdist_group("sqlquery")
 def test_sync_query_repository_instantiation(engine: Engine) -> None:
     """Test that SQLAlchemySyncQueryRepository can be instantiated without super().__init__() error."""
     from advanced_alchemy.repository import SQLAlchemySyncQueryRepository
@@ -321,7 +316,6 @@ def test_sync_query_repository_instantiation(engine: Engine) -> None:
         assert repository_with_params.wrap_exceptions is False
 
 
-@pytest.mark.xdist_group("sqlquery")
 async def test_async_query_service_with_repository_instantiation(async_engine: AsyncEngine) -> None:
     """Test that SQLAlchemyAsyncQueryService using the repository works correctly."""
     from advanced_alchemy.service import SQLAlchemyAsyncQueryService
@@ -334,7 +328,6 @@ async def test_async_query_service_with_repository_instantiation(async_engine: A
         assert query_service.repository.session == session
 
 
-@pytest.mark.xdist_group("sqlquery")
 def test_sync_query_service_with_repository_instantiation(engine: Engine) -> None:
     """Test that SQLAlchemySyncQueryService using the repository works correctly."""
     from advanced_alchemy.service import SQLAlchemySyncQueryService

@@ -3,48 +3,45 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Generator
 from io import StringIO
+from operator import itemgetter
 from pathlib import Path
 from typing import Any, cast
+from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from alembic.util.exc import CommandError
+from anyio import Path as AsyncPath
 from pytest import CaptureFixture, FixtureRequest
 from pytest_lazy_fixtures import lf
 from sqlalchemy import Engine, ForeignKey, String, event
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
-from sqlalchemy.orm import Mapped, mapped_column, relationship, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
-from advanced_alchemy import base
+from advanced_alchemy import base, mixins
 from advanced_alchemy.alembic import commands
 from advanced_alchemy.alembic.utils import drop_all, dump_tables
 from advanced_alchemy.config.asyncio import AlembicAsyncConfig
 from advanced_alchemy.config.sync import AlembicSyncConfig
 from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
-from tests.fixtures.uuid import models as models_uuid
+from advanced_alchemy.utils.fixtures import open_fixture_sync
+from advanced_alchemy.utils.sync_tools import async_
 from tests.helpers import maybe_async
-
-AuthorModel = type[models_uuid.UUIDAuthor]
-RuleModel = type[models_uuid.UUIDRule]
-ModelWithFetchedValue = type[models_uuid.UUIDModelWithFetchedValue]
-ItemModel = type[models_uuid.UUIDItem]
-TagModel = type[models_uuid.UUIDTag]
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.xdist_group("alembic_commands"),
 ]
 
 
 @pytest.fixture(
-    scope="session",
     params=[
         pytest.param(
             "sqlite_engine",
             marks=[
                 pytest.mark.sqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -116,13 +113,13 @@ def sync_sqlalchemy_config(request: FixtureRequest) -> Generator[SQLAlchemySyncC
 
 
 @pytest.fixture(
-    scope="session",
     params=[
         pytest.param(
             "aiosqlite_engine",
             marks=[
                 pytest.mark.aiosqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -196,16 +193,17 @@ def async_sqlalchemy_config(
 
 
 @pytest.fixture(
-    scope="session",
     params=[lf("sync_sqlalchemy_config"), lf("async_sqlalchemy_config")],
     ids=["sync", "async"],
 )
 def any_config(request: FixtureRequest) -> Generator[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig, None, None]:
-    """Return a session for the current session"""
+    """Return a config for the current test."""
     if isinstance(request.param, SQLAlchemyAsyncConfig):
         request.getfixturevalue("async_sqlalchemy_config")
     else:
         request.getfixturevalue("sync_sqlalchemy_config")
+    if request.param.metadata is not None:
+        base.metadata_registry.set(request.param.bind_key, request.param.metadata)
     yield request.param  # type: ignore[no-any-return]
 
 
@@ -213,6 +211,8 @@ def any_config(request: FixtureRequest) -> Generator[SQLAlchemySyncConfig | SQLA
 def alembic_commands(
     any_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
 ) -> Generator[commands.AlembicCommands, None, None]:
+    if any_config.metadata is not None:
+        base.metadata_registry.set(any_config.bind_key, any_config.metadata)
     yield commands.AlembicCommands(
         sqlalchemy_config=any_config,
     )
@@ -250,6 +250,8 @@ def test_alembic_command_config_propagates_alembic_options() -> None:
     assert command_config.user_module_prefix == "sqlalchemy."
 
 
+@pytest.mark.sqlite
+@pytest.mark.xdist_group("sqlite")
 @pytest.mark.parametrize("async_mode", [False, True], ids=["sync", "async"])
 @pytest.mark.parametrize("offline", [False, True], ids=["online", "offline"])
 @pytest.mark.parametrize("schema", [None, "custom_schema"], ids=["default_schema", "custom_schema"])
@@ -302,8 +304,6 @@ def test_alembic_version_table_schema(
 
 
 async def test_alembic_init(alembic_commands: commands.AlembicCommands, tmp_project_dir: Path) -> None:
-    from advanced_alchemy.utils.sync_tools import async_
-
     alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
     expected_dirs = [f"{tmp_project_dir}/migrations/", f"{tmp_project_dir}/migrations/versions"]
     expected_files = [f"{tmp_project_dir}/migrations/env.py", f"{tmp_project_dir}/migrations/script.py.mako"]
@@ -313,9 +313,21 @@ async def test_alembic_init(alembic_commands: commands.AlembicCommands, tmp_proj
         assert await async_(Path(file).is_file)()
 
 
-async def test_alembic_init_already(alembic_commands: commands.AlembicCommands, tmp_project_dir: Path) -> None:
-    from advanced_alchemy.utils.sync_tools import async_
+async def test_alembic_init_renders_postgres_enum_import(
+    alembic_commands: commands.AlembicCommands, tmp_project_dir: Path
+) -> None:
+    """The generated ``env.py`` should opt into PostgreSQL enum autogenerate support.
 
+    See https://github.com/litestar-org/advanced-alchemy/issues/492.
+    """
+    alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
+    env_contents = await async_(Path(f"{tmp_project_dir}/migrations/env.py").read_text)()
+    assert 'importlib.import_module("alembic_postgresql_enum")' in env_contents
+    assert 'if config.db_url.startswith("postgresql"):' in env_contents
+    assert "contextlib.suppress(ModuleNotFoundError)" in env_contents
+
+
+async def test_alembic_init_already(alembic_commands: commands.AlembicCommands, tmp_project_dir: Path) -> None:
     alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
     expected_dirs = [f"{tmp_project_dir}/migrations/", f"{tmp_project_dir}/migrations/versions"]
     expected_files = [f"{tmp_project_dir}/migrations/env.py", f"{tmp_project_dir}/migrations/script.py.mako"]
@@ -327,7 +339,6 @@ async def test_alembic_init_already(alembic_commands: commands.AlembicCommands, 
         alembic_commands.init(directory=f"{tmp_project_dir}/migrations/")
 
 
-@pytest.mark.xdist_group("alembic_drop_all")  # Isolate destructive test to prevent race conditions
 async def test_drop_all(
     alembic_commands: commands.AlembicCommands,
     any_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
@@ -353,42 +364,239 @@ async def test_drop_all(
     assert "Successfully dropped all objects" in result.out
 
 
+class _DumpBase(base.CommonTableAttributes, mixins.UUIDPrimaryKey, DeclarativeBase):
+    registry = base.create_registry()
+
+
+class DumpAuthorModel(_DumpBase):
+    name: Mapped[str] = mapped_column(String(10))
+    books: Mapped[list[DumpBookModel]] = relationship(lazy="joined", viewonly=True)
+
+
+class DumpBookModel(_DumpBase):
+    title: Mapped[str] = mapped_column(String(10))
+    author_id: Mapped[UUID] = mapped_column(ForeignKey("dump_author_model.id"))
+    author: Mapped[DumpAuthorModel] = relationship(lazy="joined", innerjoin=True, viewonly=True)
+
+
+_AUTHORS = [
+    {"id": "00000000-0000-0000-0000-000000000001", "name": "alice"},
+    {"id": "00000000-0000-0000-0000-000000000002", "name": "bob"},
+    {"id": "00000000-0000-0000-0000-000000000003", "name": "carol"},
+]
+_BOOKS = [
+    {
+        "id": "00000000-0000-0000-0000-000000000011",
+        "title": "red",
+        "author_id": "00000000-0000-0000-0000-000000000001",
+    },
+    {
+        "id": "00000000-0000-0000-0000-000000000012",
+        "title": "green",
+        "author_id": "00000000-0000-0000-0000-000000000001",
+    },
+    {
+        "id": "00000000-0000-0000-0000-000000000013",
+        "title": "blue",
+        "author_id": "00000000-0000-0000-0000-000000000002",
+    },
+]
+
+
+async def _seed_dump_models(config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig) -> None:
+    authors = [DumpAuthorModel(id=UUID(row["id"]), name=row["name"]) for row in _AUTHORS]
+    books = [DumpBookModel(id=UUID(row["id"]), title=row["title"], author_id=UUID(row["author_id"])) for row in _BOOKS]
+    if isinstance(config, SQLAlchemySyncConfig):
+        engine = config.get_engine()
+        _DumpBase.metadata.drop_all(engine)
+        _DumpBase.metadata.create_all(engine)
+        with config.get_session() as session:
+            session.add_all(authors)
+            session.flush()
+            session.add_all(books)
+            session.commit()
+    else:
+        async_engine = config.get_engine()
+        async with async_engine.begin() as conn:
+            await conn.run_sync(_DumpBase.metadata.drop_all)
+            await conn.run_sync(_DumpBase.metadata.create_all)
+        async with config.get_session() as session:
+            session.add_all(authors)
+            await session.flush()
+            session.add_all(books)
+            await session.commit()
+
+
+async def _drop_dump_models(config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig) -> None:
+    if isinstance(config, SQLAlchemySyncConfig):
+        _DumpBase.metadata.drop_all(config.get_engine())
+    else:
+        async with config.get_engine().begin() as conn:
+            await conn.run_sync(_DumpBase.metadata.drop_all)
+
+
+@pytest.fixture(
+    params=[
+        pytest.param(
+            ("sqlite_engine", True),
+            marks=[
+                pytest.mark.sqlite,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
+            ],
+        ),
+        pytest.param(
+            ("aiosqlite_engine", True),
+            marks=[
+                pytest.mark.aiosqlite,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
+            ],
+        ),
+        pytest.param(
+            ("aiosqlite_engine", False),
+            marks=[
+                pytest.mark.aiosqlite,
+                pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
+            ],
+        ),
+    ],
+    ids=["sqlite", "aiosqlite-stream", "aiosqlite-buffered"],
+)
+def sqlite_dump_config(
+    request: FixtureRequest, monkeypatch: MonkeyPatch
+) -> Generator[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig, None, None]:
+    engine_fixture, supports_cursors = cast("tuple[str, bool]", request.param)
+    engine = request.getfixturevalue(engine_fixture)
+    orm_registry = base.create_registry()
+    if isinstance(engine, AsyncEngine):
+        if not supports_cursors:
+            monkeypatch.setattr(engine.sync_engine.dialect, "supports_server_side_cursors", False)
+        yield SQLAlchemyAsyncConfig(
+            engine_instance=engine,
+            session_maker=async_sessionmaker(bind=engine, expire_on_commit=False),
+            metadata=orm_registry.metadata,
+        )
+    else:
+        yield SQLAlchemySyncConfig(
+            engine_instance=engine,
+            session_maker=sessionmaker(bind=engine, expire_on_commit=False),
+            metadata=orm_registry.metadata,
+        )
+
+
 async def test_dump_tables(
     any_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
     capfd: CaptureFixture[str],
     tmp_project_dir: Path,
 ) -> None:
-    from sqlalchemy.orm import DeclarativeBase
-
-    from advanced_alchemy import base, mixins
-
-    class _UUIDAuditBase(base.CommonTableAttributes, mixins.UUIDPrimaryKey, DeclarativeBase):
-        registry = base.create_registry()
-
-    class TestAuthorModel(_UUIDAuditBase):
-        name: Mapped[str] = mapped_column(String(10))
-
-    class TestBookModel(_UUIDAuditBase):
-        title: Mapped[str] = mapped_column(String(10))
-        author_id: Mapped[UUID] = mapped_column(ForeignKey("test_author_model.id"))
-
-    TestBookModel.author = relationship(TestAuthorModel, lazy="joined", innerjoin=True, viewonly=True)
-    TestAuthorModel.books = relationship(TestBookModel, back_populates="author", lazy="noload", uselist=True)
-
-    if isinstance(any_config, SQLAlchemySyncConfig):
-        TestBookModel.metadata.create_all(any_config.get_engine())
-    else:
-        async with any_config.get_engine().begin() as conn:
-            await conn.run_sync(TestBookModel.metadata.create_all)
-
-    await dump_tables(
-        tmp_project_dir,
-        any_config.get_session(),
-        [TestAuthorModel, TestBookModel],
-    )
+    await _seed_dump_models(any_config)
+    try:
+        await dump_tables(
+            tmp_project_dir,
+            any_config.get_session(),
+            [DumpAuthorModel, DumpBookModel],
+        )
+    finally:
+        await _drop_dump_models(any_config)
     result = capfd.readouterr()
-    assert "Dumping table 'test_author_model'" in result.out
-    assert "Dumping table 'test_book_model" in result.out
+    assert "Dumping table 'dump_author_model'" in result.out
+    assert "Dumping table 'dump_book_model'" in result.out
+    assert f"Wrote {tmp_project_dir / 'dump_author_model.json'}" in result.out
+    assert sorted([p.name async for p in AsyncPath(tmp_project_dir).iterdir()]) == [
+        "dump_author_model.json",
+        "dump_book_model.json",
+    ]
+    assert sorted(open_fixture_sync(tmp_project_dir, "dump_author_model"), key=itemgetter("id")) == _AUTHORS
+    assert sorted(open_fixture_sync(tmp_project_dir, "dump_book_model"), key=itemgetter("id")) == _BOOKS
+
+
+@pytest.mark.parametrize(
+    ("dump_kwargs", "author_files", "book_files"),
+    [
+        ({}, ["dump_author_model.json"], ["dump_book_model.json"]),
+        ({"file_format": "jsonl"}, ["dump_author_model.jsonl"], ["dump_book_model.jsonl"]),
+        (
+            {"file_format": "jsonl", "compression": "gzip"},
+            ["dump_author_model.jsonl.gz"],
+            ["dump_book_model.jsonl.gz"],
+        ),
+        (
+            {"file_format": "csv", "compression": "zip"},
+            ["dump_author_model.csv.zip"],
+            ["dump_book_model.csv.zip"],
+        ),
+        (
+            {"compression": "gzip", "max_records": 2},
+            ["dump_author_model.001.json.gz", "dump_author_model.002.json.gz"],
+            ["dump_book_model.001.json.gz", "dump_book_model.002.json.gz"],
+        ),
+        (
+            {"file_format": "jsonl", "max_records": 1, "batch_size": 1},
+            ["dump_author_model.001.jsonl", "dump_author_model.002.jsonl", "dump_author_model.003.jsonl"],
+            ["dump_book_model.001.jsonl", "dump_book_model.002.jsonl", "dump_book_model.003.jsonl"],
+        ),
+        (
+            {"file_format": "jsonl", "max_bytes": 200},
+            ["dump_author_model.001.jsonl", "dump_author_model.002.jsonl"],
+            ["dump_book_model.001.jsonl", "dump_book_model.002.jsonl", "dump_book_model.003.jsonl"],
+        ),
+    ],
+    ids=[
+        "default-json",
+        "jsonl",
+        "jsonl-gzip",
+        "csv-zip",
+        "json-gzip-max-records-2",
+        "jsonl-max-records-1-batch-1",
+        "jsonl-max-bytes-200",
+    ],
+)
+async def test_dump_tables_fixture_options(
+    sqlite_dump_config: SQLAlchemySyncConfig | SQLAlchemyAsyncConfig,
+    capfd: CaptureFixture[str],
+    tmp_project_dir: Path,
+    dump_kwargs: dict[str, Any],
+    author_files: list[str],
+    book_files: list[str],
+) -> None:
+    await _seed_dump_models(sqlite_dump_config)
+    try:
+        await dump_tables(
+            tmp_project_dir,
+            sqlite_dump_config.get_session(),
+            [DumpAuthorModel, DumpBookModel],
+            **dump_kwargs,
+        )
+    finally:
+        await _drop_dump_models(sqlite_dump_config)
+    result = capfd.readouterr()
+    expected_files = author_files + book_files
+    assert sorted([p.name async for p in AsyncPath(tmp_project_dir).iterdir()]) == sorted(expected_files)
+    assert all(f"Wrote {tmp_project_dir / name}" in result.out for name in expected_files)
+    assert open_fixture_sync(tmp_project_dir, "dump_author_model") == _AUTHORS
+    assert open_fixture_sync(tmp_project_dir, "dump_book_model") == _BOOKS
+    if not dump_kwargs:
+        author_text = await AsyncPath(tmp_project_dir / "dump_author_model.json").read_text(encoding="utf-8")
+        assert author_text.startswith("[\n{")
+        assert author_text.endswith("}\n]\n")
+        assert author_text.count(",\n") == 2
+    if "max_bytes" in dump_kwargs:
+        assert all(
+            [
+                (await AsyncPath(tmp_project_dir / name).stat()).st_size <= dump_kwargs["max_bytes"]
+                for name in expected_files
+            ]
+        )
+
+
+@pytest.mark.unit
+async def test_dump_tables_rejects_invalid_batch_size(tmp_project_dir: Path) -> None:
+    out_dir = tmp_project_dir / "out"
+    with pytest.raises(ValueError, match="batch_size must be at least 1, got 0"):
+        await dump_tables(out_dir, MagicMock(), [], batch_size=0)
+    assert not out_dir.exists()
 
 
 """

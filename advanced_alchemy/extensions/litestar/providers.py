@@ -8,7 +8,8 @@ You should not have modify this module very often and should only be invoked und
 
 import datetime
 import inspect
-from collections.abc import AsyncGenerator, Callable, Generator
+import re
+from collections.abc import AsyncGenerator, Callable, Generator, Mapping
 from functools import partial
 from typing import (
     TYPE_CHECKING,
@@ -27,6 +28,9 @@ from litestar.di import NamedDependency, Provide
 from litestar.params import QueryParameter, SkipValidation
 from litestar.utils.signature import ParsedSignature
 
+from advanced_alchemy.config import SQLAlchemyAsyncConfig as BaseAsyncConfig
+from advanced_alchemy.config import SQLAlchemySyncConfig as BaseSyncConfig
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.filters import (
     BeforeAfter,
     BooleanFilter,
@@ -44,6 +48,7 @@ from advanced_alchemy.service import (
     ErrorMessages,
     LoadSpec,
     ModelT,
+    ServiceGroup,
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
@@ -78,6 +83,7 @@ SortOrder = Literal["asc", "desc"]
 SortOrderOrNone = Optional[SortOrder]
 AsyncServiceT_co = TypeVar("AsyncServiceT_co", bound=SQLAlchemyAsyncRepositoryService[Any, Any], covariant=True)
 SyncServiceT_co = TypeVar("SyncServiceT_co", bound=SQLAlchemySyncRepositoryService[Any, Any], covariant=True)
+ServiceGroupT = TypeVar("ServiceGroupT", bound=ServiceGroup)
 
 __all__ = (
     "DEPENDENCY_DEFAULTS",
@@ -86,6 +92,7 @@ __all__ = (
     "DependencyDefaults",
     "FieldNameType",
     "FilterConfig",
+    "ServiceGroup",
     "SingletonMeta",
     "create_filter_dependencies",
     "create_service_dependencies",
@@ -113,12 +120,110 @@ class DependencyDefaults:
     """Key for the search filter dependency."""
     DEFAULT_PAGINATION_SIZE: int = 20
     """Default pagination size."""
+    prefix: Optional[str] = None
+    """Optional namespace prefix for dependency keys."""
+
+    def __init__(
+        self,
+        filters_key: Optional[str] = None,
+        created_filter_key: Optional[str] = None,
+        id_filter_key: Optional[str] = None,
+        limit_offset_filter_key: Optional[str] = None,
+        updated_filter_key: Optional[str] = None,
+        order_by_filter_key: Optional[str] = None,
+        search_filter_key: Optional[str] = None,
+        default_pagination_size: Optional[int] = None,
+        prefix: Optional[str] = None,
+    ) -> None:
+        if prefix is not None:
+            self.prefix = prefix
+        clean_prefix = self.prefix.rstrip("_") if self.prefix else ""
+        prefix_clean = f"{clean_prefix}_" if clean_prefix else ""
+        has_prefix = bool(prefix_clean)
+        cls = type(self)
+
+        for attr, explicit_key in (
+            ("FILTERS_DEPENDENCY_KEY", filters_key),
+            ("CREATED_FILTER_DEPENDENCY_KEY", created_filter_key),
+            ("ID_FILTER_DEPENDENCY_KEY", id_filter_key),
+            ("LIMIT_OFFSET_FILTER_DEPENDENCY_KEY", limit_offset_filter_key),
+            ("UPDATED_FILTER_DEPENDENCY_KEY", updated_filter_key),
+            ("ORDER_BY_FILTER_DEPENDENCY_KEY", order_by_filter_key),
+            ("SEARCH_FILTER_DEPENDENCY_KEY", search_filter_key),
+        ):
+            if explicit_key is not None or has_prefix:
+                base = explicit_key if explicit_key is not None else cast("str", getattr(cls, attr))
+                object.__setattr__(self, attr, f"{prefix_clean}{base}" if has_prefix else base)
+
+        if default_pagination_size is not None:
+            object.__setattr__(self, "DEFAULT_PAGINATION_SIZE", default_pagination_size)
 
 
 DEPENDENCY_DEFAULTS = DependencyDefaults()
 
 
 dep_cache = DependencyCache()
+
+
+def _attach_service_provider_signature(
+    provider: Callable[..., Any],
+    session_dependency_key: str,
+    param_annotation: Any,
+    return_annotation: Any,
+) -> Callable[..., Any]:
+    session_param = inspect.Parameter(
+        name=session_dependency_key,
+        kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        annotation=param_annotation,
+    )
+    provider.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+        parameters=[session_param],
+        return_annotation=return_annotation,
+    )
+    provider.__annotations__ = {
+        session_dependency_key: param_annotation,
+        "return": return_annotation,
+    }
+    return provider
+
+
+def _is_async_provider_target(
+    service_class: type[Any],
+    config: "Optional[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]",
+) -> bool:
+    if issubclass(service_class, ServiceGroup):
+        group_async = service_class.is_async_group()
+        if group_async is not None:
+            return group_async
+        if isinstance(config, BaseSyncConfig):
+            return False
+        if isinstance(config, BaseAsyncConfig):
+            return True
+        return True
+    return (
+        issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService
+    )
+
+
+def _with_dep_defaults_prefix(
+    dep_defaults: Optional[DependencyDefaults],
+    prefix: str,
+) -> DependencyDefaults:
+    if dep_defaults is None:
+        return DependencyDefaults(prefix=prefix)
+    cls = type(dep_defaults)
+    old_prefix = f"{dep_defaults.prefix.rstrip('_')}_" if dep_defaults.prefix else ""
+    return cls(
+        filters_key=dep_defaults.FILTERS_DEPENDENCY_KEY.removeprefix(old_prefix),
+        created_filter_key=dep_defaults.CREATED_FILTER_DEPENDENCY_KEY.removeprefix(old_prefix),
+        id_filter_key=dep_defaults.ID_FILTER_DEPENDENCY_KEY.removeprefix(old_prefix),
+        limit_offset_filter_key=dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY.removeprefix(old_prefix),
+        updated_filter_key=dep_defaults.UPDATED_FILTER_DEPENDENCY_KEY.removeprefix(old_prefix),
+        order_by_filter_key=dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY.removeprefix(old_prefix),
+        search_filter_key=dep_defaults.SEARCH_FILTER_DEPENDENCY_KEY.removeprefix(old_prefix),
+        default_pagination_size=dep_defaults.DEFAULT_PAGINATION_SIZE,
+        prefix=prefix,
+    )
 
 
 @overload
@@ -149,8 +254,22 @@ def create_service_provider(
 ) -> Callable[..., Generator[SyncServiceT_co, None, None]]: ...
 
 
+@overload
 def create_service_provider(
-    service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
+    service_class: type["ServiceGroupT"],
+    /,
+    statement: "Optional[Select[Any]]" = None,
+    config: "Optional[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]" = None,
+    error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
+    load: "Optional[LoadSpec]" = None,
+    execution_options: "Optional[dict[str, Any]]" = None,
+    uniquify: Optional[bool] = None,
+    count_with_window_function: Optional[bool] = None,
+) -> Callable[..., Union[AsyncGenerator[ServiceGroupT, None], Generator[ServiceGroupT, None, None]]]: ...
+
+
+def create_service_provider(
+    service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co", "ServiceGroupT"]],
     /,
     statement: "Optional[Select[tuple[ModelT]]]" = None,
     config: "Optional[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]" = None,
@@ -159,15 +278,21 @@ def create_service_provider(
     execution_options: "Optional[dict[str, Any]]" = None,
     uniquify: Optional[bool] = None,
     count_with_window_function: Optional[bool] = None,
-) -> Callable[..., Union["AsyncGenerator[AsyncServiceT_co, None]", "Generator[SyncServiceT_co,None, None]"]]:
-    """Create a dependency provider for a service with a configurable session key.
+) -> Callable[
+    ...,
+    Union[
+        "AsyncGenerator[Union[AsyncServiceT_co, ServiceGroupT], None]",
+        "Generator[Union[SyncServiceT_co, ServiceGroupT], None, None]",
+    ],
+]:
+    """Create a dependency provider for a service or ServiceGroup with a configurable session key.
 
     Args:
-        service_class: The service class inheriting from SQLAlchemyAsyncRepositoryService or SQLAlchemySyncRepositoryService.
-        statement: An optional SQLAlchemy Select statement to scope the service.
+        service_class: The service or ServiceGroup class to instantiate per request.
+        statement: An optional SQLAlchemy Select statement to scope a single service.
         config: An optional SQLAlchemy configuration object.
         error_messages: Optional custom error messages for the service.
-        load: Optional LoadSpec for eager loading relationships.
+        load: Optional LoadSpec for eager loading relationships on a single service.
         execution_options: Optional dictionary of execution options for SQLAlchemy.
         uniquify: Optional flag to uniquify results.
         count_with_window_function: Optional flag to use window function for counting.
@@ -175,50 +300,39 @@ def create_service_provider(
     Returns:
         A dependency provider function suitable for Litestar's DI system.
     """
+    is_group = issubclass(service_class, ServiceGroup)
+    if is_group and (statement is not None or load is not None):
+        msg = "Group-wide 'statement' and 'load' options are not supported for ServiceGroup; configure them on individual service classes."
+        raise ImproperConfigurationError(msg)
 
     session_dependency_key = config.session_dependency_key if config else "db_session"
+    is_async = _is_async_provider_target(service_class, config)
 
-    if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
-        async_session_type_annotation = NamedDependency[SkipValidation[Optional["AsyncSession"]]]
-        return_type_annotation = AsyncGenerator[service_class, None]  # type: ignore[valid-type]
-
-        async def provide_service_async(*args: Any, **kwargs: Any) -> "AsyncGenerator[AsyncServiceT_co, None]":
-            db_session = cast("Optional[AsyncSession]", args[0] if args else kwargs.get(session_dependency_key))
-            async with service_class.new(  # type: ignore[union-attr]
-                session=db_session,  # type: ignore[arg-type]
+    def _enter_target(db_session: Any) -> Any:
+        if is_group:
+            group_cls = cast("type[ServiceGroup]", service_class)
+            return group_cls.new(
+                session=db_session,
+                config=config,
+                error_messages=error_messages,
+                execution_options=execution_options,
+                uniquify=uniquify,
+                count_with_window_function=count_with_window_function,
+            )
+        if is_async:
+            async_svc_cls = cast("type[SQLAlchemyAsyncRepositoryService[Any, Any]]", service_class)
+            return async_svc_cls.new(
+                session=db_session,
                 statement=statement,
-                config=cast("Optional[SQLAlchemyAsyncConfig]", config),  # type: ignore[arg-type]
+                config=cast("Optional[SQLAlchemyAsyncConfig]", config),
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
                 uniquify=uniquify,
                 count_with_window_function=count_with_window_function,
-            ) as service:
-                yield service
-
-        session_param = inspect.Parameter(
-            name=session_dependency_key,
-            kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            annotation=async_session_type_annotation,
-        )
-
-        provider_signature = inspect.Signature(
-            parameters=[session_param],
-            return_annotation=return_type_annotation,
-        )
-        provide_service_async.__signature__ = provider_signature  # type: ignore[attr-defined]
-        provide_service_async.__annotations__ = {
-            session_dependency_key: async_session_type_annotation,
-            "return": return_type_annotation,
-        }
-        return provide_service_async
-
-    sync_session_type_annotation = NamedDependency[SkipValidation[Optional["Session"]]]
-    return_type_annotation = Generator[service_class, None, None]  # type: ignore[misc,assignment,valid-type]
-
-    def provide_service_sync(*args: Any, **kwargs: Any) -> "Generator[SyncServiceT_co, None, None]":
-        db_session = cast("Optional[Session]", args[0] if args else kwargs.get(session_dependency_key))
-        with service_class.new(
+            )
+        sync_svc_cls = cast("type[SQLAlchemySyncRepositoryService[Any, Any]]", service_class)
+        return sync_svc_cls.new(
             session=db_session,
             statement=statement,
             config=cast("Optional[SQLAlchemySyncConfig]", config),
@@ -227,29 +341,85 @@ def create_service_provider(
             execution_options=execution_options,
             uniquify=uniquify,
             count_with_window_function=count_with_window_function,
-        ) as service:
+        )
+
+    if is_async:
+        async_session_type_annotation = NamedDependency[SkipValidation[Optional["AsyncSession"]]]
+        return_type_annotation = AsyncGenerator[service_class, None]  # type: ignore[valid-type]
+
+        async def provide_service_async(*args: Any, **kwargs: Any) -> "AsyncGenerator[Any, None]":
+            db_session = cast("Optional[AsyncSession]", args[0] if args else kwargs.get(session_dependency_key))
+            async with _enter_target(db_session) as service:
+                yield service
+
+        return _attach_service_provider_signature(
+            provide_service_async,
+            session_dependency_key,
+            async_session_type_annotation,
+            return_type_annotation,
+        )
+
+    sync_session_type_annotation = NamedDependency[SkipValidation[Optional["Session"]]]
+    return_type_annotation = Generator[service_class, None, None]  # type: ignore[misc,assignment,valid-type]
+
+    def provide_service_sync(*args: Any, **kwargs: Any) -> "Generator[Any, None, None]":
+        db_session = cast("Optional[Session]", args[0] if args else kwargs.get(session_dependency_key))
+        with _enter_target(db_session) as service:
             yield service
 
-    session_param = inspect.Parameter(
-        name=session_dependency_key,
-        kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        annotation=sync_session_type_annotation,
+    return _attach_service_provider_signature(
+        provide_service_sync,
+        session_dependency_key,
+        sync_session_type_annotation,
+        return_type_annotation,
     )
 
-    provider_signature = inspect.Signature(
-        parameters=[session_param],
-        return_annotation=return_type_annotation,
-    )
-    provide_service_sync.__signature__ = provider_signature  # type: ignore[attr-defined]
-    provide_service_sync.__annotations__ = {
-        session_dependency_key: sync_session_type_annotation,
-        "return": return_type_annotation,
-    }
-    return provide_service_sync
+
+def _resolve_single_service_dep_defaults(
+    key: str,
+    dep_defaults: "Optional[DependencyDefaults]",
+    scoped_filters: bool,
+) -> "DependencyDefaults":
+    """Resolve effective filter dependency defaults for a single service provider."""
+    if dep_defaults is None:
+        return DependencyDefaults(prefix=key) if scoped_filters else DEPENDENCY_DEFAULTS
+    if scoped_filters and not getattr(dep_defaults, "prefix", None):
+        return _with_dep_defaults_prefix(dep_defaults, key)
+    return dep_defaults
+
+
+def _create_service_group_filter_dependencies(
+    service_class: "type[ServiceGroup]",
+    key: str,
+    filters: "Union[FilterConfig, Mapping[str, FilterConfig]]",
+    dep_defaults: "Optional[DependencyDefaults]",
+    scoped_filters: bool,
+) -> dict[str, Provide]:
+    """Create scoped filter dependencies for each configured service in a ServiceGroup."""
+    if not isinstance(cast("Any", filters), Mapping):
+        msg = f"ServiceGroup filters must map service attribute names to FilterConfig dictionaries on {service_class.__name__}."
+        raise ImproperConfigurationError(msg)
+    group_fields = service_class.service_fields()
+    base_prefix = ""
+    if dep_defaults is not None and getattr(dep_defaults, "prefix", None):
+        base_prefix = cast("str", dep_defaults.prefix).rstrip("_")
+    elif scoped_filters:
+        base_prefix = key.rstrip("_")
+    deps: dict[str, Provide] = {}
+    for attr_name, attr_filter_config in cast("Mapping[str, FilterConfig]", filters).items():
+        if attr_name not in group_fields:
+            msg = f"Filter configuration key {attr_name!r} does not match any service attribute on {service_class.__name__}."
+            raise ImproperConfigurationError(msg)
+        if not attr_filter_config:
+            continue
+        scoped_prefix = f"{base_prefix}_{attr_name}" if base_prefix else attr_name
+        attr_defaults = _with_dep_defaults_prefix(dep_defaults, scoped_prefix)
+        deps.update(create_filter_dependencies(attr_filter_config, attr_defaults))
+    return deps
 
 
 def create_service_dependencies(
-    service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
+    service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co", "ServiceGroupT"]],
     /,
     key: str,
     statement: "Optional[Select[tuple[ModelT]]]" = None,
@@ -257,33 +427,49 @@ def create_service_dependencies(
     error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
     load: "Optional[LoadSpec]" = None,
     execution_options: "Optional[dict[str, Any]]" = None,
-    filters: "Optional[FilterConfig]" = None,
+    filters: "Optional[Union[FilterConfig, Mapping[str, FilterConfig]]]" = None,
     uniquify: Optional[bool] = None,
     count_with_window_function: Optional[bool] = None,
-    dep_defaults: "DependencyDefaults" = DEPENDENCY_DEFAULTS,
+    dep_defaults: "Optional[DependencyDefaults]" = None,
+    scoped_filters: bool = False,
 ) -> dict[str, Provide]:
-    """Create a dependency provider for the combined filter function.
+    """Create dependency providers for a service or ServiceGroup and optional filters.
 
     Args:
         key: The key to use for the dependency provider.
-        service_class: The service class to create a dependency provider for.
-        statement: The statement to use for the service.
+        service_class: The service or ServiceGroup class to create a dependency provider for.
+        statement: The statement to use for a single service.
         config: The configuration to use for the service.
         error_messages: The error messages to use for the service.
-        load: The load spec to use for the service.
+        load: The load spec to use for a single service.
         execution_options: The execution options to use for the service.
-        filters: The filter configuration to use for the service.
+        filters: Filter configuration for a single service, or mapping of service attribute name to FilterConfig for a ServiceGroup.
         uniquify: Whether to uniquify the service.
         count_with_window_function: Whether to count with a window function.
         dep_defaults: The dependency defaults to use for the service.
+        scoped_filters: Whether to scope the filter dependency keys to the service key.
 
     Returns:
-        A dictionary of dependency providers for the service.
+        A dictionary of dependency providers for the service or ServiceGroup.
     """
-
-    if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
-        svc = create_service_provider(  # type: ignore[type-var,misc,unused-ignore]
-            service_class,
+    is_group = issubclass(service_class, ServiceGroup)
+    is_async = _is_async_provider_target(service_class, config)
+    if is_group:
+        group_cls = cast("type[ServiceGroup]", service_class)
+        svc: Callable[..., Any] = create_service_provider(
+            group_cls,
+            statement,
+            config,
+            error_messages,
+            load,
+            execution_options,
+            uniquify,
+            count_with_window_function,
+        )
+    else:
+        svc_cls = cast("type[SQLAlchemyAsyncRepositoryService[Any, Any]]", service_class)
+        svc = create_service_provider(
+            svc_cls,
             statement,
             cast("Optional[SQLAlchemyAsyncConfig]", config),
             error_messages,
@@ -292,21 +478,24 @@ def create_service_dependencies(
             uniquify,
             count_with_window_function,
         )
-        deps = {key: Provide(svc)}
-    else:
-        svc = create_service_provider(  # type: ignore[assignment]
-            service_class,
-            statement,
-            cast("Optional[SQLAlchemySyncConfig]", config),
-            error_messages,
-            load,
-            execution_options,
-            uniquify,
-            count_with_window_function,
+    deps: dict[str, Provide] = {key: Provide(svc) if is_async else Provide(svc, sync_to_thread=False)}
+    if not filters:
+        return deps
+
+    if is_group:
+        deps.update(
+            _create_service_group_filter_dependencies(
+                cast("type[ServiceGroup]", service_class),
+                key,
+                filters,
+                dep_defaults,
+                scoped_filters,
+            )
         )
-        deps = {key: Provide(svc, sync_to_thread=False)}
-    if filters:
-        deps.update(create_filter_dependencies(filters, dep_defaults))
+        return deps
+
+    effective_dep_defaults = _resolve_single_service_dep_defaults(key, dep_defaults, scoped_filters)
+    deps.update(create_filter_dependencies(cast("FilterConfig", filters), effective_dep_defaults))
     return deps
 
 
@@ -322,7 +511,8 @@ def create_filter_dependencies(
     Returns:
         A dependency provider function for the combined filter function.
     """
-    aliases = resolve_filter_aliases(config)
+    prefix = getattr(dep_defaults, "prefix", None)
+    aliases = resolve_filter_aliases(config, prefix=prefix)
     cache_key = filter_cache_key(_CACHE_NAMESPACE, config, dep_defaults, aliases)
     deps = cast("Optional[dict[str, Provide]]", dep_cache.get_dependencies(cache_key))
     if deps is not None:
@@ -380,7 +570,12 @@ def _create_statement_filters(  # noqa: C901, PLR0915
         dict[str, Provide]: Dictionary of filter provider functions
     """
     filters: dict[str, Provide] = {}
-    alias_for = (resolve_filter_aliases(config) if aliases is None else aliases).__getitem__
+    prefix = getattr(dep_defaults, "prefix", None)
+    clean_prefix = prefix.rstrip("_") if isinstance(prefix, str) else ""
+    prefix_str = f"{clean_prefix}_" if clean_prefix else ""
+    alias_for = (
+        resolve_filter_aliases(config, prefix=clean_prefix or None) if aliases is None else aliases
+    ).__getitem__
 
     if config.get("id_filter", False):
 
@@ -430,6 +625,7 @@ def _create_statement_filters(  # noqa: C901, PLR0915
         )
 
     if search_fields := config.get("search"):
+        parsed_field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else set(search_fields)
 
         def provide_search_filter(
             search_string: Annotated[
@@ -447,11 +643,8 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                 ),
             ] = config.get("search_ignore_case", False),
         ) -> SearchFilter:
-            # Handle both string and set input types for search fields
-            field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else set(search_fields)
-
             return SearchFilter(
-                field_name=field_names,
+                field_name=parsed_field_names,
                 value=search_string,  # type: ignore[arg-type]
                 ignore_case=ignore_case or False,
                 escape_wildcards=config.get("search_escape_wildcards", False),
@@ -515,7 +708,7 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                 return provide_not_in_filter  # pyright: ignore
 
             provider = create_not_in_filter_provider(field_def)  # pyright: ignore
-            filters[f"{field_def.name}_not_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
+            filters[f"{prefix_str}{field_def.name}_not_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
 
     # Add in filter providers
     if in_fields := config.get("in_fields"):
@@ -567,7 +760,7 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                 return provide_in_filter  # pyright: ignore
 
             provider = create_in_filter_provider(field_def)  # type: ignore
-            filters[f"{field_def.name}_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
+            filters[f"{prefix_str}{field_def.name}_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
 
     if boolean_fields := config.get("boolean_fields"):
         for boolean_field_def in normalize_field_name_types(boolean_fields):
@@ -604,7 +797,9 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                 return provide_boolean_filter
 
             boolean_provider = create_boolean_filter_provider(boolean_field_def)
-            filters[f"{boolean_field_def.name}_boolean_filter"] = Provide(boolean_provider, sync_to_thread=False)
+            filters[f"{prefix_str}{boolean_field_def.name}_boolean_filter"] = Provide(
+                boolean_provider, sync_to_thread=False
+            )
 
     if choice_fields := config.get("choice_fields"):
         for choice_field_def in normalize_choice_field_types(choice_fields):
@@ -645,7 +840,14 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                 return provide_choices_filter
 
             choices_provider = create_choices_filter_provider(choice_field_def)
-            filters[f"{choice_field_def.name}_choices_filter"] = Provide(choices_provider, sync_to_thread=False)
+            filters[f"{prefix_str}{choice_field_def.name}_choices_filter"] = Provide(
+                choices_provider, sync_to_thread=False
+            )
+
+    if clean_prefix and filters:
+        ident = re.sub(r"\W+", "_", clean_prefix).strip("_")
+        param_prefix = f"p_{ident}_" if ident and ident[0].isdigit() else (f"{ident}_" if ident else "scoped_")
+        filters = {dep_key: _scope_filter_provider(provide, param_prefix) for dep_key, provide in filters.items()}
 
     if filters and include_aggregate:
         aggregate = _create_filter_aggregate_function(config, dep_defaults, filters)
@@ -656,6 +858,35 @@ def _create_statement_filters(  # noqa: C901, PLR0915
         filters[dep_defaults.FILTERS_DEPENDENCY_KEY] = dependency
 
     return filters
+
+
+def _scope_filter_provider(provide: Provide, param_prefix: str) -> Provide:
+    """Namespace a filter dependency callable's parameter names to avoid DI collisions."""
+    dependency = provide.dependency
+    signature = inspect.signature(dependency)
+    annotations = getattr(dependency, "__annotations__", {})
+    param_map: list[tuple[str, str]] = []
+    parameters: list[inspect.Parameter] = []
+    scoped_annotations: dict[str, Any] = {}
+    for parameter in signature.parameters.values():
+        scoped_name = f"{param_prefix}{parameter.name}"
+        param_map.append((parameter.name, scoped_name))
+        parameters.append(parameter.replace(name=scoped_name))
+        if parameter.name in annotations:
+            scoped_annotations[scoped_name] = annotations[parameter.name]
+    if "return" in annotations:
+        scoped_annotations["return"] = annotations["return"]
+
+    def scoped_dependency(**kwargs: Any) -> Any:
+        return dependency(**{orig: kwargs[scoped] for orig, scoped in param_map})
+
+    scoped_dependency.__name__ = f"{param_prefix}{dependency.__name__}"
+    scoped_signature = inspect.Signature(parameters, return_annotation=signature.return_annotation)
+    scoped_dependency.__signature__ = scoped_signature  # type: ignore[attr-defined]
+    scoped_dependency.__annotations__ = scoped_annotations
+    scoped_provide = Provide(scoped_dependency, sync_to_thread=False)
+    scoped_provide.parsed_fn_signature = ParsedSignature.from_signature(scoped_signature, scoped_annotations)
+    return scoped_provide
 
 
 def _create_filter_aggregate_function(

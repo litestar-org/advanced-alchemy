@@ -1,27 +1,48 @@
 =======
-fastapi
+FastAPI
 =======
 
-API Reference for the ``FastAPI`` extensions module
+API Reference for the ``FastAPI`` extensions module.
 
-.. note:: Private methods and attributes are not included in the API reference.
+.. py:module:: advanced_alchemy.extensions.fastapi
 
-------------------------
+Extension & CLI
+---------------
 
-.. automodule:: advanced_alchemy.extensions.fastapi
-    :imported-members:
-        advanced_alchemy.utils
-        advanced_alchemy.base
-        advanced_alchemy.exceptions
-        advanced_alchemy.filters
-        advanced_alchemy.mixins
-        advanced_alchemy.operations
-        advanced_alchemy.repository
-        advanced_alchemy.service
-        advanced_alchemy.types
-        advanced_alchemy.alembic.commands.AlembicCommands
-        advanced_alchemy.extensions.starlette.EngineConfig
-        advanced_alchemy.extensions.starlette.SQLAlchemyAsyncConfig
-        advanced_alchemy.extensions.starlette.SQLAlchemySyncConfig
+.. autoclass:: AdvancedAlchemy
     :members:
-    :noindex:
+    :no-inherited-members:
+    :show-inheritance:
+
+.. autofunction:: assign_cli_group
+
+.. autofunction:: get_database_migration_plugin
+
+Configuration
+-------------
+
+FastAPI re-exports the Starlette configuration classes:
+
+- :class:`~advanced_alchemy.extensions.starlette.SQLAlchemyAsyncConfig`
+- :class:`~advanced_alchemy.extensions.starlette.SQLAlchemySyncConfig`
+- :class:`~advanced_alchemy.extensions.starlette.EngineConfig`
+- :class:`~advanced_alchemy.config.AlembicAsyncConfig`
+- :class:`~advanced_alchemy.config.AlembicSyncConfig`
+- :class:`~advanced_alchemy.config.AsyncSessionConfig`
+- :class:`~advanced_alchemy.config.SyncSessionConfig`
+
+Dependency Providers
+--------------------
+
+.. py:module:: advanced_alchemy.extensions.fastapi.providers
+
+.. autofunction:: provide_service
+
+.. autofunction:: provide_filters
+
+.. autoclass:: DependencyDefaults
+    :members:
+    :no-inherited-members:
+
+.. autodata:: DEPENDENCY_DEFAULTS
+    :no-value:

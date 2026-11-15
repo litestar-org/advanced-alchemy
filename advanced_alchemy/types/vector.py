@@ -57,6 +57,9 @@ class Vector(TypeDecorator[list[float]]):
         self.dim = dim
         self.storage_format = storage_format
 
+    def __repr__(self) -> str:
+        return f"Vector(dim={self.dim!r}, storage_format={self.storage_format!r})"
+
     def load_dialect_impl(self, dialect: Dialect) -> TypeEngine[Any]:
         if dialect.name == "oracle":
             from sqlalchemy.dialects.oracle import VECTOR, VectorStorageFormat

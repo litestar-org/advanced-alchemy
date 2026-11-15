@@ -3,7 +3,8 @@ from typing import Annotated, Optional
 from uuid import UUID
 
 from litestar import Controller, Litestar, delete, get, patch, post
-from litestar.params import Dependency, PathParameter
+from litestar.di import NamedDependency
+from litestar.params import PathParameter, SkipValidation
 from pydantic import BaseModel
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -20,9 +21,6 @@ from advanced_alchemy.extensions.litestar import (
 )
 
 
-# The `AuditBase` class includes the same UUID` based primary key (`id`) and 2
-# additional columns: `created` and `updated`. `created` is a timestamp of when the
-# record created, and `updated` is the last time the record was modified.
 class BookModel(base.UUIDAuditBase):
     __tablename__ = "book"
     title: Mapped[str]
@@ -30,17 +28,11 @@ class BookModel(base.UUIDAuditBase):
     author: Mapped["AuthorModel"] = relationship(lazy="joined", innerjoin=True, viewonly=True)
 
 
-# the SQLAlchemy base includes a declarative model for you to use in your models.
-# The `Base` class includes a `UUID` based primary key (`id`)
 class AuthorModel(base.UUIDBase):
-    # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
     dob: Mapped[Optional[datetime.date]]
     books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="selectin")
-
-
-# we will explicitly define the schema instead of using DTO objects for clarity.
 
 
 class Author(BaseModel):
@@ -83,24 +75,27 @@ class AuthorController(Controller):
     @get(path="/authors")
     async def list_authors(
         self,
-        authors_service: AuthorService,
-        filters: Annotated[list[filters.FilterTypes], Dependency(skip_validation=True)],
+        authors_service: NamedDependency[AuthorService],
+        filters: NamedDependency[SkipValidation[list[filters.FilterTypes]]],
     ) -> service.OffsetPagination[Author]:
         """List authors."""
         results, total = await authors_service.get_many_and_count(*filters)
         return authors_service.to_schema(results, total, filters=filters, schema_type=Author)
 
     @post(path="/authors")
-    async def create_author(self, authors_service: AuthorService, data: AuthorCreate) -> Author:
+    async def create_author(
+        self,
+        authors_service: NamedDependency[AuthorService],
+        data: AuthorCreate,
+    ) -> Author:
         """Create a new author."""
         obj = await authors_service.create(data)
         return authors_service.to_schema(obj, schema_type=Author)
 
-    # we override the authors_repo to use the version that joins the Books in
     @get(path="/authors/{author_id:uuid}")
     async def get_author(
         self,
-        authors_service: AuthorService,
+        authors_service: NamedDependency[AuthorService],
         author_id: Annotated[
             UUID,
             PathParameter(
@@ -116,7 +111,7 @@ class AuthorController(Controller):
     @patch(path="/authors/{author_id:uuid}")
     async def update_author(
         self,
-        authors_service: AuthorService,
+        authors_service: NamedDependency[AuthorService],
         data: AuthorUpdate,
         author_id: Annotated[
             UUID,
@@ -133,7 +128,7 @@ class AuthorController(Controller):
     @delete(path="/authors/{author_id:uuid}")
     async def delete_author(
         self,
-        authors_service: AuthorService,
+        authors_service: NamedDependency[AuthorService],
         author_id: Annotated[
             UUID,
             PathParameter(

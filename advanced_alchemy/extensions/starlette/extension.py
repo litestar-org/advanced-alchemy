@@ -29,10 +29,8 @@ class AdvancedAlchemy:
     It provides middleware for handling transactions based on commit strategies.
 
     Args:
-        config (advanced_alchemy.config.asyncio.SQLAlchemyAsyncConfig | advanced_alchemy.config.sync.SQLAlchemySyncConfig):
-            The SQLAlchemy configuration.
-        app (starlette.applications.Starlette | None):
-            The Starlette application instance. Defaults to None.
+        config: The SQLAlchemy configuration.
+        app: The Starlette application instance. Defaults to ``None``.
     """
 
     def __init__(
@@ -61,7 +59,7 @@ class AdvancedAlchemy:
         Sets up middleware and shutdown handlers for managing the database engine.
 
         Args:
-            app (starlette.applications.Starlette): The Starlette application instance.
+            app: The Starlette application instance.
 
         Raises:
             advanced_alchemy.exceptions.ImproperConfigurationError:
@@ -112,7 +110,7 @@ class AdvancedAlchemy:
                 If the application is not initialized.
 
         Returns:
-            starlette.applications.Starlette: The Starlette application instance.
+            The Starlette application instance.
         """
         if self._app is None:  # pragma: no cover
             msg = "Application not initialized. Did you forget to call init_app?"

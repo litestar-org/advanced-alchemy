@@ -2,18 +2,27 @@
 Filtering and Pagination
 ========================
 
-Advanced Alchemy provides a powerful and flexible system for filtering and paginating your database queries.
+Suppose a reader visits your blog and searches for ``"python"``, filters to published articles from the past week, and views 20 posts per page.
+
+Instead of manually conditionally appending ``.where()`` and ``.limit()`` clauses in every route, you can pass both plain SQLAlchemy expressions and ready-made filter objects directly into your repository calls.
+
+Example Setup
+-------------
 
 .. code-block:: python
 
     import datetime
     from typing import Optional
-
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import Mapped, mapped_column
-
     from advanced_alchemy.base import BigIntAuditBase
-    from advanced_alchemy.filters import CollectionFilter, LimitOffset, NotNullFilter, NullFilter, SearchFilter
+    from advanced_alchemy.filters import (
+        CollectionFilter,
+        LimitOffset,
+        NotNullFilter,
+        NullFilter,
+        SearchFilter,
+    )
     from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
 
@@ -29,140 +38,109 @@ Advanced Alchemy provides a powerful and flexible system for filtering and pagin
     class FilteringPostRepository(SQLAlchemyAsyncRepository[FilteringPost]):
         model_type = FilteringPost
 
-Basic Filtering
----------------
+Plain SQLAlchemy Conditions
+---------------------------
 
-You can pass SQLAlchemy expressions directly to repository methods like ``list``, ``list_and_count``, and ``count``.
+For straightforward checks inside Python code, pass normal SQLAlchemy column comparisons straight to ``get_many`` or ``get_many_and_count``:
 
 .. code-block:: python
 
     async def get_recent_posts(db_session: AsyncSession) -> list[FilteringPost]:
-        repository = FilteringPostRepository(session=db_session)
-        return await repository.get_many(
+        cutoff = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=7)
+        repo = FilteringPostRepository(session=db_session)
+        return await repo.get_many(
             FilteringPost.published.is_(True),
-            FilteringPost.created_at > (datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=7)),
+            FilteringPost.created_at >= cutoff,
         )
 
-Filter Constructs
------------------
+Built-In Filter Helpers
+-----------------------
 
-Advanced Alchemy includes several pre-defined filter constructs located in ``advanced_alchemy.filters``.
+When building web endpoints with optional query parameters, Advanced Alchemy's filter helpers turn user input into safe SQL conditions:
 
-Collection Filter
-~~~~~~~~~~~~~~~~~
+.. tab-set::
 
-Filters records where a column's value is (or is not) in a collection of values.
+    .. tab-item:: Text Search
 
-.. code-block:: python
+        .. code-block:: python
 
-    async def get_posts_by_ids(db_session: AsyncSession, post_ids: list[int]) -> list[FilteringPost]:
-        repository = FilteringPostRepository(session=db_session)
-        return await repository.get_many(CollectionFilter(field_name="id", values=post_ids))
+            async def search_posts(db_session: AsyncSession, query: str) -> list[FilteringPost]:
+                repo = FilteringPostRepository(session=db_session)
+                return await repo.get_many(
+                    SearchFilter(field_name="title", value=query, ignore_case=True),
+                )
 
-Search Filter
-~~~~~~~~~~~~~
+            literal_discount = SearchFilter(
+                field_name="title",
+                value="50% off",
+                escape_wildcards=True,
+            )
 
-Provides basic string search capabilities.
+    .. tab-item:: ID Lists
 
-.. code-block:: python
+        .. code-block:: python
 
-    async def search_posts(db_session: AsyncSession, query: str) -> list[FilteringPost]:
-        repository = FilteringPostRepository(session=db_session)
-        return await repository.get_many(SearchFilter(field_name="title", value=query, ignore_case=True))
+            async def get_selected_posts(
+                db_session: AsyncSession,
+                post_ids: list[int],
+            ) -> list[FilteringPost]:
+                repo = FilteringPostRepository(session=db_session)
+                return await repo.get_many(
+                    CollectionFilter(field_name="id", values=post_ids),
+                )
 
-``SearchFilter`` and ``NotInSearchFilter`` preserve SQL wildcard matching by
-default: ``%`` matches any sequence of characters and ``_`` matches one character.
-To match those characters literally in accounting codes or titles, opt in with
-``escape_wildcards=True``:
+    .. tab-item:: Empty vs. Filled
 
-.. code-block:: python
+        .. code-block:: python
 
-    literal_search = SearchFilter(field_name="title", value="50% off", escape_wildcards=True)
+            async def list_drafts_and_published(
+                db_session: AsyncSession,
+            ) -> tuple[list[FilteringPost], list[FilteringPost]]:
+                repo = FilteringPostRepository(session=db_session)
+                drafts = await repo.get_many(NullFilter(field_name="published_at"))
+                live = await repo.get_many(NotNullFilter(field_name="published_at"))
+                return drafts, live
 
-This option escapes ``%``, ``_``, and the escape character ``/`` while retaining
-the surrounding substring wildcards. Dialect-specific pattern syntax, such as
-SQL Server's bracket expressions (``[abc]``), is unchanged. It requires SQL
-``ESCAPE`` support. Spanner has no ``ESCAPE`` clause, so ``escape_wildcards``
-must stay ``False`` there. The Litestar and FastAPI filter providers enable it
-through the ``search_escape_wildcards`` key of ``FilterConfig``.
+.. tip::
 
-Null and Not Null Filters
-~~~~~~~~~~~~~~~~~~~~~~~~~
+    Set ``escape_wildcards=True`` on ``SearchFilter`` when searching text that may contain literal ``%`` or ``_`` characters (such as ``"50% off"``) on databases that support SQL ``ESCAPE``.
 
-.. versionadded:: 1.9.0
+Paginating Results
+------------------
 
-Filters records based on whether a column is ``NULL`` or ``NOT NULL``.
-
-.. code-block:: python
-
-    async def get_unpublished_posts(db_session: AsyncSession) -> list[FilteringPost]:
-        repository = FilteringPostRepository(session=db_session)
-        return await repository.get_many(NullFilter(field_name="published_at"))
-
-
-    async def get_published_posts(db_session: AsyncSession) -> list[FilteringPost]:
-        repository = FilteringPostRepository(session=db_session)
-        return await repository.get_many(NotNullFilter(field_name="published_at"))
-
-Pagination
-----------
-
-The ``LimitOffset`` filter is used for standard limit/offset pagination. The ``list_and_count`` method is particularly useful here as it returns both the page of results and the total record count.
+Combine ``LimitOffset`` with ``get_many_and_count`` to get both the current page of rows and the total matching row count for your UI's page switcher:
 
 .. code-block:: python
 
-    async def get_paginated_posts(
+    async def get_posts_page(
         db_session: AsyncSession,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[FilteringPost], int]:
-        repository = FilteringPostRepository(session=db_session)
+        repo = FilteringPostRepository(session=db_session)
         offset = (page - 1) * page_size
+        return await repo.get_many_and_count(LimitOffset(offset=offset, limit=page_size))
 
-        return await repository.get_many_and_count(
-            LimitOffset(offset=offset, limit=page_size),
-        )
+Naming URL Query Parameters
+---------------------------
 
-Explicit Routing
-----------------
-
-All read and count operations support an optional ``bind_group`` parameter for explicit routing control when using read replicas.
-
-.. code-block:: python
-
-    async def get_posts_from_analytics_replica(db_session: AsyncSession) -> list[FilteringPost]:
-        repository = FilteringPostRepository(session=db_session)
-        return await repository.get_many(bind_group="analytics")
-
-Generated query parameter names
--------------------------------
-
-The Litestar ``create_filter_dependencies()`` and FastAPI ``provide_filters()`` helpers
-accept the same optional ``alias_generator`` configuration. Existing names such as
-``pageSize``, ``searchString``, and ``orderBy`` remain the default. To expose snake_case
-query parameters in either integration:
+In Litestar and FastAPI, filter dependencies use camelCase query parameters by default (``?pageSize=10&searchString=python``). Set ``alias_generator="snake_case"`` in ``FilterConfig`` when your API prefers ``?page_size=10&search_string=python``:
 
 .. code-block:: python
 
     from advanced_alchemy.utils.dependencies import FilterConfig
 
-    config: FilterConfig = {
+    snake_case_filters: FilterConfig = {
         "pagination_type": "limit_offset",
-        "search": "name",
+        "search": "title",
         "sort_field": "created_at",
         "alias_generator": "snake_case",
     }
 
-This configuration accepts ``?page_size=10&search_string=alice&order_by=created_at``.
-Use ``"camel_case"`` to explicitly select camelCase, or supply a callable for custom
-conventions. An explicit preset follows the same collision validation as a callable.
-The generator receives canonical snake_case parameter names, including field-specific
-names such as ``account_id_in``. Custom generators must return nonempty, distinct
-strings. Names are resolved when dependencies are constructed and used consistently
-for requests and OpenAPI; the generator does not run during requests.
+If you use :doc:`read replicas </usage/routing>`, any read or count call can also target a named replica pool with ``bind_group="analytics"``:
 
-This option controls query parameter names. It does not translate sort-field values
-or change the internal dependency names configured through ``DependencyDefaults``.
-Dependencies with equivalent configuration, defaults, and resolved query names reuse
-the same cached provider. Different pagination defaults or dependency names remain
-isolated.
+.. code-block:: python
+
+    async def list_for_reporting(db_session: AsyncSession) -> list[FilteringPost]:
+        repo = FilteringPostRepository(session=db_session)
+        return await repo.get_many(bind_group="analytics")

@@ -1,5 +1,5 @@
 ====
-uuid
+UUID
 ====
 
 .. automodule:: advanced_alchemy.mixins.uuid

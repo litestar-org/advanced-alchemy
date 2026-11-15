@@ -28,7 +28,6 @@ from advanced_alchemy.utils.serialization import (
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed"),
-    pytest.mark.xdist_group("attrs_service"),
 ]
 
 here = Path(__file__).parent
@@ -172,7 +171,6 @@ class StateQuery(base.SQLQuery):
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
-@pytest.mark.xdist_group("attrs")
 def test_sync_attrs_service_basic_operations(engine: Engine, attrs_test_tables: None) -> None:
     """Test basic service operations with attrs classes."""
     # Skip mock engines as they don't support auto-generated primary keys
@@ -215,7 +213,6 @@ def test_sync_attrs_service_basic_operations(engine: Engine, attrs_test_tables: 
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
-@pytest.mark.xdist_group("attrs")
 def test_sync_attrs_with_defaults(engine: Engine, attrs_test_tables: None) -> None:
     """Test attrs classes with default values."""
     # Skip mock engines as they don't support auto-generated primary keys
@@ -242,7 +239,6 @@ def test_sync_attrs_with_defaults(engine: Engine, attrs_test_tables: None) -> No
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
-@pytest.mark.xdist_group("attrs")
 def test_sync_query_service_with_attrs(engine: Engine, attrs_test_tables: None) -> None:
     """Test query service with attrs schema conversion."""
     # Skip mock engines as they don't support auto-generated primary keys
@@ -287,7 +283,6 @@ def test_sync_query_service_with_attrs(engine: Engine, attrs_test_tables: None) 
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
-@pytest.mark.xdist_group("attrs")
 async def test_async_attrs_service_basic_operations(async_engine: AsyncEngine, attrs_test_tables_async: None) -> None:
     """Test async service operations with attrs classes."""
     # Skip mock engines as they don't support auto-generated primary keys
@@ -330,7 +325,6 @@ async def test_async_attrs_service_basic_operations(async_engine: AsyncEngine, a
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
-@pytest.mark.xdist_group("attrs")
 async def test_async_query_service_with_attrs(async_engine: AsyncEngine, attrs_test_tables_async: None) -> None:
     """Test async query service with attrs schema conversion."""
     # Skip mock engines as they don't support auto-generated primary keys
@@ -372,7 +366,6 @@ async def test_async_query_service_with_attrs(async_engine: AsyncEngine, attrs_t
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
-@pytest.mark.xdist_group("attrs")
 def test_attrs_error_handling(engine: Engine, attrs_test_tables: None) -> None:
     """Test error handling with attrs integration."""
     # Skip mock engines as they don't support auto-generated primary keys
@@ -397,7 +390,6 @@ def test_attrs_error_handling(engine: Engine, attrs_test_tables: None) -> None:
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
-@pytest.mark.xdist_group("attrs")
 def test_attrs_mixed_with_other_schemas(engine: Engine, attrs_test_tables: None) -> None:
     """Test attrs alongside other schema types."""
     # Skip mock engines as they don't support auto-generated primary keys
@@ -430,7 +422,6 @@ def test_attrs_mixed_with_other_schemas(engine: Engine, attrs_test_tables: None)
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
-@pytest.mark.xdist_group("attrs")
 def test_attrs_partial_update_with_nothing_values(engine: Engine, attrs_test_tables: None) -> None:
     """Test attrs partial updates with NOTHING values (GitHub Issue #535)."""
     # Skip mock engines as they don't support auto-generated primary keys
@@ -484,7 +475,6 @@ def test_attrs_partial_update_with_nothing_values(engine: Engine, attrs_test_tab
 
 
 @pytest.mark.skipif(not ATTRS_INSTALLED, reason="attrs not installed")
-@pytest.mark.xdist_group("attrs")
 def test_attrs_update_many_with_nothing_values(engine: Engine, attrs_test_tables: None) -> None:
     """Test attrs update_many with NOTHING values for partial updates."""
     # Skip mock engines as they don't support auto-generated primary keys

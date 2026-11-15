@@ -1,34 +1,47 @@
-from collections.abc import Callable
+"""Sphinx directives for rendering structured release changelogs."""
+
+from __future__ import annotations
+
 from functools import partial
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
 from docutils import nodes
 from docutils.parsers.rst import directives
-from sphinx.application import Sphinx
 from sphinx.util.docutils import SphinxDirective
 from sphinx.util.nodes import clean_astext
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from sphinx.application import Sphinx
     from sphinx.domains.std import StandardDomain
+
+__all__ = (
+    "Change",
+    "ChangeDirective",
+    "ChangelogDirective",
+    "setup",
+)
 
 _GH_BASE_URL = "https://github.com/litestar-org/advanced-alchemy"
 
 
 def _parse_gh_reference(raw: str, type_: Literal["issues", "pull"]) -> list[str]:
+    """Convert space-separated issue or PR numbers into full GitHub URLs."""
     return [f"{_GH_BASE_URL}/{type_}/{r.strip()}" for r in raw.split(" ") if r]
 
 
 class Change(nodes.General, nodes.Element):
-    """A change node for the changelog."""
+    """Docutils container node representing a single changelog entry."""
 
 
 class ChangeDirective(SphinxDirective):
-    """A directive for the changelog."""
+    """Directive representing an individual ``.. change::`` item inside a changelog section."""
 
     required_arguments = 1
     has_content = True
     final_argument_whitespace = True
-    option_spec: ClassVar[Optional[dict[str, Callable[[str], Any]]]] = {
+    option_spec: ClassVar[dict[str, Callable[[str], Any]] | None] = {
         "type": partial(directives.choice, values=("feature", "bugfix", "misc")),
         "breaking": directives.flag,
         "issue": directives.unchanged,
@@ -36,11 +49,7 @@ class ChangeDirective(SphinxDirective):
     }
 
     def run(self) -> list[nodes.Node]:
-        """Run the directive.
-
-        Returns:
-            A list of nodes.
-        """
+        """Parse the change directive body and attach GitHub issue and PR reference links."""
         self.assert_has_content()
 
         change_type = self.options.get("type", "misc").lower()
@@ -49,7 +58,7 @@ class ChangeDirective(SphinxDirective):
         change_node = nodes.container("\n".join(self.content))
         change_node.attributes["classes"].append("changelog-change")
 
-        self.state.nested_parse(self.content, self.content_offset, change_node)  # pyright: ignore[reportUnknownMemberType]
+        self.state.nested_parse(self.content, self.content_offset, change_node)
 
         reference_links = [
             *_parse_gh_reference(self.options.get("issue", ""), "issues"),
@@ -79,11 +88,14 @@ class ChangeDirective(SphinxDirective):
 
 
 class ChangelogDirective(SphinxDirective):
+    """Directive grouping ``.. change::`` entries under a versioned release section."""
+
     required_arguments = 1
     has_content = True
-    option_spec = {"date": directives.unchanged}
+    option_spec: ClassVar[dict[str, Callable[[str], Any]] | None] = {"date": directives.unchanged}
 
     def run(self) -> list[nodes.Node]:
+        """Render the release section and categorized feature, bugfix, and misc definition lists."""
         self.assert_has_content()
 
         version = self.arguments[0]
@@ -97,7 +109,7 @@ class ChangelogDirective(SphinxDirective):
             changelog_node += nodes.strong("", "Released: ")
             changelog_node += nodes.Text(release_date)
 
-        self.state.nested_parse(self.content, self.content_offset, changelog_node)  # pyright: ignore[reportUnknownMemberType]
+        self.state.nested_parse(self.content, self.content_offset, changelog_node)
 
         domain = cast("StandardDomain", self.env.get_domain("std"))
 
@@ -109,9 +121,9 @@ class ChangelogDirective(SphinxDirective):
 
         change_group_titles = {"bugfix": "Bugfixes", "feature": "Features", "misc": "Other changes"}
 
-        nodes_to_remove = []
+        nodes_to_remove: list[Change] = []
 
-        for _i, change_node in enumerate(changelog_node.findall(Change)):
+        for change_node in changelog_node.findall(Change):
             change_type = change_node.attributes["change_type"]
             title = change_node.attributes["title"]
 
@@ -143,15 +155,13 @@ class ChangelogDirective(SphinxDirective):
                 term += breaking_notice
 
             list_item += [term]
-
             list_item += nodes.definition("", change_node.children[0])
 
-            nodes_to_remove.append(change_node)  # pyright: ignore[reportUnknownMemberType]
-
+            nodes_to_remove.append(change_node)
             change_group_lists[change_type] += list_item
 
-        for node in nodes_to_remove:  # pyright: ignore[reportUnknownVariableType]
-            changelog_node.remove(node)  # pyright: ignore[reportUnknownArgumentType]
+        for node in nodes_to_remove:
+            changelog_node.remove(node)
 
         for change_group_type, change_group_list in change_group_lists.items():
             if not change_group_list.children:
@@ -171,7 +181,8 @@ class ChangelogDirective(SphinxDirective):
         return [section_target, changelog_node]
 
 
-def setup(app: Sphinx) -> dict[str, Union[str, bool]]:
+def setup(app: Sphinx) -> dict[str, str | bool]:
+    """Register the ``changelog`` and ``change`` directives with Sphinx."""
     app.add_directive("changelog", ChangelogDirective)
     app.add_directive("change", ChangeDirective)
 

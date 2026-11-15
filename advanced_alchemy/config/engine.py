@@ -63,19 +63,17 @@ class EngineConfig:
     "READ UNCOMMITTED" and "AUTOCOMMIT" based on backend."""
     json_deserializer: "Callable[[str], Any]" = decode_json
     """For dialects that support the :class:`JSON <sqlalchemy.types.JSON>` datatype, this is a Python callable that will
-    convert a JSON string to a Python object. By default, this is set to Litestar's
-    :attr:`decode_json() <.serialization.decode_json>` function."""
+    convert a JSON string to a Python object. By default, this is set to
+    :func:`advanced_alchemy.utils.serialization.decode_json`."""
     json_serializer: "Callable[[Any], str]" = encode_json
     """For dialects that support the JSON datatype, this is a Python callable that will render a given object as JSON.
-    By default, Litestar's :attr:`encode_json() <.serialization.encode_json>` is used."""
+    By default, :func:`advanced_alchemy.utils.serialization.encode_json` is used."""
     label_length: "Optional[Union[int, EmptyType]]" = Empty
     """Optional integer value which limits the size of dynamically generated column labels to that many characters. If
     less than 6, labels are generated as “_(counter)”. If ``None``, the value of ``dialect.max_identifier_length``,
-    which may be affected via the
-    :attr:`get_engine.max_identifier_length parameter <sqlalchemy.get_engine.params.max_identifier_length>`, is
-    used instead. The value of
-    :attr:`get_engine.label_length <sqlalchemy.get_engine.params.label_length>` may not be larger than that of
-    :attr:`get_engine.max_identifier_length <sqlalchemy.get_engine.params.max_identifier_length>`."""
+    which may be affected via the ``max_identifier_length`` parameter of
+    :func:`sqlalchemy.create_engine`, is used instead. The value of
+    ``label_length`` may not be larger than that of ``max_identifier_length``."""
     logging_name: "Union[str, EmptyType]" = Empty
     """String identifier which will be used within the “name” field of logging records generated within the
     “sqlalchemy.engine” logger. Defaults to a hexstring of the object`s id."""
@@ -128,8 +126,8 @@ class EngineConfig:
     MySQL in particular will disconnect automatically if no activity is detected on a connection for eight hours
     (although this is configurable with the MySQLDB connection itself and the server configuration as well)."""
     pool_reset_on_return: 'Union[Literal["rollback", "commit"], EmptyType]' = Empty
-    """Set the :attr:`Pool.reset_on_return <sqlalchemy.pool.Pool.params.reset_on_return` parameter of the underlying
-    :class`Pool <sqlalchemy.pool.Pool>` object, which can be set to the values ``"rollback"``, ``"commit"``, or
+    """Set the ``Pool.reset_on_return`` parameter of the underlying
+    :class:`Pool <sqlalchemy.pool.Pool>` object, which can be set to the values ``"rollback"``, ``"commit"``, or
     ``None``."""
     pool_timeout: "Union[int, EmptyType]" = Empty
     """Number of seconds to wait before giving up on getting a connection from the pool. This is only used with
@@ -146,7 +144,7 @@ class EngineConfig:
     query_cache_size: "Union[int, EmptyType]" = Empty
     """Size of the cache used to cache the SQL string form of queries. Set to zero to disable caching.
 
-    See :attr:`query_cache_size <sqlalchemy.get_engine.params.query_cache_size>` for more info.
+    See :func:`sqlalchemy.create_engine` for more info.
     """
     use_insertmanyvalues: "Union[bool, EmptyType]" = Empty
     """``True`` by default, use the “insertmanyvalues” execution style for INSERT..RETURNING statements by default."""

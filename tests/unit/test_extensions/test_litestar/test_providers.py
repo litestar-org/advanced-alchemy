@@ -12,6 +12,7 @@ from enum import Enum, IntEnum
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, patch
 
+import pytest
 from litestar import Litestar, get
 from litestar.di import NamedDependency, Provide
 from litestar.openapi.config import OpenAPIConfig
@@ -20,6 +21,7 @@ from litestar.testing import TestClient
 from sqlalchemy import FromClause, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Mapper, mapped_column
 
+from advanced_alchemy.extensions.litestar import SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.plugin import signature_namespace_values
 from advanced_alchemy.extensions.litestar.providers import (
     DEPENDENCY_DEFAULTS,
@@ -30,6 +32,8 @@ from advanced_alchemy.extensions.litestar.providers import (
     SingletonMeta,
     _create_filter_aggregate_function,  # pyright: ignore[reportPrivateUsage]
     _create_statement_filters,  # pyright: ignore[reportPrivateUsage]
+    _is_async_provider_target,  # pyright: ignore[reportPrivateUsage]
+    _with_dep_defaults_prefix,  # pyright: ignore[reportPrivateUsage]
     create_filter_dependencies,
     create_service_dependencies,
     create_service_provider,
@@ -48,10 +52,12 @@ from advanced_alchemy.filters import (
 )
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 from advanced_alchemy.service import (
+    ServiceGroup,
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
 from advanced_alchemy.types.identity import BigIntIdentity
+from advanced_alchemy.utils.dependencies import resolve_filter_aliases
 from tests.helpers import anext_
 
 if sys.version_info >= (3, 11):
@@ -528,7 +534,7 @@ def test_individual_order_by_dependency_injection_skips_runtime_field_validation
     """Test individual Litestar filter dependencies can be injected directly."""
 
     @get("/", dependencies=create_filter_dependencies({"sort_field": "name"}))
-    async def handler(order_by_filter: OrderBy) -> dict[str, str]:
+    async def handler(order_by_filter: NamedDependency[OrderBy]) -> dict[str, str]:
         return {"field_name": cast(str, order_by_filter.field_name), "sort_order": order_by_filter.sort_order}
 
     with TestClient(Litestar([handler])) as client:
@@ -546,7 +552,7 @@ def test_litestar_openapi_schema_uses_typed_sort_parameters() -> None:
     filter_dependencies = create_filter_dependencies({"sort_field": ["name", "id"], "sort_order": "asc"})
 
     @get("/test")
-    async def handler(filters: SkipValidation[list[FilterTypes]]) -> list[str]:
+    async def handler(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> list[str]:
         return [type(filter_).__name__ for filter_ in filters]
 
     app = Litestar(
@@ -662,7 +668,7 @@ def test_choice_filter_openapi_schema_supports_explicit_and_enum_choices() -> No
     )
 
     @get("/items")
-    async def handler(filters: SkipValidation[list[FilterTypes]]) -> list[str]:
+    async def handler(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> list[str]:
         return [type(filter_).__name__ for filter_ in filters]
 
     app = Litestar(
@@ -708,7 +714,7 @@ def test_litestar_in_filter_values_are_isolated() -> None:
     filter_dependencies = create_filter_dependencies(filter_config)
 
     @get("/test")
-    def handler(filters: SkipValidation[list[FilterTypes]]) -> dict[str, list[str]]:
+    def handler(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> dict[str, list[str]]:
         response: dict[str, list[str]] = {}
         for filter_ in filters:
             if isinstance(filter_, CollectionFilter):
@@ -1141,7 +1147,7 @@ def test_litestar_openapi_schema(mock_create_filters: unittest.mock.MagicMock) -
     filter_dependencies = mock_create_filters(filter_config)
 
     @get("/test")
-    async def test_handler(filters: list[FilterTypes]) -> list[str]:
+    async def test_handler(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> list[str]:
         """Dummy handler to test schema generation."""
         return [type(f).__name__ for f in filters]
 
@@ -1286,3 +1292,255 @@ def test_custom_query_aliases_match_requests_and_openapi() -> None:
         "account_id_in",
         "is_active",
     }
+
+
+def test_dependency_defaults_prefix() -> None:
+    defaults = DependencyDefaults(prefix="service")
+    assert defaults.prefix == "service"
+    assert defaults.FILTERS_DEPENDENCY_KEY == "service_filters"
+    assert defaults.CREATED_FILTER_DEPENDENCY_KEY == "service_created_filter"
+    assert defaults.ID_FILTER_DEPENDENCY_KEY == "service_id_filter"
+    assert defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY == "service_limit_offset_filter"
+    assert defaults.UPDATED_FILTER_DEPENDENCY_KEY == "service_updated_filter"
+    assert defaults.ORDER_BY_FILTER_DEPENDENCY_KEY == "service_order_by_filter"
+    assert defaults.SEARCH_FILTER_DEPENDENCY_KEY == "service_search_filter"
+    assert defaults.DEFAULT_PAGINATION_SIZE == 20
+
+    defaults_with_trailing = DependencyDefaults(prefix="service_")
+    assert defaults_with_trailing.FILTERS_DEPENDENCY_KEY == "service_filters"
+
+    defaults_custom = DependencyDefaults(prefix="user", search_filter_key="custom_search")
+    assert defaults_custom.SEARCH_FILTER_DEPENDENCY_KEY == "user_custom_search"
+
+    class UsersDefaults(DependencyDefaults):
+        prefix = "users"
+
+    subclass_defaults = UsersDefaults()
+    assert subclass_defaults.prefix == "users"
+    assert subclass_defaults.FILTERS_DEPENDENCY_KEY == "users_filters"
+    assert subclass_defaults.CREATED_FILTER_DEPENDENCY_KEY == "users_created_filter"
+    assert subclass_defaults.ID_FILTER_DEPENDENCY_KEY == "users_id_filter"
+    assert subclass_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY == "users_limit_offset_filter"
+    assert subclass_defaults.UPDATED_FILTER_DEPENDENCY_KEY == "users_updated_filter"
+    assert subclass_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY == "users_order_by_filter"
+    assert subclass_defaults.SEARCH_FILTER_DEPENDENCY_KEY == "users_search_filter"
+
+    underscore_defaults = DependencyDefaults(prefix="_")
+    assert underscore_defaults.FILTERS_DEPENDENCY_KEY == "filters"
+
+
+def test_create_service_dependencies_scoped_filters() -> None:
+    with patch("advanced_alchemy.extensions.litestar.providers.create_service_provider") as mock_create_provider:
+        mock_create_provider.return_value = lambda: "user_service"
+        deps = create_service_dependencies(
+            MockSyncService,
+            key="user_service",
+            scoped_filters=True,
+            filters=cast(
+                FilterConfig,
+                {
+                    "id_filter": True,
+                    "search": "name",
+                    "pagination_type": "limit_offset",
+                    "in_fields": ["status"],
+                },
+            ),
+        )
+        assert "user_service" in deps
+        assert "user_service_filters" in deps
+        assert "user_service_id_filter" in deps
+        assert "user_service_search_filter" in deps
+        assert "user_service_limit_offset_filter" in deps
+        assert "user_service_status_in_filter" in deps
+
+
+def test_create_service_dependencies_merge_collision_prevented() -> None:
+    with patch("advanced_alchemy.extensions.litestar.providers.create_service_provider") as mock_create_provider:
+        mock_create_provider.side_effect = [lambda: "user_service", lambda: "course_service"]
+        user_deps = create_service_dependencies(
+            MockSyncService,
+            key="user_service",
+            scoped_filters=True,
+            filters=cast(
+                FilterConfig,
+                {"search": "name", "pagination_type": "limit_offset", "id_filter": True},
+            ),
+        )
+        course_deps = create_service_dependencies(
+            MockSyncService,
+            key="course_service",
+            scoped_filters=True,
+            filters=cast(
+                FilterConfig,
+                {"search": "title", "pagination_type": "limit_offset", "id_filter": True},
+            ),
+        )
+
+        merged_deps = {**user_deps, **course_deps}
+        assert len(merged_deps) == len(user_deps) + len(course_deps)
+        assert "user_service_filters" in merged_deps
+        assert "course_service_filters" in merged_deps
+        assert "user_service_search_filter" in merged_deps
+        assert "course_service_search_filter" in merged_deps
+        assert "user_service_limit_offset_filter" in merged_deps
+        assert "course_service_limit_offset_filter" in merged_deps
+
+        @get("/combined")
+        def handler(
+            user_service_filters: NamedDependency[SkipValidation[list[FilterTypes]]],
+            course_service_filters: NamedDependency[SkipValidation[list[FilterTypes]]],
+        ) -> dict[str, Any]:
+            return {
+                "user_filters": {type(f).__name__: asdict(f) for f in user_service_filters},
+                "course_filters": {type(f).__name__: asdict(f) for f in course_service_filters},
+            }
+
+        app = Litestar(route_handlers=[handler], dependencies=merged_deps, debug=True)
+        with TestClient(app) as client:
+            resp = client.get(
+                "/combined",
+                params={
+                    "userServiceSearchString": "alice",
+                    "userServicePageSize": 5,
+                    "userServiceCurrentPage": 2,
+                    "courseServiceSearchString": "math",
+                    "courseServicePageSize": 12,
+                    "courseServiceCurrentPage": 3,
+                },
+            )
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            assert data["user_filters"]["SearchFilter"]["value"] == "alice"
+            assert data["user_filters"]["LimitOffset"] == {"limit": 5, "offset": 5}
+            assert data["course_filters"]["SearchFilter"]["value"] == "math"
+            assert data["course_filters"]["LimitOffset"] == {"limit": 12, "offset": 24}
+
+
+def test_scoped_filters_prefix_subclass_and_pagination_isolation() -> None:
+    class UsersDefaults(DependencyDefaults):
+        prefix = "users"
+
+    class RolesDefaults(DependencyDefaults):
+        prefix = "roles"
+
+    user_filters_deps = create_filter_dependencies(
+        cast(FilterConfig, {"pagination_type": "limit_offset"}),
+        dep_defaults=UsersDefaults(),
+    )
+    role_filters_deps = create_filter_dependencies(
+        cast(FilterConfig, {"pagination_type": "limit_offset"}),
+        dep_defaults=RolesDefaults(),
+    )
+
+    @get("/scoped-pages")
+    def handler(
+        users_filters: NamedDependency[SkipValidation[list[FilterTypes]]],
+        roles_filters: NamedDependency[SkipValidation[list[FilterTypes]]],
+    ) -> dict[str, Any]:
+        return {
+            "users": {type(f).__name__: asdict(f) for f in users_filters},
+            "roles": {type(f).__name__: asdict(f) for f in roles_filters},
+        }
+
+    app = Litestar(route_handlers=[handler], dependencies={**user_filters_deps, **role_filters_deps}, debug=True)
+    with TestClient(app) as client:
+        resp = client.get("/scoped-pages", params={"usersCurrentPage": 2, "rolesCurrentPage": 5})
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["users"]["LimitOffset"] == {"limit": 20, "offset": 20}
+        assert data["roles"]["LimitOffset"] == {"limit": 20, "offset": 80}
+
+
+def test_scoped_filters_snake_case_query_aliases() -> None:
+    aliases = resolve_filter_aliases(
+        cast(FilterConfig, {"pagination_type": "limit_offset", "search": "name", "alias_generator": "snake_case"}),
+        prefix="users",
+    )
+    assert aliases == {
+        "current_page": "users_current_page",
+        "page_size": "users_page_size",
+        "search_string": "users_search_string",
+        "search_ignore_case": "users_search_ignore_case",
+    }
+
+
+class _LitestarPlainHelper:
+    """Plain helper service whose async mode cannot be inferred without config."""
+
+    def __init__(self, session: Any) -> None:
+        self.session = session
+
+
+class _LitestarUndeterminedGroup(ServiceGroup):
+    """ServiceGroup composed solely of plain classes without SQLAlchemy base classes."""
+
+    helper: _LitestarPlainHelper
+
+
+class _LitestarPairGroup(ServiceGroup):
+    """ServiceGroup with two async services for scoped filter dependency coverage."""
+
+    primary: MockAsyncService
+    secondary: MockAsyncService
+
+
+def test_dependency_defaults_pagination_override_and_prefix_cloning() -> None:
+    defaults = DependencyDefaults(filters_key="custom_filters", default_pagination_size=25)
+    assert defaults.DEFAULT_PAGINATION_SIZE == 25
+    cloned = _with_dep_defaults_prefix(defaults, "grp")
+    assert cloned.FILTERS_DEPENDENCY_KEY == "grp_custom_filters"
+    assert cloned.DEFAULT_PAGINATION_SIZE == 25
+
+
+def test_is_async_provider_target_for_undetermined_group() -> None:
+    sync_cfg = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:")
+    assert _is_async_provider_target(_LitestarUndeterminedGroup, sync_cfg) is False
+    assert _is_async_provider_target(_LitestarUndeterminedGroup, None) is True
+
+
+@pytest.mark.parametrize(
+    ("dep_defaults", "scoped_filters", "expected_filter_key"),
+    [
+        (None, True, "items_filters"),
+        (DependencyDefaults(filters_key="q"), True, "items_q"),
+        (DependencyDefaults(prefix="custom"), True, "custom_filters"),
+    ],
+)
+def test_create_service_dependencies_single_service_prefix_resolution(
+    dep_defaults: DependencyDefaults | None,
+    scoped_filters: bool,
+    expected_filter_key: str,
+) -> None:
+    deps = create_service_dependencies(
+        MockAsyncService,
+        key="items",
+        filters=cast(FilterConfig, {"id_filter": int}),
+        dep_defaults=dep_defaults,
+        scoped_filters=scoped_filters,
+    )
+    assert "items" in deps
+    assert expected_filter_key in deps
+
+
+@pytest.mark.parametrize(
+    ("dep_defaults", "scoped_filters", "expected_filter_key"),
+    [
+        (DependencyDefaults(prefix="grp"), False, "grp_primary_filters"),
+        (None, True, "auth_primary_filters"),
+    ],
+)
+def test_create_service_dependencies_group_prefix_and_empty_branch(
+    dep_defaults: DependencyDefaults | None,
+    scoped_filters: bool,
+    expected_filter_key: str,
+) -> None:
+    deps = create_service_dependencies(
+        _LitestarPairGroup,
+        key="auth",
+        filters={"primary": cast(FilterConfig, {"id_filter": int}), "secondary": {}},
+        dep_defaults=dep_defaults,
+        scoped_filters=scoped_filters,
+    )
+    assert "auth" in deps
+    assert expected_filter_key in deps
+    assert "auth_secondary_filters" not in deps

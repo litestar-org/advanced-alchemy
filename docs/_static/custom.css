@@ -1,238 +1,875 @@
-/* Advanced Alchemy Custom Theme Configuration
- * Uses Shibuya theme's CSS variables for proper color integration
- * Shibuya provides --accent-1 through --accent-12 based on accent_color in conf.py
- * Current accent_color: amber (configured in docs/conf.py)
+/* Advanced Alchemy Documentation Theme
+ * Official Litestar Brand Palette:
+ *   Deep Navy:    #202235 (surfaces & light-mode display) / #131522 (dark canvas)
+ *   Litestar Gold:#edb641 (brand accent bars, dark-mode active indicators)
+ *   Soft Gold:    #ffd480 (dark-mode hover highlights)
+ *   Silver-Slate: #dcdfe4 (dark-mode body prose)
+ *   Sapphire:     #1d4ed8 (light prose links) / #60a5fa (dark prose links)
  */
 
 :root {
-  /* Typography scaling for responsive brand text */
-  --brand-font-size-xl: 6rem;
-  --brand-font-size-lg: 5rem;
-  --brand-font-size-md: 4rem;
-  --brand-font-size-sm: 2.5rem;
-  --brand-font-size-xs: 1.8rem;
-  --brand-font-size-xxs: 1.6rem;
-
-  --brand-letter-spacing-xl: 0.25em;
-  --brand-letter-spacing-lg: 0.2em;
-  --brand-letter-spacing-md: 0.1em;
-  --brand-letter-spacing-sm: 0.05em;
-  --brand-letter-spacing-xs: 0.03em;
+  --aa-navy-950: #0f111c;
+  --aa-navy-900: #131522;
+  --aa-navy-850: #181b2c;
+  --aa-navy-800: #202235;
+  --aa-navy-700: #2a2f4a;
+  --aa-navy-600: #363c5e;
+  --aa-gold-500: #edb641;
+  --aa-gold-400: #f3c45a;
+  --aa-gold-300: #ffd480;
+  --aa-gold-700: #9a5b00;
+  --aa-silver-200: #dcdfe4;
+  --aa-link-light: #1d4ed8;
+  --aa-link-light-hover: #1e40af;
+  --aa-link-dark: #60a5fa;
+  --aa-link-dark-hover: #93c5fd;
 }
 
-/* Light mode: Use Shibuya's accent color variables
- * --accent-9 is the primary accent color
- * --accent-10 is slightly darker
- * --accent-11 is for high-contrast text
- * --accent-a1 through --accent-a12 are transparent variants
- */
+/* =====================================================
+ * Theme Surfaces & Semantic Variables
+ * ===================================================== */
+
 html.light {
-  --brand-text-glow: 0 0 10px var(--accent-a3),
-    0 0 20px var(--accent-a2), 0 0 30px var(--accent-a1);
+  --sy-c-background: #ffffff;
+  --sy-c-surface: #f8fafc;
+  --sy-c-divider: #e2e8f0;
+  --sy-c-border: #cbd5e1;
+  --sy-c-heading: #202235;
+  --sy-c-bold: #161826;
+  --sy-c-text: #2d3748;
+  --sy-c-light: #475569;
+  --sy-c-link: #9a5b00;
+  --sy-c-link-hover: #78350f;
+  --sy-c-foot-background: #f8fafc;
+  --sy-c-foot-divider: #e2e8f0;
+  --sig-property: #6d28d9;
+  --sig-name: #202235;
+  --sig-typehint: #1d4ed8;
+  --sig-param: #334155;
 }
 
-/* Dark mode: Use Shibuya's accent color variables for dark theme */
 html.dark {
-  --brand-text-glow: 0 0 10px var(--accent-a6),
-    0 0 20px var(--accent-a5), 0 0 30px var(--accent-a4);
+  --sy-c-background: #131522;
+  --sy-c-surface: #1b1f33;
+  --sy-c-divider: #262b44;
+  --sy-c-border: #323859;
+  --sy-c-heading: #f8fafc;
+  --sy-c-bold: #ffffff;
+  --sy-c-text: #dcdfe4;
+  --sy-c-light: #94a3b8;
+  --sy-c-link: #edb641;
+  --sy-c-link-hover: #ffd480;
+  --sy-c-foot-background: #0f111c;
+  --sy-c-foot-divider: #232740;
+  --sig-property: #c4b5fd;
+  --sig-name: #edb641;
+  --sig-typehint: #60a5fa;
+  --sig-param: #e2e8f0;
 }
 
-.title-with-logo {
-  display: flex;
+/* =====================================================
+ * Desktop Layout, Unified Column Measure & Scrollbars
+ * ===================================================== */
+
+@media (min-width: 1280px) {
+  .sy-rside {
+    display: block !important;
+    visibility: visible !important;
+  }
+}
+
+.sy-page .sy-main .yue {
+  max-width: 48rem;
+}
+
+.yue p,
+.yue li {
+  line-height: 1.72;
+}
+
+.yue h1 {
+  letter-spacing: -0.02em;
+  font-weight: 750;
+}
+
+.yue h2 {
+  letter-spacing: -0.015em;
+  font-weight: 700;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--sy-c-divider);
+}
+
+.yue h3 {
+  letter-spacing: -0.01em;
+  font-weight: 650;
+}
+
+/* Slim, unobtrusive scrollbars on code blocks, tables, and sidebars */
+.highlight::-webkit-scrollbar,
+.yue table::-webkit-scrollbar,
+.sy-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.highlight::-webkit-scrollbar-button,
+.yue table::-webkit-scrollbar-button,
+.sy-scrollbar::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+html.light .highlight::-webkit-scrollbar-thumb,
+html.light .yue table::-webkit-scrollbar-thumb,
+html.light .sy-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(32, 34, 53, 0.22);
+  border-radius: 999px;
+}
+
+html.dark .highlight::-webkit-scrollbar-thumb,
+html.dark .yue table::-webkit-scrollbar-thumb,
+html.dark .sy-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(220, 223, 228, 0.22);
+  border-radius: 999px;
+}
+
+/* =====================================================
+ * Top Navigation Bar & Litestar Brand Lockup
+ * ===================================================== */
+
+.sy-head {
+  border-top: 2px solid var(--aa-gold-500);
+}
+
+html.light .sy-head {
+  background-color: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+html.dark .sy-head {
+  background-color: rgba(19, 21, 34, 0.92);
+  border-bottom: 1px solid #262b44;
+}
+
+.sy-head-brand {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  margin: 5rem auto 4rem;
-  width: 100%;
-  padding: 0 2rem;
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
+  gap: 0.6rem;
 }
 
-html[class] .title-with-logo .brand-text {
-  font-family: var(--sy-f-text);
-  font-weight: 300;
-  font-size: var(--brand-font-size-lg);
-  letter-spacing: var(--brand-letter-spacing-xl);
+.sy-head-brand img {
+  height: 1.75rem;
+  width: auto;
+}
+
+.sy-head-brand img + strong {
+  display: inline !important;
+  font-size: 0.96rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+html.light .sy-head-brand img + strong {
+  color: #202235;
+}
+
+html.dark .sy-head-brand img + strong {
+  color: #f8fafc;
+}
+
+@media (max-width: 960px) {
+  .sy-head-brand img + strong {
+    display: none !important;
+  }
+
+  .sy-head-links,
+  .sy-breadcrumbs,
+  .sy-breadcrumbs-inner {
+    scrollbar-width: none;
+  }
+
+  .sy-head-links {
+    padding: 0 0.35rem;
+  }
+
+  .sy-head-links::-webkit-scrollbar,
+  .sy-breadcrumbs::-webkit-scrollbar,
+  .sy-breadcrumbs-inner::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sy-head-links button,
+  .sy-head-links a {
+    padding: 0.4rem 0.38rem;
+    font-size: 0.89rem;
+  }
+}
+
+/* =====================================================
+ * Left Sidebar (Global TOC) & Right Rail (Local TOC)
+ * ===================================================== */
+
+.globaltoc .caption {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+html.light .globaltoc .caption {
+  color: #202235;
+}
+
+html.dark .globaltoc .caption {
+  color: #edb641;
+}
+
+html.light .globaltoc > ul a.current {
+  color: #202235;
+  font-weight: 650;
+  background-color: rgba(237, 182, 65, 0.16);
+  border-radius: 0.375rem;
+  padding: 0.18rem 0.5rem;
+  margin-left: -0.5rem;
+}
+
+html.dark .globaltoc > ul a.current {
+  color: #edb641;
+  font-weight: 650;
+  background-color: rgba(237, 182, 65, 0.12);
+  border-radius: 0.375rem;
+  padding: 0.18rem 0.5rem;
+  margin-left: -0.5rem;
+}
+
+html.light .globaltoc li.toctree-l2.current {
+  border-left-color: #edb641;
+  border-left-width: 2px;
+}
+
+html.dark .globaltoc li.toctree-l2.current {
+  border-left-color: #edb641;
+  border-left-width: 2px;
+}
+
+html.light .globaltoc a:hover,
+html.light .localtoc > ul li > a:hover {
+  color: #202235;
+}
+
+html.dark .globaltoc a:hover,
+html.dark .localtoc > ul li > a:hover {
+  color: #ffd480;
+}
+
+.localtoc > h3 {
+  font-size: 0.78rem;
+  font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+html.light .localtoc > h3 {
+  color: #202235;
+}
+
+html.dark .localtoc > h3 {
+  color: #edb641;
+}
+
+.localtoc > ul li.active > a {
+  font-weight: 650;
+  border-left: 2px solid #edb641;
+  padding-left: 0.55rem;
+  margin-left: -0.65rem;
+}
+
+html.light .localtoc > ul li.active > a {
+  color: #202235;
+}
+
+html.dark .localtoc > ul li.active > a {
+  color: #edb641;
+}
+
+/* =====================================================
+ * Landing Hero, Badges, CTA Buttons & Grid Cards
+ * ===================================================== */
+
+.aa-hero {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 2.25rem auto 1.75rem;
+  padding: 0 1rem;
+}
+
+.aa-hero-banner {
+  width: 100%;
+  max-width: 44rem;
+  height: auto;
+  display: block;
+}
+
+.aa-hero-banner--dark,
+.aa-hero-banner-dark {
+  display: none !important;
+}
+
+html.dark .aa-hero-banner--dark,
+html.dark .aa-hero-banner-dark {
+  display: block !important;
+}
+
+html.dark .aa-hero-banner--light,
+html.dark .aa-hero-banner-light {
+  display: none !important;
+}
+
+#badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem;
+  margin: 0 auto 2.5rem;
+}
+
+#badges img {
+  margin: 0;
+  height: 20px;
+}
+
+.lead {
+  font-size: 1.2rem;
   text-align: center;
-  line-height: 1.4;
-  max-width: 100%;
-  word-break: break-word;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  hyphens: auto;
-  -webkit-hyphens: auto;
-  -ms-hyphens: auto;
-  transition: color 0.3s ease, text-shadow 0.3s ease;
+  max-width: 44rem;
+  margin: 0 auto 1rem;
 }
 
-html.light .title-with-logo .brand-text {
-  color: var(--sy-c-heading);
-  text-shadow: var(--brand-text-glow);
+#home-head + .lead + p {
+  text-align: center;
+  max-width: 44rem;
+  margin: 0 auto 1.75rem;
 }
 
-html.dark .title-with-logo .brand-text {
-  color: var(--sy-c-text);
-  text-shadow: var(--brand-text-glow);
-}
-
-/* Button container wrapping */
 .buttons.wrap {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 1.5rem 0 2.75rem;
 }
 
 .buttons.wrap .btn-no-wrap {
   flex: 0 0 auto;
 }
 
-/* Large screens */
-@media (min-width: 1200px) {
-  html[class] .title-with-logo .brand-text {
-    font-size: var(--brand-font-size-xl);
-  }
+.yue a.aa-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.62rem 1.3rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.94rem;
+  text-decoration: none !important;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 
-/* Medium-small screens */
-@media (max-width: 991px) {
-  html[class] .title-with-logo .brand-text {
-    font-size: var(--brand-font-size-md);
-    letter-spacing: var(--brand-letter-spacing-lg);
-  }
+html.light .yue a.aa-btn--primary {
+  background-color: #202235;
+  color: #ffffff !important;
+  border: 1px solid #202235;
+  box-shadow: 0 2px 6px rgba(32, 34, 53, 0.16);
 }
 
-/* Small screens */
-@media (max-width: 767px) {
-  html[class] .title-with-logo .brand-text {
-    font-size: var(--brand-font-size-sm);
-    letter-spacing: var(--brand-letter-spacing-md);
-  }
-  html[class] .title-with-logo {
-    margin: 2rem auto 1.5rem;
-  }
+html.light .yue a.aa-btn--primary:hover {
+  background-color: #2b2e47;
+  border-color: #edb641;
+  color: #ffd480 !important;
 }
 
-/* Extra small screens */
-@media (max-width: 480px) {
-  html[class] .title-with-logo .brand-text {
-    font-size: var(--brand-font-size-xs);
-    letter-spacing: var(--brand-letter-spacing-sm);
-    line-height: 1.2;
-  }
-  html[class] .title-with-logo {
-    margin: 1.5rem auto 1rem;
-    padding: 0 1rem;
-  }
+html.dark .yue a.aa-btn--primary {
+  background-color: #edb641;
+  color: #131522 !important;
+  border: 1px solid #edb641;
+  box-shadow: 0 2px 10px rgba(237, 182, 65, 0.22);
 }
 
-/* Smallest screens */
-@media (max-width: 360px) {
-  html[class] .title-with-logo .brand-text {
-    font-size: var(--brand-font-size-xxs);
-    letter-spacing: var(--brand-letter-spacing-xs);
-  }
+html.dark .yue a.aa-btn--primary:hover {
+  background-color: #ffd480;
+  border-color: #ffd480;
+  color: #131522 !important;
 }
 
-/* Badge container styling - clean layout without box */
-#badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 3em;
+html.light .yue a.aa-btn--secondary {
+  background-color: #f8fafc;
+  color: #202235 !important;
+  border: 1px solid #cbd5e1;
 }
 
-#badges img {
-  margin-top: 0;
-  margin-bottom: 0;
+html.light .yue a.aa-btn--secondary:hover {
+  background-color: #ffffff;
+  border-color: #edb641;
+  color: #202235 !important;
+}
+
+html.dark .yue a.aa-btn--secondary {
+  background-color: #1b1f33;
+  color: #f8fafc !important;
+  border: 1px solid #323859;
+}
+
+html.dark .yue a.aa-btn--secondary:hover {
+  background-color: #232842;
+  border-color: #edb641;
+  color: #ffd480 !important;
+}
+
+/* Sphinx-Design Cards */
+html.light .sd-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.625rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+html.light .sd-card.sd-card-hover:hover {
+  border-color: #edb641;
+  box-shadow: 0 6px 16px rgba(32, 34, 53, 0.08);
+  transform: translateY(-1px);
+}
+
+html.dark .sd-card {
+  background-color: #181b2c;
+  border: 1px solid #2b314f;
+  border-radius: 0.625rem;
+  box-shadow: none;
+}
+
+html.dark .sd-card.sd-card-hover:hover {
+  background-color: #1e2238;
+  border-color: #edb641;
+  transform: translateY(-1px);
+}
+
+html.light .sd-card .sd-card-title {
+  color: #202235;
+}
+
+html.dark .sd-card .sd-card-title {
+  color: #f8fafc;
+}
+
+html.dark .sd-card .sd-octicon {
+  fill: #edb641;
+}
+
+html.light .sd-card .sd-octicon {
+  fill: #202235;
 }
 
 /* =====================================================
- * Brand-Aligned UI Element Enhancements
- * Uses Shibuya's accent colors for consistency
+ * Prose Links, Inline Code & Clickable Code Pills
  * ===================================================== */
 
-/* Inline code styling - uses accent colors */
+html.light .yue a:not(.headerlink):not(.aa-btn):not(.sd-card-hover):not(:has(> code:only-child)):not(code a) {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}
+
+html.light .yue a:not(.headerlink):not(.aa-btn):not(.sd-card-hover):not(:has(> code:only-child)):not(code a):hover {
+  color: #1e40af;
+}
+
+html.dark .yue a:not(.headerlink):not(.aa-btn):not(.sd-card-hover):not(:has(> code:only-child)):not(code a) {
+  color: #60a5fa;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}
+
+html.dark .yue a:not(.headerlink):not(.aa-btn):not(.sd-card-hover):not(:has(> code:only-child)):not(code a):hover {
+  color: #93c5fd;
+}
+
+/* Plain inline code spans: clean borderless surface */
 html.light code.literal {
-  background-color: var(--accent-a2);
-  border: 1px solid var(--accent-a4);
-  color: var(--accent-11);
-  padding: 0.1em 0.4em;
-  border-radius: 0.3em;
-  font-size: 90%;
+  background-color: #f1f5f9;
+  border: none;
+  color: #1e293b;
+  padding: 0.14em 0.4em;
+  border-radius: 0.3rem;
+  font-size: 0.875em;
 }
 
 html.dark code.literal {
-  background-color: var(--accent-a3);
-  border: 1px solid var(--accent-a5);
-  color: var(--accent-11);
-  padding: 0.1em 0.4em;
-  border-radius: 0.3em;
-  font-size: 90%;
+  background-color: #222740;
+  border: none;
+  color: #f1f5f9;
+  padding: 0.14em 0.4em;
+  border-radius: 0.3rem;
+  font-size: 0.875em;
 }
 
-/* Navigation links - accent color on hover */
-html.light .toctree-wrapper a:hover,
-html.light .doc-toc a:hover {
-  color: var(--accent-10);
+/* Linked code pills: crisp sapphire border strictly on clickable symbols */
+html.light a > code.literal {
+  background-color: rgba(29, 78, 216, 0.065);
+  border: 1px solid rgba(29, 78, 216, 0.26);
+  color: #1d4ed8;
+  text-decoration: none;
 }
 
-html.dark .toctree-wrapper a:hover,
-html.dark .doc-toc a:hover {
-  color: var(--accent-11);
+html.light a:hover > code.literal {
+  background-color: rgba(29, 78, 216, 0.12);
+  border-color: rgba(29, 78, 216, 0.48);
+  color: #1e40af;
 }
 
-/* Blockquote styling - accent-colored left border */
-html.light blockquote {
-  border-left: 4px solid var(--accent-9);
-  background-color: var(--accent-a2);
-  padding: 1em 1em 1em 1.5em;
-  margin: 1em 0;
+html.dark a > code.literal {
+  background-color: rgba(96, 165, 250, 0.11);
+  border: 1px solid rgba(96, 165, 250, 0.34);
+  color: #60a5fa;
+  text-decoration: none;
 }
 
-html.dark blockquote {
-  border-left: 4px solid var(--accent-10);
-  background-color: var(--accent-a3);
-  padding: 1em 1em 1em 1.5em;
-  margin: 1em 0;
+html.dark a:hover > code.literal {
+  background-color: rgba(96, 165, 250, 0.2);
+  border-color: rgba(96, 165, 250, 0.56);
+  color: #93c5fd;
 }
 
-/* Table header styling - accent colors */
-html.light table thead th {
-  background-color: var(--accent-a2);
-  border-bottom: 2px solid var(--accent-9);
+/* =====================================================
+ * Sphinx-Design Tabs (Package Manager & Code Tabs)
+ * ===================================================== */
+
+html.light .yue .sd-tab-set > input:checked + label {
+  color: #202235;
+  font-weight: 650;
+  border-bottom-color: #edb641;
 }
 
-html.dark table thead th {
-  background-color: var(--accent-a3);
-  border-bottom: 2px solid var(--accent-10);
+html.light .yue .sd-tab-set > label:hover {
+  color: #202235;
 }
 
-/* Admonition enhancements - accent-aligned colors */
-html.light .admonition.note {
-  border-left-color: var(--sy-c-heading);
+html.dark .yue .sd-tab-set > input:checked + label {
+  color: #edb641;
+  font-weight: 650;
+  border-bottom-color: #edb641;
 }
 
-html.light .admonition.tip {
-  border-left-color: var(--accent-9);
+html.dark .yue .sd-tab-set > label:hover {
+  color: #ffd480;
 }
 
-html.dark .admonition.note {
-  border-left-color: var(--accent-9);
+/* =====================================================
+ * Tables
+ * ===================================================== */
+
+.yue .table-wrapper:not(.ghost):not(.autosummary) {
+  border-radius: 0.5rem;
+  margin: 1.25rem 0 1.75rem;
+  overflow: hidden;
+  overflow-x: auto;
 }
 
-html.dark .admonition.tip {
-  border-left-color: var(--accent-10);
+html.light .yue .table-wrapper:not(.ghost):not(.autosummary) {
+  border: 1px solid #e2e8f0;
 }
 
-/* Ensure smooth transitions for theme switching */
-code.literal,
-.toctree-wrapper a,
-.doc-toc a,
-blockquote,
-table thead th,
+html.dark .yue .table-wrapper:not(.ghost):not(.autosummary) {
+  border: 1px solid #2b314f;
+}
+
+.yue .table-wrapper table.docutils {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  font-size: 0.92rem;
+}
+
+html.light .yue table.docutils thead th {
+  background-color: #f8fafc;
+  color: #202235;
+  font-weight: 650;
+  border-bottom: 2px solid #edb641;
+  padding: 0.65rem 0.85rem;
+}
+
+html.dark .yue table.docutils thead th {
+  background-color: #1b1f33;
+  color: #f8fafc;
+  font-weight: 650;
+  border-bottom: 2px solid #edb641;
+  padding: 0.65rem 0.85rem;
+}
+
+.yue table.docutils tbody td {
+  padding: 0.62rem 0.85rem;
+  vertical-align: top;
+}
+
+html.light .yue table.docutils tbody tr + tr td {
+  border-top: 1px solid #e2e8f0;
+}
+
+html.dark .yue table.docutils tbody tr + tr td {
+  border-top: 1px solid #252a42;
+}
+
+html.light .yue table.docutils tbody tr:hover td {
+  background-color: rgba(248, 250, 252, 0.85);
+}
+
+html.dark .yue table.docutils tbody tr:hover td {
+  background-color: rgba(32, 34, 53, 0.65);
+}
+
+/* =====================================================
+ * Admonitions & Scoped Prose Blockquotes
+ * ===================================================== */
+
 .admonition {
-  transition: all 0.3s ease;
+  border-radius: 0.5rem;
+}
+
+html.light .admonition {
+  --color-1: #fdfaf3;
+  --color-2: rgba(237, 182, 65, 0.18);
+  --color-3: #d99b1e;
+  --color-4: #202235;
+}
+
+html.dark .admonition {
+  --color-1: #181b2c;
+  --color-2: rgba(237, 182, 65, 0.14);
+  --color-3: #edb641;
+  --color-4: #ffd480;
+}
+
+html.dark .admonition:after {
+  background-color: #131522;
+}
+
+html.light .admonition.note,
+html.light .admonition.seealso {
+  --color-1: #f8fafc;
+  --color-2: rgba(29, 78, 216, 0.08);
+  --color-3: #2563eb;
+  --color-4: #1e3a8a;
+}
+
+html.dark .admonition.note,
+html.dark .admonition.seealso {
+  --color-1: #171c2e;
+  --color-2: rgba(96, 165, 250, 0.14);
+  --color-3: #3b82f6;
+  --color-4: #93c5fd;
+}
+
+html.dark .admonition.note:after,
+html.dark .admonition.seealso:after,
+html.dark .admonition.important:after,
+html.dark .admonition.danger:after,
+html.dark .admonition.error:after,
+html.dark .admonition.attention:after {
+  background-color: #ffffff;
+}
+
+html.light .admonition.warning,
+html.light .admonition.caution {
+  --color-1: #fffbeb;
+  --color-2: rgba(217, 119, 6, 0.13);
+  --color-3: #d97706;
+  --color-4: #78350f;
+}
+
+html.dark .admonition.warning,
+html.dark .admonition.caution {
+  --color-1: #211c1c;
+  --color-2: rgba(245, 158, 11, 0.16);
+  --color-3: #f59e0b;
+  --color-4: #fde68a;
+}
+
+/* Scope blockquote styling strictly to direct prose blockquotes so sphinx-click option lists stay clean */
+html.light .yue > blockquote {
+  border-left: 3px solid #edb641;
+  background-color: #f8fafc;
+  padding: 0.85rem 1.15rem;
+  margin: 1.25rem 0;
+  border-radius: 0 0.375rem 0.375rem 0;
+}
+
+html.dark .yue > blockquote {
+  border-left: 3px solid #edb641;
+  background-color: #181b2c;
+  padding: 0.85rem 1.15rem;
+  margin: 1.25rem 0;
+  border-radius: 0 0.375rem 0.375rem 0;
+}
+
+/* =====================================================
+ * API Reference Signatures (Autodoc)
+ * ===================================================== */
+
+.yue dl.py {
+  margin-bottom: 1.75rem;
+}
+
+html.light .yue dt.sig {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #edb641;
+  padding: 0.55rem 0.85rem 0.55rem 3rem;
+  margin-bottom: 0.65rem;
+}
+
+html.dark .yue dt.sig {
+  background-color: #181b2c;
+  border: 1px solid #2b314f;
+  border-left: 3px solid #edb641;
+  padding: 0.55rem 0.85rem 0.55rem 3rem;
+  margin-bottom: 0.65rem;
+}
+
+.yue dt.sig abbr[title] {
+  text-decoration: none;
+  border-bottom: none;
+}
+
+html.light .yue dt.sig + dd {
+  border-left: 1px solid #e2e8f0;
+  padding-left: 1.15rem;
+  margin-left: 0.75rem;
+}
+
+html.dark .yue dt.sig + dd {
+  border-left: 1px solid #262b44;
+  padding-left: 1.15rem;
+  margin-left: 0.75rem;
+}
+
+/* =====================================================
+ * Dual Light/Dark Diagrams, Mermaid & Dropdowns
+ * ===================================================== */
+
+.aa-diagram {
+  margin: 1.5rem 0 2rem;
+}
+
+.aa-diagram img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.75rem;
+}
+
+.aa-diagram .aa-diagram--dark,
+.aa-diagram .aa-diagram-dark {
+  display: none !important;
+}
+
+html.dark .aa-diagram .aa-diagram--dark,
+html.dark .aa-diagram .aa-diagram-dark {
+  display: block !important;
+}
+
+html.dark .aa-diagram .aa-diagram--light,
+html.dark .aa-diagram .aa-diagram-light {
+  display: none !important;
+}
+
+.yue pre.mermaid,
+.yue div.mermaid {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1.25rem 1rem;
+  margin: 1.35rem 0 1.85rem;
+  border-radius: 0.75rem;
+  overflow-x: auto;
+}
+
+html.light .yue pre.mermaid,
+html.light .yue div.mermaid {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+html.dark .yue pre.mermaid,
+html.dark .yue div.mermaid {
+  background-color: #16192b;
+  border: 1px solid #2b314f;
+}
+
+html.dark pre.mermaid > svg,
+html.dark div.mermaid > svg {
+  filter: none !important;
+}
+
+html.dark .yue .mermaid .node rect,
+html.dark .yue .mermaid .node circle,
+html.dark .yue .mermaid .node polygon,
+html.dark .yue .mermaid .node path {
+  fill: #202235 !important;
+  stroke: #edb641 !important;
+}
+
+html.dark .yue .mermaid .nodeLabel,
+html.dark .yue .mermaid .label,
+html.dark .yue .mermaid text {
+  color: #f8fafc !important;
+  fill: #f8fafc !important;
+}
+
+html.dark .yue .mermaid .edgeLabel,
+html.dark .yue .mermaid .edgeLabel rect,
+html.dark .yue .mermaid .labelBkg {
+  background-color: #16192b !important;
+  fill: #16192b !important;
+  color: #dcdfe4 !important;
+}
+
+html.dark .yue .mermaid .flowchart-link,
+html.dark .yue .mermaid .edgePath .path {
+  stroke: #94a3b8 !important;
+}
+
+html.dark .yue .mermaid marker path {
+  fill: #94a3b8 !important;
+  stroke: #94a3b8 !important;
+}
+
+.yue details.sd-dropdown {
+  border-radius: 0.625rem;
+  overflow: hidden;
+  margin: 1.25rem 0 1.75rem;
+}
+
+html.light .yue details.sd-dropdown {
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+}
+
+html.dark .yue details.sd-dropdown {
+  border: 1px solid #2b314f;
+  background-color: #181b2c;
+}
+
+html.light .yue details.sd-dropdown > summary.sd-card-header {
+  background-color: #f8fafc;
+  color: #202235;
+  font-weight: 650;
+}
+
+html.dark .yue details.sd-dropdown > summary.sd-card-header {
+  background-color: #1b1f33;
+  color: #f8fafc;
+  font-weight: 650;
 }

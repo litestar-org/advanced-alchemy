@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, cast
 
 from sanic import HTTPResponse, Request, Sanic
+from sqlalchemy import Engine
 from sqlalchemy.exc import OperationalError
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
@@ -64,7 +65,7 @@ def _make_unique_context_key(app: "Sanic[Any, Any]", key: str) -> str:  # pragma
         if not hasattr(app.ctx, key):
             return key
         key = f"{key}_{i}"
-        i += i
+        i += 1
 
 
 def serializer(value: Any) -> str:
@@ -396,7 +397,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
             setattr(self.app.ctx, self.engine_key, self.get_engine())  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
             setattr(self.app.ctx, self.session_maker_key, self.create_session_maker())  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
             bootstrap.add_dependency(  # pyright: ignore[reportUnknownMemberType]
-                AsyncEngine,
+                Engine,
                 self.get_engine_from_request,
             )
             bootstrap.add_dependency(  # pyright: ignore[reportUnknownMemberType]
@@ -404,7 +405,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 self.get_sessionmaker_from_request,
             )
             bootstrap.add_dependency(  # pyright: ignore[reportUnknownMemberType]
-                AsyncSession,
+                Session,
                 self.get_session_from_request,
             )
             await self.on_startup()

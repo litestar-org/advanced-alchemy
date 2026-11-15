@@ -1,82 +1,71 @@
-=======
-routing
-=======
+===============
+Replica Routing
+===============
 
-API Reference for the ``routing`` module
+.. py:module:: advanced_alchemy.routing
 
-.. note:: Private methods and attributes are not included in the API reference.
+Read/write replica session routing for SQLAlchemy engines and sessions. See
+:class:`~advanced_alchemy.config.routing.RoutingConfig`,
+:class:`~advanced_alchemy.config.routing.ReplicaConfig`, and
+:class:`~advanced_alchemy.config.routing.RoutingStrategy` for configuration.
 
-Read/Write Routing
-------------------
-
-The routing module provides automatic routing of read operations to read replicas while directing
-write operations to the primary database. This enables better scalability by distributing read
-load across multiple replica databases.
-
-Key Features
-~~~~~~~~~~~~
-
-- **Automatic Routing**: SELECT queries route to replicas, INSERT/UPDATE/DELETE to primary
-- **Sticky-After-Write**: Ensures read-your-writes consistency by routing reads to primary after writes
-- **FOR UPDATE Detection**: Automatically routes ``SELECT ... FOR UPDATE`` to primary
-- **Multiple Replica Support**: Round-robin or random selection across multiple replicas
-- **Agnostic Bind Group Routing**: Define and route to arbitrary groups (e.g., "analytics", "reporting")
-- **Context Managers**: Explicit control with ``primary_context()``, ``replica_context()``, and ``use_bind_group()``
-- **Framework Integration**: Built-in support for Litestar, FastAPI, Flask, Sanic, Starlette
-
-Configuration Classes
-~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: advanced_alchemy.config.routing.RoutingConfig
-    :no-index:
-
-.. autoclass:: advanced_alchemy.config.routing.ReplicaConfig
-    :no-index:
-
-.. autoclass:: advanced_alchemy.config.routing.RoutingStrategy
-    :no-index:
-
-Session Classes
-~~~~~~~~~~~~~~~
-
-.. autoclass:: advanced_alchemy.routing.RoutingSyncSession
-    :members:
-    :undoc-members:
-    :special-members: __init__
+Routing Sessions & Session Makers
+---------------------------------
 
 .. autoclass:: advanced_alchemy.routing.RoutingAsyncSession
-    :members:
-    :undoc-members:
-    :special-members: __init__
+    :no-members:
+    :no-inherited-members:
+    :show-inheritance:
 
-Session Makers
-~~~~~~~~~~~~~~
+.. autoclass:: advanced_alchemy.routing.RoutingSyncSession
+    :members: get_bind
+    :no-inherited-members:
+    :show-inheritance:
 
 .. autoclass:: advanced_alchemy.routing.RoutingAsyncSessionMaker
-    :members:
-    :undoc-members:
+    :members: close_all
+    :no-inherited-members:
+    :show-inheritance:
 
 .. autoclass:: advanced_alchemy.routing.RoutingSyncSessionMaker
-    :members:
-    :undoc-members:
+    :members: close_all
+    :no-inherited-members:
+    :show-inheritance:
+
+.. autofunction:: advanced_alchemy.routing.dispose_session_maker_async
+
+.. autofunction:: advanced_alchemy.routing.dispose_session_maker_sync
 
 Replica Selectors
-~~~~~~~~~~~~~~~~~
+-----------------
+
+.. py:module:: advanced_alchemy.routing.selectors
+    :no-typesetting:
+
+.. autoclass:: advanced_alchemy.routing.selectors.EngineSelector
+    :members: next
+    :no-inherited-members:
+    :show-inheritance:
+
+.. py:currentmodule:: advanced_alchemy.routing
 
 .. autoclass:: advanced_alchemy.routing.ReplicaSelector
-    :members:
-    :undoc-members:
+    :members: next, has_replicas, count
+    :no-inherited-members:
+    :show-inheritance:
 
 .. autoclass:: advanced_alchemy.routing.RoundRobinSelector
-    :members:
-    :undoc-members:
+    :members: next
+    :no-inherited-members:
+    :show-inheritance:
 
 .. autoclass:: advanced_alchemy.routing.RandomSelector
-    :members:
-    :undoc-members:
+    :members: next
+    :no-inherited-members:
+    :show-inheritance:
 
-Context Managers
-~~~~~~~~~~~~~~~~
+Routing Context Managers & State
+--------------------------------
 
 .. autofunction:: advanced_alchemy.routing.primary_context
 
@@ -86,11 +75,12 @@ Context Managers
 
 .. autofunction:: advanced_alchemy.routing.reset_routing_context
 
-Context Variables
-~~~~~~~~~~~~~~~~~
+.. py:data:: stick_to_primary_var
+    :type: contextvars.ContextVar[bool]
 
-.. autodata:: advanced_alchemy.routing.stick_to_primary_var
-    :annotation:
+    Context variable tracking whether subsequent reads should stick to the primary after a write.
 
-.. autodata:: advanced_alchemy.routing.force_primary_var
-    :annotation:
+.. py:data:: force_primary_var
+    :type: contextvars.ContextVar[bool]
+
+    Context variable forcing operations onto the primary engine.

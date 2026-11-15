@@ -1,6 +1,8 @@
 =======
-alembic
+Alembic
 =======
+
+.. py:module:: advanced_alchemy.alembic
 
 API Reference for the ``Alembic`` module
 

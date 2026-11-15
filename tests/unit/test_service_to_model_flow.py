@@ -8,19 +8,31 @@ input normalization before repository delegation.
 from __future__ import annotations
 
 import datetime
-from typing import Any, Optional, cast
+import warnings
+from typing import Any, Generic, Optional, TypeVar, Union, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy import String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import String, create_engine
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, Session, mapped_column
+from sqlalchemy.pool import StaticPool
 
 from advanced_alchemy.base import UUIDAuditBase
-from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
-from advanced_alchemy.repository._util import get_primary_key_info
+from advanced_alchemy.exceptions import IntegrityError
+from advanced_alchemy.repository import (
+    SQLAlchemyAsyncRepository,
+    SQLAlchemyAsyncSlugRepository,
+    SQLAlchemySyncRepository,
+    SQLAlchemySyncSlugRepository,
+)
+from advanced_alchemy.repository._util import get_primary_key_info, supports_partial_hydration
+from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository
 from advanced_alchemy.repository.typing import PrimaryKeyType
 from advanced_alchemy.service import SchemaDumpConfig, SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
 from advanced_alchemy.utils.serialization import ATTRS_INSTALLED, MSGSPEC_INSTALLED, PYDANTIC_INSTALLED, ModelDictT
+from tests.helpers import maybe_async
 
 pytestmark = [pytest.mark.unit]
 
@@ -64,9 +76,7 @@ class TrackingService(SQLAlchemyAsyncRepositoryService[MockModel, MockRepository
     repository_type = MockRepository
 
     def __init__(self) -> None:
-        # Create mock repository
         self._repository = MockRepository()
-        # Mock model with proper SQLAlchemy attributes
         mock_model = MockModel()
         mock_model.id = "existing-id"  # type: ignore[assignment]
         mock_model.name = "existing"
@@ -74,7 +84,6 @@ class TrackingService(SQLAlchemyAsyncRepositoryService[MockModel, MockRepository
         self._repository.get = AsyncMock(return_value=mock_model)  # type: ignore[method-assign]
         self._repository.update = AsyncMock(side_effect=lambda data, **kwargs: data)  # type: ignore[method-assign]
 
-        # Track method calls
         self.to_model_calls: list[tuple[Any, Optional[str]]] = []
         self.to_model_on_update_calls: list[Any] = []
 
@@ -105,9 +114,7 @@ class TrackingSyncService(SQLAlchemySyncRepositoryService[MockModel, MockSyncRep
     repository_type = MockSyncRepository
 
     def __init__(self) -> None:
-        # Create mock repository
         self._repository = MockSyncRepository()
-        # Mock model with proper SQLAlchemy attributes
         mock_model = MockModel()
         mock_model.id = "existing-id"  # type: ignore[assignment]
         mock_model.name = "existing"
@@ -115,7 +122,6 @@ class TrackingSyncService(SQLAlchemySyncRepositoryService[MockModel, MockSyncRep
         self._repository.get = MagicMock(return_value=mock_model)  # type: ignore[method-assign]
         self._repository.update = MagicMock(side_effect=lambda data, **kwargs: data)  # type: ignore[method-assign]
 
-        # Track method calls
         self.to_model_calls: list[tuple[Any, Optional[str]]] = []
         self.to_model_on_update_calls: list[Any] = []
 
@@ -365,14 +371,16 @@ async def test_update_operation_map_routes_to_to_model_on_update() -> None:
 
 @pytest.mark.asyncio
 async def test_update_propagates_with_for_update_flag() -> None:
-    """Ensure the async service forwards locking hints to the repository."""
+    """Ensure the async service forwards locking hints directly to repository.update without a duplicate get()."""
 
     service = TrackingService()
     await service.update({"name": "updated"}, item_id="test-id", with_for_update=True)
 
     get_mock = cast(AsyncMock, service.repository.get)
-    get_mock.assert_awaited_once()
-    assert get_mock.call_args.kwargs["with_for_update"] is True
+    get_mock.assert_not_awaited()
+    update_mock = cast(AsyncMock, service.repository.update)
+    update_mock.assert_awaited_once()
+    assert update_mock.call_args.kwargs["with_for_update"] is True
 
 
 # Tests for sync service
@@ -473,17 +481,16 @@ def test_sync_update_pydantic_per_call_schema_dump_config_includes_unset_default
 
 
 def test_sync_update_propagates_with_for_update_flag() -> None:
-    """Ensure the sync service forwards the locking flag to its repository."""
+    """Ensure the sync service forwards the locking flag directly to repository.update without a duplicate get()."""
 
     service = TrackingSyncService()
     service.update({"name": "updated"}, item_id="test-id", with_for_update=True)
 
     get_mock = cast(MagicMock, service.repository.get)
-    get_mock.assert_called_once()
-    assert get_mock.call_args.kwargs["with_for_update"] is True
-
-
-# Tests for update lifecycle overrides
+    get_mock.assert_not_called()
+    update_mock = cast(MagicMock, service.repository.update)
+    update_mock.assert_called_once()
+    assert update_mock.call_args.kwargs["with_for_update"] is True
 
 
 @pytest.mark.asyncio
@@ -516,44 +523,381 @@ async def test_update_invokes_overridden_to_model_on_update() -> None:
     assert service.update_hook_called
 
 
-# Edge case tests
-
-
 @pytest.mark.asyncio
 async def test_update_without_item_id_uses_model_id() -> None:
     """Test update without item_id uses ID from model instance."""
     service = TrackingService()
 
-    # Update with model that has ID
     model = MockModel()
     model.id = "model-id"  # type: ignore[assignment]
     model.name = "Updated Name"
     await service.update(model)
 
-    # Should work - uses model's ID
     assert len(service.to_model_calls) == 1
 
 
 @pytest.mark.asyncio
 async def test_update_preserves_existing_instance_attributes() -> None:
-    """Test that update with item_id preserves existing instance attributes."""
+    """Test that update with item_id sets the ID on the partial model without touching unset attributes."""
     service = TrackingService()
 
-    # Update only name field
     result = await service.update({"name": "New Name"}, item_id="test-id")
+    state = sa_inspect(result)
 
-    # Existing ID should be preserved from existing instance
     assert result.name == "New Name"
-    assert result.id == "existing-id"  # From mock repository's get()
+    assert result.id == "test-id"
+    assert state is not None
+    assert "dob" not in state.dict
+    cast(AsyncMock, service.repository.get).assert_not_awaited()
 
 
 def test_sync_update_preserves_existing_instance_attributes() -> None:
-    """Test that sync update with item_id preserves existing instance attributes."""
+    """Test that sync update with item_id sets the ID on the partial model without touching unset attributes."""
     service = TrackingSyncService()
 
-    # Update only name field
     result = service.update({"name": "New Name"}, item_id="test-id")
+    state = sa_inspect(result)
 
-    # Existing ID should be preserved from existing instance
     assert result.name == "New Name"
-    assert result.id == "existing-id"  # From mock repository's get()
+    assert result.id == "test-id"
+    assert state is not None
+    assert "dob" not in state.dict
+    cast(MagicMock, service.repository.get).assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("service_cls", "mock_cls"),
+    [(TrackingService, AsyncMock), (TrackingSyncService, MagicMock)],
+)
+@pytest.mark.parametrize("lookup_id", ["existing-id", "missing-id"])
+async def test_service_get_or_none_delegates_to_repository(
+    service_cls: type[Union[TrackingService, TrackingSyncService]],
+    mock_cls: type[Union[AsyncMock, MagicMock]],
+    lookup_id: str,
+) -> None:
+    """Ensure sync and async service get_or_none forward lookups without error_messages."""
+    service = service_cls()
+    sentinel = MockModel()
+    sentinel.id = "existing-id"  # type: ignore[assignment]
+    expected = sentinel if lookup_id == "existing-id" else None
+    mock_get_or_none = mock_cls(return_value=expected)
+    service.repository.get_or_none = mock_get_or_none  # type: ignore[method-assign]
+
+    result = await maybe_async(service.get_or_none(lookup_id))
+
+    assert result is expected
+    mock_get_or_none.assert_called_once()
+    assert mock_get_or_none.call_args.kwargs["item_id"] == lookup_id
+    assert "error_messages" not in mock_get_or_none.call_args.kwargs
+
+
+def test_service_generic_subclass_auto_binds_repository_type() -> None:
+    """Service subclasses bind repository_type and model_type from generic type arguments."""
+
+    class AutoAsyncService(SQLAlchemyAsyncRepositoryService[MockModel]):
+        pass
+
+    class AutoSyncService(SQLAlchemySyncRepositoryService[MockModel]):
+        pass
+
+    class CustomAsyncRepo(SQLAlchemyAsyncRepository[MockModel]):
+        pass
+
+    class CustomSyncRepo(SQLAlchemySyncRepository[MockModel]):
+        pass
+
+    class CustomRepoAsyncService(SQLAlchemyAsyncRepositoryService[MockModel, CustomAsyncRepo]):
+        pass
+
+    class CustomRepoSyncService(SQLAlchemySyncRepositoryService[MockModel, CustomSyncRepo]):
+        pass
+
+    class ParametricSlugAsyncService(
+        SQLAlchemyAsyncRepositoryService[MockModel, SQLAlchemyAsyncSlugRepository[MockModel]]
+    ):
+        pass
+
+    class ParametricSlugSyncService(
+        SQLAlchemySyncRepositoryService[MockModel, SQLAlchemySyncSlugRepository[MockModel]]
+    ):
+        pass
+
+    async_session = AsyncMock(spec=AsyncSession, bind=MagicMock(), info={})
+    sync_session = MagicMock(spec=Session, bind=MagicMock(), info={})
+
+    auto_async_svc = AutoAsyncService(session=async_session)
+    auto_sync_svc = AutoSyncService(session=sync_session)
+    custom_async_svc = CustomRepoAsyncService(session=async_session)
+    custom_sync_svc = CustomRepoSyncService(session=sync_session)
+    slug_async_svc = ParametricSlugAsyncService(session=async_session)
+    slug_sync_svc = ParametricSlugSyncService(session=sync_session)
+
+    assert AutoAsyncService._model_type is MockModel
+    assert isinstance(auto_async_svc.repository, SQLAlchemyAsyncRepository)
+    assert auto_async_svc.repository.model_type is MockModel
+
+    assert AutoSyncService._model_type is MockModel
+    assert isinstance(auto_sync_svc.repository, SQLAlchemySyncRepository)
+    assert auto_sync_svc.repository.model_type is MockModel
+
+    assert isinstance(custom_async_svc.repository, CustomAsyncRepo)
+    assert custom_async_svc.repository.model_type is MockModel
+
+    assert isinstance(custom_sync_svc.repository, CustomSyncRepo)
+    assert custom_sync_svc.repository.model_type is MockModel
+
+    assert isinstance(slug_async_svc.repository, SQLAlchemyAsyncSlugRepository)
+    assert slug_async_svc.repository.model_type is MockModel
+
+    assert isinstance(slug_sync_svc.repository, SQLAlchemySyncSlugRepository)
+    assert slug_sync_svc.repository.model_type is MockModel
+
+    direct_async_service: SQLAlchemyAsyncRepositoryService[MockModel] = SQLAlchemyAsyncRepositoryService(
+        session=async_session,
+        model_type=MockModel,
+    )
+    direct_sync_service: SQLAlchemySyncRepositoryService[MockModel] = SQLAlchemySyncRepositoryService(
+        session=sync_session,
+        model_type=MockModel,
+    )
+
+    assert isinstance(direct_async_service.repository, SQLAlchemyAsyncRepository)
+    assert direct_async_service.repository.model_type is MockModel
+    assert isinstance(direct_sync_service.repository, SQLAlchemySyncRepository)
+    assert direct_sync_service.repository.model_type is MockModel
+
+    class MockAsyncOverrideRepo(SQLAlchemyAsyncMockRepository[MockModel]):
+        pass
+
+    class MockSyncOverrideRepo(SQLAlchemySyncMockRepository[MockModel]):
+        pass
+
+    mock_async_svc = AutoAsyncService(session=async_session, repository_type=MockAsyncOverrideRepo)
+    mock_sync_svc = AutoSyncService(session=sync_session, repository_type=MockSyncOverrideRepo)
+    assert isinstance(mock_async_svc.repository, MockAsyncOverrideRepo)
+    assert isinstance(mock_sync_svc.repository, MockSyncOverrideRepo)
+
+
+def test_inherited_repository_type_survives_extra_generic_parameters() -> None:
+    """Service subclasses with custom or reordered generic parameters resolve mapped models and preserve repository_type."""
+    model_var = TypeVar("model_var")
+    schema_var = TypeVar("schema_var")
+
+    class BaseService(SQLAlchemySyncRepositoryService[model_var], Generic[model_var, schema_var]):  # type: ignore[type-var]
+        pass
+
+    class ParentService(BaseService[MockModel, dict[str, Any]]):
+        repository_type = MockSyncRepository
+
+    class LeafService(ParentService):
+        pass
+
+    class ReorderedBaseService(SQLAlchemySyncRepositoryService[model_var], Generic[schema_var, model_var]):  # type: ignore[type-var]
+        pass
+
+    class ReorderedLeafService(ReorderedBaseService[dict[str, Any], MockModel]):
+        pass
+
+    reordered_repo_type = getattr(ReorderedLeafService, "repository_type", None)
+    assert LeafService.repository_type is MockSyncRepository
+    assert ReorderedLeafService._model_type is MockModel
+    assert reordered_repo_type is not None
+    assert issubclass(reordered_repo_type, SQLAlchemySyncRepository)
+    assert getattr(reordered_repo_type, "model_type", None) is MockModel
+    assert reordered_repo_type.__module__ == __name__
+
+
+class DataclassMappedBase(MappedAsDataclass, DeclarativeBase):
+    """Base for dataclass-mapped service update tests."""
+
+
+class DataclassMappedArticle(DataclassMappedBase):
+    """Dataclass-mapped model with required, nullable, and default columns."""
+
+    __tablename__ = "service_dataclass_article"
+
+    id: Mapped[int] = mapped_column(primary_key=True, init=False)
+    title: Mapped[str]
+    status: Mapped[str] = mapped_column(default="draft")
+    subtitle: Mapped[Optional[str]] = mapped_column(default="default-sub", nullable=True)
+    server_tag: Mapped[Optional[str]] = mapped_column(default=None, server_default="srv-tag", nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(default=None, nullable=True)
+
+
+class DataclassMappedArticleService(SQLAlchemySyncRepositoryService[DataclassMappedArticle]):
+    """Auto-bound sync service for DataclassMappedArticle."""
+
+
+def test_dataclass_mapped_model_partial_update_and_explicit_none() -> None:
+    """Service item_id updates write explicit None while repository instance updates preserve defaults silently."""
+    engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+    DataclassMappedBase.metadata.create_all(engine)
+    try:
+        with Session(engine, expire_on_commit=False) as session:
+            service = DataclassMappedArticleService(session=session)
+            article = DataclassMappedArticle(
+                title="Initial",
+                status="published",
+                subtitle="custom-sub",
+                server_tag="keep-srv",
+                notes="keep-me",
+            )
+            session.add(article)
+            session.commit()
+            article_id = article.id
+
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                updated = service.update({"title": "Renamed"}, item_id=article_id, auto_commit=True)
+                assert updated.title == "Renamed"
+                assert updated.status == "published"
+                assert updated.subtitle == "custom-sub"
+                assert updated.server_tag == "keep-srv"
+                assert updated.notes == "keep-me"
+
+                repo_input = DataclassMappedArticle(title="Repo Renamed", status="published")
+                repo_input.id = article_id
+                repo_updated = service.repository.update(repo_input, auto_commit=True)
+                assert repo_updated.title == "Repo Renamed"
+                assert repo_updated.server_tag == "keep-srv"
+
+                cleared = service.update({"subtitle": None, "notes": None}, item_id=article_id, auto_commit=True)
+                assert cleared.title == "Repo Renamed"
+                assert cleared.status == "published"
+                assert cleared.subtitle is None
+                assert cleared.notes is None
+                assert not [w for w in caught if issubclass(w.category, DeprecationWarning)]
+
+            with pytest.raises(IntegrityError):
+                service.update({"status": None}, item_id=article_id, auto_commit=True)
+            session.rollback()
+
+            with pytest.raises(IntegrityError):
+                service.update({"title": None}, item_id=article_id, auto_commit=True)
+    finally:
+        engine.dispose()
+
+
+class CustomInitBase(DeclarativeBase):
+    """Base for models with constructor-derived attributes."""
+
+
+class DefaultInitArticle(CustomInitBase):
+    """Model using the default declarative constructor."""
+
+    __tablename__ = "service_default_init_article"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str]
+
+
+class SluggedArticle(CustomInitBase):
+    """Model whose constructor derives ``slug`` from ``name``."""
+
+    __tablename__ = "service_slugged_article"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str]
+    slug: Mapped[str]
+    body: Mapped[Optional[str]] = mapped_column(nullable=True)
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        if "name" in kwargs:
+            self.slug = str(kwargs["name"]).lower().replace(" ", "-")
+
+
+class SluggedArticleService(SQLAlchemySyncRepositoryService[SluggedArticle]):
+    """Auto-bound sync service for SluggedArticle."""
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        pytest.param(DefaultInitArticle, True, id="declarative-constructor"),
+        pytest.param(DataclassMappedArticle, True, id="mapped-as-dataclass"),
+        pytest.param(SluggedArticle, False, id="custom-init"),
+    ],
+)
+def test_supports_partial_hydration(model: type[Any], expected: bool) -> None:
+    """Partial hydration applies only when the model constructor has no side effects to preserve."""
+    assert supports_partial_hydration(model) is expected
+
+
+def test_custom_init_model_update_applies_constructor_side_effects() -> None:
+    """Updates on models with a custom ``__init__`` still apply constructor-derived attributes."""
+    engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+    CustomInitBase.metadata.create_all(engine)
+    try:
+        with Session(engine, expire_on_commit=False) as session:
+            service = SluggedArticleService(session=session)
+            session.add(SluggedArticle(id=1, name="First Post", body="keep-me"))
+            session.commit()
+
+            updated = service.update({"name": "Renamed Post"}, item_id=1, auto_commit=True)
+            assert updated.name == "Renamed Post"
+            assert updated.slug == "renamed-post"
+            assert updated.body == "keep-me"
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize("use_config", [False, True])
+async def test_service_new_preserves_custom_constructor(use_config: bool) -> None:
+    """Inherited factories preserve constructors predating the model/repository overrides."""
+
+    class LegacyAsyncService(SQLAlchemyAsyncRepositoryService[MockModel]):
+        def __init__(
+            self,
+            session: Any,
+            statement: Any = None,
+            error_messages: Any = None,
+            load: Any = None,
+            execution_options: Any = None,
+            uniquify: Any = None,
+            count_with_window_function: Any = None,
+        ) -> None:
+            super().__init__(session=session)
+
+    class LegacySyncService(SQLAlchemySyncRepositoryService[MockModel]):
+        def __init__(
+            self,
+            session: Any,
+            statement: Any = None,
+            error_messages: Any = None,
+            load: Any = None,
+            execution_options: Any = None,
+            uniquify: Any = None,
+            count_with_window_function: Any = None,
+        ) -> None:
+            super().__init__(session=session)
+
+    async_session = AsyncMock(spec=AsyncSession, bind=MagicMock(), info={})
+    sync_session = MagicMock(spec=Session, bind=MagicMock(), info={})
+    async_config = MagicMock()
+    async_config.get_session.return_value.__aenter__.return_value = async_session
+    sync_config = MagicMock()
+    sync_config.get_session.return_value.__enter__.return_value = sync_session
+    async_options: dict[str, Any] = {"config": async_config} if use_config else {"session": async_session}
+    sync_options: dict[str, Any] = {"config": sync_config} if use_config else {"session": sync_session}
+    async with LegacyAsyncService.new(**async_options) as svc:
+        assert svc.repository.session is async_session
+    with LegacySyncService.new(**sync_options) as svc_sync:
+        assert svc_sync.repository.session is sync_session
+
+
+async def test_service_new_explicit_overrides() -> None:
+    """Factory overrides still reach the constructed service in sync and async mode."""
+    async_session = AsyncMock(spec=AsyncSession, bind=MagicMock(), info={})
+    sync_session = MagicMock(spec=Session, bind=MagicMock(), info={})
+    async with SQLAlchemyAsyncRepositoryService.new(
+        session=async_session, model_type=MockModel, repository_type=SQLAlchemyAsyncMockRepository
+    ) as svc:
+        assert isinstance(svc.repository, SQLAlchemyAsyncMockRepository)
+        assert svc.repository.model_type is MockModel
+    with SQLAlchemySyncRepositoryService.new(
+        session=sync_session, model_type=MockModel, repository_type=SQLAlchemySyncMockRepository
+    ) as svc_sync:
+        assert isinstance(svc_sync.repository, SQLAlchemySyncMockRepository)
+        assert svc_sync.repository.model_type is MockModel

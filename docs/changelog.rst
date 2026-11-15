@@ -3,6 +3,67 @@
 1.x Changelog
 =============
 
+.. changelog:: 1.13.0
+
+    .. change:: preserve custom service constructors and SQL expression parity
+        :type: bugfix
+        :pr: 824
+
+        Inherited service ``new()`` factories preserve custom constructors that
+        accept the existing service options; model and repository overrides are
+        forwarded only when supplied. Mock repositories match SQL for NULL
+        comparisons, escaped LIKE expressions, and scalar arithmetic predicates.
+
+    .. change:: preserve ORM delete behavior and query count configuration
+        :type: bugfix
+        :pr: 824
+
+        ``delete_many`` and ``delete_where`` use ORM deletion for models requiring
+        delete cascades, stored-object cleanup, joined-table inheritance, or custom
+        delete listeners. These paths can issue more statements than bulk deletion.
+        Query repositories use a window count when ``count_with_window_function``
+        is true and separate queries when false, except on Spanner, which uses
+        separate queries. Custom repository implementations should provide
+        ``set_primary_key_value`` alongside the existing primary-key helpers.
+
+    .. change:: partial update hydration and single-query service updates
+        :type: bugfix
+        :pr: 824
+
+        ``Service.update`` now builds the update model with
+        ``partial_model_from_dict`` so omitted fields stay unset instead of being
+        filled with constructor defaults, fixing ``MappedAsDataclass`` and SQLModel
+        table models where defaults overwrote stored values or required fields raised
+        ``TypeError``. Models that define their own ``__init__`` keep calling it so
+        constructor-derived attributes are still applied. ``Service.update(item_id=...)``
+        delegates directly to ``Repository.update``, removing a duplicate ``SELECT``,
+        and ``item_id`` takes precedence over an identifier present in the payload.
+
+    .. change:: mock repository filter parity
+        :type: bugfix
+        :pr: 824
+
+        ``SQLAlchemyAsyncMockRepository`` and ``SQLAlchemySyncMockRepository`` support
+        ``NotInCollectionFilter``, ``NotInSearchFilter``, ``ComparisonFilter``,
+        ``ExistsFilter``, ``NotExistsFilter``, ``MultiFilter``, ``between()``, and
+        ``is_(None)``. ``LimitOffset`` slices ``offset:offset + limit``, ``BeforeAfter``
+        applies both bounds, and ``get_many_and_count`` returns the count before
+        pagination. Unsupported SQL expressions now raise ``RepositoryError`` instead of
+        returning unfiltered rows, so tests that relied on the previous results may
+        need to be updated.
+
+    .. change:: infer service model and repository types from generic parameters
+        :type: feature
+        :pr: 824
+
+        ``SQLAlchemyAsyncRepositoryService[Model]`` and
+        ``SQLAlchemySyncRepositoryService[Model]`` subclasses no longer need an inline
+        ``repository_type``; the model and a default repository are inferred from the
+        generic parameters, and ``model_type=`` / ``repository_type=`` can be passed
+        when instantiating directly. To type custom repository methods, pass the
+        repository as the second generic parameter, for example
+        ``SQLAlchemyAsyncRepositoryService[Widget, WidgetRepository]``.
+
 .. changelog:: 1.12.0
     :date: 2026-10-19
 
@@ -115,6 +176,17 @@
 
 .. changelog:: 1.11.0
     :date: 2026-05-30
+
+    .. change:: add expired-entry cleanup to the Litestar SQLAlchemy store
+        :type: feature
+        :pr: 788
+        :issue: 787
+
+        Adds ``SQLAlchemyStore.delete_expired()`` for periodic cleanup with both
+        synchronous and asynchronous SQLAlchemy configurations. Cleanup removes
+        expired rows in the store's exact namespace while preserving live entries,
+        entries without an expiration time, and entries in other namespaces.
+        The session guide documents how to call it on a recurring schedule.
 
     .. change:: harden crypto column types and add TOTP and one-time-code storage
         :type: feature

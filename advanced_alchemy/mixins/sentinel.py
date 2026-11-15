@@ -1,35 +1,28 @@
-from typing import TypedDict
+from typing import Any
 
-from sqlalchemy.orm import Mapped, MappedAsDataclass, declarative_mixin, declared_attr, mapped_column
-from sqlalchemy.sql.schema import _InsertSentinelColumnDefault  # pyright: ignore [reportPrivateUsage]
-from typing_extensions import NotRequired
-
-
-class SentinelKwargs(TypedDict):
-    init: NotRequired[bool]
+from sqlalchemy import Integer, insert_sentinel
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 
-@declarative_mixin
+def _create_sentinel_column(_cls: Any) -> Mapped[int]:
+    return mapped_column(
+        Integer,
+        name="sa_orm_sentinel",
+        insert_default=insert_sentinel().default,
+        _omit_from_statements=True,
+        insert_sentinel=True,
+        use_existing_column=True,
+        nullable=True,
+        sort_order=3001,
+    )
+
+
+_create_sentinel_column.__annotations__.clear()
+
+
 class SentinelMixin:
     """Mixin to add a sentinel column for SQLAlchemy models."""
 
     __abstract__ = True
-    _sentinel_kwargs: SentinelKwargs = {}
 
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-        if issubclass(cls, MappedAsDataclass):
-            cls._sentinel_kwargs["init"] = False
-
-    @declared_attr
-    def _sentinel(cls) -> Mapped[int]:
-        return mapped_column(
-            name="sa_orm_sentinel",
-            insert_default=_InsertSentinelColumnDefault(),
-            _omit_from_statements=True,
-            insert_sentinel=True,
-            use_existing_column=True,
-            nullable=True,
-            sort_order=3001,
-            **cls._sentinel_kwargs,
-        )
+    _sentinel = declared_attr(_create_sentinel_column)

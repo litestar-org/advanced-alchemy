@@ -24,14 +24,14 @@ class EncryptionBackend(abc.ABC):
     Concrete implementations should provide the actual encryption/decryption logic.
 
     Attributes:
-        passphrase (bytes): The encryption passphrase used by the backend.
+        passphrase: The encryption passphrase used by the backend.
     """
 
     def mount_vault(self, key: "Union[str, bytes]") -> None:
         """Mounts the vault with the provided encryption key.
 
         Args:
-            key (str | bytes): The encryption key used to initialize the backend.
+            key: The encryption key used to initialize the backend.
         """
         if isinstance(key, str):
             key = key.encode()
@@ -42,7 +42,7 @@ class EncryptionBackend(abc.ABC):
         """Initializes the encryption engine with the provided key.
 
         Args:
-            key (bytes | str): The encryption key.
+            key: The encryption key.
 
         Raises:
             NotImplementedError: If the method is not implemented by the subclass.
@@ -53,10 +53,10 @@ class EncryptionBackend(abc.ABC):
         """Encrypts the given value.
 
         Args:
-            value (Any): The value to encrypt.
+            value: The value to encrypt.
 
         Returns:
-            str: The encrypted value.
+            The encrypted value.
 
         Raises:
             NotImplementedError: If the method is not implemented by the subclass.
@@ -67,10 +67,10 @@ class EncryptionBackend(abc.ABC):
         """Decrypts the given value.
 
         Args:
-            value (Any): The value to decrypt.
+            value: The value to decrypt.
 
         Returns:
-            str: The decrypted value.
+            The decrypted value.
 
         Raises:
             NotImplementedError: If the method is not implemented by the subclass.
@@ -84,10 +84,10 @@ class EncryptionBackend(abc.ABC):
         bind parameter in a database encryption function.
 
         Args:
-            bindvalue (Any): The bound parameter element.
+            bindvalue: The bound parameter element.
 
         Returns:
-            Any | None: The wrapped SQL expression, or ``None`` for client-side backends.
+            The wrapped SQL expression, or ``None`` for client-side backends.
         """
         return None
 
@@ -99,10 +99,10 @@ class EncryptionBackend(abc.ABC):
         column in a database decryption function.
 
         Args:
-            column (Any): The column element being read.
+            column: The column element being read.
 
         Returns:
-            Any | None: The wrapped SQL expression, or ``None`` for client-side backends.
+            The wrapped SQL expression, or ``None`` for client-side backends.
         """
         return None
 
@@ -116,14 +116,14 @@ class PGCryptoBackend(EncryptionBackend):
     the ASCII-armored ciphertext is stored as text so the column type is unchanged.
 
     Attributes:
-        passphrase (str): The base64-encoded passphrase used for encryption and decryption.
+        passphrase: The base64-encoded passphrase used for encryption and decryption.
     """
 
     def init_engine(self, key: "Union[bytes, str]") -> None:
         """Initializes the pgcrypto engine with the provided key.
 
         Args:
-            key (bytes | str): The encryption key.
+            key: The encryption key.
         """
         if isinstance(key, str):
             key = key.encode()
@@ -133,10 +133,10 @@ class PGCryptoBackend(EncryptionBackend):
         """Returns the plaintext value to bind; encryption happens server-side.
 
         Args:
-            value (Any): The value to encrypt.
+            value: The value to encrypt.
 
         Returns:
-            str: The plaintext value passed to :meth:`bind_expression`.
+            The plaintext value passed to :meth:`bind_expression`.
         """
         if not isinstance(value, str):  # pragma: no cover
             return repr(value)
@@ -146,10 +146,10 @@ class PGCryptoBackend(EncryptionBackend):
         """Normalizes the server-decrypted value; decryption happens in SQL.
 
         Args:
-            value (Any): The value already decrypted by :meth:`column_expression`.
+            value: The value already decrypted by :meth:`column_expression`.
 
         Returns:
-            str: The decrypted value.
+            The decrypted value.
         """
         if isinstance(value, bytes):  # pragma: no cover
             return value.decode("utf-8")
@@ -161,10 +161,10 @@ class PGCryptoBackend(EncryptionBackend):
         """Wraps the bound parameter in ``armor(pgp_sym_encrypt(...))``.
 
         Args:
-            bindvalue (Any): The bound parameter element.
+            bindvalue: The bound parameter element.
 
         Returns:
-            Any: The SQL expression producing ASCII-armored ciphertext.
+            The SQL expression producing ASCII-armored ciphertext.
         """
         return sql_func.armor(sql_func.pgp_sym_encrypt(bindvalue, self.passphrase))
 
@@ -172,10 +172,10 @@ class PGCryptoBackend(EncryptionBackend):
         """Wraps the column in ``pgp_sym_decrypt(dearmor(...))``.
 
         Args:
-            column (Any): The column element being read.
+            column: The column element being read.
 
         Returns:
-            Any: The SQL expression producing the decrypted plaintext.
+            The SQL expression producing the decrypted plaintext.
         """
         return sql_func.pgp_sym_decrypt(sql_func.dearmor(column), self.passphrase)
 
@@ -189,8 +189,8 @@ class FernetBackend(EncryptionBackend):
     provided passphrase with a single SHA256 digest.
 
     Attributes:
-        key (bytes): The base64-encoded key used for encryption and decryption.
-        fernet (cryptography.fernet.Fernet): The Fernet instance used for encryption/decryption.
+        key: The base64-encoded key used for encryption and decryption.
+        fernet: The Fernet instance used for encryption/decryption.
     """
 
     def __init__(self) -> None:
@@ -208,7 +208,7 @@ class FernetBackend(EncryptionBackend):
         This method hashes the key using SHA256 before initializing the engine.
 
         Args:
-            key (str | bytes): The encryption key.
+            key: The encryption key.
         """
         from cryptography.hazmat.backends import default_backend
         from cryptography.hazmat.primitives import hashes
@@ -224,7 +224,7 @@ class FernetBackend(EncryptionBackend):
         """Initializes the Fernet engine with the provided key.
 
         Args:
-            key (bytes | str): The encryption key.
+            key: The encryption key.
         """
         from cryptography.fernet import Fernet
 
@@ -237,10 +237,10 @@ class FernetBackend(EncryptionBackend):
         """Encrypts the given value using Fernet.
 
         Args:
-            value (Any): The value to encrypt.
+            value: The value to encrypt.
 
         Returns:
-            str: The encrypted value.
+            The encrypted value.
         """
         if not isinstance(value, str):
             value = repr(value)
@@ -252,10 +252,10 @@ class FernetBackend(EncryptionBackend):
         """Decrypts the given value using Fernet.
 
         Args:
-            value (Any): The value to decrypt.
+            value: The value to decrypt.
 
         Returns:
-            str: The decrypted value.
+            The decrypted value.
         """
         if not isinstance(value, str):  # pragma: no cover
             value = str(value)
@@ -275,15 +275,15 @@ class EncryptedString(TypeDecorator[str]):
     It extends :class:`sqlalchemy.types.TypeDecorator` and implements String as its underlying type.
 
     Args:
-        key (str | bytes | Callable[[], str | bytes] | None): The encryption key. Can be a string, bytes, or callable returning either. Defaults to os.urandom(32).
-        backend (Type[EncryptionBackend] | None): The encryption backend class to use. Defaults to FernetBackend.
-        length (int | None): The length of the unencrypted string. This is used for documentation and validation purposes only, as encrypted strings will be longer.
-        **kwargs (Any | None): Additional arguments passed to the underlying String type.
+        key: The encryption key. Can be a string, bytes, or callable returning either. Defaults to ``os.urandom(32)``.
+        backend: The encryption backend class to use. Defaults to :class:`FernetBackend`.
+        length: The length of the unencrypted string. This is used for documentation and validation purposes only, as encrypted strings will be longer.
+        **kwargs: Additional arguments passed to the underlying String type.
 
     Attributes:
-        key (str | bytes | Callable[[], str | bytes]): The encryption key.
-        backend (EncryptionBackend): The encryption backend instance.
-        length (int | None): The unencrypted string length.
+        key: The encryption key.
+        backend: The encryption backend instance.
+        length: The unencrypted string length.
     """
 
     impl = String
@@ -299,10 +299,10 @@ class EncryptedString(TypeDecorator[str]):
         """Initializes the EncryptedString TypeDecorator.
 
         Args:
-            key (str | bytes | Callable[[], str | bytes] | None): The encryption key. Can be a string, bytes, or callable returning either. Defaults to os.urandom(32).
-            backend (Type[EncryptionBackend] | None): The encryption backend class to use. Defaults to FernetBackend.
-            length (int | None): The length of the unencrypted string. This is used for documentation and validation purposes only.
-            **kwargs (Any | None): Additional arguments passed to the underlying String type.
+            key: The encryption key. Can be a string, bytes, or callable returning either. Defaults to ``os.urandom(32)``.
+            backend: The encryption backend class to use. Defaults to :class:`FernetBackend`.
+            length: The length of the unencrypted string. This is used for documentation and validation purposes only.
+            **kwargs: Additional arguments passed to the underlying String type.
         """
         super().__init__()
         if key is DEFAULT_ENCRYPTION_KEY:
@@ -333,7 +333,7 @@ class EncryptedString(TypeDecorator[str]):
         """Returns the Python type for this type decorator.
 
         Returns:
-            Type[str]: The Python string type.
+            The Python string type.
         """
         return str
 
@@ -344,10 +344,10 @@ class EncryptedString(TypeDecorator[str]):
         For most encryption methods, the encrypted string will be approximately 1.35x longer than the original.
 
         Args:
-            dialect (Dialect): The SQLAlchemy dialect.
+            dialect: The SQLAlchemy dialect.
 
         Returns:
-            Any: The dialect-specific type descriptor.
+            The dialect-specific type descriptor.
         """
         if dialect.name in {"mysql", "mariadb"}:
             # For MySQL/MariaDB, always use Text to avoid length limitations
@@ -363,14 +363,14 @@ class EncryptedString(TypeDecorator[str]):
         This method encrypts the value using the specified backend and validates length if specified.
 
         Args:
-            value (Any): The value to process.
-            dialect (Dialect): The SQLAlchemy dialect.
+            value: The value to process.
+            dialect: The SQLAlchemy dialect.
 
         Raises:
             IntegrityError: If the unencrypted value exceeds the maximum length.
 
         Returns:
-            str | None: The encrypted value or None if the input is None.
+            The encrypted value or ``None`` if the input is ``None``.
         """
         if value is None:
             return value
@@ -389,11 +389,11 @@ class EncryptedString(TypeDecorator[str]):
         This method decrypts the value using the specified backend.
 
         Args:
-            value (Any): The value to process.
-            dialect (Dialect): The SQLAlchemy dialect.
+            value: The value to process.
+            dialect: The SQLAlchemy dialect.
 
         Returns:
-            str | None: The decrypted value or None if the input is None.
+            The decrypted value or ``None`` if the input is ``None``.
         """
         if value is None:
             return value
@@ -419,10 +419,10 @@ class EncryptedString(TypeDecorator[str]):
         plain placeholder; server-side backends wrap it in a database encryption function.
 
         Args:
-            bindparam (Any): The bound parameter element.
+            bindparam: The bound parameter element.
 
         Returns:
-            Any: The wrapped SQL expression for server-side backends, otherwise the bound parameter.
+            The wrapped SQL expression for server-side backends, otherwise the bound parameter.
         """
         self.mount_vault()
         wrapped = self.backend.bind_expression(bindparam)
@@ -435,10 +435,10 @@ class EncryptedString(TypeDecorator[str]):
         wrap it in a database decryption function.
 
         Args:
-            column (Any): The column element being read.
+            column: The column element being read.
 
         Returns:
-            Any: The wrapped SQL expression for server-side backends, otherwise the column.
+            The wrapped SQL expression for server-side backends, otherwise the column.
         """
         self.mount_vault()
         wrapped = self.backend.column_expression(column)
@@ -453,9 +453,9 @@ class EncryptedText(EncryptedString):
     This is suitable for storing larger encrypted text content compared to EncryptedString.
 
     Args:
-        key (str | bytes | Callable[[], str | bytes] | None): The encryption key. Can be a string, bytes, or callable returning either. Defaults to os.urandom(32).
-        backend (Type[EncryptionBackend] | None): The encryption backend class to use. Defaults to FernetBackend.
-        **kwargs (Any | None): Additional arguments passed to the underlying String type.
+        key: The encryption key. Can be a string, bytes, or callable returning either. Defaults to ``os.urandom(32)``.
+        backend: The encryption backend class to use. Defaults to :class:`FernetBackend`.
+        **kwargs: Additional arguments passed to the underlying String type.
     """
 
     impl = Text
@@ -465,9 +465,9 @@ class EncryptedText(EncryptedString):
         """Loads the appropriate dialect implementation for Text type.
 
         Args:
-            dialect (Dialect): The SQLAlchemy dialect.
+            dialect: The SQLAlchemy dialect.
 
         Returns:
-            Any: The dialect-specific Text type descriptor.
+            The dialect-specific Text type descriptor.
         """
         return dialect.type_descriptor(Text())

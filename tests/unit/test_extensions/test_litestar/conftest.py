@@ -39,10 +39,13 @@ from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlche
 
 @pytest.fixture(autouse=True)
 def reload_package() -> Generator[None, None, None]:
+    GenericSQLAlchemyConfig._SESSION_SCOPE_KEY_REGISTRY.clear()
+    GenericSQLAlchemyConfig._ENGINE_APP_STATE_KEY_REGISTRY.clear()
+    GenericSQLAlchemyConfig._SESSIONMAKER_APP_STATE_KEY_REGISTRY.clear()
     yield
-    GenericSQLAlchemyConfig._SESSION_SCOPE_KEY_REGISTRY = set()  # type: ignore
-    GenericSQLAlchemyConfig._ENGINE_APP_STATE_KEY_REGISTRY = set()  # type: ignore
-    GenericSQLAlchemyConfig._SESSIONMAKER_APP_STATE_KEY_REGISTRY = set()  # type: ignore
+    GenericSQLAlchemyConfig._SESSION_SCOPE_KEY_REGISTRY.clear()
+    GenericSQLAlchemyConfig._ENGINE_APP_STATE_KEY_REGISTRY.clear()
+    GenericSQLAlchemyConfig._SESSIONMAKER_APP_STATE_KEY_REGISTRY.clear()
 
 
 @pytest.fixture(autouse=True)

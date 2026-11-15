@@ -1,6 +1,6 @@
 import logging
 import sys
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 from contextlib import suppress
 from pathlib import Path
 from typing import Any, Optional
@@ -13,7 +13,7 @@ from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from advanced_alchemy._listeners import set_async_context, setup_file_object_listeners
+from advanced_alchemy._listeners import FileObjectListener, set_async_context, setup_file_object_listeners
 from advanced_alchemy.base import create_registry
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.types.file_object import (
@@ -31,8 +31,27 @@ logger = logging.getLogger(__name__)
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.xdist_group("file_object"),
 ]
+
+
+@pytest.fixture(autouse=True)
+def preserve_global_file_object_listeners() -> Generator[None, None, None]:
+    """Restore legacy listener registrations after each storage test."""
+    listeners: dict[str, Callable[..., Any]] = {
+        "before_flush": FileObjectListener.before_flush,
+        "after_commit": FileObjectListener.after_commit,
+        "after_rollback": FileObjectListener.after_rollback,
+    }
+    registrations = [(name, listener, event.contains(Session, name, listener)) for name, listener in listeners.items()]
+    try:
+        yield
+    finally:
+        for name, listener, was_registered in registrations:
+            is_registered = event.contains(Session, name, listener)
+            if was_registered and not is_registered:
+                event.listen(Session, name, listener)
+            elif not was_registered and is_registered:
+                event.remove(Session, name, listener)
 
 
 def remove_listeners() -> None:
@@ -58,18 +77,13 @@ def remove_listeners() -> None:
     set_async_context(False)
 
 
-def rustfs_endpoint_url(rustfs_service: RustfsService) -> str:
-    scheme = "https" if rustfs_service.secure else "http"
-    return f"{scheme}://{rustfs_service.endpoint}"
-
-
 def rustfs_s3_filesystem(rustfs_service: RustfsService, **kwargs: Any) -> Any:
     s3fs = pytest.importorskip("s3fs")
     return s3fs.S3FileSystem(
         anon=False,
         key=rustfs_service.access_key,
         secret=rustfs_service.secret_key,
-        endpoint_url=rustfs_endpoint_url(rustfs_service),
+        endpoint_url=rustfs_service.endpoint_url,
         client_kwargs={
             "verify": rustfs_service.secure,
             "use_ssl": rustfs_service.secure,
@@ -77,12 +91,6 @@ def rustfs_s3_filesystem(rustfs_service: RustfsService, **kwargs: Any) -> Any:
         config_kwargs={"s3": {"addressing_style": "path"}},
         **kwargs,
     )
-
-
-def ensure_rustfs_bucket(rustfs_service: RustfsService, bucket_name: str) -> None:
-    fs = rustfs_s3_filesystem(rustfs_service, asynchronous=False, loop=None)
-    with suppress(FileExistsError):
-        fs.mkdir(bucket_name)
 
 
 # --- Fixtures ---
@@ -167,18 +175,8 @@ def sync_db_engine(engine: Engine) -> Generator[Engine, None, None]:
 
 
 @pytest.fixture(scope="function")
-def async_db_engine(request: pytest.FixtureRequest) -> Generator[AsyncEngine, None, None]:
+def async_db_engine(async_engine: AsyncEngine) -> Generator[AsyncEngine, None, None]:
     """Provides an async engine with file object listener execution options."""
-    # Try to get async_engine, fall back to specific engine fixtures
-    if "async_engine" in request.fixturenames:
-        async_engine = request.getfixturevalue("async_engine")
-    elif "aiosqlite_engine" in request.fixturenames:
-        async_engine = request.getfixturevalue("aiosqlite_engine")
-    elif "asyncpg_engine" in request.fixturenames:
-        async_engine = request.getfixturevalue("asyncpg_engine")
-    else:
-        pytest.skip("No async engine fixture available")
-
     dialect_name = getattr(async_engine.dialect, "name", "")
 
     # Skip engines that don't support file object operations properly
@@ -248,7 +246,8 @@ async def async_session(
     set_async_context(False)
 
 
-@pytest.mark.xdist_group("file_object")
+@pytest.mark.rustfs
+@pytest.mark.xdist_group("rustfs")
 @pytest.mark.xfail(
     sys.version_info < (3, 10),
     reason="s3fs endpoint_url parameter incompatible with Python 3.9",
@@ -261,7 +260,6 @@ async def test_fsspec_s3_basic_operations_async(
     """Test basic save, get_content, delete via backend and FileObject with prefix."""
     remove_listeners()
 
-    ensure_rustfs_bucket(rustfs_service, rustfs_default_bucket_name)
     fs = rustfs_s3_filesystem(rustfs_service)
 
     # Initialize backend with prefix
@@ -313,7 +311,8 @@ async def test_fsspec_s3_basic_operations_async(
         await backend.get_content_async(file_path)
 
 
-@pytest.mark.xdist_group("file_object")
+@pytest.mark.rustfs
+@pytest.mark.xdist_group("rustfs")
 @pytest.mark.xfail(
     sys.version_info < (3, 10),
     reason="s3fs endpoint_url parameter incompatible with Python 3.9",
@@ -331,7 +330,6 @@ def test_fsspec_s3_basic_operations_sync(
         asynchronous=False,
         loop=None,
     )
-    ensure_rustfs_bucket(rustfs_service, rustfs_default_bucket_name)
 
     # Initialize backend with prefix
     backend = FSSpecBackend(
@@ -382,7 +380,8 @@ def test_fsspec_s3_basic_operations_sync(
         backend.get_content(file_path)
 
 
-@pytest.mark.xdist_group("file_object")
+@pytest.mark.rustfs
+@pytest.mark.xdist_group("rustfs")
 async def test_obstore_s3_basic_operations_async(
     storage_registry: StorageRegistry,
     rustfs_service: RustfsService,
@@ -390,12 +389,10 @@ async def test_obstore_s3_basic_operations_async(
 ) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
     remove_listeners()
-    endpoint_url = rustfs_endpoint_url(rustfs_service)
-    ensure_rustfs_bucket(rustfs_service, rustfs_default_bucket_name)
     backend = ObstoreBackend(
         key="s3_test_store",
         fs=f"s3://{rustfs_default_bucket_name}/",
-        aws_endpoint=f"{endpoint_url}/",
+        aws_endpoint=f"{rustfs_service.endpoint_url}/",
         aws_access_key_id=rustfs_service.access_key,
         aws_secret_access_key=rustfs_service.secret_key,
         aws_virtual_hosted_style_request=False,
@@ -446,7 +443,8 @@ async def test_obstore_s3_basic_operations_async(
         await backend.get_content_async(file_path)
 
 
-@pytest.mark.xdist_group("file_object")
+@pytest.mark.rustfs
+@pytest.mark.xdist_group("rustfs")
 def test_obstore_s3_basic_operations_sync(
     storage_registry: StorageRegistry,
     rustfs_service: RustfsService,
@@ -454,12 +452,10 @@ def test_obstore_s3_basic_operations_sync(
 ) -> None:
     """Test basic save, get_content, delete via backend and FileObject."""
     remove_listeners()
-    endpoint_url = rustfs_endpoint_url(rustfs_service)
-    ensure_rustfs_bucket(rustfs_service, rustfs_default_bucket_name)
     backend = ObstoreBackend(
         key="s3_test_store",
         fs=f"s3://{rustfs_default_bucket_name}/",
-        aws_endpoint=f"{endpoint_url}/",
+        aws_endpoint=f"{rustfs_service.endpoint_url}/",
         aws_access_key_id=rustfs_service.access_key,
         aws_secret_access_key=rustfs_service.secret_key,
         aws_virtual_hosted_style_request=False,
@@ -581,7 +577,6 @@ def test_obstore_basic_operations_sync(storage_registry: StorageRegistry) -> Non
         backend.get_content(file_path)
 
 
-@pytest.mark.xdist_group("file_object")
 async def test_obstore_single_file_async_no_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
@@ -620,7 +615,6 @@ async def test_obstore_single_file_async_no_listener(
     assert loaded_content == file_content
 
 
-@pytest.mark.xdist_group("file_object")
 async def test_obstore_multiple_files_async_no_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
@@ -672,24 +666,25 @@ async def test_obstore_multiple_files_async_no_listener(
     assert await loaded_obj2.get_content_async() == img2_content
 
 
-@pytest.mark.xdist_group("file_object")
+@pytest.mark.flaky(reruns=5)
 async def test_obstore_update_async_with_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
     """Test listener deletes old file when attribute is updated and session committed."""
-    # Set async context flag to enable async operations in the listener
     set_async_context(True)
-
     setup_file_object_listeners()
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"Old file content"
     new_content = b"New file content"
-    old_path = "old_file_async.txt"
-    new_path = "new_file_async.txt"
+    old_path = "old_file_async_update_listener.txt"
+    new_path = "new_file_async_update_listener.txt"
 
-    # Save initial file and model
-    old_obj = FileObject(backend=backend, filename="old_file_async.txt", to_filename=old_path, content=old_content)
-    # Make sure file is saved to the backend
+    old_obj = FileObject(
+        backend=backend,
+        filename="old_file_async_update_listener.txt",
+        to_filename=old_path,
+        content=old_content,
+    )
     old_obj = await old_obj.save_async()
 
     doc = Document(name="DocToUpdate", attachment=old_obj)
@@ -697,28 +692,29 @@ async def test_obstore_update_async_with_listener(
     await async_session.commit()
     await async_session.refresh(doc)
 
-    # Verify old file exists
     assert await backend.get_content_async(old_path) == old_content
 
-    # Prepare new file
-    new_obj = FileObject(backend=backend, filename="new_file_async.txt", to_filename=new_path, content=new_content)
+    new_obj = FileObject(
+        backend=backend,
+        filename="new_file_async_update_listener.txt",
+        to_filename=new_path,
+        content=new_content,
+    )
 
-    # Update the document with the new file
     doc.attachment = new_obj
     async_session.add(doc)
     await async_session.commit()
     await async_session.refresh(doc)
 
-    # Verify new file exists and attachment updated
     assert await backend.get_content_async(new_path) == new_content
-    assert doc.attachment is not None and doc.attachment.path == new_path  # pyright: ignore
+    attachment = doc.attachment
+    assert attachment is not None
+    assert attachment.path == new_path
 
-    # Verify the listener deleted the old file
     with pytest.raises(FileNotFoundError):
         await backend.get_content_async(old_path)
 
 
-@pytest.mark.xdist_group("file_object")
 async def test_obstore_delete_async_on_update_clear_with_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
@@ -761,7 +757,6 @@ async def test_obstore_delete_async_on_update_clear_with_listener(
         await backend.get_content_async(old_path)
 
 
-@pytest.mark.xdist_group("file_object")
 async def test_obstore_delete_async_multiple_removed_with_listener(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
@@ -1072,15 +1067,17 @@ async def test_obstore_backend_storage_registry_management(storage_registry: Sto
 @pytest.mark.xdist_group("file_object")
 async def test_obstore_backend_storage_registry_error_handling(storage_registry: StorageRegistry) -> None:
     """Test StorageRegistry error handling."""
-    # Test get_backend with non-existent key
     with pytest.raises(ImproperConfigurationError, match='No storage backend registered with key "nonexistent"'):
         storage_registry.get_backend("nonexistent")
 
-    # Test unregister_backend with non-existent key
-    storage_registry.unregister_backend("nonexistent")  # Should not raise an error
+    storage_registry.unregister_backend("nonexistent")
 
-    # Test set_default_backend with invalid backend
-    storage_registry.set_default_backend("invalid.module.path.Backend")
+    previous_default = storage_registry.default_backend
+    try:
+        storage_registry.set_default_backend("invalid.module.path.Backend")
+        assert storage_registry.default_backend == "invalid.module.path.Backend"
+    finally:
+        storage_registry.set_default_backend(previous_default)
 
 
 @pytest.mark.xdist_group("file_object")
@@ -1397,7 +1394,6 @@ async def test_file_object_save_async_no_data(storage_registry: StorageRegistry)
         await obj.save_async()
 
 
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_sqlalchemy_single_file_persist_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:
@@ -1436,7 +1432,6 @@ def test_obstore_backend_sqlalchemy_single_file_persist_sync(
     assert loaded_content == file_content
 
 
-@pytest.mark.xdist_group("file_object")
 async def test_obstore_backend_listener_sqlalchemy_single_file_persist_async(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
@@ -1444,10 +1439,9 @@ async def test_obstore_backend_listener_sqlalchemy_single_file_persist_async(
     setup_file_object_listeners()
     set_async_context(True)
     file_content = b"SQLAlchemy Async Integration Test"
-    doc_name = "Sync Integration Doc"
-    file_path = "sqlalchemy_single_async.bin"
+    doc_name = "Async Integration Doc"
+    file_path = "sqlalchemy_single_async_persist.bin"
 
-    # 1. Prepare FileObject and save via backend
     initial_obj = FileObject(
         backend="local_test_store",
         filename="report.bin",
@@ -1455,7 +1449,6 @@ async def test_obstore_backend_listener_sqlalchemy_single_file_persist_async(
         content_type="application/octet-stream",
         content=file_content,
     )
-    # 2. Create and save model instance
     doc = Document(name=doc_name, attachment=initial_obj)
     async_session.add(doc)
     await async_session.commit()
@@ -1464,18 +1457,16 @@ async def test_obstore_backend_listener_sqlalchemy_single_file_persist_async(
     assert doc.id is not None
     assert doc.attachment is not None
     assert isinstance(doc.attachment, FileObject)
-    assert doc.attachment.filename == "sqlalchemy_single_async.bin"
+    assert doc.attachment.filename == "sqlalchemy_single_async_persist.bin"
     assert doc.attachment.path == file_path
     assert doc.attachment.size == len(file_content) or doc.attachment.size is None
     assert doc.attachment.content_type == "application/octet-stream"
     assert doc.attachment.backend.key == "local_test_store"
 
-    # 3. Retrieve content via loaded FileObject
     loaded_content = doc.attachment.get_content()
     assert loaded_content == file_content
 
 
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_sqlalchemy_multiple_files_persist_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:
@@ -1529,7 +1520,6 @@ def test_obstore_backend_sqlalchemy_multiple_files_persist_sync(
     assert loaded_obj2.get_content() == img2_content
 
 
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_delete_on_update_clear_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:
@@ -1564,7 +1554,6 @@ def test_obstore_backend_listener_delete_on_update_clear_sync(
 
 
 @pytest.mark.flaky(reruns=5)
-@pytest.mark.xdist_group("file_object")
 async def test_obstore_backend_listener_delete_on_update_clear_async(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
@@ -1572,35 +1561,33 @@ async def test_obstore_backend_listener_delete_on_update_clear_async(
     setup_file_object_listeners()
     set_async_context(True)
     backend = storage_registry.get_backend("local_test_store")
-    old_content = b"File to clear sync"
-    old_path = "clear_me_sync.log"
+    old_content = b"File to clear listener async"
+    old_path = "clear_me_listener_async.log"
 
-    # Save initial file and model
-    old_obj = FileObject(backend=backend, filename="clear.log", to_filename=old_path, content=old_content)
-    doc = Document(name="DocToClearSync", attachment=old_obj)
+    old_obj = FileObject(
+        backend=backend,
+        filename="clear_me_listener_async.log",
+        to_filename=old_path,
+        content=old_content,
+    )
+    doc = Document(name="DocToClearListenerAsync", attachment=old_obj)
     async_session.add(doc)
     await async_session.commit()
     await async_session.refresh(doc)
 
-    # Verify old file exists
     assert await backend.get_content_async(old_path) == old_content
 
-    # Clear the attachment
     doc.attachment = None
     async_session.add(doc)
     await async_session.commit()
     await async_session.refresh(doc)
 
-    # Verify attachment is None
     assert doc.attachment is None
 
-    # Verify the listener deleted the file from storage
     with pytest.raises(FileNotFoundError):
         await backend.get_content_async(old_path)
 
 
-@pytest.mark.flaky(reruns=5)
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_update_file_object_sync(session: Session, storage_registry: StorageRegistry) -> None:
     """Test listener deletes old file when attribute is updated and session committed using synchronous SQLAlchemy session."""
     setup_file_object_listeners()
@@ -1610,7 +1597,6 @@ def test_obstore_backend_listener_update_file_object_sync(session: Session, stor
     old_path = "old_file_sync_update.txt"
     new_path = "new_file_sync_update.txt"
 
-    # Save initial file and model
     old_obj = FileObject(
         backend=backend, filename="old_file_sync_update.txt", to_filename=old_path, content=old_content
     )
@@ -1619,33 +1605,31 @@ def test_obstore_backend_listener_update_file_object_sync(session: Session, stor
     session.commit()
     session.refresh(doc)
 
-    # Verify old file exists
     assert backend.get_content(old_path) == old_content
 
-    # Update the document's attachment (inline creation)
     new_obj = FileObject(
         backend=backend, filename="new_file_sync_update.txt", to_filename=new_path, content=new_content
     )
     doc.attachment = new_obj
-    session.add(doc)  # Add again as it's modified
-    session.commit()  # Listener should save new_obj and queue deletion of old_obj
+    session.add(doc)
+    session.commit()
     session.refresh(doc)
 
-    # Verify new file exists and attachment updated
     assert backend.get_content(new_path) == new_content
-    assert doc.attachment is not None and doc.attachment.path == new_path  # pyright: ignore
+    attachment = doc.attachment
+    assert attachment is not None
+    assert attachment.path == new_path
 
-    # Verify the listener deleted the old file from storage
     with pytest.raises(FileNotFoundError):
         backend.get_content(old_path)
 
 
 @pytest.mark.flaky(reruns=5)
-@pytest.mark.xdist_group("file_object")
 async def test_obstore_backend_listener_update_file_object_async(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:
     """Test listener deletes old file when attribute is updated and session committed using asynchronous SQLAlchemy session."""
+    set_async_context(True)
     setup_file_object_listeners()
     backend = storage_registry.get_backend("local_test_store")
     old_content = b"Old file content sync"
@@ -1653,7 +1637,6 @@ async def test_obstore_backend_listener_update_file_object_async(
     old_path = "old_file_async_update.txt"
     new_path = "new_file_async_update.txt"
 
-    # Save initial file and model
     old_obj = FileObject(
         backend=backend, filename="old_file_async_update.txt", to_filename=old_path, content=old_content
     )
@@ -1662,28 +1645,25 @@ async def test_obstore_backend_listener_update_file_object_async(
     await async_session.commit()
     await async_session.refresh(doc)
 
-    # Verify old file exists
     assert backend.get_content(old_path) == old_content
 
-    # Update the document's attachment (inline creation)
     new_obj = FileObject(
         backend=backend, filename="new_file_async_update.txt", to_filename=new_path, content=new_content
     )
     doc.attachment = new_obj
-    async_session.add(doc)  # Add again as it's modified
-    await async_session.commit()  # Listener should save new_obj and queue deletion of old_obj
+    async_session.add(doc)
+    await async_session.commit()
     await async_session.refresh(doc)
 
     assert backend.get_content(new_path) == new_content
-    assert doc.attachment is not None and doc.attachment.path == new_path  # pyright: ignore
+    attachment = doc.attachment
+    assert attachment is not None
+    assert attachment.path == new_path
 
-    # Verify the listener deleted the old file from storage
     with pytest.raises(FileNotFoundError):
         backend.get_content(old_path)
 
 
-@pytest.mark.flaky(reruns=5)
-@pytest.mark.xdist_group("file_object")
 def test_obstore_backend_listener_delete_multiple_removed_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:
@@ -1696,35 +1676,29 @@ def test_obstore_backend_listener_delete_multiple_removed_sync(
     path1 = "multi_del_1_sync.dat"
     path2 = "multi_del_2_sync.dat"
 
-    # Save files
     obj1 = FileObject(backend=backend, filename=path1, content=content1)
     obj2 = FileObject(backend=backend, filename=path2, content=content2)
 
-    # Create model with initial list
     doc = Document(name="MultiDeleteSyncTest", images=[obj1, obj2])
     session.add(doc)
     session.commit()
     session.refresh(doc)
 
-    # Verify all files exist
     assert backend.get_content(path1) == content1
     assert backend.get_content(path2) == content2
 
-    # Remove items from the list (triggers MutableList tracking)
     assert doc.images is not None
-    current_images = list(doc.images)  # Create standard list copy
-    removed_item = current_images.pop(1)  # Mutate copy
+    current_images = list(doc.images)
+    removed_item = current_images.pop(1)
     assert removed_item.path == obj2.path
-    del current_images[0]  # Mutate copy
+    del current_images[0]
     assert len(current_images) == 0
-    doc.images = MutableList(current_images)  # Wrap in MutableList before reassignment
+    doc.images = MutableList(current_images)
 
     session.add(doc)
-    # Commit the session to trigger listener
     session.commit()
     session.refresh(doc)
     assert doc.images == []
-    # Verify the listener deleted the files
     with pytest.raises(FileNotFoundError):
         backend.get_content(path1)
     with pytest.raises(FileNotFoundError):
@@ -1732,7 +1706,6 @@ def test_obstore_backend_listener_delete_multiple_removed_sync(
 
 
 @pytest.mark.flaky(reruns=5)
-@pytest.mark.xdist_group("file_object")
 async def test_obstore_backend_listener_delete_multiple_removed_async(
     async_session: AsyncSession, storage_registry: StorageRegistry
 ) -> None:

@@ -4,10 +4,11 @@ import contextlib
 import datetime
 import re
 from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, Any, ClassVar, Optional, Protocol, Union, cast, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Optional, Protocol, Union, cast, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import Date, MetaData, String
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -110,8 +111,8 @@ def merge_table_arguments(cls: type[DeclarativeBase], table_args: Optional[Table
     making it easier to append additional information such as comments or constraints to the model.
 
     Args:
-        cls (type[:class:`sqlalchemy.orm.DeclarativeBase`]): The model that will get the table args.
-        table_args (:class:`TableArgsType`, optional): Additional information to add to table_args.
+        cls: The model that will get the table args.
+        table_args: Additional information to add to table_args.
 
     Returns:
         :class:`TableArgsType`: Merged table arguments.
@@ -148,13 +149,16 @@ class ModelProtocol(Protocol):
     a mapper and table (including SQLModel ``table=True`` models) satisfies this protocol.
 
     Attributes:
-        __table__ (:class:`sqlalchemy.sql.FromClause`): The table associated with the model.
-        __mapper__ (:class:`sqlalchemy.orm.Mapper`): The mapper for the model.
+        __table__: The table associated with the model.
+        __mapper__: The mapper for the model.
     """
 
     if TYPE_CHECKING:
         __table__: ClassVar[FromClause]
         __mapper__: ClassVar[Mapper[Any]]
+
+
+_DEFAULT_EXCLUDED_FIELDS: Final[frozenset[str]] = frozenset({"sa_orm_sentinel", "_sentinel"})
 
 
 def model_to_dict(instance: "ModelProtocol", exclude: Optional[set[str]] = None) -> dict[str, Any]:
@@ -176,16 +180,13 @@ def model_to_dict(instance: "ModelProtocol", exclude: Optional[set[str]] = None)
     if to_dict_fn is not None and callable(to_dict_fn):
         return to_dict_fn(exclude=exclude)  # type: ignore[no-any-return]
 
-    exclude_fields: set[str] = {"sa_orm_sentinel", "_sentinel"}
-    with contextlib.suppress(AttributeError):
-        exclude_fields = exclude_fields.union(cast("set[str]", instance._sa_instance_state.unloaded))  # type: ignore[attr-defined,union-attr]  # noqa: SLF001
-    if exclude:
-        exclude_fields = exclude_fields.union(exclude)
+    ins = sa_inspect(instance)
+    unloaded = ins.unloaded if ins is not None and hasattr(ins, "unloaded") else ()
     mapper = class_mapper(type(instance))
     return {
         field: getattr(instance, field)
         for field in mapper.columns.keys()  # noqa: SIM118
-        if field not in exclude_fields
+        if field not in _DEFAULT_EXCLUDED_FIELDS and field not in unloaded and (not exclude or field not in exclude)
     }
 
 
@@ -208,11 +209,12 @@ class BasicAttributes:
         Returns:
             Dict[str, Any]: A dict representation of the model
         """
-        exclude = {"sa_orm_sentinel", "_sentinel"}.union(self._sa_instance_state.unloaded).union(exclude or [])  # type: ignore[attr-defined]
+        ins = sa_inspect(self)
+        unloaded = ins.unloaded if ins is not None and hasattr(ins, "unloaded") else ()
         return {
             field: getattr(self, field)
             for field in self.__mapper__.columns.keys()  # noqa: SIM118
-            if field not in exclude
+            if field not in _DEFAULT_EXCLUDED_FIELDS and field not in unloaded and (not exclude or field not in exclude)
         }
 
 
@@ -228,7 +230,7 @@ class CommonTableAttributes(BasicAttributes):
     - **Concrete Table Inheritance (CTI)**: Child classes have independent tables
 
     Attributes:
-        __tablename__ (str | None): The inferred table name, or None for Single Table Inheritance children.
+        __tablename__: The inferred table name, or ``None`` for Single Table Inheritance children.
     """
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -385,7 +387,7 @@ def create_registry(
     """Create a new SQLAlchemy registry.
 
     Args:
-        custom_annotation_map (dict, optional): Custom type annotations to use for the registry.
+        custom_annotation_map: Custom type annotations to use for the registry.
 
     Returns:
         :class:`sqlalchemy.orm.registry`: A new SQLAlchemy registry with the specified type annotations.
@@ -430,10 +432,6 @@ class MetadataRegistry:
     """A registry for metadata.
 
     Provides methods to get and set metadata for different bind keys.
-
-    Methods:
-        get: Retrieves the metadata for a given bind key.
-        set: Sets the metadata for a given bind key.
     """
 
     _instance: Optional["MetadataRegistry"] = None
@@ -448,7 +446,7 @@ class MetadataRegistry:
         """Get the metadata for the given bind key.
 
         Args:
-            bind_key (Optional[str]): The bind key for the metadata.
+            bind_key: The bind key for the metadata.
 
         Returns:
             :class:`sqlalchemy.MetaData`: The metadata for the given bind key.
@@ -459,8 +457,8 @@ class MetadataRegistry:
         """Set the metadata for the given bind key.
 
         Args:
-            bind_key (Optional[str]): The bind key for the metadata.
-            metadata (:class:`sqlalchemy.MetaData`): The metadata to set.
+            bind_key: The bind key for the metadata.
+            metadata: The metadata to set.
         """
         self._registry[bind_key] = metadata
 
@@ -486,9 +484,9 @@ class AdvancedDeclarativeBase(DeclarativeBase):
     Inherits from :class:`sqlalchemy.orm.DeclarativeBase`.
 
     Attributes:
-        registry (:class:`sqlalchemy.orm.registry`): The registry for the declarative base.
-        __metadata_registry__ (:class:`~advanced_alchemy.base.MetadataRegistry`): The metadata registry.
-        __bind_key__ (Optional[:class:`str`]): The bind key for the metadata.
+        registry: The registry for the declarative base.
+        __metadata_registry__: The metadata registry.
+        __bind_key__: The bind key for the metadata.
     """
 
     registry = orm_registry

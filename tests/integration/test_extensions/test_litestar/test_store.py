@@ -24,11 +24,9 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.xdist_group("litestar_store"),
 ]
 
 
-# Module-level cache for model classes to prevent recreation
 _store_model_cache: dict[str, type] = {}
 
 

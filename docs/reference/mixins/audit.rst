@@ -1,5 +1,5 @@
 ======
-audit
+Audit
 ======
 
 .. automodule:: advanced_alchemy.mixins.audit

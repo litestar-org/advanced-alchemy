@@ -1,5 +1,5 @@
 =======
-routing
+Routing
 =======
 
 Configuration classes for read/write replica routing.

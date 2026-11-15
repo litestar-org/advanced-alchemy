@@ -2,8 +2,9 @@ import contextlib
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Union, cast
 
-from litestar.di import Provide
+from litestar.di import NamedDependency, Provide
 from litestar.dto import DTOData
+from litestar.params import SkipValidation
 from litestar.plugins import CLIPlugin, InitPluginProtocol
 from sqlalchemy.ext.asyncio import AsyncSession, async_scoped_session
 from sqlalchemy.orm import Session, scoped_session
@@ -57,6 +58,8 @@ signature_namespace_values: dict[str, Any] = {
     "OffsetPagination": OffsetPagination,
     "ExistsFilter": ExistsFilter,
     "DTOData": DTOData,
+    "NamedDependency": NamedDependency,
+    "SkipValidation": SkipValidation,
     "Sequence": Sequence,
     "ModelT": ModelT,
     "ModelDictT": ModelDictT,
@@ -120,7 +123,7 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPlugin, _slots_base.SlotsBase)
         """Configure application for use with SQLAlchemy.
 
         Args:
-            app_config: The :class:`AppConfig <.config.app.AppConfig>` instance.
+            app_config: The :class:`~litestar.config.app.AppConfig` instance.
         """
         self._validate_config()
 
@@ -151,7 +154,7 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPlugin, _slots_base.SlotsBase)
             app_config.before_send.append(cast("BeforeMessageSendHookHandler", config.before_send_handler))
         app_config.signature_namespace.update(signature_namespace_values)
         if configure_exception_handler and not any(
-            isinstance(exc, int) or issubclass(exc, RepositoryError)
+            isinstance(exc, type) and issubclass(exc, RepositoryError)
             for exc in app_config.exception_handlers  # pyright: ignore[reportUnknownMemberType]
         ):
             app_config.exception_handlers.update({RepositoryError: exception_to_http_response})  # pyright: ignore[reportUnknownMemberType]

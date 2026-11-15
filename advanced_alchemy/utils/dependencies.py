@@ -290,8 +290,9 @@ def normalize_sort_field(sort_field: SortField) -> str:
     return sorted(sort_field)[0]
 
 
-def resolve_filter_aliases(config: FilterConfig) -> dict[str, str]:
+def resolve_filter_aliases(config: FilterConfig, *, prefix: Optional[str] = None) -> dict[str, str]:
     """Resolve public query names once, validating only opt-in custom naming."""
+    clean_prefix = prefix.rstrip("_") if prefix else ""
     names: list[str] = []
     for key, parameters in (
         ("id_filter", ("ids",)),
@@ -315,11 +316,12 @@ def resolve_filter_aliases(config: FilterConfig) -> dict[str, str]:
     resolved: dict[str, str] = {}
     claimed: set[str] = set()
     for name in names:
+        scoped_name = f"{clean_prefix}_{name}" if clean_prefix else name
         alias: Any
         if isinstance(generator, str):
-            alias = name if generator == "snake_case" else camelize(name)
+            alias = scoped_name if generator == "snake_case" else camelize(scoped_name)
         else:
-            alias = camelize(name) if generator is None else generator(name)
+            alias = camelize(scoped_name) if generator is None else generator(scoped_name)
         if generator is not None and (not isinstance(alias, str) or not alias or alias in claimed):
             msg = f"Filter parameter {name!r} has an invalid or duplicate query parameter {alias!r}"
             raise ImproperConfigurationError(msg)

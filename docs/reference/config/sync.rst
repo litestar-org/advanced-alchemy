@@ -1,5 +1,5 @@
 ====
-sync
+Sync
 ====
 
 .. automodule:: advanced_alchemy.config.sync

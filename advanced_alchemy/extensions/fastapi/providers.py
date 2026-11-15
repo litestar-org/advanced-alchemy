@@ -12,7 +12,6 @@ import logging
 from collections.abc import AsyncGenerator, Generator
 from functools import partial
 from typing import (
-    TYPE_CHECKING,
     Annotated,
     Any,
     Callable,
@@ -30,6 +29,8 @@ from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.extensions.fastapi.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.fastapi.extension import AdvancedAlchemy
 from advanced_alchemy.filters import (
     BeforeAfter,
@@ -48,6 +49,9 @@ from advanced_alchemy.service import (
     ErrorMessages,
     LoadSpec,
     ModelT,
+    ServiceGroup,
+    SQLAlchemyAsyncQueryService,
+    SQLAlchemyAsyncRepositoryReadService,
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
@@ -65,9 +69,6 @@ from advanced_alchemy.utils.dependencies import (
 
 logger = logging.getLogger("advanced_alchemy.extensions.fastapi")
 
-if TYPE_CHECKING:
-    from advanced_alchemy.extensions.fastapi import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
-
 T = TypeVar("T")
 DTorNone = Optional[datetime.datetime]
 StringOrNone = Optional[str]
@@ -78,6 +79,7 @@ SortOrder = Literal["asc", "desc"]
 SortOrderOrNone = Optional[SortOrder]
 AsyncServiceT_co = TypeVar("AsyncServiceT_co", bound=SQLAlchemyAsyncRepositoryService[Any, Any], covariant=True)
 SyncServiceT_co = TypeVar("SyncServiceT_co", bound=SQLAlchemySyncRepositoryService[Any, Any], covariant=True)
+ServiceGroupT = TypeVar("ServiceGroupT", bound=ServiceGroup)
 
 __all__ = (
     "DEPENDENCY_DEFAULTS",
@@ -86,6 +88,7 @@ __all__ = (
     "DependencyDefaults",
     "FieldNameType",
     "FilterConfig",
+    "ServiceGroup",
     "dep_cache",
     "provide_filters",
     "provide_service",
@@ -138,6 +141,43 @@ def _should_commit_for_status(status_code: int, commit_mode: str) -> bool:
     return False
 
 
+_ASYNC_SERVICE_BASES: tuple[type[Any], ...] = (
+    SQLAlchemyAsyncQueryService,
+    SQLAlchemyAsyncRepositoryReadService,
+    SQLAlchemyAsyncRepositoryService,
+)
+
+
+def _clear_request_state(request: Request, session_key: str) -> None:
+    """Clear managed session attributes from FastAPI request state."""
+    for attr in (
+        session_key,
+        f"{session_key}_generator_managed",
+        f"{session_key}_response_status",
+    ):
+        with contextlib.suppress(Exception):
+            delattr(request.state, attr)
+
+
+def _is_async_service_target(
+    service_class: type[Any],
+    extension: AdvancedAlchemy,
+    key: Optional[str],
+) -> bool:
+    """Return whether a service or ServiceGroup targets async sessions."""
+    if issubclass(service_class, ServiceGroup):
+        is_async = service_class.is_async_group()
+        if is_async is not None:
+            return is_async
+        config: Any = extension.get_config(key)
+        if isinstance(config, SQLAlchemyAsyncConfig):
+            return True
+        if isinstance(config, SQLAlchemySyncConfig):
+            return False
+        return inspect.isasyncgenfunction(extension.provide_session(key))
+    return issubclass(service_class, _ASYNC_SERVICE_BASES)
+
+
 @overload
 def provide_service(
     service_class: type["AsyncServiceT_co"],
@@ -168,8 +208,9 @@ def provide_service(
 ) -> Callable[..., Generator[SyncServiceT_co, None, None]]: ...
 
 
-def provide_service(  # noqa: C901, PLR0915
-    service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
+@overload
+def provide_service(
+    service_class: type["ServiceGroupT"],
     /,
     extension: AdvancedAlchemy,
     key: Optional[str] = None,
@@ -179,58 +220,85 @@ def provide_service(  # noqa: C901, PLR0915
     execution_options: Optional[dict[str, Any]] = None,
     uniquify: Optional[bool] = None,
     count_with_window_function: Optional[bool] = None,
-) -> Callable[..., Union[AsyncGenerator[AsyncServiceT_co, None], Generator[SyncServiceT_co, None, None]]]:
-    """Create a dependency provider for a service.
+) -> Callable[..., Union[AsyncGenerator[ServiceGroupT, None], Generator[ServiceGroupT, None, None]]]: ...
 
-    This function creates a generator-based dependency that manages
-    the service lifecycle. The generator owns the session lifecycle
-    and handles commit/rollback/close operations to ensure proper
-    connection pool management (especially important for asyncpg).
+
+def provide_service(  # noqa: C901, PLR0915
+    service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co", "ServiceGroupT"]],
+    /,
+    extension: AdvancedAlchemy,
+    key: Optional[str] = None,
+    statement: Optional[Select[tuple[ModelT]]] = None,
+    error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
+    load: Optional[LoadSpec] = None,
+    execution_options: Optional[dict[str, Any]] = None,
+    uniquify: Optional[bool] = None,
+    count_with_window_function: Optional[bool] = None,
+) -> Callable[
+    ...,
+    Union[
+        AsyncGenerator[AsyncServiceT_co, None],
+        Generator[SyncServiceT_co, None, None],
+        AsyncGenerator[ServiceGroupT, None],
+        Generator[ServiceGroupT, None, None],
+    ],
+]:
+    """Create a FastAPI dependency provider for a service or ServiceGroup.
 
     Returns:
-        A dependency provider for the service.
+        A generator-based FastAPI dependency provider managing service and session lifecycle.
     """
-    if issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService:  # type: ignore[comparison-overlap]
+    is_group = issubclass(service_class, ServiceGroup)
+    if is_group and (statement is not None or load is not None):
+        msg = "ServiceGroup does not support group-level 'statement' or 'load'; set them on each service class."
+        raise ImproperConfigurationError(msg)
+
+    if _is_async_service_target(service_class, extension, key):
         async_config = cast("Optional[SQLAlchemyAsyncConfig]", extension.get_config(key))
 
         async def provide_async_service(
             request: Request,
             db_session: AsyncSession = Depends(extension.provide_session(key)),  # noqa: B008
-        ) -> AsyncGenerator[AsyncServiceT_co, None]:  # type: ignore[union-attr,unused-ignore]
+        ) -> AsyncGenerator[Union[AsyncServiceT_co, ServiceGroupT], None]:
             session_key = async_config.session_key if async_config else "db_session"
-
-            # Mark session as generator-managed to prevent middleware cleanup
             setattr(request.state, f"{session_key}_generator_managed", True)
 
             exc_info: Optional[BaseException] = None
             try:
-                async with service_class.new(  # type: ignore[union-attr,unused-ignore]
-                    session=db_session,  # type: ignore[arg-type, unused-ignore]
-                    statement=statement,
-                    config=async_config,  # type: ignore[arg-type]
-                    error_messages=error_messages,
-                    load=load,
-                    execution_options=execution_options,
-                    uniquify=uniquify,
-                    count_with_window_function=count_with_window_function,
-                ) as service:
-                    yield service
+                context_manager: Any = (
+                    cast("type[ServiceGroup]", service_class).new(
+                        session=db_session,
+                        error_messages=error_messages,
+                        execution_options=execution_options,
+                        uniquify=uniquify,
+                        count_with_window_function=count_with_window_function,
+                    )
+                    if is_group
+                    else cast("type[SQLAlchemyAsyncRepositoryService[Any, Any]]", service_class).new(
+                        session=db_session,
+                        statement=statement,
+                        config=async_config,
+                        error_messages=error_messages,
+                        load=load,
+                        execution_options=execution_options,
+                        uniquify=uniquify,
+                        count_with_window_function=count_with_window_function,
+                    )
+                )
+                async with context_manager as service:
+                    yield cast("Union[AsyncServiceT_co, ServiceGroupT]", service)
             except BaseException as e:
                 exc_info = e
                 raise
             finally:
-                # Get response status stored by middleware
                 response_status = getattr(request.state, f"{session_key}_response_status", None)
                 commit_mode = async_config.commit_mode if async_config else "manual"
-
                 should_commit = (
                     exc_info is None
                     and response_status is not None
                     and _should_commit_for_status(response_status, commit_mode)
                 )
 
-                # Each cleanup operation is individually protected so that failures
-                # in one step do not prevent subsequent steps or mask the original exception.
                 try:
                     if should_commit:
                         await db_session.commit()
@@ -250,57 +318,58 @@ def provide_service(  # noqa: C901, PLR0915
                     else:
                         raise
 
-                # Clean up request state
-                for attr in [
-                    session_key,
-                    f"{session_key}_generator_managed",
-                    f"{session_key}_response_status",
-                ]:
-                    with contextlib.suppress(Exception):
-                        delattr(request.state, attr)
+                _clear_request_state(request, session_key)
 
-        return provide_async_service
+        return cast(
+            "Callable[..., Union[AsyncGenerator[AsyncServiceT_co, None], Generator[SyncServiceT_co, None, None], AsyncGenerator[ServiceGroupT, None], Generator[ServiceGroupT, None, None]]]",
+            provide_async_service,
+        )
 
     sync_config = cast("Optional[SQLAlchemySyncConfig]", extension.get_config(key))
 
     def provide_sync_service(
         request: Request,
         db_session: Session = Depends(extension.provide_session(key)),  # noqa: B008
-    ) -> Generator[SyncServiceT_co, None, None]:
+    ) -> Generator[Union[SyncServiceT_co, ServiceGroupT], None, None]:
         session_key = sync_config.session_key if sync_config else "db_session"
-
-        # Mark session as generator-managed to prevent middleware cleanup
         setattr(request.state, f"{session_key}_generator_managed", True)
 
         exc_info: Optional[BaseException] = None
         try:
-            with service_class.new(
-                session=db_session,  # type: ignore[arg-type, unused-ignore]
-                statement=statement,
-                config=sync_config,
-                error_messages=error_messages,
-                load=load,
-                execution_options=execution_options,
-                uniquify=uniquify,
-                count_with_window_function=count_with_window_function,
-            ) as service:
-                yield service
+            context_manager: Any = (
+                cast("type[ServiceGroup]", service_class).new(
+                    session=db_session,
+                    error_messages=error_messages,
+                    execution_options=execution_options,
+                    uniquify=uniquify,
+                    count_with_window_function=count_with_window_function,
+                )
+                if is_group
+                else cast("type[SQLAlchemySyncRepositoryService[Any, Any]]", service_class).new(
+                    session=db_session,
+                    statement=statement,
+                    config=sync_config,
+                    error_messages=error_messages,
+                    load=load,
+                    execution_options=execution_options,
+                    uniquify=uniquify,
+                    count_with_window_function=count_with_window_function,
+                )
+            )
+            with context_manager as service:
+                yield cast("Union[SyncServiceT_co, ServiceGroupT]", service)
         except BaseException as e:
             exc_info = e
             raise
         finally:
-            # Get response status stored by middleware
             response_status = getattr(request.state, f"{session_key}_response_status", None)
             commit_mode = sync_config.commit_mode if sync_config else "manual"
-
             should_commit = (
                 exc_info is None
                 and response_status is not None
                 and _should_commit_for_status(response_status, commit_mode)
             )
 
-            # Each cleanup operation is individually protected so that failures
-            # in one step do not prevent subsequent steps or mask the original exception.
             try:
                 if should_commit:
                     db_session.commit()
@@ -320,16 +389,12 @@ def provide_service(  # noqa: C901, PLR0915
                 else:
                     raise
 
-            # Clean up request state
-            for attr in [
-                session_key,
-                f"{session_key}_generator_managed",
-                f"{session_key}_response_status",
-            ]:
-                with contextlib.suppress(Exception):
-                    delattr(request.state, attr)
+            _clear_request_state(request, session_key)
 
-    return provide_sync_service
+    return cast(
+        "Callable[..., Union[AsyncGenerator[AsyncServiceT_co, None], Generator[SyncServiceT_co, None, None], AsyncGenerator[ServiceGroupT, None], Generator[ServiceGroupT, None, None]]]",
+        provide_sync_service,
+    )
 
 
 def provide_filters(
@@ -574,8 +639,8 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
         )
         annotations[param_name] = Annotated[LimitOffset, Depends(provide_limit_offset_pagination)]
 
-    # Add search filter providers
     if search_fields := config.get("search"):
+        parsed_field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else set(search_fields)
 
         def provide_search_filter(
             search_string: Annotated[
@@ -595,10 +660,8 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 ),
             ] = config.get("search_ignore_case", False),
         ) -> SearchFilter:
-            field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else set(search_fields)
-
             return SearchFilter(
-                field_name=field_names,
+                field_name=parsed_field_names,
                 value=search_string,  # type: ignore[arg-type]
                 ignore_case=ignore_case or False,
                 escape_wildcards=config.get("search_escape_wildcards", False),

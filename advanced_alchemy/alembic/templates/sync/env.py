@@ -1,3 +1,12 @@
+"""Synchronous Alembic migration environment template.
+
+When ``alembic-postgresql-enum`` is installed and the target dialect is
+PostgreSQL, importing it registers autogenerate comparators for PostgreSQL
+``ENUM`` types.
+"""
+
+import contextlib
+import importlib
 from typing import TYPE_CHECKING, cast
 
 from alembic.autogenerate import rewriter
@@ -14,10 +23,12 @@ if TYPE_CHECKING:
 __all__ = ("do_run_migrations", "run_migrations_offline", "run_migrations_online")
 
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
 config: "AlembicCommandConfig" = context.config  # type: ignore
 writer = rewriter.Rewriter()
+
+if config.db_url.startswith("postgresql"):
+    with contextlib.suppress(ModuleNotFoundError):
+        importlib.import_module("alembic_postgresql_enum")
 
 
 def run_migrations_offline() -> None:

@@ -10,7 +10,7 @@ import sys
 from collections import defaultdict
 from collections.abc import Generator
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 import click
 import httpx
@@ -113,7 +113,7 @@ class _Thing:
         client: httpx.AsyncClient,
         method: str,
         url: str,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> httpx.Response:
         last_error: Optional[BaseException] = None
         for attempt in range(_MAX_HTTP_RETRIES):

@@ -155,12 +155,12 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
     session_dependency_key: str = "db_session"
     """Key to use for the dependency injection of database sessions."""
     engine_app_state_key: str = "db_engine"
-    """Key under which to store the SQLAlchemy engine in the application :class:`State <.datastructures.State>`
+    """Key under which to store the SQLAlchemy engine in the application :class:`State <litestar.datastructures.State>`
     instance.
     """
     session_maker_app_state_key: str = "session_maker_class"
     """Key under which to store the SQLAlchemy :class:`sessionmaker <sqlalchemy.orm.sessionmaker>` in the application
-    :class:`State <.datastructures.State>` instance.
+    :class:`State <litestar.datastructures.State>` instance.
     """
     session_scope_key: str = SESSION_SCOPE_KEY
     """Key under which to store the SQLAlchemy scope in the application."""

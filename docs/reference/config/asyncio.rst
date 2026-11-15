@@ -1,5 +1,5 @@
 =======
-asyncio
+Asyncio
 =======
 
 .. automodule:: advanced_alchemy.config.asyncio

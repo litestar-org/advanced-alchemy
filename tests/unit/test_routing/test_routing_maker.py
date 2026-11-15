@@ -3,14 +3,24 @@
 Tests the factory classes that create routing sessions.
 """
 
+from __future__ import annotations
+
+import datetime
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy import Engine
+from sqlalchemy import Engine, event
 from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.pool import NullPool
 
+from advanced_alchemy._listeners import touch_updated_timestamp
+from advanced_alchemy.config.asyncio import SQLAlchemyAsyncConfig
+from advanced_alchemy.config.engine import EngineConfig
 from advanced_alchemy.config.routing import RoutingConfig, RoutingStrategy
+from advanced_alchemy.config.sync import SQLAlchemySyncConfig
 from advanced_alchemy.routing.maker import (
     RoutingAsyncSessionMaker,
     RoutingSyncSessionMaker,
@@ -19,6 +29,7 @@ from advanced_alchemy.routing.maker import (
 )
 from advanced_alchemy.routing.selectors import RandomSelector, RoundRobinSelector
 from advanced_alchemy.routing.session import RoutingSyncSession
+from advanced_alchemy.types import DateTimeUTC
 
 
 @pytest.fixture
@@ -533,3 +544,137 @@ async def test_dispose_session_maker_async_noop_for_non_routing_maker() -> None:
 async def test_dispose_session_maker_async_noop_for_none() -> None:
     """dispose_session_maker_async handles a None session maker without raising."""
     await dispose_session_maker_async(None)
+
+
+def test_sync_config_with_routing_attaches_and_removes_listeners() -> None:
+    """Verify SQLAlchemySyncConfig attaches before_flush listeners to RoutingSyncSessionMaker."""
+    routing = RoutingConfig(
+        primary_connection_string="sqlite:///:memory:",
+        read_replicas=["sqlite:///:memory:"],
+    )
+    config = SQLAlchemySyncConfig(routing_config=routing)
+    maker = config.create_session_maker()
+    assert isinstance(maker, RoutingSyncSessionMaker)
+    assert event.contains(maker.session_maker, "before_flush", touch_updated_timestamp)
+    with pytest.deprecated_call():
+        assert maker.sync_session_maker is maker.session_maker
+    maker.close_all()
+
+
+@pytest.mark.asyncio
+async def test_async_config_with_routing_attaches_and_removes_listeners() -> None:
+    """Verify SQLAlchemyAsyncConfig attaches before_flush listeners to RoutingAsyncSessionMaker."""
+    routing = RoutingConfig(
+        primary_connection_string="sqlite+aiosqlite:///:memory:",
+        read_replicas=["sqlite+aiosqlite:///:memory:"],
+    )
+    config = SQLAlchemyAsyncConfig(routing_config=routing, engine_config=EngineConfig(poolclass=NullPool))
+    maker = config.create_session_maker()
+    assert isinstance(maker, RoutingAsyncSessionMaker)
+    sync_maker = maker._session_config["sync_session_class"]
+    assert event.contains(sync_maker, "before_flush", touch_updated_timestamp)
+    await maker.close_all()
+
+
+def test_routing_sync_session_maker_configure(routing_config: RoutingConfig) -> None:
+    """Verify configure() updates session config and underlying sessionmaker."""
+    maker = RoutingSyncSessionMaker(routing_config=routing_config)
+    maker.configure(autoflush=False, expire_on_commit=False)
+    assert maker._session_config["autoflush"] is False
+    assert maker._session_config["expire_on_commit"] is False
+    assert maker.session_maker.kw["autoflush"] is False
+    assert maker.session_maker.kw["expire_on_commit"] is False
+    maker.close_all()
+
+
+def test_routing_async_session_maker_configure() -> None:
+    """Verify configure() updates session config on RoutingAsyncSessionMaker."""
+    routing = RoutingConfig(
+        primary_connection_string="sqlite+aiosqlite:///:memory:",
+        read_replicas=["sqlite+aiosqlite:///:memory:"],
+    )
+    maker = RoutingAsyncSessionMaker(routing_config=routing)
+    maker.configure(expire_on_commit=False)
+    assert maker._session_config["expire_on_commit"] is False
+
+
+def test_sync_routing_session_executes_listeners(tmp_path: Path) -> None:
+    """Verify touch_updated_timestamp executes during flush on routing sessions."""
+
+    class Base(DeclarativeBase):
+        pass
+
+    class AuditModel(Base):
+        __tablename__ = "audit_items_sync"
+        id: Mapped[int] = mapped_column(primary_key=True)
+        name: Mapped[str] = mapped_column()
+        updated_at: Mapped[datetime.datetime | None] = mapped_column(DateTimeUTC(timezone=True), nullable=True)
+
+    db_file = tmp_path / "routing_sync_test.db"
+    routing = RoutingConfig(
+        primary_connection_string=f"sqlite:///{db_file}",
+        read_replicas=[f"sqlite:///{db_file}"],
+    )
+    config = SQLAlchemySyncConfig(routing_config=routing)
+    maker = config.create_session_maker()
+    assert isinstance(maker, RoutingSyncSessionMaker)
+    Base.metadata.create_all(maker.primary_engine)
+
+    initial_time = datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)
+    with maker() as session:
+        item = AuditModel(id=1, name="initial", updated_at=initial_time)
+        session.add(item)
+        session.commit()
+
+    with maker() as session:
+        retrieved = session.get(AuditModel, 1)
+        assert retrieved is not None
+        retrieved.name = "updated"
+        session.commit()
+        assert retrieved.updated_at is not None
+        assert retrieved.updated_at > initial_time
+
+    maker.close_all()
+
+
+@pytest.mark.asyncio
+async def test_async_routing_session_executes_listeners(tmp_path: Path) -> None:
+    """Verify touch_updated_timestamp executes during async flush on routing sessions."""
+
+    class Base(DeclarativeBase):
+        pass
+
+    class AuditModel(Base):
+        __tablename__ = "audit_items_async"
+        id: Mapped[int] = mapped_column(primary_key=True)
+        name: Mapped[str] = mapped_column()
+        updated_at: Mapped[datetime.datetime | None] = mapped_column(DateTimeUTC(timezone=True), nullable=True)
+
+    db_file = tmp_path / "routing_async_test.db"
+    routing = RoutingConfig(
+        primary_connection_string=f"sqlite+aiosqlite:///{db_file}",
+        read_replicas=[f"sqlite+aiosqlite:///{db_file}"],
+    )
+    config = SQLAlchemyAsyncConfig(routing_config=routing, engine_config=EngineConfig(poolclass=NullPool))
+    maker = config.create_session_maker()
+    assert isinstance(maker, RoutingAsyncSessionMaker)
+
+    async with maker.primary_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    initial_time = datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)
+    async with maker() as session:
+        item = AuditModel(id=1, name="initial", updated_at=initial_time)
+        session.add(item)
+        await session.commit()
+
+    async with maker() as session:
+        retrieved = await session.get(AuditModel, 1)
+        assert retrieved is not None
+        retrieved.name = "updated"
+        await session.commit()
+        await session.refresh(retrieved)
+        assert retrieved.updated_at is not None
+        assert retrieved.updated_at > initial_time
+
+    await maker.close_all()

@@ -31,18 +31,17 @@ if TYPE_CHECKING:
 
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.xdist_group("alembic_cli_integration"),
 ]
 
 
 @pytest.fixture(
-    scope="session",
     params=[
         pytest.param(
             "sqlite_engine",
             marks=[
                 pytest.mark.sqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -67,13 +66,13 @@ def sync_test_config(request: FixtureRequest) -> Generator[SQLAlchemySyncConfig,
 
 
 @pytest.fixture(
-    scope="session",
     params=[
         pytest.param(
             "aiosqlite_engine",
             marks=[
                 pytest.mark.aiosqlite,
                 pytest.mark.integration,
+                pytest.mark.xdist_group("sqlite"),
             ],
         ),
         pytest.param(
@@ -98,16 +97,17 @@ def async_test_config(request: FixtureRequest) -> Generator[SQLAlchemyAsyncConfi
 
 
 @pytest.fixture(
-    scope="session",
     params=[lf("sync_test_config"), lf("async_test_config")],
     ids=["sync", "async"],
 )
 def test_config(request: FixtureRequest) -> Generator[SQLAlchemySyncConfig | SQLAlchemyAsyncConfig, None, None]:
-    """Return config for current session."""
+    """Return config for current test."""
     if isinstance(request.param, SQLAlchemyAsyncConfig):
         request.getfixturevalue("async_test_config")
     else:
         request.getfixturevalue("sync_test_config")
+    if request.param.metadata is not None:
+        base.metadata_registry.set(request.param.bind_key, request.param.metadata)
     yield request.param  # type: ignore[no-any-return]
 
 

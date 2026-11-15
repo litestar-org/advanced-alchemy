@@ -30,6 +30,7 @@ if TYPE_CHECKING:
         AsyncServiceT_co,
         DependencyDefaults,
         FilterConfig,
+        ServiceGroupT,
         SyncServiceT_co,
     )
 
@@ -112,9 +113,10 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         count_with_window_function: Optional[bool] = None,
     ) -> "Callable[..., Generator[SyncServiceT_co, None, None]]": ...
 
-    def provide_service(  # pragma: no cover
+    @overload
+    def provide_service(
         self,
-        service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co"]],
+        service_class: type["ServiceGroupT"],  # pyright: ignore
         /,
         key: "Optional[str]" = None,
         statement: "Optional[Select[tuple[ModelT]]]" = None,
@@ -123,11 +125,24 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         execution_options: "Optional[dict[str, Any]]" = None,
         uniquify: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
-    ) -> "Callable[..., Union[AsyncGenerator[AsyncServiceT_co, None], Generator[SyncServiceT_co, None, None]]]":
-        """Provides a service instance for dependency injection.
+    ) -> "Callable[..., Union[AsyncGenerator[ServiceGroupT, None], Generator[ServiceGroupT, None, None]]]": ...
+
+    def provide_service(  # pragma: no cover
+        self,
+        service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co", "ServiceGroupT"]],
+        /,
+        key: "Optional[str]" = None,
+        statement: "Optional[Select[tuple[ModelT]]]" = None,
+        error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
+        load: "Optional[LoadSpec]" = None,
+        execution_options: "Optional[dict[str, Any]]" = None,
+        uniquify: Optional[bool] = None,
+        count_with_window_function: Optional[bool] = None,
+    ) -> "Callable[..., Union[AsyncGenerator[Union[AsyncServiceT_co, ServiceGroupT], None], Generator[Union[SyncServiceT_co, ServiceGroupT], None, None]]]":
+        """Provides a service or ServiceGroup instance for dependency injection.
 
         Args:
-            service_class: The service class to provide.
+            service_class: The service or ServiceGroup class to provide.
             key: Optional key for the service.
             statement: Optional SQLAlchemy statement.
             error_messages: Optional error messages.
@@ -137,7 +152,7 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
             count_with_window_function: Optional flag to use window function for counting.
 
         Returns:
-            A callable that returns an async generator for async services or a generator for sync services.
+            A callable that returns an async generator or generator providing the target instance.
         """
         from advanced_alchemy.extensions.fastapi.providers import provide_service as _provide_service
 
