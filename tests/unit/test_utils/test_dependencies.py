@@ -1,20 +1,42 @@
 """Unit tests for shared dependency-injection utilities."""
 
+import datetime
+from decimal import Decimal
 from enum import Enum
-from typing import Any, cast
+from typing import Any, Optional, cast
 from unittest.mock import MagicMock
+from uuid import UUID
 
 import pytest
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, Numeric, String, Text, Time, TypeDecorator, Uuid
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.filters import (
+    CollectionFilter,
+    ComparisonFilter,
+    NotNullFilter,
+    NullFilter,
+    OrderBy,
+    RelationshipFilter,
+    SearchFilter,
+)
 from advanced_alchemy.utils.dependencies import (
     ChoiceField,
     DependencyCache,
     FieldNameType,
     FilterConfig,
+    build_grid_filter,
+    build_grid_filters_for_group,
+    build_order_by_filters,
+    group_grid_filter_fields,
     make_hashable,
     normalize_choice_field_types,
     normalize_sort_field,
+    normalize_sort_fields,
+    query_type_for_grid_filter,
+    resolve_grid_filter_fields,
 )
 from advanced_alchemy.utils.singleton import SingletonMeta
 
@@ -184,3 +206,246 @@ def test_alias_presets_share_effective_names_across_frameworks() -> None:
         assert factory({"search": "name", "alias_generator": "camel_case"}) is factory({"search": "name"})
         with pytest.raises(ImproperConfigurationError, match="Unknown filter alias preset"):
             factory(cast(FilterConfig, {"search": "name", "alias_generator": "typo"}))
+
+
+class _GridTestBase(DeclarativeBase):
+    """Isolated base for grid metadata inference unit tests."""
+
+
+class _GridTestAuthor(_GridTestBase):
+    """Author model for dotted relationship grid metadata tests."""
+
+    __tablename__ = "grid_meta_author"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    country: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    posts: Mapped[list["_GridTestPost"]] = relationship(back_populates="author")
+
+
+class _GridTestPost(_GridTestBase):
+    """Post model exercising every supported grid column type."""
+
+    __tablename__ = "grid_meta_post"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    title: Mapped[str] = mapped_column(String(100))
+    subtitle: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    views: Mapped[int] = mapped_column(Integer)
+    rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    is_published: Mapped[bool] = mapped_column()
+    status: Mapped[StatusChoice] = mapped_column(SAEnum(StatusChoice))
+    published_date: Mapped[datetime.date] = mapped_column(Date)
+    published_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    publish_time: Mapped[datetime.time] = mapped_column(Time)
+    author_id: Mapped[UUID] = mapped_column(ForeignKey("grid_meta_author.id"))
+    author: Mapped[_GridTestAuthor] = relationship(back_populates="posts")
+
+
+@pytest.mark.parametrize(
+    ("field_path", "expected_ops", "expected_type"),
+    [
+        ("title", ("eq", "ne", "contains", "startswith", "endswith", "in"), str),
+        ("subtitle", ("eq", "ne", "contains", "startswith", "endswith", "in", "is_null"), str),
+        ("views", ("eq", "ne", "gt", "ge", "lt", "le", "in"), int),
+        ("rating", ("eq", "ne", "gt", "ge", "lt", "le", "in", "is_null"), float),
+        ("price", ("eq", "ne", "gt", "ge", "lt", "le", "in"), Decimal),
+        ("is_published", ("eq",), bool),
+        ("status", ("eq", "ne", "in"), StatusChoice),
+        ("id", ("eq", "ne", "in"), UUID),
+        ("published_date", ("eq", "ne", "gt", "ge", "lt", "le", "in"), datetime.date),
+        ("published_at", ("eq", "ne", "gt", "ge", "lt", "le", "in", "is_null"), datetime.datetime),
+        ("publish_time", ("eq", "ne", "gt", "ge", "lt", "le", "in"), datetime.time),
+        ("author.name", ("eq", "ne", "contains", "startswith", "endswith", "in"), str),
+        ("author.country", ("eq", "ne", "contains", "startswith", "endswith", "in", "is_null"), str),
+    ],
+)
+def test_resolve_grid_filter_fields_infers_column_operators(
+    field_path: str,
+    expected_ops: tuple[str, ...],
+    expected_type: Any,
+) -> None:
+    specs = resolve_grid_filter_fields([field_path], _GridTestPost)
+    assert tuple(spec.operator for spec in specs) == expected_ops
+    assert all(spec.value_type is expected_type for spec in specs)
+    base_name = field_path.replace(".", "_")
+    assert tuple(spec.param_name for spec in specs) == tuple(f"{base_name}_{op}" for op in expected_ops)
+
+
+def test_resolve_grid_filter_fields_narrowing_and_grouping() -> None:
+    specs = resolve_grid_filter_fields(
+        {
+            "title": {"contains", "eq"},
+            "views": {"le", "ge"},
+            "author.name": {"contains", "eq"},
+        },
+        _GridTestPost,
+    )
+    assert [(spec.param_name, spec.operator) for spec in specs] == [
+        ("title_eq", "eq"),
+        ("title_contains", "contains"),
+        ("views_ge", "ge"),
+        ("views_le", "le"),
+        ("author_name_eq", "eq"),
+        ("author_name_contains", "contains"),
+    ]
+
+    groups = group_grid_filter_fields(specs)
+    assert len(groups) == 3
+    rel_group = next(group for group in groups if group[0] == ("author",))
+    assert [spec.param_name for spec in rel_group[2]] == ["author_name_eq", "author_name_contains"]
+
+    built_rel = build_grid_filters_for_group(
+        rel_group[2],
+        {"author_name_eq": "Ada", "author_name_contains": "da"},
+        rel_path=("author",),
+    )
+    assert isinstance(built_rel, RelationshipFilter)
+    assert built_rel.relationship == "author"
+    assert isinstance(built_rel.filters[0], ComparisonFilter)
+    assert isinstance(built_rel.filters[1], SearchFilter)
+
+
+def test_grid_filter_query_types_and_filter_builders() -> None:
+    specs = resolve_grid_filter_fields(
+        {"subtitle": {"contains", "is_null"}, "views": {"in", "ge"}},
+        _GridTestPost,
+    )
+    by_name = {spec.param_name: spec for spec in specs}
+    assert query_type_for_grid_filter(by_name["subtitle_contains"]) == Optional[str]
+    assert query_type_for_grid_filter(by_name["subtitle_is_null"]) == Optional[bool]
+    assert query_type_for_grid_filter(by_name["views_in"]) == Optional[list[int]]
+    assert query_type_for_grid_filter(by_name["views_ge"]) == Optional[int]
+
+    assert isinstance(build_grid_filter(by_name["subtitle_is_null"], True), NullFilter)
+    assert isinstance(build_grid_filter(by_name["subtitle_is_null"], False), NotNullFilter)
+    assert isinstance(build_grid_filter(by_name["views_in"], [10, 20]), CollectionFilter)
+    assert build_grid_filter(by_name["views_in"], []) is None
+
+
+@pytest.mark.parametrize(
+    ("filter_fields", "model", "match"),
+    [
+        (["title"], None, "requires a SQLAlchemy model"),
+        ({"views": {"contains"}}, _GridTestPost, "String grid operator 'contains'"),
+        ({"title": {"ge"}}, _GridTestPost, "Range grid operator 'ge'"),
+        ({"is_published": {"gt"}}, _GridTestPost, "Range grid operator 'gt'"),
+        (cast(Any, {"views": {"bogus"}}), _GridTestPost, "Unsupported grid operator 'bogus'"),
+        (["missing"], _GridTestPost, "Unknown column 'missing'"),
+        (["author.missing"], _GridTestPost, "Unknown column 'missing'"),
+        (["missing_rel.name"], _GridTestPost, "Unknown relationship 'missing_rel'"),
+        (["bad..path"], _GridTestPost, "Invalid field path"),
+    ],
+)
+def test_resolve_grid_filter_fields_rejects_invalid_config(
+    filter_fields: Any,
+    model: Optional[type[Any]],
+    match: str,
+) -> None:
+    with pytest.raises(ImproperConfigurationError, match=match):
+        resolve_grid_filter_fields(filter_fields, model)
+
+
+def test_normalize_sort_fields_and_collection_rejection() -> None:
+    assert normalize_sort_fields(["views", "author.name", "views"], _GridTestPost) == ("views", "author.name")
+    assert normalize_sort_fields({"views", "title"}, _GridTestPost) == ("title", "views")
+    with pytest.raises(ImproperConfigurationError, match="only to-one paths are sortable"):
+        normalize_sort_fields(["posts.title"], _GridTestAuthor)
+
+
+@pytest.mark.parametrize(
+    ("order_by_values", "sort_order", "default_field", "expected"),
+    [
+        (["-views", "author.name"], None, "title", [OrderBy("views", "desc"), OrderBy("author.name", "asc")]),
+        (["+title"], "desc", None, [OrderBy("title", "asc")]),
+        (["views"], "desc", None, [OrderBy("views", "desc")]),
+        (None, None, "views", [OrderBy("views", "desc")]),
+        (None, None, None, []),
+    ],
+)
+def test_build_order_by_filters_valid_cases(
+    order_by_values: Optional[list[str]],
+    sort_order: Any,
+    default_field: Optional[str],
+    expected: list[OrderBy],
+) -> None:
+    result = build_order_by_filters(
+        order_by_values,
+        sort_order,
+        allowed_fields={"title", "views", "author.name"},
+        default_field=default_field,
+        default_order="desc",
+    )
+    assert result == expected
+
+
+@pytest.mark.parametrize("bad_values", [["secret"], ["-secret"], [""]])
+def test_build_order_by_filters_rejects_disallowed_or_empty(bad_values: list[str]) -> None:
+    with pytest.raises(ValueError):
+        build_order_by_filters(bad_values, None, allowed_fields={"title", "views"})
+
+
+class _WrappedTextType(TypeDecorator[str]):
+    """Custom TypeDecorator delegating to String for grid type-inference coverage."""
+
+    impl = String
+    cache_ok = True
+
+
+class _WrappedGridModel(_GridTestBase):
+    """Model exercising TypeDecorator unwrapping and string-backed enums in grid inference."""
+
+    __tablename__ = "grid_wrapped_model"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    slug: Mapped[str] = mapped_column(_WrappedTextType(80))
+    label: Mapped[str] = mapped_column(SAEnum("a", "b", name="label_enum"))
+
+
+@pytest.mark.parametrize(
+    ("operator", "ignore_case", "expected_op"),
+    [
+        ("startswith", True, "istartswith"),
+        ("startswith", False, "startswith"),
+        ("endswith", True, "iendswith"),
+        ("endswith", False, "endswith"),
+    ],
+)
+def test_build_grid_filter_string_prefix_suffix_and_decorator_types(
+    operator: Any,
+    ignore_case: bool,
+    expected_op: str,
+) -> None:
+    specs = resolve_grid_filter_fields({"slug": {operator}, "label": {"eq"}}, _WrappedGridModel)
+    target = next(spec for spec in specs if spec.field_path == "slug")
+    built = build_grid_filter(target, "pre", ignore_case=ignore_case)
+    assert isinstance(built, ComparisonFilter)
+    assert built.operator == expected_op
+    assert built.value == "pre"
+    label_spec = next(spec for spec in specs if spec.field_path == "label")
+    assert label_spec.value_type is str
+
+    with pytest.raises(ImproperConfigurationError, match="Expected a SQLAlchemy mapped model"):
+        resolve_grid_filter_fields(["name"], dict)
+
+
+@pytest.mark.parametrize(
+    ("sort_fields", "model", "expected_error"),
+    [
+        (["author.name"], None, None),
+        ([""], _GridTestPost, "Invalid sort_fields entry"),
+        (["bad name"], _GridTestPost, "Invalid column name"),
+        (["unknown.name"], _GridTestPost, "Unknown relationship 'unknown'"),
+    ],
+)
+def test_normalize_sort_fields_validation_and_without_model(
+    sort_fields: list[str],
+    model: Any,
+    expected_error: Optional[str],
+) -> None:
+    if expected_error is not None:
+        with pytest.raises(ImproperConfigurationError, match=expected_error):
+            normalize_sort_fields(sort_fields, model=model)
+        return
+    assert normalize_sort_fields(sort_fields, model=model) == ("author.name",)

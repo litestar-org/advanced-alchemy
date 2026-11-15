@@ -1,6 +1,5 @@
 import datetime
 import random
-import re
 import string
 from collections import abc
 from collections.abc import Iterable
@@ -24,14 +23,7 @@ from typing_extensions import Self
 
 from advanced_alchemy.exceptions import ErrorMessages, IntegrityError, NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
-    BeforeAfter,
-    CollectionFilter,
     LimitOffset,
-    NotInCollectionFilter,
-    NotInSearchFilter,
-    OnBeforeAfter,
-    OrderBy,
-    SearchFilter,
     StatementFilter,
 )
 from advanced_alchemy.repository._async import SQLAlchemyAsyncRepositoryProtocol, SQLAlchemyAsyncSlugRepositoryProtocol
@@ -46,6 +38,7 @@ from advanced_alchemy.repository._util import (
 )
 from advanced_alchemy.repository.memory.base import (
     AnyObject,
+    InMemoryFilterEvaluator,
     InMemoryStore,
     SQLAlchemyInMemoryStore,
     SQLAlchemyMultiStore,
@@ -312,26 +305,11 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
 
     @staticmethod
     def _apply_limit_offset_pagination(result: List[ModelT], limit: int, offset: int) -> List[ModelT]:
-        return result[offset:limit]
+        return InMemoryFilterEvaluator.apply_limit_offset(result, limit, offset)
 
     def _extract_field_name(self, field: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]") -> str:
-        """Extract string field name from various input types.
-
-        Args:
-            field: Field name, column element, or instrumented attribute
-
-        Returns:
-            str: String field name for use with getattr()
-
-        Raises:
-            RepositoryError: If a ColumnElement (func expression) is used with mock repository
-        """
-        if isinstance(field, str):
-            return field
-        if isinstance(field, InstrumentedAttribute):
-            return field.key
-        msg = f"{type(field)} columns are not supported in mock repositories (in-memory filtering)"
-        raise RepositoryError(msg)
+        """Extract string field name from various input types."""
+        return InMemoryFilterEvaluator.extract_field_name(field)
 
     def _filter_in_collection(
         self,
@@ -339,8 +317,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         values: abc.Collection[Any],
     ) -> List[ModelT]:
-        field_str = self._extract_field_name(field_name)
-        return [item for item in result if getattr(item, field_str) in values]
+        return InMemoryFilterEvaluator.filter_in_collection(result, field_name, values)
 
     def _filter_not_in_collection(
         self,
@@ -348,10 +325,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
         values: abc.Collection[Any],
     ) -> List[ModelT]:
-        if not values:
-            return result
-        field_str = self._extract_field_name(field_name)
-        return [item for item in result if getattr(item, field_str) not in values]
+        return InMemoryFilterEvaluator.filter_not_in_collection(result, field_name, values)
 
     def _filter_on_datetime_field(
         self,
@@ -362,19 +336,14 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         on_or_before: Optional[datetime.datetime] = None,
         on_or_after: Optional[datetime.datetime] = None,
     ) -> List[ModelT]:
-        field_str = self._extract_field_name(field_name)
-        result_: List[ModelT] = []
-        for item in result:
-            attr: datetime.datetime = getattr(item, field_str)
-            if before is not None and attr < before:
-                result_.append(item)
-            if after is not None and attr > after:
-                result_.append(item)
-            if on_or_before is not None and attr <= on_or_before:
-                result_.append(item)
-            if on_or_after is not None and attr >= on_or_after:
-                result_.append(item)
-        return result_
+        return InMemoryFilterEvaluator.filter_on_datetime(
+            result,
+            field_name,
+            before=before,
+            after=after,
+            on_or_before=on_or_before,
+            on_or_after=on_or_after,
+        )
 
     @staticmethod
     def _filter_by_like(
@@ -384,20 +353,13 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         ignore_case: bool,
         escape_wildcards: bool = False,
     ) -> List[ModelT]:
-        if escape_wildcards:
-            value = re.escape(value)
-        pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
-        fields = {field_name} if isinstance(field_name, str) else field_name
-        items: List[ModelT] = []
-        for field in fields:
-            items.extend(
-                [
-                    item
-                    for item in result
-                    if isinstance(getattr(item, field), str) and pattern.match(getattr(item, field))
-                ],
-            )
-        return list(set(items))
+        return InMemoryFilterEvaluator.filter_by_like(
+            result,
+            field_name,
+            value,
+            ignore_case,
+            escape_wildcards=escape_wildcards,
+        )
 
     @staticmethod
     def _filter_by_not_like(
@@ -407,20 +369,13 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         ignore_case: bool,
         escape_wildcards: bool = False,
     ) -> List[ModelT]:
-        if escape_wildcards:
-            value = re.escape(value)
-        pattern = re.compile(rf".*{value}.*", re.IGNORECASE) if ignore_case else re.compile(rf".*{value}.*")
-        fields = {field_name} if isinstance(field_name, str) else field_name
-        items: List[ModelT] = []
-        for field in fields:
-            items.extend(
-                [
-                    item
-                    for item in result
-                    if isinstance(getattr(item, field), str) and pattern.match(getattr(item, field))
-                ],
-            )
-        return list(set(result).difference(set(items)))
+        return InMemoryFilterEvaluator.filter_by_not_like(
+            result,
+            field_name,
+            value,
+            ignore_case,
+            escape_wildcards=escape_wildcards,
+        )
 
     def _filter_result_by_kwargs(
         self,
@@ -442,16 +397,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         sort_desc: bool = False,
         nulls: Optional[Literal["first", "last"]] = None,
     ) -> List[ModelT]:
-        attribute = self._extract_field_name(field_name)
-        if nulls is None:
-            return sorted(result, key=lambda item: getattr(item, attribute), reverse=sort_desc)
-        missing = [item for item in result if getattr(item, attribute) is None]
-        present = sorted(
-            (item for item in result if getattr(item, attribute) is not None),
-            key=lambda item: getattr(item, attribute),
-            reverse=sort_desc,
-        )
-        return [*missing, *present] if nulls == "first" else [*present, *missing]
+        return InMemoryFilterEvaluator.order_by(result, field_name, sort_desc=sort_desc, nulls=nulls)
 
     def _apply_filters(
         self,
@@ -459,58 +405,7 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         *filters: Union[StatementFilter, ColumnElement[bool]],
         apply_pagination: bool = True,
     ) -> List[ModelT]:
-        for filter_ in filters:
-            if isinstance(filter_, LimitOffset):
-                if apply_pagination:
-                    result = self._apply_limit_offset_pagination(result, filter_.limit, filter_.offset)
-            elif isinstance(filter_, BeforeAfter):
-                result = self._filter_on_datetime_field(
-                    result,
-                    field_name=filter_.field_name,
-                    before=filter_.before,
-                    after=filter_.after,
-                )
-            elif isinstance(filter_, OnBeforeAfter):
-                result = self._filter_on_datetime_field(
-                    result,
-                    field_name=filter_.field_name,
-                    on_or_before=filter_.on_or_before,
-                    on_or_after=filter_.on_or_after,
-                )
-
-            elif isinstance(filter_, NotInCollectionFilter):
-                if filter_.values is not None:  # pyright: ignore
-                    result = self._filter_not_in_collection(result, filter_.field_name, filter_.values)  # pyright: ignore
-            elif isinstance(filter_, CollectionFilter):
-                if filter_.values is not None:  # pyright: ignore
-                    result = self._filter_in_collection(result, filter_.field_name, filter_.values)  # pyright: ignore
-            elif isinstance(filter_, OrderBy):
-                result = self._order_by(
-                    result,
-                    filter_.field_name,
-                    sort_desc=filter_.sort_order == "desc",
-                    nulls=filter_.nulls,
-                )
-            elif isinstance(filter_, NotInSearchFilter):
-                result = self._filter_by_not_like(
-                    result,
-                    {self._extract_field_name(f) for f in filter_.normalized_field_names},
-                    value=filter_.value,
-                    ignore_case=bool(filter_.ignore_case),
-                    escape_wildcards=filter_.escape_wildcards,
-                )
-            elif isinstance(filter_, SearchFilter):
-                result = self._filter_by_like(
-                    result,
-                    {self._extract_field_name(f) for f in filter_.normalized_field_names},
-                    value=filter_.value,
-                    ignore_case=bool(filter_.ignore_case),
-                    escape_wildcards=filter_.escape_wildcards,
-                )
-            elif not isinstance(filter_, ColumnElement):
-                msg = f"Unexpected filter: {filter_}"
-                raise RepositoryError(msg)
-        return result
+        return InMemoryFilterEvaluator.apply_filters(result, *filters, apply_pagination=apply_pagination)
 
     def _get_match_fields(
         self,
@@ -528,8 +423,12 @@ class SQLAlchemyAsyncMockRepository(SQLAlchemyAsyncRepositoryProtocol[ModelT]):
         *filters: Union[StatementFilter, ColumnElement[bool]],
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
-        result = await self.get_many(*filters, **kwargs)
-        return result, len(result)
+        unpaginated = self._filter_result_by_kwargs(
+            self._apply_filters(self.__collection__().get_all(), *filters, apply_pagination=False),
+            kwargs,
+        )
+        paginated = self._apply_filters(list(unpaginated), *(f for f in filters if isinstance(f, LimitOffset)))
+        return paginated, len(unpaginated)
 
     async def _get_many_and_count_window(
         self,

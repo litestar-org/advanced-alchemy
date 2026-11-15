@@ -6,6 +6,7 @@ import inspect
 import sys
 import unittest.mock
 import uuid
+from collections.abc import Sequence
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from enum import Enum, IntEnum
@@ -17,9 +18,10 @@ from litestar.di import NamedDependency, Provide
 from litestar.openapi.config import OpenAPIConfig
 from litestar.params import SkipValidation
 from litestar.testing import TestClient
-from sqlalchemy import FromClause, String, select
-from sqlalchemy.orm import DeclarativeBase, Mapped, Mapper, mapped_column
+from sqlalchemy import ForeignKey, FromClause, Integer, String, select
+from sqlalchemy.orm import DeclarativeBase, Mapped, Mapper, mapped_column, relationship
 
+from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
 from advanced_alchemy.extensions.litestar.plugins.init.plugin import signature_namespace_values
 from advanced_alchemy.extensions.litestar.providers import (
     DEPENDENCY_DEFAULTS,
@@ -27,6 +29,8 @@ from advanced_alchemy.extensions.litestar.providers import (
     DependencyCache,
     DependencyDefaults,
     FilterConfig,
+    FilterFieldsSpec,
+    GridOperator,
     SingletonMeta,
     _create_filter_aggregate_function,  # pyright: ignore[reportPrivateUsage]
     _create_statement_filters,  # pyright: ignore[reportPrivateUsage]
@@ -40,10 +44,14 @@ from advanced_alchemy.filters import (
     BooleanFilter,
     ChoicesFilter,
     CollectionFilter,
+    ComparisonFilter,
     FilterTypes,
     LimitOffset,
     NotInCollectionFilter,
+    NotNullFilter,
+    NullFilter,
     OrderBy,
+    RelationshipFilter,
     SearchFilter,
 )
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
@@ -1457,3 +1465,331 @@ def test_scoped_filters_snake_case_query_aliases() -> None:
         "search_string": "users_search_string",
         "search_ignore_case": "users_search_ignore_case",
     }
+
+
+class _LitestarGridBase(DeclarativeBase):
+    """Isolated base for Litestar grid filtering tests."""
+
+
+class _LitestarGridAuthor(_LitestarGridBase):
+    """Author model for Litestar data-grid tests."""
+
+    __tablename__ = "litestar_grid_author"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100))
+    articles: Mapped[list[_LitestarGridArticle]] = relationship(back_populates="author")
+
+
+class _LitestarGridArticle(_LitestarGridBase):
+    """Article model for Litestar data-grid tests."""
+
+    __tablename__ = "litestar_grid_article"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(150))
+    views: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(30))
+    published_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    author_id: Mapped[int] = mapped_column(ForeignKey("litestar_grid_author.id"))
+    author: Mapped[_LitestarGridAuthor] = relationship(back_populates="articles")
+
+
+class _LitestarGridArticleRepo(SQLAlchemyAsyncRepository[_LitestarGridArticle]):
+    model_type = _LitestarGridArticle
+
+
+class _LitestarGridArticleService(SQLAlchemyAsyncRepositoryService[_LitestarGridArticle, _LitestarGridArticleRepo]):
+    repository_type = _LitestarGridArticleRepo
+
+
+def _serialize_grid_filters(filters: Sequence[Any]) -> list[dict[str, Any]]:
+    serialized: list[dict[str, Any]] = []
+    for item in filters:
+        if isinstance(item, RelationshipFilter):
+            serialized.append(
+                {
+                    "type": "RelationshipFilter",
+                    "relationship": item.relationship,
+                    "filters": _serialize_grid_filters(item.filters),
+                }
+            )
+        elif isinstance(item, ComparisonFilter):
+            serialized.append(
+                {
+                    "type": "ComparisonFilter",
+                    "field_name": item.field_name,
+                    "operator": item.operator,
+                    "value": item.value,
+                }
+            )
+        elif isinstance(item, SearchFilter):
+            serialized.append(
+                {
+                    "type": "SearchFilter",
+                    "field_name": item.field_name,
+                    "value": item.value,
+                    "ignore_case": item.ignore_case,
+                }
+            )
+        elif isinstance(item, CollectionFilter):
+            serialized.append(
+                {
+                    "type": "CollectionFilter",
+                    "field_name": item.field_name,
+                    "values": list(item.values or ()),
+                }
+            )
+        elif isinstance(item, OrderBy):
+            serialized.append(
+                {
+                    "type": "OrderBy",
+                    "field_name": item.field_name,
+                    "sort_order": item.sort_order,
+                }
+            )
+        elif isinstance(item, LimitOffset):
+            serialized.append({"type": "LimitOffset", "limit": item.limit, "offset": item.offset})
+        elif isinstance(item, (NullFilter, NotNullFilter)):
+            serialized.append({"type": type(item).__name__, "field_name": item.field_name})
+    return serialized
+
+
+def test_litestar_grid_filter_fields_and_sort_fields_openapi_and_parsing() -> None:
+    """Verify grouped relationship filters, repeatable orderBy, 400 validation, and OpenAPI schema."""
+    ops: set[GridOperator] = {"contains", "eq"}
+    field_spec: FilterFieldsSpec = {
+        "title": ops,
+        "views": {"ge", "le"},
+        "status": {"in"},
+        "published_at": {"is_null"},
+        "author.name": ops,
+    }
+    config: FilterConfig = {
+        "filter_fields": field_spec,
+        "sort_fields": ["title", "views", "author.name"],
+        "pagination_type": "limit_offset",
+        "pagination_size": 10,
+    }
+
+    @get("/articles")
+    async def list_articles(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> list[dict[str, Any]]:
+        return _serialize_grid_filters(filters)
+
+    deps = create_service_dependencies(_LitestarGridArticleService, key="articles", filters=config)
+    app = Litestar(
+        route_handlers=[list_articles],
+        dependencies=deps,
+        openapi_config=OpenAPIConfig(title="Grid API", version="1.0.0"),
+        signature_namespace=signature_namespace_values,
+        debug=True,
+    )
+
+    schema = app.openapi_schema.to_schema()
+    param_map = {p["name"]: p for p in schema["paths"]["/articles"]["get"]["parameters"]}
+    assert {
+        "titleContains",
+        "titleEq",
+        "viewsGe",
+        "viewsLe",
+        "statusIn",
+        "publishedAtIsNull",
+        "authorNameContains",
+        "authorNameEq",
+        "orderBy",
+    }.issubset(param_map.keys())
+    order_schema = param_map["orderBy"]["schema"]
+    order_variants = order_schema.get("oneOf") or order_schema.get("anyOf") or [order_schema]
+    assert any(variant.get("type") == "array" for variant in order_variants)
+
+    with TestClient(app) as client:
+        ok = client.get(
+            "/articles",
+            params=[
+                ("titleContains", "sql"),
+                ("viewsGe", "100"),
+                ("viewsLe", "500"),
+                ("statusIn", "draft"),
+                ("authorNameContains", "cody"),
+                ("authorNameEq", "Cody"),
+                ("publishedAtIsNull", "true"),
+                ("orderBy", "-views"),
+                ("orderBy", "author.name"),
+                ("currentPage", "2"),
+                ("pageSize", "25"),
+            ],
+        )
+        assert ok.status_code == 200, ok.text
+        parsed = ok.json()
+        assert {"type": "SearchFilter", "field_name": "title", "value": "sql", "ignore_case": True} in parsed
+        assert {"type": "ComparisonFilter", "field_name": "views", "operator": "ge", "value": 100} in parsed
+        assert {"type": "ComparisonFilter", "field_name": "views", "operator": "le", "value": 500} in parsed
+        assert {"type": "CollectionFilter", "field_name": "status", "values": ["draft"]} in parsed
+        assert {"type": "NullFilter", "field_name": "published_at"} in parsed
+        assert {"type": "LimitOffset", "limit": 25, "offset": 25} in parsed
+        rel_filters = [item for item in parsed if item["type"] == "RelationshipFilter"]
+        assert len(rel_filters) == 1
+        assert rel_filters[0]["relationship"] == "author"
+        assert rel_filters[0]["filters"] == [
+            {"type": "ComparisonFilter", "field_name": "name", "operator": "eq", "value": "Cody"},
+            {"type": "SearchFilter", "field_name": "name", "value": "cody", "ignore_case": True},
+        ]
+        order_filters = [item for item in parsed if item["type"] == "OrderBy"]
+        assert order_filters == [
+            {"type": "OrderBy", "field_name": "views", "sort_order": "desc"},
+            {"type": "OrderBy", "field_name": "author.name", "sort_order": "asc"},
+        ]
+
+        invalid_sort = client.get("/articles", params=[("orderBy", "-secret")])
+        assert invalid_sort.status_code == 400
+
+
+def test_litestar_grid_filters_snake_case_scoped_and_explicit_model() -> None:
+    """Verify snake_case query names, scoped prefixes, and explicit create_filter_dependencies model binding."""
+    config: FilterConfig = {
+        "filter_fields": {"title": {"contains"}, "author.name": {"eq"}},
+        "sort_fields": ["title", "author.name"],
+        "alias_generator": "snake_case",
+    }
+    aliases = resolve_filter_aliases(config, prefix="posts", model=_LitestarGridArticle)
+    assert aliases == {
+        "title_contains": "posts_title_contains",
+        "author_name_eq": "posts_author_name_eq",
+        "order_by": "posts_order_by",
+        "sort_order": "posts_sort_order",
+    }
+
+    deps = create_filter_dependencies(config, model=_LitestarGridArticle)
+
+    @get("/explicit")
+    async def list_explicit(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> list[dict[str, Any]]:
+        return _serialize_grid_filters(filters)
+
+    app = Litestar(route_handlers=[list_explicit], dependencies=deps, debug=True)
+    with TestClient(app) as client:
+        resp = client.get(
+            "/explicit",
+            params=[("title_contains", "alc"), ("author_name_eq", "Ada"), ("order_by", "-author.name")],
+        )
+        assert resp.status_code == 200, resp.text
+        parsed = resp.json()
+        assert {"type": "SearchFilter", "field_name": "title", "value": "alc", "ignore_case": True} in parsed
+        assert {
+            "type": "RelationshipFilter",
+            "relationship": "author",
+            "filters": [{"type": "ComparisonFilter", "field_name": "name", "operator": "eq", "value": "Ada"}],
+        } in parsed
+        assert {"type": "OrderBy", "field_name": "author.name", "sort_order": "desc"} in parsed
+
+
+def test_litestar_grid_e2e_async_sqlite_prototype() -> None:
+    """Exercise full HTTP -> Litestar DI -> SQLAlchemyAsyncRepositoryService -> SQLite grid query flow."""
+    db_config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+
+    async def seed_database(app: Litestar) -> None:
+        engine = db_config.get_engine()
+        async with engine.begin() as conn:
+            await conn.run_sync(_LitestarGridBase.metadata.create_all)
+        async with db_config.get_session() as session:
+            ada = _LitestarGridAuthor(name="Ada")
+            cody = _LitestarGridAuthor(name="Cody")
+            session.add_all(
+                [
+                    _LitestarGridArticle(
+                        title="SQLAlchemy Basics",
+                        views=150,
+                        status="draft",
+                        published_at=None,
+                        author=cody,
+                    ),
+                    _LitestarGridArticle(
+                        title="Advanced SQL Queries",
+                        views=420,
+                        status="draft",
+                        published_at=datetime(2026, 1, 5),
+                        author=cody,
+                    ),
+                    _LitestarGridArticle(
+                        title="SQL Indexing Deep Dive",
+                        views=900,
+                        status="draft",
+                        published_at=None,
+                        author=ada,
+                    ),
+                    _LitestarGridArticle(
+                        title="Python Packaging",
+                        views=300,
+                        status="published",
+                        published_at=datetime(2026, 2, 1),
+                        author=cody,
+                    ),
+                ]
+            )
+            await session.commit()
+
+    @get("/grid")
+    async def list_grid(
+        articles_service: NamedDependency[_LitestarGridArticleService],
+        filters: NamedDependency[SkipValidation[list[FilterTypes]]],
+    ) -> dict[str, Any]:
+        rows, total = await articles_service.get_many_and_count(*filters)
+        return {
+            "total": total,
+            "items": [{"title": row.title, "views": row.views, "status": row.status} for row in rows],
+        }
+
+    deps = create_service_dependencies(
+        _LitestarGridArticleService,
+        key="articles_service",
+        filters={
+            "filter_fields": {
+                "title": {"contains", "eq"},
+                "views": {"ge", "le"},
+                "status": {"in"},
+                "published_at": {"is_null"},
+                "author.name": {"contains", "eq"},
+            },
+            "sort_fields": ["title", "views", "author.name"],
+            "pagination_type": "limit_offset",
+            "pagination_size": 10,
+        },
+    )
+    app = Litestar(
+        route_handlers=[list_grid],
+        dependencies=deps,
+        plugins=[SQLAlchemyPlugin(config=db_config)],
+        on_startup=[seed_database],
+        debug=True,
+    )
+    with TestClient(app) as client:
+        filtered = client.get(
+            "/grid",
+            params=[
+                ("titleContains", "sql"),
+                ("viewsGe", "100"),
+                ("viewsLe", "500"),
+                ("statusIn", "draft"),
+                ("authorNameContains", "cody"),
+                ("orderBy", "-views"),
+                ("currentPage", "1"),
+                ("pageSize", "1"),
+            ],
+        )
+        assert filtered.status_code == 200, filtered.text
+        assert filtered.json() == {
+            "total": 2,
+            "items": [{"title": "Advanced SQL Queries", "views": 420, "status": "draft"}],
+        }
+
+        rel_sorted = client.get(
+            "/grid",
+            params=[("publishedAtIsNull", "true"), ("orderBy", "author.name")],
+        )
+        assert rel_sorted.status_code == 200, rel_sorted.text
+        assert rel_sorted.json() == {
+            "total": 2,
+            "items": [
+                {"title": "SQL Indexing Deep Dive", "views": 900, "status": "draft"},
+                {"title": "SQLAlchemy Basics", "views": 150, "status": "draft"},
+            ],
+        }

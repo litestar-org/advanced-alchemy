@@ -3,7 +3,7 @@
 import inspect
 import sys
 import typing
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, IntEnum
@@ -11,12 +11,13 @@ from typing import Annotated, Any, Optional, Union, cast
 from unittest.mock import patch
 from uuid import UUID
 
+import anyio
 import pytest
 from fastapi import Depends, FastAPI, Request, params
 from fastapi.testclient import TestClient
-from sqlalchemy import String
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.exceptions import ImproperConfigurationError
@@ -28,6 +29,8 @@ from advanced_alchemy.extensions.fastapi.providers import (
     DependencyDefaults,
     FieldNameType,
     FilterConfig,
+    FilterFieldsSpec,
+    GridOperator,
     _create_filter_aggregate_function_fastapi,  # pyright: ignore[reportPrivateUsage]
     dep_cache,  # Import the global cache instance
     provide_filters,
@@ -37,9 +40,13 @@ from advanced_alchemy.filters import (
     BooleanFilter,
     ChoicesFilter,
     CollectionFilter,
+    ComparisonFilter,
     FilterTypes,
     LimitOffset,
+    NotNullFilter,
+    NullFilter,
     OrderBy,
+    RelationshipFilter,
     SearchFilter,
 )
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
@@ -1161,3 +1168,248 @@ def test_equal_dependency_defaults_still_share_a_dependency() -> None:
     assert provide_filters(_cached_config(), DependencyDefaults()) is provide_filters(
         _cached_config(), DependencyDefaults()
     )
+
+
+class _FastAPIGridBase(DeclarativeBase):
+    """Isolated declarative base for FastAPI data-grid tests."""
+
+
+class _FastAPIGridAuthor(_FastAPIGridBase):
+    """Author model for FastAPI data-grid tests."""
+
+    __tablename__ = "fastapi_grid_author"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100))
+    articles: Mapped[list["_FastAPIGridArticle"]] = relationship(back_populates="author")
+
+
+class _FastAPIGridArticle(_FastAPIGridBase):
+    """Article model for FastAPI data-grid tests."""
+
+    __tablename__ = "fastapi_grid_article"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(150))
+    views: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(30))
+    published_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    author_id: Mapped[int] = mapped_column(ForeignKey("fastapi_grid_author.id"))
+    author: Mapped[_FastAPIGridAuthor] = relationship(back_populates="articles")
+
+
+class _FastAPIGridArticleRepo(SQLAlchemyAsyncRepository[_FastAPIGridArticle]):
+    model_type = _FastAPIGridArticle
+
+
+class _FastAPIGridArticleService(SQLAlchemyAsyncRepositoryService[_FastAPIGridArticle, _FastAPIGridArticleRepo]):
+    repository_type = _FastAPIGridArticleRepo
+
+
+def _serialize_fastapi_grid_filters(filters: Sequence[Any]) -> list[dict[str, Any]]:
+    serialized: list[dict[str, Any]] = []
+    for item in filters:
+        if isinstance(item, RelationshipFilter):
+            serialized.append(
+                {
+                    "type": "RelationshipFilter",
+                    "relationship": item.relationship,
+                    "filters": _serialize_fastapi_grid_filters(item.filters),
+                }
+            )
+        elif isinstance(item, ComparisonFilter):
+            serialized.append(
+                {
+                    "type": "ComparisonFilter",
+                    "field_name": item.field_name,
+                    "operator": item.operator,
+                    "value": item.value,
+                }
+            )
+        elif isinstance(item, SearchFilter):
+            serialized.append(
+                {
+                    "type": "SearchFilter",
+                    "field_name": item.field_name,
+                    "value": item.value,
+                    "ignore_case": item.ignore_case,
+                }
+            )
+        elif isinstance(item, CollectionFilter):
+            serialized.append(
+                {
+                    "type": "CollectionFilter",
+                    "field_name": item.field_name,
+                    "values": list(item.values or ()),
+                }
+            )
+        elif isinstance(item, OrderBy):
+            serialized.append(
+                {
+                    "type": "OrderBy",
+                    "field_name": item.field_name,
+                    "sort_order": item.sort_order,
+                }
+            )
+        elif isinstance(item, LimitOffset):
+            serialized.append({"type": "LimitOffset", "limit": item.limit, "offset": item.offset})
+        elif isinstance(item, (NullFilter, NotNullFilter)):
+            serialized.append({"type": type(item).__name__, "field_name": item.field_name})
+    return serialized
+
+
+def test_fastapi_grid_filter_fields_and_sort_fields_openapi_and_parsing() -> None:
+    """Verify grouped relationship filters, repeatable orderBy, 422 validation, and OpenAPI schema."""
+    ops: set[GridOperator] = {"contains", "eq"}
+    field_spec: FilterFieldsSpec = {
+        "title": ops,
+        "views": {"ge", "le"},
+        "status": {"in"},
+        "published_at": {"is_null"},
+        "author.name": ops,
+    }
+    config: FilterConfig = {
+        "filter_fields": field_spec,
+        "sort_fields": ["title", "views", "author.name"],
+        "pagination_type": "limit_offset",
+        "pagination_size": 10,
+    }
+    filter_dep = provide_filters(config, model=_FastAPIGridArticle)
+
+    app = FastAPI()
+
+    @app.get("/articles")
+    def list_articles(filters: Annotated[list[FilterTypes], Depends(filter_dep)]) -> list[dict[str, Any]]:
+        return _serialize_fastapi_grid_filters(filters)
+
+    with TestClient(app) as client:
+        schema = client.get("/openapi.json").json()
+        param_map = {p["name"]: p for p in schema["paths"]["/articles"]["get"]["parameters"]}
+        assert {
+            "titleContains",
+            "titleEq",
+            "viewsGe",
+            "viewsLe",
+            "statusIn",
+            "publishedAtIsNull",
+            "authorNameContains",
+            "authorNameEq",
+            "orderBy",
+        }.issubset(param_map.keys())
+        assert param_map["orderBy"]["schema"]["anyOf"][0]["type"] == "array"
+
+        ok = client.get(
+            "/articles",
+            params=[
+                ("titleContains", "sql"),
+                ("viewsGe", "100"),
+                ("viewsLe", "500"),
+                ("statusIn", "draft"),
+                ("authorNameContains", "cody"),
+                ("authorNameEq", "Cody"),
+                ("publishedAtIsNull", "true"),
+                ("orderBy", "-views"),
+                ("orderBy", "author.name"),
+                ("currentPage", "2"),
+                ("pageSize", "25"),
+            ],
+        )
+        assert ok.status_code == 200, ok.text
+        parsed = ok.json()
+        assert {"type": "SearchFilter", "field_name": "title", "value": "sql", "ignore_case": True} in parsed
+        assert {"type": "ComparisonFilter", "field_name": "views", "operator": "ge", "value": 100} in parsed
+        assert {"type": "ComparisonFilter", "field_name": "views", "operator": "le", "value": 500} in parsed
+        assert {"type": "CollectionFilter", "field_name": "status", "values": ["draft"]} in parsed
+        assert {"type": "NullFilter", "field_name": "published_at"} in parsed
+        assert {"type": "LimitOffset", "limit": 25, "offset": 25} in parsed
+        rel_filters = [item for item in parsed if item["type"] == "RelationshipFilter"]
+        assert len(rel_filters) == 1
+        assert rel_filters[0]["relationship"] == "author"
+        assert rel_filters[0]["filters"] == [
+            {"type": "ComparisonFilter", "field_name": "name", "operator": "eq", "value": "Cody"},
+            {"type": "SearchFilter", "field_name": "name", "value": "cody", "ignore_case": True},
+        ]
+        order_filters = [item for item in parsed if item["type"] == "OrderBy"]
+        assert order_filters == [
+            {"type": "OrderBy", "field_name": "views", "sort_order": "desc"},
+            {"type": "OrderBy", "field_name": "author.name", "sort_order": "asc"},
+        ]
+
+        invalid_sort = client.get("/articles", params=[("orderBy", "-secret")])
+        assert invalid_sort.status_code == 422
+
+
+def test_fastapi_grid_snake_case_and_e2e_async_sqlite_prototype() -> None:
+    """Exercise FastAPI grid filtering + relationship OrderBy + pagination against async SQLite."""
+    config: FilterConfig = {
+        "filter_fields": {
+            "title": {"contains", "eq"},
+            "views": {"ge", "le"},
+            "status": {"in"},
+            "author.name": {"contains"},
+        },
+        "sort_fields": ["title", "views", "author.name"],
+        "pagination_type": "limit_offset",
+        "pagination_size": 10,
+        "alias_generator": "snake_case",
+    }
+    aliases = resolve_filter_aliases(config, model=_FastAPIGridArticle)
+    assert "title_contains" in aliases
+    assert "order_by" in aliases
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def get_session() -> AsyncGenerator[AsyncSession, None]:
+        async with session_factory() as session:
+            yield session
+
+    filter_dep = provide_filters(config, model=_FastAPIGridArticle)
+    app = FastAPI()
+
+    @app.get("/grid")
+    async def list_grid(
+        filters: Annotated[list[FilterTypes], Depends(filter_dep)],
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> dict[str, Any]:
+        service = _FastAPIGridArticleService(session=session)
+        rows, total = await service.get_many_and_count(*filters)
+        return {
+            "total": total,
+            "items": [{"title": row.title, "views": row.views, "status": row.status} for row in rows],
+        }
+
+    async def _seed() -> None:
+        async with engine.begin() as conn:
+            await conn.run_sync(_FastAPIGridBase.metadata.create_all)
+        async with session_factory() as session:
+            ada = _FastAPIGridAuthor(name="Ada")
+            cody = _FastAPIGridAuthor(name="Cody")
+            session.add_all(
+                [
+                    _FastAPIGridArticle(title="SQL Basics", views=150, status="draft", author=cody),
+                    _FastAPIGridArticle(title="SQL Tuning", views=450, status="draft", author=ada),
+                    _FastAPIGridArticle(title="Python Hints", views=200, status="published", author=cody),
+                ]
+            )
+            await session.commit()
+
+    anyio.run(_seed)
+    with TestClient(app) as client:
+        resp = client.get(
+            "/grid",
+            params=[
+                ("title_contains", "sql"),
+                ("views_ge", "100"),
+                ("views_le", "500"),
+                ("status_in", "draft"),
+                ("order_by", "author.name"),
+                ("current_page", "1"),
+                ("page_size", "5"),
+            ],
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["total"] == 2
+        assert [item["title"] for item in data["items"]] == ["SQL Tuning", "SQL Basics"]
+    anyio.run(engine.dispose)
