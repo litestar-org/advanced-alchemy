@@ -11,7 +11,7 @@ from sqlalchemy import BooleanClauseList, ColumnElement, and_, inspect
 from sqlalchemy.orm import InstrumentedAttribute, RelationshipProperty, Session, class_mapper, object_mapper
 from sqlalchemy.orm.exc import UnmappedClassError
 from sqlalchemy.sql import operators as sa_op
-from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
+from sqlalchemy.sql.elements import BinaryExpression, BindParameter, False_, Null, True_, UnaryExpression
 from typing_extensions import TypeVar
 
 from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
@@ -457,11 +457,11 @@ def _elem_is_not(left_val: Any, right_val: Any) -> bool:
 
 
 def _elem_eq(left_val: Any, right_val: Any) -> bool:
-    return bool(left_val == right_val)
+    return left_val is not None and right_val is not None and bool(left_val == right_val)
 
 
 def _elem_ne(left_val: Any, right_val: Any) -> bool:
-    return left_val is not None and bool(left_val != right_val)
+    return left_val is not None and right_val is not None and bool(left_val != right_val)
 
 
 def _elem_in(left_val: Any, right_val: Any) -> bool:
@@ -808,12 +808,26 @@ class InMemoryFilterEvaluator:
                 msg = f"Unsupported expression {element!r} in mock repositories"
                 raise RepositoryError(msg)
             left_val = getattr(item, left_key)
-            right_val = getattr(element.right, "value", None)
+            if isinstance(element.right, True_):
+                right_val: Any = True
+            elif isinstance(element.right, False_):
+                right_val = False
+            elif isinstance(element.right, Null):
+                right_val = None
+            elif isinstance(element.right, BindParameter):
+                right_val = element.right.value
+            else:
+                msg = f"Unsupported expression {element!r} in mock repositories"
+                raise RepositoryError(msg)
             operator_fn = element.operator
             if operator_fn in _BINARY_ELEMENT_OPS:
                 return bool(_BINARY_ELEMENT_OPS[operator_fn](left_val, right_val))
             if operator_fn in _BINARY_ORDERED_OPS:
-                return left_val is not None and bool(_BINARY_ORDERED_OPS[operator_fn](left_val, right_val))
+                return (
+                    left_val is not None
+                    and right_val is not None
+                    and bool(_BINARY_ORDERED_OPS[operator_fn](left_val, right_val))
+                )
         if isinstance(element, BooleanClauseList):
             clauses = list(element.clauses)
             if element.operator is sa_op.and_:
