@@ -42,21 +42,16 @@ def preserve_global_file_object_listeners() -> Generator[None, None, None]:
         "after_commit": FileObjectListener.after_commit,
         "after_rollback": FileObjectListener.after_rollback,
     }
-    registrations = [
-        (target, name, listener, event.contains(target, name, listener))
-        for target in (Session, AsyncSession)
-        for name, listener in listeners.items()
-        if target is Session or hasattr(target, name)
-    ]
+    registrations = [(name, listener, event.contains(Session, name, listener)) for name, listener in listeners.items()]
     try:
         yield
     finally:
-        for target, name, listener, was_registered in registrations:
-            is_registered = event.contains(target, name, listener)
+        for name, listener, was_registered in registrations:
+            is_registered = event.contains(Session, name, listener)
             if was_registered and not is_registered:
-                event.listen(target, name, listener)
+                event.listen(Session, name, listener)
             elif not was_registered and is_registered:
-                event.remove(target, name, listener)
+                event.remove(Session, name, listener)
 
 
 def remove_listeners() -> None:
