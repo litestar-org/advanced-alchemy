@@ -861,7 +861,8 @@ def test_group_acquisition_failure_reaches_managed_contexts(
         @classmethod
         @contextmanager
         def new(cls, session: Any) -> Iterator[Any]:
-            raise failure("acquisition")
+            if session is not None:
+                raise failure("acquisition")
             yield cls()
 
     class Nested(ServiceGroup):
@@ -869,9 +870,7 @@ def test_group_acquisition_failure_reaches_managed_contexts(
 
     broken_type = {"factory": BrokenFactory, "init": BrokenInit, "nested": Nested}[failure_stage]
 
-    class Group(ServiceGroup):
-        managed: Managed
-        broken: broken_type  # pyright: ignore[reportInvalidTypeForm]
+    Group = type("Group", (ServiceGroup,), {"__annotations__": {"managed": Managed, "broken": broken_type}})
 
     class Config:
         @contextmanager
@@ -914,9 +913,9 @@ async def test_nested_group_factories_receive_options_and_unwind(asynchronous: b
         inner: Inner
 
     if asynchronous:
-        async with AsyncSession() as session:
-            async with Outer.new(session=session, auto_commit=False, uniquify=True) as group:
-                assert group.inner.managed.session is session
+        async with AsyncSession() as async_session:
+            async with Outer.new(session=async_session, auto_commit=False, uniquify=True) as group:
+                assert group.inner.managed.session is async_session
                 assert events == [("enter", False)]
     else:
         with Session() as session:
@@ -978,7 +977,8 @@ async def test_async_group_cancellation_unwinds_session_and_services(failure_sta
         @classmethod
         @asynccontextmanager
         async def new(cls, session: Any) -> AsyncIterator[Any]:
-            raise CancelledError("acquisition")
+            if session is not None:
+                raise CancelledError("acquisition")
             yield cls()
 
     class Nested(ServiceGroup):
@@ -986,9 +986,7 @@ async def test_async_group_cancellation_unwinds_session_and_services(failure_sta
 
     broken_type = {"factory": BrokenFactory, "init": BrokenInit, "nested": Nested}[failure_stage]
 
-    class Group(ServiceGroup):
-        managed: Managed
-        broken: broken_type  # pyright: ignore[reportInvalidTypeForm]
+    Group = type("Group", (ServiceGroup,), {"__annotations__": {"managed": Managed, "broken": broken_type}})
 
     class Config:
         @asynccontextmanager
@@ -1050,8 +1048,8 @@ async def test_group_acquisition_failure_cannot_be_suppressed(asynchronous: bool
 
     with pytest.raises(RuntimeError, match="acquisition"):
         if asynchronous:
-            async with AsyncSession() as session:
-                async with Group.new(session=session):
+            async with AsyncSession() as async_session:
+                async with Group.new(session=async_session):
                     pytest.fail("group acquisition must fail")
         else:
             with Session() as session:
@@ -1064,8 +1062,52 @@ def test_local_forward_reference_inside_annotated_group_field() -> None:
         def __init__(self, session: Any) -> None:
             self.session = session
 
-    class Group(ServiceGroup):
-        service: Annotated["LocalService", "member"]
-        marker: Annotated[ClassVar[str], "metadata"] = "ignored"
+    Group = type(
+        "Group",
+        (ServiceGroup,),
+        {
+            "__annotations__": {
+                "service": Annotated["LocalService", "member"],
+                "marker": "Annotated[ClassVar[str], 'metadata']",
+            },
+            "marker": "ignored",
+        },
+    )
 
     assert dict(Group.service_fields()) == {"service": LocalService}
+
+
+@pytest.mark.parametrize("managed", [False, True])
+def test_group_passes_session_positionally_before_variadic_options(managed: bool) -> None:
+    class PositionalService:
+        def __init__(self, db_session: Session, **options: Any) -> None:
+            self.session = db_session
+            self.options = options
+
+    class FactoryService(PositionalService):
+        @classmethod
+        @contextmanager
+        def new(cls, db_session: Session, **options: Any) -> Iterator["FactoryService"]:
+            yield cls(db_session, **options)
+
+    class KeywordService:
+        def __init__(self, **options: Any) -> None:
+            self.session = options.pop("session")
+            self.options = options
+
+    class Group(ServiceGroup):
+        positional: PositionalService
+        factory: FactoryService
+        keyword: KeywordService
+
+    with Session() as session:
+        if managed:
+            with Group.new(session=session, auto_commit=False) as group:
+                assert group.positional.session is group.factory.session is group.keyword.session is session
+                assert (
+                    group.positional.options == group.factory.options == group.keyword.options == {"auto_commit": False}
+                )
+        else:
+            group = Group(session, auto_commit=False)
+            assert group.positional.session is group.factory.session is group.keyword.session is session
+            assert group.positional.options == group.factory.options == group.keyword.options == {"auto_commit": False}

@@ -216,8 +216,14 @@ def _build_call_plan(call: Any) -> tuple[bool, frozenset[str] | None]:
     params = sig.parameters
     has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
     session_param = params.get("session")
+    requires_positional_session = any(
+        name not in {"self", "cls"}
+        and param.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        and param.default is inspect.Parameter.empty
+        for name, param in params.items()
+    )
     accepts_session_kw = (session_param is not None and session_param.kind != inspect.Parameter.POSITIONAL_ONLY) or (
-        session_param is None and has_var_kw
+        session_param is None and has_var_kw and not requires_positional_session
     )
     accepted_kw = (
         None
