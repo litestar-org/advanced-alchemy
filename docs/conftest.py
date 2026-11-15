@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 EXECUTABLE_DOCS = (
     "usage/database_seeding.rst",
+    "usage/service_composition.rst",
     "usage/**/*.rst",
     "getting-started.rst",
 )

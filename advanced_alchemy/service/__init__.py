@@ -14,6 +14,7 @@ from advanced_alchemy.service._async import (
     SQLAlchemyAsyncRepositoryReadService,
     SQLAlchemyAsyncRepositoryService,
 )
+from advanced_alchemy.service._group import ServiceGroup
 from advanced_alchemy.service._sync import (
     SQLAlchemySyncQueryService,
     SQLAlchemySyncRepositoryReadService,
@@ -79,6 +80,7 @@ __all__ = (
     "SQLAlchemySyncRepositoryReadService",
     "SQLAlchemySyncRepositoryService",
     "SchemaDumpConfig",
+    "ServiceGroup",
     "SupportedSchemaModel",
     "fields",
     "find_filter",
