@@ -5,6 +5,27 @@
 
 .. changelog:: 1.13.0
 
+    .. change:: preserve custom service constructors and SQL expression parity
+        :type: bugfix
+        :pr: 824
+
+        Inherited service ``new()`` factories preserve custom constructors that
+        accept the existing service options; model and repository overrides are
+        forwarded only when supplied. Mock repositories match SQL for NULL
+        comparisons, escaped LIKE expressions, and scalar arithmetic predicates.
+
+    .. change:: preserve ORM delete behavior and query count configuration
+        :type: bugfix
+        :pr: 824
+
+        ``delete_many`` and ``delete_where`` use ORM deletion for models requiring
+        delete cascades, stored-object cleanup, joined-table inheritance, or custom
+        delete listeners. These paths can issue more statements than bulk deletion.
+        Query repositories use a window count when ``count_with_window_function``
+        is true and separate queries when false, except on Spanner, which uses
+        separate queries. Custom repository implementations should provide
+        ``set_primary_key_value`` alongside the existing primary-key helpers.
+
     .. change:: partial update hydration and single-query service updates
         :type: bugfix
         :pr: 824
