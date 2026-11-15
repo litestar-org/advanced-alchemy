@@ -200,7 +200,7 @@ test = [
   "pytest-asyncio>=0.23.8",
   "pytest-cov>=5.0.0",
   "pytest-databases[postgres,oracle,cockroachdb,bigquery,spanner]>=0.19.0 ; python_version < \"3.11\"",
-  "pytest-databases[embedded-postgres]>=0.20.0b1 ; python_version >= \"3.11\"",
+  "pytest-databases[embedded-postgres]>=0.20.0b3 ; python_version >= \"3.11\"",
   "pytest-lazy-fixtures>=1.1.1",
   "pytest-rerunfailures",
   "pytest-mock>=3.14.0",
