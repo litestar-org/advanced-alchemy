@@ -651,7 +651,7 @@ class InMemoryFilterEvaluator:
         if isinstance(expr, BinaryExpression):
             left = cls.evaluate_sql_expression(item, expr.left)
             right = cls.evaluate_sql_expression(item, expr.right)
-            return cls._eval_binary_operator(left, right, expr.operator)
+            return cls._eval_binary_operator(left, right, expr.operator, escape=expr.modifiers.get("escape"))
         if isinstance(expr, ColumnElement):
             key = getattr(expr, "key", None) or getattr(expr, "name", None)  # pyright: ignore[reportUnknownArgumentType]
             if isinstance(key, str) and hasattr(item, key):
@@ -814,10 +814,14 @@ class InMemoryFilterEvaluator:
         return cls._like_to_regex(f"%{value}%", ignore_case=ignore_case)
 
     @staticmethod
-    def _like_to_regex(pattern_str: str, ignore_case: bool = False) -> re.Pattern[str]:
+    def _like_to_regex(pattern_str: str, ignore_case: bool = False, escape: Optional[str] = None) -> re.Pattern[str]:
         parts: List[str] = ["^"]
-        for ch in pattern_str:
-            if ch == "%":
+        characters = iter(pattern_str)
+        for ch in characters:
+            if escape is not None and ch == escape:
+                escaped = next(characters, None)
+                parts.append(re.escape(escaped) if escaped is not None else "(?!)")
+            elif ch == "%":
                 parts.append(".*")
             elif ch == "_":
                 parts.append(".")
@@ -855,12 +859,14 @@ class InMemoryFilterEvaluator:
 
     @classmethod
     def _eval_comparison_op(cls, val: Any, op_name: str, target: Any) -> bool:
+        if target is None and op_name in {"eq", "ne"}:
+            return (val is None) if op_name == "eq" else (val is not None)
         if val is None:
             return False
         if op_name == "eq":
             return bool(val == target)
         if op_name == "ne":
-            return False if target is None else bool(val != target)
+            return bool(val != target)
         value_op = cls._COMPARISON_VALUE_OPS.get(op_name)
         if value_op is not None:
             return value_op(val, target)
@@ -912,25 +918,35 @@ class InMemoryFilterEvaluator:
         return False, None
 
     @classmethod
-    def _eval_string_binary_op(cls, left: Any, right_str: str, operator: Any) -> Optional[bool]:
+    def _eval_string_binary_op(
+        cls, left: Any, right_str: str, operator: Any, escape: Optional[str] = None
+    ) -> Optional[bool]:
         if operator is sql_op.like_op:
-            return isinstance(left, str) and bool(cls._like_to_regex(right_str, ignore_case=False).match(left))
+            return isinstance(left, str) and bool(
+                cls._like_to_regex(right_str, ignore_case=False, escape=escape).match(left)
+            )
         if operator is sql_op.ilike_op:
-            return isinstance(left, str) and bool(cls._like_to_regex(right_str, ignore_case=True).match(left))
+            return isinstance(left, str) and bool(
+                cls._like_to_regex(right_str, ignore_case=True, escape=escape).match(left)
+            )
         if operator is sql_op.not_like_op:
-            return isinstance(left, str) and not bool(cls._like_to_regex(right_str, ignore_case=False).match(left))
+            return isinstance(left, str) and not bool(
+                cls._like_to_regex(right_str, ignore_case=False, escape=escape).match(left)
+            )
         if operator is sql_op.not_ilike_op:
-            return isinstance(left, str) and not bool(cls._like_to_regex(right_str, ignore_case=True).match(left))
+            return isinstance(left, str) and not bool(
+                cls._like_to_regex(right_str, ignore_case=True, escape=escape).match(left)
+            )
         if operator is sql_op.startswith_op:
-            return isinstance(left, str) and left.startswith(right_str)
+            return isinstance(left, str) and bool(cls._like_to_regex(f"{right_str}%", escape=escape).match(left))
         if operator is sql_op.endswith_op:
-            return isinstance(left, str) and left.endswith(right_str)
+            return isinstance(left, str) and bool(cls._like_to_regex(f"%{right_str}", escape=escape).match(left))
         if operator is sql_op.contains_op:
-            return isinstance(left, str) and (right_str in left)
+            return isinstance(left, str) and bool(cls._like_to_regex(f"%{right_str}%", escape=escape).match(left))
         return None
 
     @classmethod
-    def _eval_binary_operator(cls, left: Any, right: Any, operator: Any) -> Optional[bool]:
+    def _eval_binary_operator(cls, left: Any, right: Any, operator: Any, escape: Optional[str] = None) -> Any:
         handled, null_aware_result = cls._eval_null_aware_binary_op(left, right, operator)
         if handled:
             return null_aware_result
@@ -945,10 +961,11 @@ class InMemoryFilterEvaluator:
                 if right_tuple[0] is None or right_tuple[1] is None:
                     return None
                 return bool(right_tuple[0] <= left <= right_tuple[1])
-        string_result = cls._eval_string_binary_op(left, str(cast("Any", right)), operator)
+        string_result = cls._eval_string_binary_op(left, str(cast("Any", right)), operator, escape=escape)
         if string_result is not None:
             return string_result
         try:
-            return bool(operator(left, right))
-        except Exception:  # noqa: BLE001
-            return False
+            return operator(left, right)
+        except Exception as error:
+            msg = f"{operator} expressions are not supported in mock repositories (in-memory filtering)"
+            raise RepositoryError(msg) from error

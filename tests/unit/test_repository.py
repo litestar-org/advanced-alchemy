@@ -1206,10 +1206,10 @@ async def test_sqlalchemy_repo_upsert(mock_repo: SQLAlchemyAsyncRepository[Any],
     """Test the sequence of repo calls for upsert operation."""
     mock_instance = MagicMock()
     mock_repo.session.merge.return_value = mock_instance  # pyright: ignore[reportFunctionMemberAccess]
+    lookup = mocker.patch.object(mock_repo, "get_one_or_none", return_value=mock_instance)
 
     instance = await maybe_async(mock_repo.upsert(mock_instance))
-    mocker.patch.object(mock_repo, "exists", return_value=True)
-    mocker.patch.object(mock_repo, "count", return_value=1)
+    lookup.assert_called_once()
 
     assert instance is mock_instance
     mock_repo.session.flush.assert_called_once()  # pyright: ignore[reportFunctionMemberAccess]
@@ -4043,3 +4043,62 @@ async def test_mock_repository_async_and_sync_crud_lifecycle(mock_parity_repo: A
     deleted_rest = await maybe_async(mock_parity_repo.delete_where(ParityProbeModel.id == 3))
     assert [row.id for row in deleted_rest] == [3]
     assert await maybe_async(mock_parity_repo.count()) == 0
+
+
+@pytest.mark.parametrize(
+    "filter_",
+    [
+        ComparisonFilter(field_name="category", operator="eq", value=None),
+        ComparisonFilter(field_name="category", operator="ne", value=None),
+        InMemoryFilterTestModel.name.like("100!%", escape="!"),
+        InMemoryFilterTestModel.name.not_like("100!%", escape="!"),
+        InMemoryFilterTestModel.name.ilike("100!_A", escape="!"),
+        InMemoryFilterTestModel.name.not_ilike("100!_A", escape="!"),
+        InMemoryFilterTestModel.name.like("100!!%", escape="!"),
+        InMemoryFilterTestModel.name.startswith("100%", autoescape=True),
+        InMemoryFilterTestModel.name.endswith("%", autoescape=True),
+        InMemoryFilterTestModel.name.contains("%", autoescape=True),
+        (InMemoryFilterTestModel.score + 2) == 12,
+        (InMemoryFilterTestModel.score * 2 - 5) >= 35,
+    ],
+)
+async def test_mock_filter_expression_matches_sqlite(filter_: Any) -> None:
+    """NULL comparisons, escaped LIKE and arithmetic retain SQL semantics."""
+    engine = create_engine("sqlite://")
+    InMemoryFilterTestModel.__table__.create(engine)
+    values = [
+        {"id": 1, "name": "100%", "slug": "percent", "category": None, "score": 10},
+        {"id": 2, "name": "100_a", "slug": "underscore", "category": "present", "score": 20},
+        {"id": 3, "name": "100!other", "slug": "escape", "category": "present", "score": 30},
+    ]
+    with Session(engine) as session:
+        sql_repo = SQLAlchemySyncRepository(session=session, model_type=InMemoryFilterTestModel)
+        session.add_all(InMemoryFilterTestModel(**value) for value in values)
+        session.flush()
+        expected = sorted(item.id for item in sql_repo.get_many(filter_))
+        sync_repo = SQLAlchemySyncMockRepository(session=session, model_type=InMemoryFilterTestModel)
+        async_repo = SQLAlchemyAsyncMockRepository(
+            session=AsyncMock(spec=AsyncSession, bind=MagicMock()), model_type=InMemoryFilterTestModel
+        )
+        try:
+            sync_repo.add_many([InMemoryFilterTestModel(**value) for value in values])
+            await async_repo.add_many([InMemoryFilterTestModel(**value) for value in values])
+            assert sorted(item.id for item in sync_repo.get_many(filter_)) == expected
+            assert sorted(item.id for item in await async_repo.get_many(filter_)) == expected
+        finally:
+            sync_repo.__database_clear__()
+            async_repo.__database_clear__()
+    engine.dispose()
+
+
+def test_mock_unsupported_binary_expression_raises() -> None:
+    """Unknown SQL operators cannot silently masquerade as false predicates."""
+    repo = SQLAlchemySyncMockRepository(
+        session=MagicMock(spec=Session, bind=MagicMock()), model_type=InMemoryFilterTestModel
+    )
+    try:
+        repo.add(InMemoryFilterTestModel(id=1, name="one", slug="one", score=10))
+        with pytest.raises(RepositoryError, match="not supported"):
+            repo.get_many(InMemoryFilterTestModel.score.op("unsupported")(2))
+    finally:
+        repo.__database_clear__()

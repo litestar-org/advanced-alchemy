@@ -619,7 +619,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         self.count_with_window_function = (
             count_with_window_function if count_with_window_function is not None else self.count_with_window_function
         )
-        self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
+        self._default_loader_options, self._loader_options_require_unique = get_abstract_loader_options(
             loader_options=load if load is not None else self.loader_options,
             inherit_lazy_relationships=self.inherit_lazy_relationships,
             merge_with_default=self.merge_loader_options,
@@ -744,11 +744,11 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
     ) -> Union[tuple[List[ExecutableOption], bool], tuple[None, bool]]:
         resolved_uniquify = self._get_uniquify(uniquify)
         if loader_options is None:
-            return self._default_loader_options, self._loader_options_have_wildcards or resolved_uniquify
+            return self._default_loader_options, self._loader_options_require_unique or resolved_uniquify
         return get_abstract_loader_options(
             loader_options=loader_options,
             default_loader_options=self._default_loader_options,
-            default_options_have_wildcards=self._loader_options_have_wildcards or resolved_uniquify,
+            default_options_have_wildcards=self._loader_options_require_unique or resolved_uniquify,
             inherit_lazy_relationships=self.inherit_lazy_relationships,
             merge_with_default=self.merge_loader_options,
         )
@@ -949,7 +949,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         """
         with self._wrap_exceptions(error_messages=error_messages):
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
-            loader_options, _loader_options_have_wildcard = self._get_loader_options(load, uniquify)
+            loader_options, _requires_unique = self._get_loader_options(load, uniquify)
             instances: List[ModelT] = []
 
             if self._requires_orm_delete():
@@ -1124,7 +1124,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         with self._wrap_exceptions(error_messages=error_messages):
             resolved_bind_group = self._resolve_bind_group(bind_group)
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
-            loader_options, _loader_options_have_wildcard = self._get_loader_options(load, uniquify)
+            loader_options, _requires_unique = self._get_loader_options(load, uniquify)
             model_type = self.model_type
             instances: List[ModelT] = []
             if self._requires_orm_delete():
@@ -1190,7 +1190,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         """Fetch multiple instances by primary key or ``id_attribute`` in dialect-safe chunks."""
         if not item_ids:
             return []
-        loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
+        loader_options, requires_unique = self._get_loader_options(load, uniquify)
         use_composite_path = id_attribute is None and self.has_composite_pk
         instances: List[ModelT] = []
         if use_composite_path:
@@ -1211,7 +1211,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
                 )
                 result = self._execute(
                     select_stmt,
-                    uniquify=self._get_uniquify(loader_options_have_wildcard or uniquify),
+                    uniquify=self._get_uniquify(requires_unique or uniquify),
                 )
                 instances.extend(result.scalars())
         else:
@@ -1238,7 +1238,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
                 )
                 result = self._execute(
                     select_stmt,
-                    uniquify=self._get_uniquify(loader_options_have_wildcard or uniquify),
+                    uniquify=self._get_uniquify(requires_unique or uniquify),
                 )
                 instances.extend(result.scalars())
         return instances
@@ -1374,7 +1374,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         with self._wrap_exceptions(error_messages=error_messages):
             resolved_execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             resolved_statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             resolved_statement = self._get_base_stmt(
                 statement=resolved_statement,
                 loader_options=loader_options,
@@ -1388,7 +1388,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
             instance = (
                 self._execute(
                     resolved_statement,
-                    uniquify=self._get_uniquify(loader_options_have_wildcard or uniquify),
+                    uniquify=self._get_uniquify(requires_unique or uniquify),
                 )
             ).scalar_one_or_none()
             instance = self.check_not_found(instance)
@@ -1462,7 +1462,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         with self._wrap_exceptions(error_messages=error_messages):
             resolved_execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             resolved_statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             resolved_statement = self._get_base_stmt(
                 statement=resolved_statement,
                 loader_options=loader_options,
@@ -1475,7 +1475,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
             resolved_statement = self._filter_select_by_kwargs(resolved_statement, kwargs)
             result = self._execute(
                 resolved_statement,
-                uniquify=self._get_uniquify(loader_options_have_wildcard or uniquify),
+                uniquify=self._get_uniquify(requires_unique or uniquify),
             )
             instances = list(result.scalars())
             for instance in instances:
@@ -1831,7 +1831,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         with self._wrap_exceptions(error_messages=error_messages):
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -1843,7 +1843,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
             instance = (
                 self._execute(
                     statement,
-                    uniquify=self._get_uniquify(loader_options_have_wildcard or uniquify),
+                    uniquify=self._get_uniquify(requires_unique or uniquify),
                 )
             ).scalar_one_or_none()
             instance = self.check_not_found(instance)
@@ -1884,7 +1884,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         with self._wrap_exceptions(error_messages=error_messages):
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -1898,7 +1898,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
                 (
                     self._execute(
                         statement,
-                        uniquify=self._get_uniquify(loader_options_have_wildcard or uniquify),
+                        uniquify=self._get_uniquify(requires_unique or uniquify),
                     )
                 ),
             ).scalar_one_or_none()
@@ -2103,7 +2103,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         with self._wrap_exceptions(error_messages=error_messages):
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -2115,7 +2115,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
                 statement=self._get_count_stmt(
                     statement=statement, loader_options=loader_options, execution_options=execution_options
                 ),
-                uniquify=self._get_uniquify(loader_options_have_wildcard or uniquify),
+                uniquify=self._get_uniquify(requires_unique or uniquify),
             )
             return cast("int", results.scalar_one())
 
@@ -2199,7 +2199,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
                     self.session.no_autoflush,
                     contextlib.suppress(MissingGreenlet, NoInspectionAvailable),
                 ):
-                    self._sync_update_fields(
+                    self._apply_update_fields(
                         data,
                         existing_instance,
                         mapper,
@@ -2220,7 +2220,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
             self._queue_cache_invalidation(self.get_primary_key_value(instance), self._resolve_bind_group(bind_group))
             return instance
 
-    def _sync_update_fields(
+    def _apply_update_fields(
         self,
         data: ModelT,
         existing_instance: ModelT,
@@ -2617,7 +2617,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         with self._wrap_exceptions(error_messages=error_messages):
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -2630,7 +2630,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
             statement = self._filter_select_by_kwargs(statement, kwargs)
             result = self._execute(
                 statement.add_columns(over(sql_func.count())),
-                uniquify=self._get_uniquify(loader_options_have_wildcard or uniquify),
+                uniquify=self._get_uniquify(requires_unique or uniquify),
             )
             count: int = 0
             instances: List[ModelT] = []
@@ -2675,7 +2675,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         with self._wrap_exceptions(error_messages=error_messages):
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load, uniquify)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -2698,7 +2698,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
                 return [], 0
             result = self._execute(
                 statement,
-                uniquify=self._get_uniquify(loader_options_have_wildcard or uniquify),
+                uniquify=self._get_uniquify(requires_unique or uniquify),
             )
             instances: List[ModelT] = []
             for (instance,) in result:
@@ -3655,7 +3655,7 @@ class SQLAlchemySyncQueryRepository:
 
         Args:
             statement: To facilitate customization of the underlying select query.
-            count_with_window_function: Force list and count to use two queries instead of an analytical window function.
+            count_with_window_function: Use an analytical window function when true, or two queries when false.
             bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 

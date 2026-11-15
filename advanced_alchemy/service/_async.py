@@ -703,12 +703,17 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
         if not config and not session:
             raise AdvancedAlchemyError(detail="Please supply an optional configuration or session to use.")
 
+        overrides: dict[str, Any] = {}
+        if model_type is not None:
+            overrides["model_type"] = model_type
+        if repository_type is not None:
+            overrides["repository_type"] = repository_type
+
         if session:
             yield cls(
                 statement=statement,
                 session=session,
-                model_type=model_type,
-                repository_type=repository_type,
+                **overrides,
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
@@ -720,8 +725,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
                 yield cls(
                     statement=statement,
                     session=db_session,
-                    model_type=model_type,
-                    repository_type=repository_type,
+                    **overrides,
                     error_messages=error_messages,
                     load=load,
                     execution_options=execution_options,

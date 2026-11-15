@@ -122,7 +122,7 @@ class SQLAlchemySyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemySyncR
         self._default_options: Any = []
         self._default_execution_options: Any = {}
         self._loader_options: Any = []
-        self._loader_options_have_wildcards = False
+        self._loader_options_require_unique = False
         self.uniquify = bool(uniquify)
         self._pk_columns, self._pk_attr_names = get_primary_key_info(self.model_type)
 

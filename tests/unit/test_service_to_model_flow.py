@@ -841,3 +841,63 @@ def test_custom_init_model_update_applies_constructor_side_effects() -> None:
             assert updated.body == "keep-me"
     finally:
         engine.dispose()
+
+
+@pytest.mark.parametrize("use_config", [False, True])
+async def test_service_new_preserves_custom_constructor(use_config: bool) -> None:
+    """Inherited factories preserve constructors predating the model/repository overrides."""
+
+    class LegacyAsyncService(SQLAlchemyAsyncRepositoryService[MockModel]):
+        def __init__(
+            self,
+            session: Any,
+            statement: Any = None,
+            error_messages: Any = None,
+            load: Any = None,
+            execution_options: Any = None,
+            uniquify: Any = None,
+            count_with_window_function: Any = None,
+        ) -> None:
+            super().__init__(session=session)
+
+    class LegacySyncService(SQLAlchemySyncRepositoryService[MockModel]):
+        def __init__(
+            self,
+            session: Any,
+            statement: Any = None,
+            error_messages: Any = None,
+            load: Any = None,
+            execution_options: Any = None,
+            uniquify: Any = None,
+            count_with_window_function: Any = None,
+        ) -> None:
+            super().__init__(session=session)
+
+    async_session = AsyncMock(spec=AsyncSession, bind=MagicMock(), info={})
+    sync_session = MagicMock(spec=Session, bind=MagicMock(), info={})
+    async_config = MagicMock()
+    async_config.get_session.return_value.__aenter__.return_value = async_session
+    sync_config = MagicMock()
+    sync_config.get_session.return_value.__enter__.return_value = sync_session
+    async_options: dict[str, Any] = {"config": async_config} if use_config else {"session": async_session}
+    sync_options: dict[str, Any] = {"config": sync_config} if use_config else {"session": sync_session}
+    async with LegacyAsyncService.new(**async_options) as svc:
+        assert svc.repository.session is async_session
+    with LegacySyncService.new(**sync_options) as svc_sync:
+        assert svc_sync.repository.session is sync_session
+
+
+async def test_service_new_explicit_overrides() -> None:
+    """Factory overrides still reach the constructed service in sync and async mode."""
+    async_session = AsyncMock(spec=AsyncSession, bind=MagicMock(), info={})
+    sync_session = MagicMock(spec=Session, bind=MagicMock(), info={})
+    async with SQLAlchemyAsyncRepositoryService.new(
+        session=async_session, model_type=MockModel, repository_type=SQLAlchemyAsyncMockRepository
+    ) as svc:
+        assert isinstance(svc.repository, SQLAlchemyAsyncMockRepository)
+        assert svc.repository.model_type is MockModel
+    with SQLAlchemySyncRepositoryService.new(
+        session=sync_session, model_type=MockModel, repository_type=SQLAlchemySyncMockRepository
+    ) as svc_sync:
+        assert isinstance(svc_sync.repository, SQLAlchemySyncMockRepository)
+        assert svc_sync.repository.model_type is MockModel

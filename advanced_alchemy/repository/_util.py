@@ -410,12 +410,12 @@ def get_abstract_loader_options(
         loads.append(lazyload("*"))
     if cycle_count == 0 and merge_with_default and default_loader_options is not None:
         loads.extend(default_loader_options)
-    options_have_wildcards = default_options_have_wildcards
+    requires_unique = default_options_have_wildcards
     if loader_options is None:
-        return (loads, options_have_wildcards)
+        return (loads, requires_unique)
     if isinstance(loader_options, ExecutableOption):
         loads.append(loader_options)
-        return (loads, options_have_wildcards or _joins_collection(loader_options, fallback=options_have_wildcards))
+        return (loads, requires_unique or _joins_collection(loader_options, fallback=requires_unique))
     if isinstance(loader_options, InstrumentedAttribute):
         loader_options = loader_options.property
     if isinstance(loader_options, RelationshipProperty):
@@ -423,16 +423,16 @@ def get_abstract_loader_options(
         loads.append(
             selectinload(class_) if loader_options.uselist else joinedload(class_, innerjoin=loader_options.innerjoin)
         )
-        return (loads, options_have_wildcards)
+        return (loads, requires_unique)
     if isinstance(loader_options, str) and loader_options == "*":
         loads.append(joinedload("*"))
         return (loads, True)
     if isinstance(loader_options, (list, tuple)):
         for attribute in loader_options:  # pyright: ignore[reportUnknownVariableType]
             if isinstance(attribute, (list, tuple)):
-                load_chain, options_have_wildcards = get_abstract_loader_options(
+                load_chain, requires_unique = get_abstract_loader_options(
                     loader_options=attribute,  # pyright: ignore[reportUnknownArgumentType]
-                    default_options_have_wildcards=options_have_wildcards,
+                    default_options_have_wildcards=requires_unique,
                     inherit_lazy_relationships=inherit_lazy_relationships,
                     merge_with_default=merge_with_default,
                     cycle_count=cycle_count + 1,
@@ -444,15 +444,15 @@ def get_abstract_loader_options(
                     loader = cast("Any", sub_load).options(loader)
                 loads.append(loader)
             else:
-                load_chain, options_have_wildcards = get_abstract_loader_options(
+                load_chain, requires_unique = get_abstract_loader_options(
                     loader_options=attribute,  # pyright: ignore[reportUnknownArgumentType]
-                    default_options_have_wildcards=options_have_wildcards,
+                    default_options_have_wildcards=requires_unique,
                     inherit_lazy_relationships=inherit_lazy_relationships,
                     merge_with_default=merge_with_default,
                     cycle_count=cycle_count + 1,
                 )
                 loads.extend(load_chain)
-    return (loads, options_have_wildcards)
+    return (loads, requires_unique)
 
 
 def is_mapped_model_class(candidate: Any) -> bool:
