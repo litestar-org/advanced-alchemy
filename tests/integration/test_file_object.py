@@ -1,6 +1,6 @@
 import logging
 import sys
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 from contextlib import suppress
 from pathlib import Path
 from typing import Any, Optional
@@ -13,7 +13,7 @@ from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from advanced_alchemy._listeners import set_async_context, setup_file_object_listeners
+from advanced_alchemy._listeners import FileObjectListener, set_async_context, setup_file_object_listeners
 from advanced_alchemy.base import create_registry
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.types.file_object import (
@@ -32,6 +32,26 @@ logger = logging.getLogger(__name__)
 pytestmark = [
     pytest.mark.integration,
 ]
+
+
+@pytest.fixture(autouse=True)
+def preserve_global_file_object_listeners() -> Generator[None, None, None]:
+    """Restore legacy listener registrations after each storage test."""
+    listeners: dict[str, Callable[..., Any]] = {
+        "before_flush": FileObjectListener.before_flush,
+        "after_commit": FileObjectListener.after_commit,
+        "after_rollback": FileObjectListener.after_rollback,
+    }
+    registrations = [(name, listener, event.contains(Session, name, listener)) for name, listener in listeners.items()]
+    try:
+        yield
+    finally:
+        for name, listener, was_registered in registrations:
+            is_registered = event.contains(Session, name, listener)
+            if was_registered and not is_registered:
+                event.listen(Session, name, listener)
+            elif not was_registered and is_registered:
+                event.remove(Session, name, listener)
 
 
 def remove_listeners() -> None:
@@ -1568,7 +1588,6 @@ async def test_obstore_backend_listener_delete_on_update_clear_async(
         await backend.get_content_async(old_path)
 
 
-@pytest.mark.flaky(reruns=5)
 def test_obstore_backend_listener_update_file_object_sync(session: Session, storage_registry: StorageRegistry) -> None:
     """Test listener deletes old file when attribute is updated and session committed using synchronous SQLAlchemy session."""
     setup_file_object_listeners()
@@ -1578,7 +1597,6 @@ def test_obstore_backend_listener_update_file_object_sync(session: Session, stor
     old_path = "old_file_sync_update.txt"
     new_path = "new_file_sync_update.txt"
 
-    # Save initial file and model
     old_obj = FileObject(
         backend=backend, filename="old_file_sync_update.txt", to_filename=old_path, content=old_content
     )
@@ -1587,25 +1605,21 @@ def test_obstore_backend_listener_update_file_object_sync(session: Session, stor
     session.commit()
     session.refresh(doc)
 
-    # Verify old file exists
     assert backend.get_content(old_path) == old_content
 
-    # Update the document's attachment (inline creation)
     new_obj = FileObject(
         backend=backend, filename="new_file_sync_update.txt", to_filename=new_path, content=new_content
     )
     doc.attachment = new_obj
-    session.add(doc)  # Add again as it's modified
-    session.commit()  # Listener should save new_obj and queue deletion of old_obj
+    session.add(doc)
+    session.commit()
     session.refresh(doc)
 
-    # Verify new file exists and attachment updated
     assert backend.get_content(new_path) == new_content
     attachment = doc.attachment
     assert attachment is not None
     assert attachment.path == new_path
 
-    # Verify the listener deleted the old file from storage
     with pytest.raises(FileNotFoundError):
         backend.get_content(old_path)
 
@@ -1623,7 +1637,6 @@ async def test_obstore_backend_listener_update_file_object_async(
     old_path = "old_file_async_update.txt"
     new_path = "new_file_async_update.txt"
 
-    # Save initial file and model
     old_obj = FileObject(
         backend=backend, filename="old_file_async_update.txt", to_filename=old_path, content=old_content
     )
@@ -1632,16 +1645,14 @@ async def test_obstore_backend_listener_update_file_object_async(
     await async_session.commit()
     await async_session.refresh(doc)
 
-    # Verify old file exists
     assert backend.get_content(old_path) == old_content
 
-    # Update the document's attachment (inline creation)
     new_obj = FileObject(
         backend=backend, filename="new_file_async_update.txt", to_filename=new_path, content=new_content
     )
     doc.attachment = new_obj
-    async_session.add(doc)  # Add again as it's modified
-    await async_session.commit()  # Listener should save new_obj and queue deletion of old_obj
+    async_session.add(doc)
+    await async_session.commit()
     await async_session.refresh(doc)
 
     assert backend.get_content(new_path) == new_content
@@ -1649,12 +1660,10 @@ async def test_obstore_backend_listener_update_file_object_async(
     assert attachment is not None
     assert attachment.path == new_path
 
-    # Verify the listener deleted the old file from storage
     with pytest.raises(FileNotFoundError):
         backend.get_content(old_path)
 
 
-@pytest.mark.flaky(reruns=5)
 def test_obstore_backend_listener_delete_multiple_removed_sync(
     session: Session, storage_registry: StorageRegistry
 ) -> None:
@@ -1667,35 +1676,29 @@ def test_obstore_backend_listener_delete_multiple_removed_sync(
     path1 = "multi_del_1_sync.dat"
     path2 = "multi_del_2_sync.dat"
 
-    # Save files
     obj1 = FileObject(backend=backend, filename=path1, content=content1)
     obj2 = FileObject(backend=backend, filename=path2, content=content2)
 
-    # Create model with initial list
     doc = Document(name="MultiDeleteSyncTest", images=[obj1, obj2])
     session.add(doc)
     session.commit()
     session.refresh(doc)
 
-    # Verify all files exist
     assert backend.get_content(path1) == content1
     assert backend.get_content(path2) == content2
 
-    # Remove items from the list (triggers MutableList tracking)
     assert doc.images is not None
-    current_images = list(doc.images)  # Create standard list copy
-    removed_item = current_images.pop(1)  # Mutate copy
+    current_images = list(doc.images)
+    removed_item = current_images.pop(1)
     assert removed_item.path == obj2.path
-    del current_images[0]  # Mutate copy
+    del current_images[0]
     assert len(current_images) == 0
-    doc.images = MutableList(current_images)  # Wrap in MutableList before reassignment
+    doc.images = MutableList(current_images)
 
     session.add(doc)
-    # Commit the session to trigger listener
     session.commit()
     session.refresh(doc)
     assert doc.images == []
-    # Verify the listener deleted the files
     with pytest.raises(FileNotFoundError):
         backend.get_content(path1)
     with pytest.raises(FileNotFoundError):

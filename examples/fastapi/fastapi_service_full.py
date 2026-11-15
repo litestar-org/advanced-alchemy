@@ -92,7 +92,7 @@ class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
 
                 # First mark books for deletion
                 for book_rm in books_to_remove:
-                    self.repository.session.delete(book_rm)
+                    await self.repository.session.delete(book_rm)
                     data.books.remove(book_rm)
 
                 # Finally add new books

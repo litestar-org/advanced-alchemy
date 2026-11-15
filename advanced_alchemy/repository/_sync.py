@@ -4,11 +4,12 @@ import contextlib
 import datetime
 import random
 import string
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from functools import partial
 from typing import (
     TYPE_CHECKING,
     Any,
+    Generic,
     List,
     Literal,
     Optional,
@@ -41,13 +42,20 @@ from sqlalchemy import func as sql_func
 from sqlalchemy.exc import MissingGreenlet, NoInspectionAvailable
 from sqlalchemy.orm import InstrumentedAttribute, Session
 from sqlalchemy.orm.scoping import scoped_session
-from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
 from sqlalchemy.sql import ColumnElement
+from sqlalchemy.sql.base import ExecutableOption
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
 from sqlalchemy.sql.selectable import ForUpdateArg, ForUpdateParameter
 
+from advanced_alchemy._listeners import flush_pending_sync_listener_tasks
 from advanced_alchemy.base import model_to_dict
-from advanced_alchemy.exceptions import ErrorMessages, NotFoundError, RepositoryError, wrap_sqlalchemy_exception
+from advanced_alchemy.exceptions import (
+    ErrorMessages,
+    ImproperConfigurationError,
+    NotFoundError,
+    RepositoryError,
+    wrap_sqlalchemy_exception,
+)
 from advanced_alchemy.filters import StatementFilter, StatementTypeT
 from advanced_alchemy.operations import (
     OnConflictUpsert,
@@ -55,20 +63,18 @@ from advanced_alchemy.operations import (
     resolve_upsert_strategy,
 )
 from advanced_alchemy.repository._util import (
-    DEFAULT_ERROR_MESSAGE_TEMPLATES,
     FilterableRepository,
     FilterableRepositoryProtocol,
     LoadSpec,
     _build_cache_key,  # pyright: ignore
+    allows_explicit_none_update,
     column_has_defaults,
     compare_values,
-    extract_pk_value_from_instance,
     get_abstract_loader_options,
     get_instrumented_attr,
     get_primary_key_info,
-    is_composite_pk,
     pk_values_present,
-    validate_composite_pk_value,
+    snapshot_and_detach_relationships,
     was_attribute_set,
 )
 from advanced_alchemy.repository.typing import MISSING, ModelT, OrderingPair, PrimaryKeyType, T
@@ -79,6 +85,7 @@ from advanced_alchemy.utils.text import slugify
 
 if TYPE_CHECKING:
     from sqlalchemy.engine.interfaces import _CoreSingleExecuteParams  # pyright: ignore[reportPrivateUsage]
+    from sqlalchemy.orm.state import InstanceState
 
     from advanced_alchemy.cache.manager import CacheManager
 
@@ -108,11 +115,14 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
 
     def has_primary_key_values(self, instance: ModelT) -> bool: ...
 
+    def set_primary_key_value(self, instance: ModelT, pk_value: PrimaryKeyType) -> ModelT: ...
+
     def __init__(
         self,
         *,
         statement: Optional[Select[tuple[ModelT]]] = None,
         session: Union[Session, scoped_session[Session]],
+        model_type: Optional[type[ModelT]] = None,
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
@@ -342,7 +352,7 @@ class SQLAlchemySyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pro
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: Optional[List[_AbstractLoad]],
+        loader_options: Optional[Sequence[ExecutableOption]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]: ...
 
@@ -502,7 +512,7 @@ class SQLAlchemySyncSlugRepositoryProtocol(SQLAlchemySyncRepositoryProtocol[Mode
         ...
 
 
-class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], FilterableRepository[ModelT]):
+class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepositoryProtocol[ModelT]):
     """Async SQLAlchemy repository implementation.
 
     Provides a complete implementation of async database operations using SQLAlchemy,
@@ -551,6 +561,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         *,
         statement: Optional[Select[tuple[ModelT]]] = None,
         session: Union[Session, scoped_session[Session]],
+        model_type: Optional[type[ModelT]] = None,
         auto_expunge: bool = False,
         auto_refresh: bool = True,
         auto_commit: bool = False,
@@ -570,6 +581,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Args:
             statement: To facilitate customization of the underlying select query.
             session: Session managing the unit-of-work for the operation.
+            model_type: Optional SQLAlchemy model type when instantiating directly without subclassing.
             auto_expunge: Remove object from session before returning.
             auto_refresh: Refresh object from session before returning.
             auto_commit: Commit objects before returning.
@@ -585,6 +597,15 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             **kwargs: Additional arguments.
 
         """
+        if model_type is not None:
+            self.model_type = model_type
+        if getattr(self, "model_type", None) is None:
+            msg = (
+                "Repository 'model_type' is not configured. Specify the model via "
+                "generic type parameter (e.g. SQLAlchemyAsyncRepository[Model]), "
+                "class attribute 'model_type = Model', or keyword argument 'model_type=Model'."
+            )
+            raise ImproperConfigurationError(msg)
         self.auto_expunge = auto_expunge
         self.auto_refresh = auto_refresh
         self.auto_commit = auto_commit
@@ -598,7 +619,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self.count_with_window_function = (
             count_with_window_function if count_with_window_function is not None else self.count_with_window_function
         )
-        self._default_loader_options, self._loader_options_have_wildcards = get_abstract_loader_options(
+        self._default_loader_options, self._loader_options_require_unique = get_abstract_loader_options(
             loader_options=load if load is not None else self.loader_options,
             inherit_lazy_relationships=self.inherit_lazy_relationships,
             merge_with_default=self.merge_loader_options,
@@ -608,11 +629,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         self.statement = select(self.model_type) if statement is None else statement
         self._dialect = self.session.bind.dialect if self.session.bind is not None else self.session.get_bind().dialect
         self._prefer_any = any(self._dialect.name == engine_type for engine_type in self.prefer_any_dialects or ())
-        # Cache manager: from explicit param or session.info (set by SQLAlchemyAsyncConfig)
         self._cache_manager = cache_manager if cache_manager is not None else session.info.get("cache_manager")
-        # Default bind group for all operations (can be overridden per-method)
         self._bind_group = bind_group
-        # Cache primary key columns for composite key support
         self._pk_columns, self._pk_attr_names = get_primary_key_info(self.model_type)
 
     def _get_uniquify(self, uniquify: Optional[bool] = None) -> bool:
@@ -691,236 +709,46 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                     unique_values.append(value)
         return unique_values
 
-    @staticmethod
-    def _get_error_messages(
+    def _wrap_exceptions(
+        self,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-        default_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
-    ) -> Optional[ErrorMessages]:
-        if error_messages == Empty:
-            error_messages = None
-        if default_messages == Empty:
-            default_messages = None
-        messages = cast("ErrorMessages", dict(DEFAULT_ERROR_MESSAGE_TEMPLATES))
-        if default_messages and isinstance(default_messages, dict):
-            messages.update(default_messages)
-        if error_messages:
-            messages.update(cast("ErrorMessages", error_messages))  # type: ignore[unused-ignore,redundant-cast]
-        return messages
-
-    @classmethod
-    def get_id_attribute_value(
-        cls,
-        item: Union[ModelT, type[ModelT]],
-        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
-    ) -> Any:
-        """Get value of attribute named as :attr:`id_attribute` on ``item``.
-
-        Args:
-            item: Anything that should have an attribute named as :attr:`id_attribute` value.
-            id_attribute: Allows customization of the unique identifier to use for model fetching.
-                Defaults to `None`, but can reference any surrogate or candidate key for the table.
-
-        Returns:
-            The value of attribute on ``item`` named as :attr:`id_attribute`.
-        """
-        if isinstance(id_attribute, InstrumentedAttribute):
-            id_attribute = id_attribute.key
-        return getattr(item, id_attribute if id_attribute is not None else cls.id_attribute)
-
-    @classmethod
-    def set_id_attribute_value(
-        cls,
-        item_id: Any,
-        item: ModelT,
-        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
-    ) -> ModelT:
-        """Return the ``item`` after the ID is set to the appropriate attribute.
-
-        Args:
-            item_id: Value of ID to be set on instance
-            item: Anything that should have an attribute named as :attr:`id_attribute` value.
-            id_attribute: Allows customization of the unique identifier to use for model fetching.
-                Defaults to `None`, but can reference any surrogate or candidate key for the table.
-
-        Returns:
-            Item with ``item_id`` set to :attr:`id_attribute`
-        """
-        if isinstance(id_attribute, InstrumentedAttribute):
-            id_attribute = id_attribute.key
-        setattr(item, id_attribute if id_attribute is not None else cls.id_attribute, item_id)
-        return item
-
-    @property
-    def pk_attr_names(self) -> tuple[str, ...]:
-        """Get primary key attribute names.
-
-        Returns:
-            Tuple of ORM attribute names for primary key columns.
-        """
-        return self._pk_attr_names
-
-    @property
-    def has_composite_pk(self) -> bool:
-        """Check if model has a composite (multi-column) primary key.
-
-        Returns:
-            True if the model has 2 or more primary key columns, False otherwise.
-
-        Examples:
-            >>> repo.has_composite_pk  # For model with single PK
-            False
-            >>> repo.has_composite_pk  # For model with (user_id, role_id) PK
-            True
-        """
-        return is_composite_pk(self._pk_columns)
-
-    def _build_pk_filter(self, pk_value: PrimaryKeyType) -> ColumnElement[bool]:
-        """Build a WHERE clause for primary key lookup.
-
-        Supports single and composite primary keys with flexible input formats.
-
-        Args:
-            pk_value: Primary key value(s).
-                - For single PK: scalar value (int, str, UUID, etc.)
-                - For composite PK: tuple of values in column order, or dict mapping attribute names to values
-
-        Returns:
-            SQLAlchemy WHERE clause expression.
-
-        Raises:
-            ValueError: If the input format doesn't match the primary key structure.
-
-        Examples:
-            # Single primary key
-            >>> filter = repo._build_pk_filter(123)
-            >>> # Generates: WHERE id = 123
-
-            # Composite primary key (tuple format)
-            >>> filter = repo._build_pk_filter((1, 5))
-            >>> # Generates: WHERE user_id = 1 AND role_id = 5
-
-            # Composite primary key (dict format)
-            >>> filter = repo._build_pk_filter({"user_id": 1, "role_id": 5})
-            >>> # Generates: WHERE user_id = 1 AND role_id = 5
-        """
-        pk_columns = self._pk_columns
-        pk_attr_names = self._pk_attr_names
-
-        # Fallback for models without mapped primary key (e.g., mock objects)
-        # In this case, use id_attribute for backward compatibility
-        if len(pk_columns) == 0:
-            id_attr = get_instrumented_attr(self.model_type, self.id_attribute)
-            result: ColumnElement[bool] = id_attr == pk_value
-            return result
-
-        # Single primary key - accept scalar value only
-        if len(pk_columns) == 1:
-            if isinstance(pk_value, tuple):
-                msg = (
-                    f"Model {self.model_type.__name__} has a single primary key column '{pk_attr_names[0]}'. "
-                    f"Expected a scalar value, got tuple: {pk_value!r}"
-                )
-                raise ValueError(msg)
-            if isinstance(pk_value, dict):
-                msg = (
-                    f"Model {self.model_type.__name__} has a single primary key column '{pk_attr_names[0]}'. "
-                    f"Expected a scalar value, got dict: {pk_value!r}"
-                )
-                raise ValueError(msg)
-            single_pk_result: ColumnElement[bool] = pk_columns[0] == pk_value
-            return single_pk_result
-
-        pk_tuple = validate_composite_pk_value(pk_value, pk_attr_names, self.model_type.__name__)
-        return and_(*[col == val for col, val in zip(pk_columns, pk_tuple)])
-
-    def get_primary_key_value(self, instance: ModelT) -> PrimaryKeyType:
-        """Extract the primary key value(s) from a model instance.
-
-        Args:
-            instance: Model instance to extract primary key from.
-
-        Returns:
-            - For single PK: scalar value (int, str, UUID, etc.)
-            - For composite PK: tuple of values in column order
-
-        Examples:
-            # Single primary key
-            >>> user = User(id=123, name="Alice")
-            >>> repo.get_primary_key_value(user)
-            123
-
-            # Composite primary key
-            >>> assignment = UserRole(user_id=1, role_id=5)
-            >>> repo.get_primary_key_value(assignment)
-            (1, 5)
-        """
-        return extract_pk_value_from_instance(instance, self._pk_attr_names)
-
-    def has_primary_key_values(self, instance: ModelT) -> bool:
-        """Check if all primary key values are set on an instance.
-
-        Args:
-            instance: Model instance to check.
-
-        Returns:
-            True if all PK values are non-None, False otherwise.
-        """
-        return pk_values_present(instance, self._pk_attr_names)
-
-    def _normalize_pk_values_to_tuples(self, item_ids: list[PrimaryKeyType]) -> list[tuple[Any, ...]]:
-        """Normalize a list of composite primary key values to tuples.
-
-        Args:
-            item_ids: List of PK values (dicts or tuples).
-
-        Returns:
-            List of tuples with values in PK column order.
-
-        Raises:
-            TypeError: If a value is not a dict or tuple.
-            ValueError: If tuple length doesn't match PK columns, dict is missing keys, or values are None.
-        """
-        pk_attr_names = self._pk_attr_names
-        model_name = self.model_type.__name__
-        return [validate_composite_pk_value(pk_value, pk_attr_names, model_name) for pk_value in item_ids]
-
-    @staticmethod
-    def check_not_found(item_or_none: Optional[ModelT]) -> ModelT:
-        """Raise :exc:`advanced_alchemy.exceptions.NotFoundError` if ``item_or_none`` is ``None``.
-
-        Args:
-            item_or_none: Item (:class:`T <T>`) to be tested for existence.
-
-        Raises:
-            NotFoundError: If ``item_or_none`` is ``None``
-
-        Returns:
-            The item, if it exists.
-        """
-        if item_or_none is None:
-            msg = "No item found when one was expected"
-            raise NotFoundError(msg)
-        return item_or_none
+    ) -> contextlib.AbstractContextManager[None]:
+        resolved_messages = self._get_error_messages(
+            error_messages=error_messages,
+            default_messages=self.error_messages,
+        )
+        return wrap_sqlalchemy_exception(
+            error_messages=resolved_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        )
 
     def _get_execution_options(
         self,
         execution_options: Optional[dict[str, Any]] = None,
+        *,
+        bind_group: Optional[str] = None,
     ) -> dict[str, Any]:
-        if execution_options is None:
-            return self._default_execution_options
-        return execution_options
+        resolved_bind_group = self._resolve_bind_group(bind_group)
+        base_options = self._default_execution_options if execution_options is None else execution_options
+        if resolved_bind_group:
+            merged_options = dict(base_options)
+            merged_options["bind_group"] = resolved_bind_group
+            return merged_options
+        return base_options
 
     def _get_loader_options(
         self,
         loader_options: Optional[LoadSpec],
-    ) -> Union[tuple[List[_AbstractLoad], bool], tuple[None, bool]]:
+        uniquify: Optional[bool] = None,
+    ) -> Union[tuple[List[ExecutableOption], bool], tuple[None, bool]]:
+        resolved_uniquify = self._get_uniquify(uniquify)
         if loader_options is None:
-            # use the defaults set at initialization
-            return self._default_loader_options, self._loader_options_have_wildcards or self._uniquify
+            return self._default_loader_options, self._loader_options_require_unique or resolved_uniquify
         return get_abstract_loader_options(
             loader_options=loader_options,
             default_loader_options=self._default_loader_options,
-            default_options_have_wildcards=self._loader_options_have_wildcards or self._uniquify,
+            default_options_have_wildcards=self._loader_options_require_unique or resolved_uniquify,
             inherit_lazy_relationships=self.inherit_lazy_relationships,
             merge_with_default=self.merge_loader_options,
         )
@@ -1041,30 +869,19 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             >>> deleted = await user_role_repo.delete((user_id, role_id))
 
         """
-        self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
-            error_messages=error_messages,
-            default_messages=self.error_messages,
-        )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
-            resolved_bind_group = self._resolve_bind_group(bind_group)
-            if resolved_bind_group:
-                execution_options = dict(execution_options) if execution_options else {}
-                execution_options["bind_group"] = resolved_bind_group
-            execution_options = self._get_execution_options(execution_options)
+        with self._wrap_exceptions(error_messages=error_messages):
+            execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             instance = self.get(
                 item_id,
                 id_attribute=id_attribute,
                 load=load,
                 execution_options=execution_options,
+                uniquify=uniquify,
                 bind_group=bind_group,
             )
             self.session.delete(instance)
             self._flush_or_commit(auto_commit=auto_commit)
             self._expunge(instance, auto_expunge=auto_expunge)
-            # Queue cache invalidation (processed on commit)
             self._queue_cache_invalidation(item_id, bind_group)
             return instance
 
@@ -1130,117 +947,144 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             ... )
 
         """
-        self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
-            error_messages=error_messages,
-            default_messages=self.error_messages,
-        )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
-            resolved_bind_group = self._resolve_bind_group(bind_group)
-            if resolved_bind_group:
-                execution_options = dict(execution_options) if execution_options else {}
-                execution_options["bind_group"] = resolved_bind_group
-            execution_options = self._get_execution_options(execution_options)
-            loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
+        with self._wrap_exceptions(error_messages=error_messages):
+            execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
+            loader_options, _requires_unique = self._get_loader_options(load, uniquify)
             instances: List[ModelT] = []
 
-            # Determine if using composite key path or single column path
-            use_composite_path = id_attribute is None and self.has_composite_pk
-
-            if use_composite_path:
-                # Composite primary key path using tuple_().in_()
-                # Adjust chunk size for composite keys (divide by number of PK columns)
-                base_chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
-                effective_chunk_size = max(1, base_chunk_size // len(self._pk_columns))
-                normalized_ids = self._normalize_pk_values_to_tuples(item_ids)
-
-                for idx in range(0, len(normalized_ids), effective_chunk_size):
-                    chunk = normalized_ids[idx : min(idx + effective_chunk_size, len(normalized_ids))]
-                    pk_filter = (
-                        or_(
-                            *[and_(*[col == val for col, val in zip(self._pk_columns, pk_tuple)]) for pk_tuple in chunk]
-                        )
-                        if self._dialect.name == "mssql"
-                        else tuple_(*self._pk_columns).in_(chunk)
-                    )
-
-                    if self._dialect.delete_executemany_returning:
-                        returning_delete_stmt = delete(self.model_type).where(pk_filter).returning(self.model_type)
-                        if execution_options:
-                            returning_delete_stmt = returning_delete_stmt.execution_options(**execution_options)
-                        instances.extend(self.session.scalars(returning_delete_stmt))
-                    else:
-                        # Select first, then delete
-                        select_stmt = select(self.model_type).where(pk_filter)
-                        if loader_options:
-                            select_stmt = select_stmt.options(*loader_options)
-                        if execution_options:
-                            select_stmt = select_stmt.execution_options(**execution_options)
-                        instances.extend(self.session.scalars(select_stmt))
-
-                        plain_delete_stmt = delete(self.model_type).where(pk_filter)
-                        if execution_options:
-                            plain_delete_stmt = plain_delete_stmt.execution_options(**execution_options)
-                        self.session.execute(plain_delete_stmt)
-            else:
-                # Single column path (existing behavior)
-                id_attr = get_instrumented_attr(
-                    self.model_type,
-                    id_attribute if id_attribute is not None else self.id_attribute,
+            if self._requires_orm_delete():
+                instances = self._fetch_many_by_ids(
+                    item_ids,
+                    id_attribute=id_attribute,
+                    chunk_size=chunk_size,
+                    load=load,
+                    execution_options=execution_options,
+                    uniquify=uniquify,
                 )
-                if self._prefer_any:
-                    chunk_size = len(item_ids) + 1
-                chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
-                for idx in range(0, len(item_ids), chunk_size):
-                    chunk = cast("List[Any]", item_ids[idx : min(idx + chunk_size, len(item_ids))])
-                    if self._dialect.delete_executemany_returning:
-                        instances.extend(
-                            self.session.scalars(
-                                self._get_delete_many_statement(
-                                    statement_type="delete",
-                                    model_type=self.model_type,
-                                    id_attribute=id_attr,
-                                    id_chunk=chunk,
-                                    supports_returning=self._dialect.delete_executemany_returning,
-                                    loader_options=loader_options,
-                                    execution_options=execution_options,
-                                ),
-                            ),
-                        )
-                    else:
-                        instances.extend(
-                            self.session.scalars(
-                                self._get_delete_many_statement(
-                                    statement_type="select",
-                                    model_type=self.model_type,
-                                    id_attribute=id_attr,
-                                    id_chunk=chunk,
-                                    supports_returning=self._dialect.delete_executemany_returning,
-                                    loader_options=loader_options,
-                                    execution_options=execution_options,
-                                ),
-                            ),
-                        )
-                        self.session.execute(
-                            self._get_delete_many_statement(
-                                statement_type="delete",
-                                model_type=self.model_type,
-                                id_attribute=id_attr,
-                                id_chunk=chunk,
-                                supports_returning=self._dialect.delete_executemany_returning,
-                                loader_options=loader_options,
-                                execution_options=execution_options,
-                            ),
-                        )
+                for instance in instances:
+                    self.session.delete(instance)
+            elif id_attribute is None and self.has_composite_pk:
+                instances = self._delete_many_composite(
+                    item_ids,
+                    chunk_size=chunk_size,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                )
+            else:
+                instances = self._delete_many_by_id_attr(
+                    item_ids,
+                    id_attribute=id_attribute,
+                    chunk_size=chunk_size,
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                )
             self._flush_or_commit(auto_commit=auto_commit)
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
-                # Queue cache invalidation (processed on commit)
-                # Use get_primary_key_value for composite PK support
                 self._queue_cache_invalidation(self.get_primary_key_value(instance), bind_group)
             return instances
+
+    def _build_composite_pk_filter(self, chunk: Sequence[tuple[Any, ...]]) -> ColumnElement[bool]:
+        if self._dialect.name == "mssql":
+            return or_(*[and_(*[col == val for col, val in zip(self._pk_columns, pk_tuple)]) for pk_tuple in chunk])
+        return tuple_(*self._pk_columns).in_(chunk)
+
+    def _delete_many_composite(
+        self,
+        item_ids: List[PrimaryKeyType],
+        *,
+        chunk_size: Optional[int],
+        loader_options: Any,
+        execution_options: dict[str, Any],
+    ) -> List[ModelT]:
+        base_chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
+        effective_chunk_size = max(1, base_chunk_size // len(self._pk_columns))
+        normalized_ids = self._normalize_pk_values_to_tuples(item_ids)
+        instances: List[ModelT] = []
+        for idx in range(0, len(normalized_ids), effective_chunk_size):
+            chunk = normalized_ids[idx : min(idx + effective_chunk_size, len(normalized_ids))]
+            pk_filter = self._build_composite_pk_filter(chunk)
+            if self._dialect.delete_executemany_returning:
+                returning_delete_stmt = self._get_base_stmt(
+                    statement=delete(self.model_type).where(pk_filter),
+                    loader_options=None,
+                    execution_options=execution_options,
+                ).returning(self.model_type)
+                instances.extend(self.session.scalars(returning_delete_stmt))
+            else:
+                select_stmt = self._get_base_stmt(
+                    statement=select(self.model_type).where(pk_filter),
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                )
+                instances.extend(self.session.scalars(select_stmt))
+                plain_delete_stmt = self._get_base_stmt(
+                    statement=delete(self.model_type).where(pk_filter),
+                    loader_options=None,
+                    execution_options=execution_options,
+                )
+                self.session.execute(plain_delete_stmt)
+        return instances
+
+    def _delete_many_by_id_attr(
+        self,
+        item_ids: List[PrimaryKeyType],
+        *,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]],
+        chunk_size: Optional[int],
+        loader_options: Any,
+        execution_options: dict[str, Any],
+    ) -> List[ModelT]:
+        id_attr = get_instrumented_attr(
+            self.model_type,
+            id_attribute if id_attribute is not None else self.id_attribute,
+        )
+        if self._prefer_any:
+            chunk_size = len(item_ids) + 1
+        chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
+        instances: List[ModelT] = []
+        for idx in range(0, len(item_ids), chunk_size):
+            chunk = cast("List[Any]", item_ids[idx : min(idx + chunk_size, len(item_ids))])
+            if self._dialect.delete_executemany_returning:
+                instances.extend(
+                    self.session.scalars(
+                        self._get_delete_many_statement(
+                            statement_type="delete",
+                            model_type=self.model_type,
+                            id_attribute=id_attr,
+                            id_chunk=chunk,
+                            supports_returning=self._dialect.delete_executemany_returning,
+                            loader_options=loader_options,
+                            execution_options=execution_options,
+                        ),
+                    ),
+                )
+            else:
+                instances.extend(
+                    self.session.scalars(
+                        self._get_delete_many_statement(
+                            statement_type="select",
+                            model_type=self.model_type,
+                            id_attribute=id_attr,
+                            id_chunk=chunk,
+                            supports_returning=self._dialect.delete_executemany_returning,
+                            loader_options=loader_options,
+                            execution_options=execution_options,
+                        ),
+                    ),
+                )
+                self.session.execute(
+                    self._get_delete_many_statement(
+                        statement_type="delete",
+                        model_type=self.model_type,
+                        id_attribute=id_attr,
+                        id_chunk=chunk,
+                        supports_returning=self._dialect.delete_executemany_returning,
+                        loader_options=loader_options,
+                        execution_options=execution_options,
+                    ),
+                )
+        return instances
 
     def delete_where(
         self,
@@ -1277,57 +1121,127 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             The deleted instances.
 
         """
-        self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
-            error_messages=error_messages,
-            default_messages=self.error_messages,
-        )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
+        with self._wrap_exceptions(error_messages=error_messages):
             resolved_bind_group = self._resolve_bind_group(bind_group)
-            if resolved_bind_group:
-                execution_options = dict(execution_options) if execution_options else {}
-                execution_options["bind_group"] = resolved_bind_group
-            execution_options = self._get_execution_options(execution_options)
-            loader_options, _loader_options_have_wildcard = self._get_loader_options(load)
+            execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
+            loader_options, _requires_unique = self._get_loader_options(load, uniquify)
             model_type = self.model_type
-            statement = self._get_base_stmt(
-                statement=delete(model_type),
-                loader_options=loader_options,
-                execution_options=execution_options,
-            )
-            statement = self._filter_select_by_kwargs(statement=statement, kwargs=kwargs)
-            statement = self._apply_filters(*filters, statement=statement, apply_pagination=False)
             instances: List[ModelT] = []
-            if self._dialect.delete_executemany_returning:
-                instances.extend(self.session.scalars(statement.returning(model_type)))
-            else:
+            if self._requires_orm_delete():
                 instances.extend(
                     self.get_many(
                         *filters,
                         load=load,
                         execution_options=execution_options,
-                        auto_expunge=auto_expunge,
-                        use_cache=False,  # Always fetch from DB for delete_where
+                        auto_expunge=False,
+                        uniquify=uniquify,
+                        use_cache=False,
                         bind_group=bind_group,
                         **kwargs,
                     ),
                 )
-                result = self.session.execute(statement)
-                row_count = getattr(result, "rowcount", -2)
-                if sanity_check and row_count >= 0 and len(instances) != row_count:  # pyright: ignore
-                    # backends will return a -1 if they can't determine impacted rowcount
-                    # only compare length of selected instances to results if it's >= 0
-                    self.session.rollback()
-                    raise RepositoryError(detail="Deleted count does not match fetched count. Rollback issued.")
+                for instance in instances:
+                    self.session.delete(instance)
+            else:
+                statement = self._get_base_stmt(
+                    statement=delete(model_type),
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                )
+                statement = self._filter_select_by_kwargs(statement=statement, kwargs=kwargs)
+                statement = self._apply_filters(*filters, statement=statement, apply_pagination=False)
+                if self._dialect.delete_executemany_returning:
+                    instances.extend(self.session.scalars(statement.returning(model_type)))
+                else:
+                    instances.extend(
+                        self.get_many(
+                            *filters,
+                            load=load,
+                            execution_options=execution_options,
+                            auto_expunge=auto_expunge,
+                            uniquify=uniquify,
+                            use_cache=False,
+                            bind_group=bind_group,
+                            **kwargs,
+                        ),
+                    )
+                    result = self.session.execute(statement)
+                    row_count = getattr(result, "rowcount", -2)
+                    if sanity_check and row_count >= 0 and len(instances) != row_count:  # pyright: ignore
+                        self.session.rollback()
+                        raise RepositoryError(detail="Deleted count does not match fetched count. Rollback issued.")
 
             self._flush_or_commit(auto_commit=auto_commit)
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
-                # Queue cache invalidation (processed on commit)
                 self._queue_cache_invalidation(self.get_primary_key_value(instance), resolved_bind_group)
             return instances
+
+    def _fetch_many_by_ids(
+        self,
+        item_ids: List[PrimaryKeyType],
+        *,
+        id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
+        chunk_size: Optional[int] = None,
+        load: Optional[LoadSpec] = None,
+        execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
+    ) -> List[ModelT]:
+        """Fetch multiple instances by primary key or ``id_attribute`` in dialect-safe chunks."""
+        if not item_ids:
+            return []
+        loader_options, requires_unique = self._get_loader_options(load, uniquify)
+        use_composite_path = id_attribute is None and self.has_composite_pk
+        instances: List[ModelT] = []
+        if use_composite_path:
+            base_chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
+            effective_chunk_size = max(1, base_chunk_size // len(self._pk_columns))
+            normalized_ids = self._normalize_pk_values_to_tuples(item_ids)
+            for idx in range(0, len(normalized_ids), effective_chunk_size):
+                chunk = normalized_ids[idx : min(idx + effective_chunk_size, len(normalized_ids))]
+                pk_filter = (
+                    or_(*[and_(*[col == val for col, val in zip(self._pk_columns, pk_tuple)]) for pk_tuple in chunk])
+                    if self._dialect.name == "mssql"
+                    else tuple_(*self._pk_columns).in_(chunk)
+                )
+                select_stmt = self._get_base_stmt(
+                    statement=select(self.model_type).where(pk_filter),
+                    loader_options=loader_options,
+                    execution_options=execution_options,
+                )
+                result = self._execute(
+                    select_stmt,
+                    uniquify=self._get_uniquify(requires_unique or uniquify),
+                )
+                instances.extend(result.scalars())
+        else:
+            id_attr = get_instrumented_attr(
+                self.model_type,
+                id_attribute if id_attribute is not None else self.id_attribute,
+            )
+            effective_chunk_size = (
+                len(item_ids) + 1 if self._prefer_any else self._get_insertmanyvalues_max_parameters(chunk_size)
+            )
+            for idx in range(0, len(item_ids), effective_chunk_size):
+                chunk = cast("List[Any]", item_ids[idx : min(idx + effective_chunk_size, len(item_ids))])
+                select_stmt = cast(
+                    "Select[tuple[ModelT]]",
+                    self._get_delete_many_statement(
+                        statement_type="select",
+                        model_type=self.model_type,
+                        id_attribute=id_attr,
+                        id_chunk=chunk,
+                        supports_returning=False,
+                        loader_options=loader_options,
+                        execution_options=execution_options,
+                    ),
+                )
+                result = self._execute(
+                    select_stmt,
+                    uniquify=self._get_uniquify(requires_unique or uniquify),
+                )
+                instances.extend(result.scalars())
+        return instances
 
     def exists(
         self,
@@ -1373,7 +1287,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def _get_base_stmt(
         *,
         statement: StatementTypeT,
-        loader_options: Optional[List[_AbstractLoad]],
+        loader_options: Optional[Sequence[ExecutableOption]],
         execution_options: Optional[dict[str, Any]],
     ) -> StatementTypeT:
         """Get base statement with options applied.
@@ -1425,10 +1339,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         id_chunk: List[Any],
         supports_returning: bool,
         statement_type: Literal["delete", "select"] = "delete",
-        loader_options: Optional[List[_AbstractLoad]],
+        loader_options: Optional[Sequence[ExecutableOption]],
         execution_options: Optional[dict[str, Any]],
     ) -> Union[Select[tuple[ModelT]], Delete, ReturningDelete[tuple[ModelT]]]:
-        # Base statement is static
         statement = self._get_base_stmt(
             statement=delete(model_type) if statement_type == "delete" else select(model_type),
             loader_options=loader_options,
@@ -1438,7 +1351,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement = statement.execution_options(**execution_options)
         if supports_returning and statement_type != "select":
             statement = cast("ReturningDelete[tuple[ModelT]]", statement.returning(model_type))  # type: ignore[union-attr,assignment]  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType,reportAttributeAccessIssue,reportUnknownVariableType]
-        # Use field.in_() if types are incompatible with ANY() or if dialect doesn't prefer ANY()
         use_in = not self._prefer_any or self._type_must_use_in_instead_of_any(id_chunk, id_attribute.type)
         if use_in:
             return statement.where(id_attribute.in_(id_chunk))  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
@@ -1455,32 +1367,30 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
         with_for_update: ForUpdateParameter,
+        uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> ModelT:
         """Fetch an entity from the database without using cache."""
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
-            resolved_bind_group = self._resolve_bind_group(bind_group)
-            if resolved_bind_group:
-                execution_options = dict(execution_options) if execution_options else {}
-                execution_options["bind_group"] = resolved_bind_group
-            resolved_execution_options = self._get_execution_options(execution_options)
+        with self._wrap_exceptions(error_messages=error_messages):
+            resolved_execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             resolved_statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             resolved_statement = self._get_base_stmt(
                 statement=resolved_statement,
                 loader_options=loader_options,
                 execution_options=resolved_execution_options,
             )
-            # Default: use primary key (handles both single and composite PKs)
             if id_attribute is None:
                 resolved_statement = resolved_statement.where(self._build_pk_filter(item_id))
             else:
-                # Custom id_attribute override: lookup by user-specified column
                 resolved_statement = self._filter_select_by_kwargs(resolved_statement, [(id_attribute, item_id)])
             resolved_statement = self._apply_for_update_options(resolved_statement, with_for_update)
-            instance = (self._execute(resolved_statement, uniquify=loader_options_have_wildcard)).scalar_one_or_none()
+            instance = (
+                self._execute(
+                    resolved_statement,
+                    uniquify=self._get_uniquify(requires_unique or uniquify),
+                )
+            ).scalar_one_or_none()
             instance = self.check_not_found(instance)
             self._expunge(instance, auto_expunge=auto_expunge)
             return instance
@@ -1497,6 +1407,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
         with_for_update: ForUpdateParameter,
+        uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
     ) -> ModelT:
         """Singleflight creator for get(id) caching (async)."""
@@ -1510,6 +1421,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 load=load,
                 execution_options=execution_options,
                 with_for_update=with_for_update,
+                uniquify=uniquify,
                 bind_group=bind_group,
             )
 
@@ -1526,6 +1438,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load=load,
             execution_options=execution_options,
             with_for_update=with_for_update,
+            uniquify=uniquify,
             bind_group=bind_group,
         )
         self._cache_manager.set_entity_sync(model_name, item_id, instance, bind_group=bind_group)
@@ -1546,17 +1459,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         bind_group: Optional[str] = None,
     ) -> List[ModelT]:
         """Fetch a list of entities from the database without using cache."""
-        self._uniquify = self._get_uniquify(uniquify)
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
-            resolved_bind_group = self._resolve_bind_group(bind_group)
-            if resolved_bind_group:
-                execution_options = dict(execution_options) if execution_options else {}
-                execution_options["bind_group"] = resolved_bind_group
-            resolved_execution_options = self._get_execution_options(execution_options)
+        with self._wrap_exceptions(error_messages=error_messages):
+            resolved_execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             resolved_statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             resolved_statement = self._get_base_stmt(
                 statement=resolved_statement,
                 loader_options=loader_options,
@@ -1567,7 +1473,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             resolved_statement = self._apply_order_by(statement=resolved_statement, order_by=order_by)
             resolved_statement = self._apply_filters(*filters, statement=resolved_statement)
             resolved_statement = self._filter_select_by_kwargs(resolved_statement, kwargs)
-            result = self._execute(resolved_statement, uniquify=loader_options_have_wildcard)
+            result = self._execute(
+                resolved_statement,
+                uniquify=self._get_uniquify(requires_unique or uniquify),
+            )
             instances = list(result.scalars())
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
@@ -1638,11 +1547,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         bind_group: Optional[str] = None,
     ) -> tuple[List[ModelT], int]:
         """Fetch a list+count payload from the database without using cache."""
-        self._uniquify = self._get_uniquify(uniquify)
-        resolved_bind_group = self._resolve_bind_group(bind_group)
-        if resolved_bind_group:
-            execution_options = dict(execution_options) if execution_options else {}
-            execution_options["bind_group"] = resolved_bind_group
         if self._dialect.name in {"spanner", "spanner+spanner"} or not count_with_window_function:
             return self._get_many_and_count_basic(
                 *filters,
@@ -1652,6 +1556,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 execution_options=execution_options,
                 order_by=order_by,
                 error_messages=error_messages,
+                uniquify=uniquify,
+                bind_group=bind_group,
                 **kwargs,
             )
         return self._get_many_and_count_window(
@@ -1662,6 +1568,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             execution_options=execution_options,
             error_messages=error_messages,
             order_by=order_by,
+            uniquify=uniquify,
+            bind_group=bind_group,
             **kwargs,
         )
 
@@ -1775,7 +1683,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             NotFoundError: If no instance is found with the given primary key.
             ValueError: If the input format doesn't match the primary key structure.
         """
-        self._uniquify = self._get_uniquify(uniquify)
         resolved_error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -1787,7 +1694,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             resolved_id_attribute = resolved_id_attribute.key
 
         cache_manager = self._cache_manager
-        # Resolve bind_group for cache key namespacing
         resolved_bind_group = self._resolve_bind_group(bind_group)
 
         if (
@@ -1807,7 +1713,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             if cached is not None:
                 return cached
 
-            # Include bind_group in singleflight key to prevent cross-shard cache pollution
             singleflight_key = (
                 f"{model_name}:{resolved_bind_group}:get:{item_id}"
                 if resolved_bind_group
@@ -1826,6 +1731,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                     load=load,
                     execution_options=execution_options,
                     with_for_update=with_for_update,
+                    uniquify=uniquify,
                     bind_group=resolved_bind_group,
                 ),
             )
@@ -1839,6 +1745,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load=load,
             execution_options=execution_options,
             with_for_update=with_for_update,
+            uniquify=uniquify,
             bind_group=bind_group,
         )
 
@@ -1921,20 +1828,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             The retrieved instance.
 
         """
-        self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
-            error_messages=error_messages,
-            default_messages=self.error_messages,
-        )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
-            if bind_group:
-                execution_options = dict(execution_options) if execution_options else {}
-                execution_options["bind_group"] = bind_group
-            execution_options = self._get_execution_options(execution_options)
+        with self._wrap_exceptions(error_messages=error_messages):
+            execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -1943,7 +1840,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement = self._apply_filters(*filters, apply_pagination=False, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             statement = self._apply_for_update_options(statement, with_for_update)
-            instance = (self._execute(statement, uniquify=loader_options_have_wildcard)).scalar_one_or_none()
+            instance = (
+                self._execute(
+                    statement,
+                    uniquify=self._get_uniquify(requires_unique or uniquify),
+                )
+            ).scalar_one_or_none()
             instance = self.check_not_found(instance)
             self._expunge(instance, auto_expunge=auto_expunge)
             return instance
@@ -1979,20 +1881,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             The retrieved instance or None
         """
-        self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
-            error_messages=error_messages,
-            default_messages=self.error_messages,
-        )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
-            if bind_group:
-                execution_options = dict(execution_options) if execution_options else {}
-                execution_options["bind_group"] = bind_group
-            execution_options = self._get_execution_options(execution_options)
+        with self._wrap_exceptions(error_messages=error_messages):
+            execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -2003,7 +1895,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement = self._apply_for_update_options(statement, with_for_update)
             instance = cast(
                 "Result[tuple[ModelT]]",
-                (self._execute(statement, uniquify=loader_options_have_wildcard)),
+                (
+                    self._execute(
+                        statement,
+                        uniquify=self._get_uniquify(requires_unique or uniquify),
+                    )
+                ),
             ).scalar_one_or_none()
             if instance:
                 self._expunge(instance, auto_expunge=auto_expunge)
@@ -2055,14 +1952,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
-        self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
-            error_messages=error_messages,
-            default_messages=self.error_messages,
-        )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
+        with self._wrap_exceptions(error_messages=error_messages):
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
                     field_name: kwargs.get(field_name)
@@ -2076,6 +1966,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 **match_filter,
                 load=load,
                 execution_options=execution_options,
+                uniquify=uniquify,
                 bind_group=bind_group,
             )
             if not existing:
@@ -2148,14 +2039,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             When using match_fields and actual model values differ from ``kwargs``, the
             model value will be updated.
         """
-        self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
-            error_messages=error_messages,
-            default_messages=self.error_messages,
-        )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
+        with self._wrap_exceptions(error_messages=error_messages):
             if match_fields := self._get_match_fields(match_fields=match_fields):
                 match_filter = {
                     field_name: kwargs.get(field_name)
@@ -2165,7 +2049,12 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             else:
                 match_filter = kwargs
             existing = self.get_one(
-                *filters, **match_filter, load=load, execution_options=execution_options, bind_group=bind_group
+                *filters,
+                **match_filter,
+                load=load,
+                execution_options=execution_options,
+                uniquify=uniquify,
+                bind_group=bind_group,
             )
             updated = False
             for field_name, new_field_value in kwargs.items():
@@ -2211,20 +2100,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
-            error_messages=error_messages,
-            default_messages=self.error_messages,
-        )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
-            if bind_group:
-                execution_options = dict(execution_options) if execution_options else {}
-                execution_options["bind_group"] = bind_group
-            execution_options = self._get_execution_options(execution_options)
+        with self._wrap_exceptions(error_messages=error_messages):
+            execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -2236,7 +2115,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 statement=self._get_count_stmt(
                     statement=statement, loader_options=loader_options, execution_options=execution_options
                 ),
-                uniquify=loader_options_have_wildcard,
+                uniquify=self._get_uniquify(requires_unique or uniquify),
             )
             return cast("int", results.scalar_one())
 
@@ -2281,85 +2160,52 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             The updated instance.
         """
-        self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
-            error_messages=error_messages,
-            default_messages=self.error_messages,
-        )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
-            # For composite PKs (when no id_attribute override), extract the full PK value
+        with self._wrap_exceptions(error_messages=error_messages):
             if id_attribute is None and self.has_composite_pk:
                 item_id = self.get_primary_key_value(data)
+                lookup_attr_names: set[str] = set(self._pk_attr_names)
             else:
                 item_id = self.get_id_attribute_value(
                     data,
                     id_attribute=id_attribute,
                 )
-            existing_instance = self.get(
-                item_id,
-                id_attribute=id_attribute,
-                load=load,
-                execution_options=execution_options,
-                with_for_update=with_for_update,
-                bind_group=bind_group,
-            )
+                if isinstance(id_attribute, InstrumentedAttribute):
+                    lookup_attr_key = id_attribute.key
+                elif id_attribute is not None:
+                    lookup_attr_key = id_attribute
+                else:
+                    lookup_attr_key = self.id_attribute
+                lookup_attr_names = {lookup_attr_key}
             mapper = None
+            relationship_values: dict[str, Any] = {}
             with (
                 self.session.no_autoflush,
                 contextlib.suppress(MissingGreenlet, NoInspectionAvailable),
             ):
                 mapper = inspect(data)
                 if mapper is not None:
-                    for column in mapper.mapper.columns:
-                        field_name = column.key
-                        new_field_value = getattr(data, field_name, MISSING)
-                        if new_field_value is not MISSING:
-                            # Skip setting columns with defaults/onupdate to None during updates
-                            # This prevents overwriting columns that should use their defaults
-                            if new_field_value is None and column_has_defaults(column):
-                                continue
-                            # Only copy attributes that were explicitly set on the input instance
-                            # This prevents overwriting existing values with uninitialized None values
-                            if not was_attribute_set(data, mapper, field_name):
-                                continue
-                            existing_field_value = getattr(existing_instance, field_name, MISSING)
-                            if existing_field_value is not MISSING and not compare_values(
-                                existing_field_value, new_field_value
-                            ):
-                                setattr(existing_instance, field_name, new_field_value)
-
-                    # Handle relationships by merging objects into session first
-                    for relationship in mapper.mapper.relationships:
-                        if relationship.viewonly or relationship.lazy in {  # pragma: no cover
-                            "write_only",
-                            "dynamic",
-                            "raise",
-                            "raise_on_sql",
-                        }:
-                            # Skip relationships with incompatible lazy loading strategies
-                            continue
-
-                        # Only copy relationships that were explicitly set on the input instance
-                        # This prevents overwriting existing relationships with uninitialized
-                        # None/[] values from SQLAlchemy's auto-initialization
-                        if not was_attribute_set(data, mapper, relationship.key):
-                            continue
-
-                        if (new_value := getattr(data, relationship.key, MISSING)) is not MISSING:
-                            # Skip relationships that cannot be handled by generic merge operations
-                            if isinstance(new_value, list):
-                                merged_values = [  # pyright: ignore
-                                    self.session.merge(item, load=False)  # pyright: ignore
-                                    for item in new_value  # pyright: ignore
-                                ]
-                                setattr(existing_instance, relationship.key, merged_values)
-                            elif new_value is not None:
-                                merged_value = self.session.merge(new_value, load=False)
-                                setattr(existing_instance, relationship.key, merged_value)
-                            else:
-                                setattr(existing_instance, relationship.key, new_value)
+                    relationship_values = snapshot_and_detach_relationships(data, mapper)
+            existing_instance = self.get(
+                item_id,
+                id_attribute=id_attribute,
+                load=load,
+                execution_options=execution_options,
+                with_for_update=with_for_update,
+                uniquify=uniquify,
+                bind_group=bind_group,
+            )
+            if data is not existing_instance and mapper is not None:
+                with (
+                    self.session.no_autoflush,
+                    contextlib.suppress(MissingGreenlet, NoInspectionAvailable),
+                ):
+                    self._apply_update_fields(
+                        data,
+                        existing_instance,
+                        mapper,
+                        lookup_attr_names,
+                        relationship_values,
+                    )
 
             instance = self._attach_to_session(existing_instance, strategy="merge")
 
@@ -2371,9 +2217,82 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 auto_refresh=auto_refresh,
             )
             self._expunge(instance, auto_expunge=auto_expunge)
-            # Queue cache invalidation (processed on commit)
-            self._queue_cache_invalidation(self.get_primary_key_value(instance), bind_group)
+            self._queue_cache_invalidation(self.get_primary_key_value(instance), self._resolve_bind_group(bind_group))
             return instance
+
+    def _apply_update_fields(
+        self,
+        data: ModelT,
+        existing_instance: ModelT,
+        mapper: "InstanceState[Any]",
+        lookup_attr_names: set[str],
+        relationship_values: dict[str, Any],
+    ) -> None:
+        explicit_none = allows_explicit_none_update(mapper)
+        for column in mapper.mapper.columns:
+            field_name = mapper.mapper.get_property_by_column(column).key
+            if field_name in lookup_attr_names:
+                continue
+            new_field_value = getattr(data, field_name, MISSING)
+            if new_field_value is MISSING or not was_attribute_set(data, mapper, field_name):
+                continue
+            if new_field_value is None and not explicit_none and column_has_defaults(column):
+                continue
+            existing_field_value = getattr(existing_instance, field_name, MISSING)
+            if existing_field_value is not MISSING and not compare_values(existing_field_value, new_field_value):
+                setattr(existing_instance, field_name, new_field_value)
+
+        for relationship in mapper.mapper.relationships:
+            if relationship.viewonly or relationship.lazy in {  # pragma: no cover
+                "write_only",
+                "dynamic",
+            }:
+                continue
+            if relationship.key in relationship_values:
+                new_value = relationship_values[relationship.key]
+            elif relationship.lazy in {"raise", "raise_on_sql"} or not was_attribute_set(
+                data, mapper, relationship.key
+            ):  # pragma: no cover
+                continue
+            else:
+                new_value = getattr(data, relationship.key, MISSING)
+            if new_value is not MISSING:
+                merged_value = self._resolve_relationship_value(new_value)
+                setattr(existing_instance, relationship.key, merged_value)
+
+    def _resolve_relationship_value(self, new_value: Any) -> Any:
+        if isinstance(new_value, list):
+            return [  # pyright: ignore
+                self._merge_or_attach_related_item(item)  # pyright: ignore
+                for item in new_value  # pyright: ignore
+            ]
+        if isinstance(new_value, set):
+            return {  # pyright: ignore
+                self._merge_or_attach_related_item(item)  # pyright: ignore
+                for item in new_value  # pyright: ignore
+            }
+        if isinstance(new_value, Mapping):
+            return {
+                key: self._merge_or_attach_related_item(val)  # pyright: ignore[reportUnknownVariableType]
+                for key, val in new_value.items()  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
+            }
+        if new_value is not None:
+            return self._merge_or_attach_related_item(new_value)
+        return None
+
+    def _merge_or_attach_related_item(self, item: Any) -> Any:
+        item_state: Any = inspect(item, raiseerr=False)  # pyright: ignore[reportUnknownVariableType]
+        if item_state is None:
+            return item
+        target_session = getattr(self.session, "sync_session", self.session)
+        target_hash_key = getattr(target_session, "hash_key", None)
+        if item_state.session_id is not None and item_state.session_id == target_hash_key:
+            return item
+        if item_state.transient:
+            _, item_pk_attrs = get_primary_key_info(cast("Any", type(item)))
+            if not pk_values_present(item, item_pk_attrs):
+                return item
+        return self.session.merge(item, load=False)
 
     def update_many(
         self,
@@ -2408,11 +2327,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             The updated instances.
         """
-        self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
-            error_messages=error_messages,
-            default_messages=self.error_messages,
-        )
         supports_updated_at = hasattr(self.model_type, "updated_at")
         data_to_update: List[dict[str, Any]] = []
         for v in data:
@@ -2421,15 +2335,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             if supports_updated_at and (update_payload.get("updated_at") is None):
                 update_payload["updated_at"] = datetime.datetime.now(datetime.timezone.utc)
             data_to_update.append(update_payload)
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
+        with self._wrap_exceptions(error_messages=error_messages):
             resolved_bind_group = self._resolve_bind_group(bind_group)
-            if resolved_bind_group:
-                execution_options = dict(execution_options) if execution_options else {}
-                execution_options["bind_group"] = resolved_bind_group
-            execution_options = self._get_execution_options(execution_options)
-            loader_options = self._get_loader_options(load)[0]
+            execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
+            loader_options = self._get_loader_options(load, uniquify)[0]
             supports_returning = self._dialect.update_executemany_returning and self._dialect.name != "oracle"
             statement = self._get_update_many_statement(
                 self.model_type,
@@ -2441,9 +2350,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 instances = list(
                     self.session.scalars(
                         statement,
-                        cast("_CoreSingleExecuteParams", data_to_update),  # this is not correct but the only way
-                        # currently to deal with an SQLAlchemy typing issue. See
-                        # https://github.com/sqlalchemy/sqlalchemy/discussions/9925
+                        cast("_CoreSingleExecuteParams", data_to_update),
                         execution_options=execution_options,
                     ),
                 )
@@ -2454,9 +2361,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             self.session.execute(statement, data_to_update, execution_options=execution_options)
             self._flush_or_commit(auto_commit=auto_commit)
 
-            # For non-RETURNING backends, fetch updated instances from database
             if self.has_composite_pk:
-                # Build composite PK filter using OR of AND conditions
                 pk_filters: List[ColumnElement[bool]] = []
                 for item in data_to_update:
                     pk_tuple = tuple(item[attr] for attr in self._pk_attr_names)
@@ -2465,6 +2370,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                     or_(*pk_filters),
                     load=loader_options,
                     execution_options=execution_options,
+                    uniquify=uniquify,
                     bind_group=bind_group,
                 )
             else:
@@ -2473,22 +2379,21 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                     getattr(self.model_type, self.id_attribute).in_(updated_ids),
                     load=loader_options,
                     execution_options=execution_options,
+                    uniquify=uniquify,
                     bind_group=bind_group,
                 )
             for instance in updated_instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
-                # Queue cache invalidation (processed on commit)
-                self._queue_cache_invalidation(self.get_primary_key_value(instance), bind_group)
+                self._queue_cache_invalidation(self.get_primary_key_value(instance), resolved_bind_group)
             return updated_instances
 
     def _get_update_many_statement(
         self,
         model_type: type[ModelT],
         supports_returning: bool,
-        loader_options: Union[List[_AbstractLoad], None],
+        loader_options: Union[Sequence[ExecutableOption], None],
         execution_options: Union[dict[str, Any], None],
     ) -> Union[Update, ReturningUpdate[tuple[ModelT]]]:
-        # Base update statement is static
         statement = self._get_base_stmt(
             statement=update(table=model_type), loader_options=loader_options, execution_options=execution_options
         )
@@ -2535,14 +2440,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         count_with_window_function = (
             count_with_window_function if count_with_window_function is not None else self.count_with_window_function
         )
-        self._uniquify = self._get_uniquify(uniquify)
+        should_uniquify = self._get_uniquify(uniquify)
         resolved_error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
 
         resolved_auto_expunge = self.auto_expunge if auto_expunge is None else auto_expunge
-        resolved_execution_options = self._get_execution_options(execution_options)
+        resolved_execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
         resolved_order_by = order_by if order_by is not None else (self.order_by if self.order_by is not None else [])
 
         cache_manager = self._cache_manager
@@ -2570,6 +2475,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
         version_token = cache_manager.get_model_version_sync(model_name)
+        resolved_bind_group = self._resolve_bind_group(bind_group)
         cache_key = _build_cache_key(
             model_name=model_name,
             version_token=version_token,
@@ -2578,8 +2484,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             kwargs=kwargs,
             order_by=resolved_order_by,
             execution_options=resolved_execution_options,
-            uniquify=self._uniquify,
+            uniquify=should_uniquify,
             count_with_window_function=count_with_window_function,
+            bind_group=resolved_bind_group,
         )
         if cache_key is None:
             return self._get_many_and_count_from_db(
@@ -2639,12 +2546,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         if not auto_expunge:
             return
 
-        # Check object state before expunging
         state = inspect(instance)
         if state is not None and (state.deleted or state.detached):
-            # Skip expunge for objects that are deleted or already detached
-            # - state.deleted: Object marked for deletion, will be detached on commit
-            # - state.detached: Object already removed from session (e.g., from DELETE...RETURNING)
             return
 
         self.session.expunge(instance)
@@ -2654,7 +2557,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         if auto_commit is None:
             auto_commit = self.auto_commit
 
-        return self.session.commit() if auto_commit else self.session.flush()
+        if auto_commit:
+            self.session.commit()
+            flush_pending_sync_listener_tasks(self.session)
+            return
+        self.session.flush()
 
     def _refresh(
         self,
@@ -2685,6 +2592,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
@@ -2699,25 +2607,17 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
             Count of records returned by query using an analytical window function, ignoring pagination.
         """
-        error_messages = self._get_error_messages(
-            error_messages=error_messages,
-            default_messages=self.error_messages,
-        )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
-            if bind_group:
-                execution_options = dict(execution_options) if execution_options else {}
-                execution_options["bind_group"] = bind_group
-            execution_options = self._get_execution_options(execution_options)
+        with self._wrap_exceptions(error_messages=error_messages):
+            execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -2728,7 +2628,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             statement = self._apply_order_by(statement=statement, order_by=order_by)
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
-            result = self._execute(statement.add_columns(over(sql_func.count())), uniquify=loader_options_have_wildcard)
+            result = self._execute(
+                statement.add_columns(over(sql_func.count())),
+                uniquify=self._get_uniquify(requires_unique or uniquify),
+            )
             count: int = 0
             instances: List[ModelT] = []
             for i, (instance, count_value) in enumerate(result):
@@ -2747,6 +2650,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
+        uniquify: Optional[bool] = None,
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> tuple[List[ModelT], int]:
@@ -2761,25 +2665,17 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 for friendlier error messages to clients
             load: Set relationships to be loaded
             execution_options: Set default execution options
+            uniquify: Optionally apply the ``unique()`` method to results before returning.
             bind_group: Optional routing group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
             Count of records returned by query using 2 queries, ignoring pagination.
         """
-        error_messages = self._get_error_messages(
-            error_messages=error_messages,
-            default_messages=self.error_messages,
-        )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
-            if bind_group:
-                execution_options = dict(execution_options) if execution_options else {}
-                execution_options["bind_group"] = bind_group
-            execution_options = self._get_execution_options(execution_options)
+        with self._wrap_exceptions(error_messages=error_messages):
+            execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
             statement = self.statement if statement is None else statement
-            loader_options, loader_options_have_wildcard = self._get_loader_options(load)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             statement = self._get_base_stmt(
                 statement=statement,
                 loader_options=loader_options,
@@ -2800,7 +2696,10 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             count = count_result.scalar_one()
             if count == 0:
                 return [], 0
-            result = self._execute(statement, uniquify=loader_options_have_wildcard)
+            result = self._execute(
+                statement,
+                uniquify=self._get_uniquify(requires_unique or uniquify),
+            )
             instances: List[ModelT] = []
             for (instance,) in result:
                 self._expunge(instance, auto_expunge=auto_expunge)
@@ -2810,10 +2709,9 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     @staticmethod
     def _get_count_stmt(
         statement: Select[tuple[ModelT]],
-        loader_options: Optional[List[_AbstractLoad]],  # noqa: ARG004
+        loader_options: Optional[Sequence[ExecutableOption]],  # noqa: ARG004
         execution_options: Optional[dict[str, Any]],  # noqa: ARG004
     ) -> Select[tuple[int]]:
-        # Count statement transformations are static
         return (
             statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True)
             .limit(None)
@@ -2865,11 +2763,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             The updated or created instance.
         """
-        self._uniquify = self._get_uniquify(uniquify)
-        error_messages = self._get_error_messages(
-            error_messages=error_messages,
-            default_messages=self.error_messages,
-        )
         if match_fields := self._get_match_fields(match_fields=match_fields):
             match_filter = {
                 field_name: getattr(data, field_name, None)
@@ -2877,16 +2770,18 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 if getattr(data, field_name, None) is not None
             }
         elif self.has_composite_pk and self.has_primary_key_values(data):
-            # For composite PKs, match on all PK columns
             match_filter = {attr: getattr(data, attr) for attr in self._pk_attr_names}
         elif getattr(data, self.id_attribute, None) is not None:
             match_filter = {self.id_attribute: getattr(data, self.id_attribute, None)}
         else:
-            # Exclude all PK columns when matching by non-PK fields
             exclude_cols = set(self._pk_attr_names) if self.has_composite_pk else {self.id_attribute}
             match_filter = model_to_dict(data, exclude=exclude_cols)
         existing = self.get_one_or_none(
-            load=load, execution_options=execution_options, bind_group=bind_group, **match_filter
+            load=load,
+            execution_options=execution_options,
+            uniquify=uniquify,
+            bind_group=bind_group,
+            **match_filter,
         )
         if not existing:
             return self.add(
@@ -2896,10 +2791,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 auto_refresh=auto_refresh,
                 bind_group=bind_group,
             )
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
-            # Exclude all PK columns when copying field values
+        with self._wrap_exceptions(error_messages=error_messages):
             exclude_cols = set(self._pk_attr_names) if self.has_composite_pk else {self.id_attribute}
             for field_name, new_field_value in model_to_dict(data, exclude=exclude_cols).items():
                 field = getattr(existing, field_name, MISSING)
@@ -2914,8 +2806,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 auto_refresh=auto_refresh,
             )
             self._expunge(instance, auto_expunge=auto_expunge)
-            # Queue cache invalidation (processed on commit)
-            self._queue_cache_invalidation(self.get_primary_key_value(instance), bind_group)
+            self._queue_cache_invalidation(self.get_primary_key_value(instance), self._resolve_bind_group(bind_group))
             return instance
 
     def upsert_many(
@@ -2979,7 +2870,6 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         """
         if not data:
             return []
-        self._uniquify = self._get_uniquify(uniquify)
         error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
@@ -3008,12 +2898,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 error_messages=error_messages,
                 load=load,
                 execution_options=execution_options,
+                uniquify=uniquify,
                 bind_group=bind_group,
             )
 
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
+        with self._wrap_exceptions(error_messages=error_messages):
             update_columns = self._resolve_upsert_update_columns(data, strategy)
             input_rows: Optional[List[dict[str, Any]]] = None
             if update_columns is not None:
@@ -3034,13 +2923,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                     error_messages=error_messages,
                     load=load,
                     execution_options=execution_options,
+                    uniquify=uniquify,
                     bind_group=bind_group,
                 )
             resolved_bind_group = self._resolve_bind_group(bind_group)
-            if resolved_bind_group:
-                execution_options = dict(execution_options) if execution_options else {}
-                execution_options["bind_group"] = resolved_bind_group
-            execution_options = dict(self._get_execution_options(execution_options) or {})
+            execution_options = dict(self._get_execution_options(execution_options, bind_group=bind_group) or {})
             execution_options["populate_existing"] = True
             instances = self._upsert_many_native(
                 input_rows=input_rows,
@@ -3049,6 +2936,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                 update_columns=update_columns,
                 load=load,
                 execution_options=execution_options,
+                uniquify=uniquify,
                 bind_group=bind_group,
                 chunk_size=chunk_size,
             )
@@ -3057,7 +2945,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                     for pk_attr in self._pk_attr_names:
                         setattr(datum, pk_attr, getattr(instance, pk_attr))
             for instance in instances:
-                self._queue_cache_invalidation(self.get_primary_key_value(instance), bind_group)
+                self._queue_cache_invalidation(self.get_primary_key_value(instance), resolved_bind_group)
             self._flush_or_commit(auto_commit=auto_commit)
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
@@ -3073,6 +2961,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         error_messages: Optional[ErrorMessages],
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
+        uniquify: Optional[bool] = None,
         bind_group: Optional[str],
     ) -> List[ModelT]:
         """Execute the SELECT-then-partition fallback path for ``upsert_many``."""
@@ -3082,15 +2971,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         match_rows = [{field_name: getattr(datum, field_name) for field_name in match_fields} for datum in data]
         queryable_rows = [row for row in match_rows if all(value is not None for value in row.values())]
 
-        with wrap_sqlalchemy_exception(
-            error_messages=error_messages, dialect_name=self._dialect.name, wrap_exceptions=self.wrap_exceptions
-        ):
+        with self._wrap_exceptions(error_messages=error_messages):
             existing_objs = (
                 self.get_many(
                     self._build_upsert_match_filter(queryable_rows, match_fields),
                     load=load,
                     execution_options=execution_options,
                     auto_expunge=False,
+                    uniquify=uniquify,
                     bind_group=bind_group,
                 )
                 if queryable_rows
@@ -3132,6 +3020,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                         auto_expunge=False,
                         load=load,
                         execution_options=execution_options,
+                        uniquify=uniquify,
                         bind_group=bind_group,
                     ),
                 )
@@ -3149,6 +3038,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         update_columns: List[str],
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
+        uniquify: Optional[bool] = None,
         bind_group: Optional[str],
         chunk_size: Optional[int],
     ) -> List[ModelT]:
@@ -3166,7 +3056,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         table = cast("Table", self.model_type.__table__)
         conflict_columns = list(strategy.conflict_columns)
         rows_per_chunk = self._get_upsert_chunk_size(len(input_rows[0]), chunk_size)
-        loader_options = self._get_loader_options(load)[0]
+        loader_options = self._get_loader_options(load, uniquify)[0]
 
         instances: List[ModelT] = []
         for chunk_start in range(0, len(input_rows), rows_per_chunk):
@@ -3189,6 +3079,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
                         match_fields=match_fields,
                         load=load,
                         execution_options=execution_options,
+                        uniquify=uniquify,
                         bind_group=bind_group,
                     )
                 )
@@ -3210,7 +3101,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         conflict_columns: List[str],
         update_columns: List[str],
         execution_options: Optional[dict[str, Any]],
-        loader_options: Optional[List[_AbstractLoad]],
+        loader_options: Optional[Sequence[ExecutableOption]],
     ) -> Optional[List[ModelT]]:
         """Execute one chunk of a native upsert.
 
@@ -3262,6 +3153,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         match_fields: List[str],
         load: Optional[LoadSpec],
         execution_options: Optional[dict[str, Any]],
+        uniquify: Optional[bool] = None,
         bind_group: Optional[str],
     ) -> List[ModelT]:
         """Re-SELECT chunk rows after a no-RETURNING native upsert."""
@@ -3271,28 +3163,11 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             load=load,
             execution_options=execution_options,
             auto_expunge=False,
+            uniquify=uniquify,
             use_cache=False,
             bind_group=bind_group,
         )
         return list(selected_rows)
-
-    def _get_object_ids(self, existing_objs: List[ModelT]) -> List[PrimaryKeyType]:
-        """Extract primary key values from a list of model instances.
-
-        For composite PKs, returns tuples; for single PKs, returns scalar values.
-        """
-        return [self.get_primary_key_value(datum) for datum in existing_objs if self.has_primary_key_values(datum)]
-
-    def _get_match_fields(
-        self,
-        match_fields: Optional[Union[List[str], str]] = None,
-        id_attribute: Optional[str] = None,
-    ) -> Optional[List[str]]:
-        id_attribute = id_attribute or self.id_attribute
-        match_fields = match_fields or self.match_fields
-        if isinstance(match_fields, str):
-            match_fields = [match_fields]
-        return match_fields
 
     def _merge_on_match_fields(
         self,
@@ -3365,14 +3240,14 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
         Returns:
             The list of instances, after filtering applied.
         """
-        self._uniquify = self._get_uniquify(uniquify)
+        should_uniquify = self._get_uniquify(uniquify)
         resolved_error_messages = self._get_error_messages(
             error_messages=error_messages,
             default_messages=self.error_messages,
         )
 
         resolved_auto_expunge = self.auto_expunge if auto_expunge is None else auto_expunge
-        resolved_execution_options = self._get_execution_options(execution_options)
+        resolved_execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
         resolved_order_by = order_by if order_by is not None else (self.order_by if self.order_by is not None else [])
 
         cache_manager = self._cache_manager
@@ -3399,6 +3274,7 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
 
         model_name = cast("str", self.model_type.__tablename__)  # type: ignore[attr-defined]
         version_token = cache_manager.get_model_version_sync(model_name)
+        resolved_bind_group = self._resolve_bind_group(bind_group)
         cache_key = _build_cache_key(
             model_name=model_name,
             version_token=version_token,
@@ -3407,7 +3283,8 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
             kwargs=kwargs,
             order_by=resolved_order_by,
             execution_options=resolved_execution_options,
-            uniquify=self._uniquify,
+            uniquify=should_uniquify,
+            bind_group=resolved_bind_group,
         )
         if cache_key is None:
             return self._get_many_from_db(
@@ -3582,19 +3459,16 @@ class SQLAlchemySyncRepository(SQLAlchemySyncRepositoryProtocol[ModelT], Filtera
     def _execute(
         self,
         statement: Select[Any],
-        uniquify: bool = False,
+        uniquify: Optional[bool] = None,
     ) -> Result[Any]:
         result = self.session.execute(statement)
-        if uniquify or self._uniquify:
+        if self._get_uniquify(uniquify):
             result = result.unique()
         return result
 
 
-class SQLAlchemySyncSlugRepository(
-    SQLAlchemySyncRepository[ModelT],
-    SQLAlchemySyncSlugRepositoryProtocol[ModelT],
-):
-    """Extends the repository to include slug model features.."""
+class SQLAlchemySyncSlugRepositoryMixin(Generic[ModelT]):
+    """Shared async slug operations for SQL and in-memory repositories."""
 
     def get_by_slug(
         self,
@@ -3611,13 +3485,14 @@ class SQLAlchemySyncSlugRepository(
         Returns:
             The model instance or None if not found.
         """
-        return self.get_one_or_none(
+        return self.get_one_or_none(  # type: ignore[attr-defined,no-any-return]
             slug=slug,
             load=load,
             execution_options=execution_options,
             error_messages=error_messages,
             uniquify=uniquify,
             bind_group=bind_group,
+            **kwargs,
         )
 
     def get_available_slug(
@@ -3633,7 +3508,7 @@ class SQLAlchemySyncSlugRepository(
 
         Args:
             value_to_slugify (str): A string that should be converted to a unique slug.
-            **kwargs: stuff
+            **kwargs: Additional parameters.
 
         Returns:
             str: a unique slug for the supplied value.  This is safe for URLs and other unique identifiers.
@@ -3651,7 +3526,15 @@ class SQLAlchemySyncSlugRepository(
         execution_options: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> bool:
-        return self.exists(slug=slug, load=load, execution_options=execution_options, **kwargs) is False
+        return self.exists(slug=slug, load=load, execution_options=execution_options, **kwargs) is False  # type: ignore[attr-defined]
+
+
+class SQLAlchemySyncSlugRepository(
+    SQLAlchemySyncRepository[ModelT],
+    SQLAlchemySyncSlugRepositoryMixin[ModelT],
+    SQLAlchemySyncSlugRepositoryProtocol[ModelT],
+):
+    """Extends the repository to include slug model features.."""
 
 
 class SQLAlchemySyncQueryRepository:
@@ -3701,7 +3584,11 @@ class SQLAlchemySyncQueryRepository:
         Returns:
             The retrieved instance.
         """
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
+        with wrap_sqlalchemy_exception(
+            error_messages=self.error_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        ):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             execution_options = {"bind_group": bind_group} if bind_group else None
             instance = (self.execute(statement, execution_options=execution_options)).scalar_one_or_none()
@@ -3723,7 +3610,11 @@ class SQLAlchemySyncQueryRepository:
         Returns:
             The retrieved instance or None
         """
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
+        with wrap_sqlalchemy_exception(
+            error_messages=self.error_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        ):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             execution_options = {"bind_group": bind_group} if bind_group else None
             instance = (self.execute(statement, execution_options=execution_options)).scalar_one_or_none()
@@ -3740,7 +3631,11 @@ class SQLAlchemySyncQueryRepository:
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
+        with wrap_sqlalchemy_exception(
+            error_messages=self.error_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        ):
             statement = statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True).order_by(
                 None,
             )
@@ -3760,14 +3655,15 @@ class SQLAlchemySyncQueryRepository:
 
         Args:
             statement: To facilitate customization of the underlying select query.
-            count_with_window_function: Force list and count to use two queries instead of an analytical window function.
+            count_with_window_function: Use an analytical window function when true, or two queries when false.
             bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 
         Returns:
             Count of records returned by query, ignoring pagination.
         """
-        if self._dialect.name in {"spanner", "spanner+spanner"} or count_with_window_function:
+        count_with_window_function = True if count_with_window_function is None else count_with_window_function
+        if self._dialect.name in {"spanner", "spanner+spanner"} or not count_with_window_function:
             return self._get_many_and_count_basic(statement=statement, bind_group=bind_group, **kwargs)
         return self._get_many_and_count_window(statement=statement, bind_group=bind_group, **kwargs)
 
@@ -3815,7 +3711,11 @@ class SQLAlchemySyncQueryRepository:
             Count of records returned by query using an analytical window function, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
+        with wrap_sqlalchemy_exception(
+            error_messages=self.error_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        ):
             statement = statement.add_columns(over(sql_func.count(text("1"))))
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             execution_options = {"bind_group": bind_group} if bind_group else None
@@ -3849,7 +3749,11 @@ class SQLAlchemySyncQueryRepository:
             Count of records returned by query using 2 queries, ignoring pagination.
         """
 
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
+        with wrap_sqlalchemy_exception(
+            error_messages=self.error_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        ):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             execution_options = {"bind_group": bind_group} if bind_group else None
             count_result = self.session.execute(
@@ -3873,7 +3777,11 @@ class SQLAlchemySyncQueryRepository:
         Returns:
             The list of instances, after filtering applied.
         """
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages, wrap_exceptions=self.wrap_exceptions):
+        with wrap_sqlalchemy_exception(
+            error_messages=self.error_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        ):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             execution_options = {"bind_group": bind_group} if bind_group else None
             result = self.execute(statement, execution_options=execution_options)
@@ -3911,7 +3819,11 @@ class SQLAlchemySyncQueryRepository:
             The filtered statement.
         """
 
-        with wrap_sqlalchemy_exception(error_messages=self.error_messages):
+        with wrap_sqlalchemy_exception(
+            error_messages=self.error_messages,
+            dialect_name=self._dialect.name,
+            wrap_exceptions=self.wrap_exceptions,
+        ):
             return statement.filter_by(**kwargs)
 
     # the following is all sqlalchemy implementation detail, and shouldn't be directly accessed
