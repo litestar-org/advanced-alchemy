@@ -3202,3 +3202,64 @@ async def test_async_mock_repository_matches_sync_and_sqlite_grid_parity() -> No
             await mock_repo.get_many((column("id") + 1) == 2)
         with pytest.raises(RepositoryError, match="not supported in mock repositories"):
             await mock_repo.get_many(column("title").desc())
+
+
+@pytest.mark.parametrize("mode", ["sync", "async"])
+@pytest.mark.parametrize("seed_mode", ["relationship", "foreign_key"])
+@pytest.mark.parametrize("filter_type", [CollectionFilter, NotInCollectionFilter])
+async def test_relationship_collection_renamed_primary_key_sqlite_parity(
+    mode: str, seed_mode: str, filter_type: Any
+) -> None:
+    """Relationship collections resolve mapped PK attributes independently of SQL column names."""
+
+    class RenamedRelationshipBase(DeclarativeBase):
+        pass
+
+    class Child(RenamedRelationshipBase):
+        __tablename__ = "renamed_relationship_child"
+        child_id: Mapped[int] = mapped_column("db_child_id", primary_key=True)
+
+    class Parent(RenamedRelationshipBase):
+        __tablename__ = "renamed_relationship_parent"
+        id: Mapped[int] = mapped_column(primary_key=True)
+        child_id: Mapped[Union[int, None]] = mapped_column(
+            "db_parent_child_id", ForeignKey("renamed_relationship_child.db_child_id")
+        )
+        child: Mapped[Union[Child, None]] = relationship(Child)
+
+    def seed() -> list[Parent]:
+        return [Parent(id=1, child=Child(child_id=7)), Parent(id=2, child=Child(child_id=9)), Parent(id=3)]
+
+    engine = create_engine("sqlite://")
+    RenamedRelationshipBase.metadata.create_all(engine)
+    repo: Any
+    if mode == "async":
+        repo = type("ParentAsyncRepo", (SQLAlchemyAsyncMockRepository,), {"model_type": Parent})(
+            session=AsyncMock(spec=AsyncSession, bind=MagicMock())
+        )
+    else:
+        repo = type("ParentSyncRepo", (SQLAlchemySyncMockRepository,), {"model_type": Parent})(
+            session=MagicMock(spec=Session, bind=MagicMock())
+        )
+    repo.__database_clear__()
+    try:
+        if seed_mode == "relationship":
+            parents = seed()
+        else:
+            child_repo = type("ChildRepo", (type(repo),), {"model_type": Child})(session=repo.session)
+            await maybe_async(child_repo.add_many([Child(child_id=7), Child(child_id=9)]))
+            parents = [Parent(id=1, child_id=7), Parent(id=2, child_id=9), Parent(id=3)]
+        await maybe_async(repo.add_many(parents))
+        assert [parent.child_id for parent in parents] == [7, 9, None]
+        assert [parent.child.child_id if parent.child else None for parent in parents] == [7, 9, None]
+        filter_ = filter_type(field_name="child", values=[7])
+        with Session(engine) as session:
+            session.add_all(seed())
+            session.flush()
+            sql_repo = type("ParentDBRepo", (SQLAlchemySyncRepository,), {"model_type": Parent})(session=session)
+            expected = sorted(item.id for item in sql_repo.get_many(filter_))
+            assert expected == ([1] if filter_type is CollectionFilter else [2, 3])
+            assert sorted(item.id for item in await maybe_async(repo.get_many(filter_))) == expected
+    finally:
+        repo.__database_clear__()
+        engine.dispose()

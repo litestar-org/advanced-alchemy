@@ -196,18 +196,23 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
             ref: Target model instance to set on data relationships
         """
         ref_mapper = object_mapper(ref)
-        for relationship in object_mapper(data).relationships:
+        data_mapper = object_mapper(data)
+        for relationship in data_mapper.relationships:
             local = next(iter(relationship.local_columns))
             remote = next(iter(relationship.remote_side))
             if not local.key or not remote.key:
                 msg = f"Cannot update relationship {relationship} for model {ref_mapper.class_}"
                 raise AdvancedAlchemyError(msg)
+            local_attr = data_mapper.get_property_by_column(local).key
+            remote_attr = (
+                relationship.mapper.get_property_by_column(remote).key if relationship.secondary is None else remote.key
+            )
             value = getattr(data, relationship.key)
             if not value and relationship.mapper.class_ is ref_mapper.class_:
                 if relationship.uselist:
                     for elem in value:
-                        if local_value := getattr(data, local.key):
-                            setattr(elem, remote.key, local_value)
+                        if local_value := getattr(data, local_attr):
+                            setattr(elem, remote_attr, local_value)
                 else:
                     setattr(data, relationship.key, ref)
 
@@ -228,17 +233,23 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                 if not local.key or not remote.key:
                     msg = f"Cannot update relationship {relationship} for model {ref_mapper.class_}"
                     raise AdvancedAlchemyError(msg)
+                local_attr = ref_mapper.get_property_by_column(local).key
+                remote_attr = (
+                    relationship.mapper.get_property_by_column(remote).key
+                    if relationship.secondary is None
+                    else remote.key
+                )
                 if relationship.uselist:
                     for elem in value:
-                        if local_value := getattr(data, local.key):
-                            setattr(elem, remote.key, local_value)
+                        if local_value := getattr(data, local_attr):
+                            setattr(elem, remote_attr, local_value)
                         self._update_relationship(elem, data)
                     # Remove duplicates added by orm when updating list items
                     if isinstance(value, list):
                         setattr(data, relationship.key, type(value)(set(value)))  # pyright: ignore[reportUnknownArgumentType]
                 else:
-                    if remote_value := getattr(value, remote.key):
-                        setattr(data, local.key, remote_value)
+                    if remote_value := getattr(value, remote_attr):
+                        setattr(data, local_attr, remote_value)
                     self._update_relationship(value, data)
 
     def _set_defaults(self, data: ModelT) -> None:  # pragma: no cover
@@ -304,10 +315,10 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
 
         if len(pk_columns) == 1:
             # Single PK - use simple string representation
-            return str(getattr(obj, self.id_attribute))
+            return str(getattr(obj, mapper.get_property_by_column(pk_columns[0]).key))
 
         # Composite PK - use tuple of all PK values
-        pk_values = tuple(getattr(obj, col.name) for col in pk_columns)
+        pk_values = tuple(getattr(obj, mapper.get_property_by_column(col).key) for col in pk_columns)
         return str(pk_values)
 
     def add(self, obj: ModelT) -> ModelT:
@@ -369,11 +380,14 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
             new_attrs = {}
 
         for column in obj_mapper.columns:
-            if column.key not in new_attrs or not column.foreign_keys:
+            if not column.foreign_keys:
+                continue
+            attr_name = obj_mapper.get_property_by_column(column).key
+            if attr_name not in new_attrs:
                 continue
             remote_mapper = mappers[next(iter(column.foreign_keys))._table_key()]  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
             try:
-                obj = self.store(remote_mapper.class_).get(new_attrs.get(column.key))
+                obj = self.store(remote_mapper.class_).get(new_attrs.get(attr_name))
             except KeyError:
                 continue
 
@@ -591,7 +605,9 @@ class InMemoryFilterEvaluator:
             raise ValueError(msg)
         return RelationshipFilter(
             relationship=field_str,
-            filters=[CollectionFilter(field_name=pk_cols[0].key, values=values)],
+            filters=[
+                CollectionFilter(field_name=rel_prop.mapper.get_property_by_column(pk_cols[0]).key, values=values)
+            ],
             negate=negate,
         )
 
