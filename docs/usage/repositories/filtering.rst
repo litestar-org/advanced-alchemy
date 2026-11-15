@@ -59,22 +59,17 @@ Example Setup
 Plain SQLAlchemy Conditions
 ---------------------------
 
-For straightforward checks inside Python code, pass normal SQLAlchemy column comparisons straight to ``get_many`` or ``get_many_and_count``:
+For straightforward checks inside Python code, pass SQLAlchemy column expressions directly to ``get_many`` or ``get_many_and_count``:
 
 .. code-block:: python
 
     async def get_recent_posts(db_session: AsyncSession) -> list[FilteringPost]:
         cutoff = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=7)
         repo = FilteringPostRepository(session=db_session)
-        return await repo.get_many(
-            FilteringPost.published.is_(True),
-            FilteringPost.created_at >= cutoff,
-        )
+        return await repo.get_many(FilteringPost.published.is_(True), FilteringPost.created_at >= cutoff)
 
 Built-In Filter Helpers
 -----------------------
-
-When building web endpoints with optional query parameters, Advanced Alchemy's filter helpers turn user input into safe SQL conditions:
 
 .. tab-set::
 
@@ -84,36 +79,23 @@ When building web endpoints with optional query parameters, Advanced Alchemy's f
 
             async def search_posts(db_session: AsyncSession, query: str) -> list[FilteringPost]:
                 repo = FilteringPostRepository(session=db_session)
-                return await repo.get_many(
-                    SearchFilter(field_name="title", value=query, ignore_case=True),
-                )
+                return await repo.get_many(SearchFilter(field_name="title", value=query, ignore_case=True))
 
-            literal_discount = SearchFilter(
-                field_name="title",
-                value="50% off",
-                escape_wildcards=True,
-            )
+            literal_discount = SearchFilter(field_name="title", value="50% off", escape_wildcards=True)
 
     .. tab-item:: ID Lists
 
         .. code-block:: python
 
-            async def get_selected_posts(
-                db_session: AsyncSession,
-                post_ids: list[int],
-            ) -> list[FilteringPost]:
+            async def get_selected_posts(db_session: AsyncSession, post_ids: list[int]) -> list[FilteringPost]:
                 repo = FilteringPostRepository(session=db_session)
-                return await repo.get_many(
-                    CollectionFilter(field_name="id", values=post_ids),
-                )
+                return await repo.get_many(CollectionFilter(field_name="id", values=post_ids))
 
     .. tab-item:: Empty vs. Filled
 
         .. code-block:: python
 
-            async def list_drafts_and_published(
-                db_session: AsyncSession,
-            ) -> tuple[list[FilteringPost], list[FilteringPost]]:
+            async def list_drafts_and_published(db_session: AsyncSession) -> tuple[list[FilteringPost], list[FilteringPost]]:
                 repo = FilteringPostRepository(session=db_session)
                 drafts = await repo.get_many(NullFilter(field_name="published_at"))
                 live = await repo.get_many(NotNullFilter(field_name="published_at"))
@@ -121,28 +103,23 @@ When building web endpoints with optional query parameters, Advanced Alchemy's f
 
 .. tip::
 
-    Set ``escape_wildcards=True`` on ``SearchFilter`` when searching text that may contain literal ``%`` or ``_`` characters (such as ``"50% off"``) on databases that support SQL ``ESCAPE``.
+    Set ``escape_wildcards=True`` on ``SearchFilter`` when searching literal ``%`` or ``_`` characters on dialects that support SQL ``ESCAPE``.
 
 Paginating Results
 ------------------
 
-Combine ``LimitOffset`` with ``get_many_and_count`` to get both the current page of rows and the total matching row count for your UI's page switcher:
+Combine ``LimitOffset`` with ``get_many_and_count`` for both page rows and total matching counts:
 
 .. code-block:: python
 
-    async def get_posts_page(
-        db_session: AsyncSession,
-        page: int = 1,
-        page_size: int = 20,
-    ) -> tuple[list[FilteringPost], int]:
+    async def get_posts_page(db_session: AsyncSession, page: int = 1, page_size: int = 20) -> tuple[list[FilteringPost], int]:
         repo = FilteringPostRepository(session=db_session)
-        offset = (page - 1) * page_size
-        return await repo.get_many_and_count(LimitOffset(offset=offset, limit=page_size))
+        return await repo.get_many_and_count(LimitOffset(offset=(page - 1) * page_size, limit=page_size))
 
 Naming URL Query Parameters
 ---------------------------
 
-In Litestar and FastAPI, filter dependencies use camelCase query parameters by default (``?pageSize=10&searchString=python``). Set ``alias_generator="snake_case"`` in ``FilterConfig`` when your API prefers ``?page_size=10&search_string=python``:
+Litestar and FastAPI filter dependencies use camelCase parameters by default (``?pageSize=10&searchString=python``). Set ``alias_generator="snake_case"`` when your API prefers ``?page_size=10``:
 
 .. code-block:: python
 
@@ -155,25 +132,14 @@ In Litestar and FastAPI, filter dependencies use camelCase query parameters by d
         "alias_generator": "snake_case",
     }
 
-If you use :doc:`read replicas </usage/routing>`, any read or count call can also target a named replica pool with ``bind_group="analytics"``:
-
-.. code-block:: python
-
-    async def list_for_reporting(db_session: AsyncSession) -> list[FilteringPost]:
-        repo = FilteringPostRepository(session=db_session)
-        return await repo.get_many(bind_group="analytics")
-
 Filtering Across Relationships
 ------------------------------
 
-Use :class:`~advanced_alchemy.filters.RelationshipFilter` to correlate conditions on related tables inside an ``EXISTS`` or ``NOT EXISTS`` subquery, or pass a relationship attribute directly to :class:`~advanced_alchemy.filters.CollectionFilter` and :class:`~advanced_alchemy.filters.NotInCollectionFilter`:
+Use :class:`~advanced_alchemy.filters.RelationshipFilter` to correlate related predicates inside ``EXISTS`` / ``NOT EXISTS``, or pass a relationship attribute to :class:`~advanced_alchemy.filters.CollectionFilter` and :class:`~advanced_alchemy.filters.NotInCollectionFilter`:
 
 .. code-block:: python
 
-    async def filter_posts_by_tags(
-        db_session: AsyncSession,
-        excluded_tag_ids: list[int],
-    ) -> list[FilteringPost]:
+    async def filter_posts_by_tags(db_session: AsyncSession, excluded_tag_ids: list[int]) -> list[FilteringPost]:
         repo = FilteringPostRepository(session=db_session)
         return await repo.get_many(
             RelationshipFilter(
@@ -182,3 +148,23 @@ Use :class:`~advanced_alchemy.filters.RelationshipFilter` to correlate condition
             ),
             NotInCollectionFilter(field_name=FilteringPost.tags, values=excluded_tag_ids),
         )
+
+Field Filtering and Sorting
+---------------------------
+
+Declare ``filter_fields`` and ``sort_fields`` in ``FilterConfig`` so Litestar and FastAPI infer column operators, group dotted relationship parameters into one ``RelationshipFilter``, and validate repeatable ``orderBy`` (``-col`` descending):
+
+.. code-block:: python
+
+    field_filters: FilterConfig = {
+        "filter_fields": {
+            "title": {"contains", "eq"},
+            "published": {"eq"},
+            "published_at": {"ge", "lt", "is_null"},
+            "tags.slug": {"in"},
+        },
+        "sort_fields": {"title", "published_at"},
+        "pagination_type": "limit_offset",
+    }
+
+Frontend grids such as TanStack Table, AG Grid, and MUI Data Grid map column filters directly to ``?titleContains=sql&publishedAtIsNull=false&tagsSlugIn=python&orderBy=-published_at&orderBy=title&currentPage=2&pageSize=25``.

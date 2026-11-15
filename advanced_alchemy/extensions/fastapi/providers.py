@@ -30,6 +30,7 @@ from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.fastapi.extension import AdvancedAlchemy
 from advanced_alchemy.filters import (
     BeforeAfter,
@@ -40,7 +41,9 @@ from advanced_alchemy.filters import (
     LimitOffset,
     NotInCollectionFilter,
     OrderBy,
+    RelationshipFilter,
     SearchFilter,
+    StatementFilter,
 )
 from advanced_alchemy.service import (
     Empty,
@@ -56,11 +59,20 @@ from advanced_alchemy.utils.dependencies import (
     DependencyCache,
     FieldNameType,
     FilterConfig,
+    FilterFieldSpec,
+    FilterFieldsSpec,
+    FilterOperator,
+    build_order_by_filters,
+    create_field_filter_provider,
     filter_cache_key,
+    filter_parameter_type,
+    group_filter_fields,
     normalize_choice_field_types,
     normalize_field_name_types,
     normalize_sort_field,
+    normalize_sort_fields,
     resolve_filter_aliases,
+    resolve_filter_fields,
 )
 
 logger = logging.getLogger("advanced_alchemy.extensions.fastapi")
@@ -86,6 +98,8 @@ __all__ = (
     "DependencyDefaults",
     "FieldNameType",
     "FilterConfig",
+    "FilterFieldsSpec",
+    "FilterOperator",
     "dep_cache",
     "provide_filters",
     "provide_service",
@@ -335,13 +349,13 @@ def provide_service(  # noqa: C901, PLR0915
 def provide_filters(
     config: FilterConfig,
     dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
+    model: Optional[type[Any]] = None,
 ) -> Callable[..., list[FilterTypes]]:
     """Create FastAPI dependency providers for filters based on the provided configuration.
 
     Returns:
         A FastAPI dependency provider function that aggregates multiple filter dependencies.
     """
-    # Check if any filters are actually requested in the config
     filter_keys = {
         "id_filter",
         "created_at",
@@ -349,10 +363,12 @@ def provide_filters(
         "pagination_type",
         "search",
         "sort_field",
+        "sort_fields",
         "not_in_fields",
         "in_fields",
         "boolean_fields",
         "choice_fields",
+        "filter_fields",
     }
 
     has_filters = False
@@ -365,15 +381,14 @@ def provide_filters(
     if not has_filters:
         return list
 
-    aliases = resolve_filter_aliases(config)
-    cache_key = filter_cache_key(_CACHE_NAMESPACE, config, dep_defaults, aliases)
+    aliases = resolve_filter_aliases(config, model=model)
+    cache_key = filter_cache_key(_CACHE_NAMESPACE, config, dep_defaults, aliases, model=model)
 
-    # Check cache first
     cached_dep = cast("Optional[Callable[..., list[FilterTypes]]]", dep_cache.get_dependencies(cache_key))
     if cached_dep is not None:
         return cached_dep
 
-    dep = _create_filter_aggregate_function_fastapi(config, dep_defaults, aliases=aliases)
+    dep = _create_filter_aggregate_function_fastapi(config, dep_defaults, aliases=aliases, model=model)
     dep_cache.add_dependencies(cache_key, dep)
     return dep
 
@@ -383,6 +398,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
     dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
     *,
     aliases: Optional[dict[str, str]] = None,
+    model: Optional[type[Any]] = None,
 ) -> Callable[..., list[FilterTypes]]:
     """Create a FastAPI dependency provider function that aggregates multiple filter dependencies.
 
@@ -395,7 +411,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
     """
     params: list[inspect.Parameter] = []
     annotations: dict[str, Any] = {}
-    alias_for = (resolve_filter_aliases(config) if aliases is None else aliases).__getitem__
+    alias_for = (resolve_filter_aliases(config, model=model) if aliases is None else aliases).__getitem__
 
     # Add id filter providers
     if (id_filter := config.get("id_filter", False)) is not False:
@@ -613,7 +629,59 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
         annotations[param_name] = Annotated[Optional[SearchFilter], Depends(provide_search_filter)]
 
     # Add sort filter providers
-    if sort_field := config.get("sort_field"):
+    if sort_fields_cfg := config.get("sort_fields"):
+        allowed_sort_fields = frozenset(normalize_sort_fields(sort_fields_cfg, model=model))
+        raw_default_sort = config.get("sort_field")
+        default_sort_field = normalize_sort_field(raw_default_sort) if raw_default_sort else None
+        if default_sort_field is not None and default_sort_field not in allowed_sort_fields:
+            msg = f"Default sort_field {default_sort_field!r} must be included in sort_fields"
+            raise ImproperConfigurationError(msg)
+        sort_order_default = config.get("sort_order", "desc")
+        sort_nulls_default = config.get("sort_nulls")
+        order_by_alias = alias_for("order_by")
+        sort_order_alias = alias_for("sort_order")
+        allowed_display = ", ".join(sorted(allowed_sort_fields))
+
+        def provide_order_by_multi(
+            field_name: Annotated[
+                Optional[list[str]],
+                Query(
+                    alias=order_by_alias,
+                    description=f"Repeatable sort fields (prefix '-' for descending). Allowed: {allowed_display}",
+                    required=False,
+                ),
+            ] = None,
+            sort_order: Annotated[
+                Optional[SortOrder],
+                Query(
+                    alias=sort_order_alias,
+                    description="Sort order ('asc' or 'desc').",
+                    required=False,
+                ),
+            ] = None,
+        ) -> list[OrderBy]:
+            try:
+                return build_order_by_filters(
+                    field_name,
+                    sort_order,
+                    allowed_fields=allowed_sort_fields,
+                    default_field=default_sort_field,
+                    default_order=sort_order_default,
+                    nulls=sort_nulls_default,
+                )
+            except ValueError as exc:
+                raise RequestValidationError(errors=[{"loc": ["query", order_by_alias], "msg": str(exc)}]) from exc
+
+        param_name = dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY
+        params.append(
+            inspect.Parameter(
+                name=param_name,
+                kind=inspect.Parameter.KEYWORD_ONLY,
+                annotation=Annotated[list[OrderBy], Depends(provide_order_by_multi)],
+            )
+        )
+        annotations[param_name] = Annotated[list[OrderBy], Depends(provide_order_by_multi)]
+    elif sort_field := config.get("sort_field"):
         sort_field_default = normalize_sort_field(sort_field)
         sort_order_default = config.get("sort_order", "desc")
         sort_nulls_default = config.get("sort_nulls")
@@ -771,6 +839,45 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 )
             )
             annotations[param_name] = Annotated[Optional[ChoicesFilter[Any]], Depends(choices_provider)]
+
+    if filter_fields_cfg := config.get("filter_fields"):
+        field_specs = resolve_filter_fields(filter_fields_cfg, model)
+        field_ignore_case = bool(config["search_ignore_case"]) if "search_ignore_case" in config else True
+        field_escape_wildcards = bool(config.get("search_escape_wildcards", False))
+
+        def _fastapi_field_annotation(spec: FilterFieldSpec, alias: str) -> Any:
+            return Annotated[
+                filter_parameter_type(spec),
+                Query(
+                    alias=alias,
+                    description=f"Filter {spec.field_path} ({spec.operator}).",
+                ),
+            ]
+
+        for rel_path, local_field, group_specs in group_filter_fields(field_specs):
+            # Length-prefix each hop so underscores cannot merge distinct paths.
+            group_slug = (
+                "rel_" + "_".join(f"{len(part)}_{part}" for part in rel_path) if rel_path else f"col_{local_field}"
+            )
+            field_provider = create_field_filter_provider(
+                group_specs,
+                rel_path=rel_path,
+                alias_for=alias_for,
+                annotation_factory=_fastapi_field_annotation,
+                name=f"provide_field_filter_{group_slug}",
+                ignore_case=field_ignore_case,
+                escape_wildcards=field_escape_wildcards,
+            )
+            dep_return_type: Any = Optional[RelationshipFilter] if rel_path else Optional[list[StatementFilter]]
+            param_name = f"field_{group_slug}_filter"
+            params.append(
+                inspect.Parameter(
+                    name=param_name,
+                    kind=inspect.Parameter.KEYWORD_ONLY,
+                    annotation=Annotated[dep_return_type, Depends(field_provider)],
+                )
+            )
+            annotations[param_name] = Annotated[dep_return_type, Depends(field_provider)]
 
     aggregate_filters = partial(_aggregate_filter_function)
 

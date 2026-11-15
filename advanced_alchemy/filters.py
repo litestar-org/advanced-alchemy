@@ -689,7 +689,10 @@ class OrderBy(StatementFilter):
             :meth:`sqlalchemy.sql.expression.Select.order_by`: SQLAlchemy ORDER BY
         """
         if isinstance(statement, Select):
-            field = self._get_instrumented_attr(model, self.field_name)
+            if isinstance(self.field_name, str) and "." in self.field_name:
+                field: InstrumentedField = self._get_relationship_order_expr(model, self.field_name)
+            else:
+                field = self._get_instrumented_attr(model, self.field_name)
             ordering: ColumnElement[Any] = field.desc() if self.sort_order == "desc" else field.asc()
             if self.nulls is not None:
                 ordering = _NullsPlacement(
@@ -697,6 +700,70 @@ class OrderBy(StatementFilter):
                 )
             statement = cast("StatementTypeT", statement.order_by(ordering))
         return statement
+
+    @staticmethod
+    def _get_relationship_order_expr(model: Any, field_path: str) -> ColumnElement[Any]:
+        """Build a correlated scalar subquery ordering expression for a to-one relationship path."""
+        parts = field_path.split(".")
+        min_rel_parts = 2
+        if len(parts) < min_rel_parts or any(not part for part in parts):
+            msg = f"Invalid relationship order path {field_path!r}"
+            raise ValueError(msg)
+        hops, leaf_field = parts[:-1], parts[-1]
+        for part in parts:
+            validate_identifier(part, "relationship" if part != leaf_field else "column")
+
+        parent_info = inspect(model)
+        first_rel = parent_info.mapper.relationships.get(hops[0])
+        if first_rel is None:
+            msg = f"Relationship {hops[0]!r} not found on model {parent_info.mapper.class_.__name__}"
+            raise ValueError(msg)
+        if first_rel.uselist:
+            msg = f"OrderBy only supports single-valued (to-one) relationship paths; {hops[0]!r} is a collection."
+            raise ValueError(msg)
+
+        first_alias = aliased(first_rel.mapper.class_, flat=True)
+        first_info = inspect(first_alias)
+        primaryjoin, secondaryjoin, _src, _dest, secondary, _adapter = first_rel._create_joins(  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+            source_selectable=parent_info.selectable,
+            dest_selectable=first_info.selectable,
+            source_polymorphic=True,
+            of_type_entity=first_info,
+            alias_secondary=True,
+        )
+        correlate_keep: list[Any] = [first_info.selectable]
+        if secondary is not None:
+            correlate_keep.append(secondary)
+
+        current_alias = first_alias
+        joins: list[tuple[Any, Any]] = []
+        for hop in hops[1:]:
+            current_mapper = inspect(current_alias).mapper
+            next_rel = current_mapper.relationships.get(hop)
+            if next_rel is None:
+                msg = f"Relationship {hop!r} not found on model {current_mapper.class_.__name__}"
+                raise ValueError(msg)
+            if next_rel.uselist:
+                msg = f"OrderBy only supports single-valued (to-one) relationship paths; {hop!r} is a collection."
+                raise ValueError(msg)
+            next_alias = aliased(next_rel.mapper.class_, flat=True)
+            next_info = inspect(next_alias)
+            joins.append((next_alias, getattr(current_alias, hop)))
+            correlate_keep.append(next_info.selectable)
+            current_alias = next_alias
+
+        leaf_attr = cast("ColumnElement[Any]", getattr(current_alias, leaf_field))
+        subquery = select(leaf_attr).select_from(first_alias)
+        if secondary is not None:
+            if secondaryjoin is None:
+                msg = "Many-to-many relationship is missing required secondary join configuration."
+                raise ValueError(msg)
+            subquery = subquery.select_from(secondary).where(and_(primaryjoin, secondaryjoin))
+        else:
+            subquery = subquery.where(primaryjoin)
+        for next_alias, join_attr in joins:
+            subquery = subquery.join(next_alias, join_attr)
+        return subquery.correlate_except(*correlate_keep).scalar_subquery()
 
 
 LIKE_ESCAPE_CHAR = "/"

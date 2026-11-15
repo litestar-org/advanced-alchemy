@@ -2000,3 +2000,48 @@ def test_search_filter_attribute_and_iendswith_sync(
 
     ends_stmt = ComparisonFilter("title", "iendswith", "REDEMPTION").append_to_statement(select(Movie), Movie)
     assert [m.title for m in session.execute(ends_stmt).scalars().all()] == ["Shawshank Redemption"]
+
+
+def test_order_by_dotted_relationship_sync(
+    relationship_models_sync: dict[str, Any],
+    session: Session,
+) -> None:
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    author_model: Any = relationship_models_sync["author"]
+    book_model: Any = relationship_models_sync["book"]
+    ada = author_model(name="Ada Lovelace")
+    zed = author_model(name="Zed Shaw")
+    book_1 = book_model(title="Book One", author=zed)
+    book_2 = book_model(title="Book Two", author=ada)
+    session.add_all([ada, zed, book_1, book_2])
+    session.flush()
+
+    asc_stmt = OrderBy(field_name="author.name", sort_order="asc").append_to_statement(select(book_model), book_model)
+    assert [b.title for b in session.execute(asc_stmt).scalars().all()] == ["Book Two", "Book One"]
+
+    desc_stmt = OrderBy(field_name="author.name", sort_order="desc").append_to_statement(select(book_model), book_model)
+    assert [b.title for b in session.execute(desc_stmt).scalars().all()] == ["Book One", "Book Two"]
+
+
+@pytest.mark.asyncio
+async def test_order_by_dotted_relationship_async(
+    relationship_models_async: dict[str, Any],
+    async_session: AsyncSession,
+) -> None:
+    if getattr(async_session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    author_model: Any = relationship_models_async["author"]
+    book_model: Any = relationship_models_async["book"]
+    ada = author_model(name="Ada Lovelace")
+    zed = author_model(name="Zed Shaw")
+    book_1 = book_model(title="Async Book One", author=zed)
+    book_2 = book_model(title="Async Book Two", author=ada)
+    async_session.add_all([ada, zed, book_1, book_2])
+    await async_session.flush()
+
+    asc_stmt = OrderBy(field_name="author.name", sort_order="asc").append_to_statement(select(book_model), book_model)
+    asc_books = (await async_session.execute(asc_stmt)).scalars().all()
+    assert [b.title for b in asc_books] == ["Async Book Two", "Async Book One"]

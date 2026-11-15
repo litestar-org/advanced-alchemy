@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 import pytest
 from sqlalchemy import Column, ColumnElement, ForeignKey, Integer, String, Table, create_engine, func, select
@@ -15,6 +15,7 @@ from advanced_alchemy.filters import (
     MultiFilter,
     NotInCollectionFilter,
     NotInSearchFilter,
+    OrderBy,
     RelationshipFilter,
     SearchFilter,
 )
@@ -388,3 +389,97 @@ def test_build_cache_key_relationship_filter_handling() -> None:
         uniquify=False,
     )
     assert raw_key is None
+
+
+@pytest.mark.parametrize(
+    ("model_cls", "field_name", "sort_order", "nulls", "expected_tokens"),
+    [
+        (UnitPost, "author.name", "asc", None, ("filter_unit_author", "name", "ASC")),
+        (UnitPost, "author.name", "desc", "last", ("filter_unit_author", "name", "DESC", "NULLS LAST")),
+        (UnitCategory, "parent.parent.name", "asc", "first", ("filter_unit_category", "name", "ASC", "NULLS FIRST")),
+    ],
+)
+def test_order_by_dotted_relationship_compiles_correlated_subquery(
+    model_cls: type[FilterUnitBase],
+    field_name: str,
+    sort_order: Literal["asc", "desc"],
+    nulls: Optional[Literal["first", "last"]],
+    expected_tokens: tuple[str, ...],
+) -> None:
+    """Verify dotted relationship paths compile to correlated scalar subqueries in OrderBy."""
+    stmt = OrderBy(field_name=field_name, sort_order=sort_order, nulls=nulls).append_to_statement(
+        select(model_cls), model_cls
+    )
+    sql = str(stmt.compile(dialect=sqlite.dialect()))
+    assert "ORDER BY (SELECT " in sql
+    for token in expected_tokens:
+        assert token in sql
+
+
+def test_order_by_dotted_relationship_executes_sqlite() -> None:
+    """Execute OrderBy across to-one and multi-hop self-referential paths on SQLite."""
+    engine = create_engine("sqlite:///:memory:")
+    FilterUnitBase.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        ada = UnitAuthor(id=1, name="Ada")
+        zed = UnitAuthor(id=2, name="Zed")
+        post_z = UnitPost(id=1, title="Zed Post", author=zed)
+        post_a = UnitPost(id=2, title="Ada Post", author=ada)
+        root = UnitCategory(id=1, name="Root")
+        mid = UnitCategory(id=2, name="Mid", parent=root)
+        leaf = UnitCategory(id=3, name="Leaf", parent=mid)
+        session.add_all([ada, zed, post_z, post_a, root, mid, leaf])
+        session.commit()
+
+        asc_posts = (
+            session.execute(
+                OrderBy(field_name="author.name", sort_order="asc").append_to_statement(select(UnitPost), UnitPost)
+            )
+            .scalars()
+            .all()
+        )
+        assert [p.title for p in asc_posts] == ["Ada Post", "Zed Post"]
+
+        desc_posts = (
+            session.execute(
+                OrderBy(field_name="author.name", sort_order="desc").append_to_statement(select(UnitPost), UnitPost)
+            )
+            .scalars()
+            .all()
+        )
+        assert [p.title for p in desc_posts] == ["Zed Post", "Ada Post"]
+
+        multi_hop = (
+            session.execute(
+                OrderBy(field_name="name", sort_order="asc").append_to_statement(
+                    OrderBy(field_name="parent.parent.name", sort_order="asc", nulls="first").append_to_statement(
+                        select(UnitCategory), UnitCategory
+                    ),
+                    UnitCategory,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert [c.name for c in multi_hop] == ["Mid", "Root", "Leaf"]
+
+
+@pytest.mark.parametrize(
+    ("model_cls", "field_name", "match"),
+    [
+        (UnitAuthor, "posts.title", "single-valued"),
+        (UnitPost, "missing.name", "not found"),
+        (UnitPost, "author.missing.name", "not found"),
+        (UnitPost, "author.posts.title", "single-valued"),
+        (UnitPost, "author..name", "Invalid relationship order path"),
+    ],
+)
+def test_order_by_dotted_relationship_rejects_invalid_paths(
+    model_cls: type[FilterUnitBase],
+    field_name: str,
+    match: str,
+) -> None:
+    """Ensure collection or malformed relationship paths fail early in OrderBy."""
+    with pytest.raises(ValueError, match=match):
+        OrderBy(field_name=field_name, sort_order="asc").append_to_statement(select(model_cls), model_cls)

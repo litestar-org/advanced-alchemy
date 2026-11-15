@@ -14,10 +14,10 @@ import pytest
 from msgspec import Struct
 from pydantic import BaseModel
 from pytest_lazy_fixtures import lf
-from sqlalchemy import Integer, String, column
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Table, and_, column, create_engine, or_
 from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute, Mapped, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute, Mapped, Session, mapped_column, relationship
 from sqlalchemy.sql.selectable import ForUpdateArg
 from sqlalchemy.types import TypeEngine
 
@@ -25,12 +25,19 @@ from advanced_alchemy import base
 from advanced_alchemy.exceptions import IntegrityError, RepositoryError, wrap_sqlalchemy_exception
 from advanced_alchemy.filters import (
     BeforeAfter,
+    BooleanFilter,
     CollectionFilter,
+    ComparisonFilter,
+    FilterGroup,
     LimitOffset,
+    MultiFilter,
     NotInCollectionFilter,
     NotInSearchFilter,
+    NotNullFilter,
+    NullFilter,
     OnBeforeAfter,
     OrderBy,
+    RelationshipFilter,
     SearchFilter,
 )
 from advanced_alchemy.operations import UpsertStrategy
@@ -2850,3 +2857,409 @@ async def test_async_mock_repository_get_or_none(lookup_id: int, should_find: bo
     await repo.add(item)
 
     assert await repo.get_or_none(lookup_id) is (item if should_find else None)
+
+
+class MockGridBase(DeclarativeBase):
+    """Isolated base for in-memory filter evaluator and repository parity tests."""
+
+
+mock_grid_article_tag = Table(
+    "mock_grid_article_tag",
+    MockGridBase.metadata,
+    Column("article_id", ForeignKey("mock_grid_article.id"), primary_key=True),
+    Column("tag_id", ForeignKey("mock_grid_tag.id"), primary_key=True),
+)
+
+
+class MockGridTag(MockGridBase):
+    """Tag model for mock repository relationship filtering tests."""
+
+    __tablename__ = "mock_grid_tag"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(50))
+
+
+class MockGridAuthor(MockGridBase):
+    """Author model with self-referential mentor for multi-hop mock tests."""
+
+    __tablename__ = "mock_grid_author"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    mentor_id: Mapped[int | None] = mapped_column(ForeignKey("mock_grid_author.id"), nullable=True)
+    mentor: Mapped[MockGridAuthor | None] = relationship(remote_side=[id])
+    articles: Mapped[list[MockGridArticle]] = relationship(back_populates="author")
+
+
+class MockGridArticle(MockGridBase):
+    """Article model for grid filter parity between DB and mock repositories."""
+
+    __tablename__ = "mock_grid_article"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(150))
+    views: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(30))
+    is_featured: Mapped[bool] = mapped_column(Boolean, default=False)
+    published_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
+    author_id: Mapped[int | None] = mapped_column(ForeignKey("mock_grid_author.id"), nullable=True)
+    author: Mapped[MockGridAuthor | None] = relationship(back_populates="articles")
+    tags: Mapped[list[MockGridTag]] = relationship(secondary=mock_grid_article_tag)
+
+
+def _seed_mock_grid_entities() -> list[MockGridArticle]:
+    tag_py = MockGridTag(id=1, name="python")
+    tag_sql = MockGridTag(id=2, name="sql")
+    mentor = MockGridAuthor(id=10, name="Grace")
+    ada = MockGridAuthor(id=1, name="Ada", mentor=mentor)
+    cody = MockGridAuthor(id=2, name="Cody")
+    return [
+        MockGridArticle(
+            id=1,
+            title="SQLAlchemy Guide",
+            views=250,
+            status="draft",
+            is_featured=False,
+            published_at=datetime.datetime(2026, 1, 10, 12, 0),
+            author=cody,
+            tags=[tag_py, tag_sql],
+        ),
+        MockGridArticle(
+            id=2,
+            title="SQL Patterns",
+            views=400,
+            status="draft",
+            is_featured=False,
+            published_at=datetime.datetime(2026, 2, 15, 8, 30),
+            author=ada,
+            tags=[tag_sql],
+        ),
+        MockGridArticle(
+            id=3,
+            title="Async Queues",
+            views=400,
+            status="published",
+            is_featured=True,
+            published_at=None,
+            author=ada,
+            tags=[tag_py],
+        ),
+        MockGridArticle(
+            id=4,
+            title="Orphan Draft",
+            views=120,
+            status="draft",
+            is_featured=False,
+            published_at=None,
+            author=None,
+            tags=[],
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("filters", "expected_ids", "expected_total"),
+    [
+        (
+            [RelationshipFilter("author", [ComparisonFilter("name", "eq", "Ada")])],
+            [2, 3],
+            2,
+        ),
+        (
+            [RelationshipFilter("author", [ComparisonFilter("name", "eq", "Ada")], negate=True)],
+            [1, 4],
+            2,
+        ),
+        (
+            [RelationshipFilter(("author", "mentor"), [SearchFilter("name", "grace", ignore_case=True)])],
+            [2, 3],
+            2,
+        ),
+        (
+            [RelationshipFilter("tags", [CollectionFilter("name", ["python"])])],
+            [1, 3],
+            2,
+        ),
+        (
+            [RelationshipFilter("tags", [CollectionFilter("name", ["python"])], negate=True)],
+            [2, 4],
+            2,
+        ),
+        (
+            [RelationshipFilter("tags", [MockGridTag.name == "sql"])],
+            [1, 2],
+            2,
+        ),
+        (
+            [CollectionFilter("tags", [1])],
+            [1, 3],
+            2,
+        ),
+        (
+            [NotInCollectionFilter("tags", [1])],
+            [2, 4],
+            2,
+        ),
+        (
+            [
+                ComparisonFilter("views", "ge", 150),
+                ComparisonFilter("views", "le", 400),
+                NotNullFilter("published_at"),
+                OrderBy("views", "desc"),
+                OrderBy("title", "asc"),
+                LimitOffset(1, 1),
+            ],
+            [1],
+            2,
+        ),
+        (
+            [OrderBy("author.name", "asc", nulls="first"), OrderBy("id", "asc")],
+            [4, 2, 3, 1],
+            4,
+        ),
+        (
+            [
+                BeforeAfter(
+                    "published_at",
+                    before=datetime.datetime(2026, 3, 1, 0, 0),
+                    after=datetime.datetime(2026, 1, 1, 0, 0),
+                ),
+                NullFilter("published_at"),
+            ],
+            [],
+            0,
+        ),
+        (
+            [
+                MultiFilter(
+                    {
+                        "or_": [
+                            {
+                                "type": "relationship",
+                                "relationship": "author",
+                                "filters": [
+                                    {"type": "comparison", "field_name": "name", "operator": "eq", "value": "Cody"}
+                                ],
+                            },
+                            {"type": "null", "field_name": "author_id"},
+                        ]
+                    }
+                ),
+                OrderBy("id", "asc"),
+            ],
+            [1, 4],
+            2,
+        ),
+    ],
+)
+def test_sync_mock_repository_relationship_and_grid_filters(
+    filters: list[Any],
+    expected_ids: list[int],
+    expected_total: int,
+) -> None:
+    """Verify SQLAlchemySyncMockRepository matches SQL filter and pagination semantics."""
+
+    class Repo(SQLAlchemySyncMockRepository[MockGridArticle]):
+        model_type = MockGridArticle
+
+    Repo.__database_clear__()
+    repo = Repo(session=MagicMock(spec=Session, bind=MagicMock()))
+    repo.add_many(_seed_mock_grid_entities())
+
+    items, total = repo.get_many_and_count(*filters)
+    assert total == expected_total
+    assert [item.id for item in items] == expected_ids
+
+
+async def test_async_mock_repository_matches_sync_and_sqlite_grid_parity() -> None:
+    """Verify SQLAlchemyAsyncMockRepository and real SQLite repository produce identical grid results."""
+
+    class AsyncMockRepo(SQLAlchemyAsyncMockRepository[MockGridArticle]):
+        model_type = MockGridArticle
+
+    class SyncDBRepo(SQLAlchemySyncRepository[MockGridArticle]):
+        model_type = MockGridArticle
+
+    AsyncMockRepo.__database_clear__()
+    mock_repo = AsyncMockRepo(session=AsyncMock(spec=AsyncSession, bind=MagicMock()))
+    await mock_repo.add_many(_seed_mock_grid_entities())
+
+    engine = create_engine("sqlite:///:memory:")
+    MockGridBase.metadata.create_all(engine)
+    with Session(engine) as session:
+        session.add_all(_seed_mock_grid_entities())
+        session.commit()
+        db_repo = SyncDBRepo(session=session)
+
+        grid_filters = [
+            SearchFilter("title", "sql", ignore_case=True),
+            ComparisonFilter("views", "ge", 200),
+            ComparisonFilter("views", "le", 500),
+            CollectionFilter("status", ["draft"]),
+            RelationshipFilter("author", [ComparisonFilter("name", "ne", "Ghost")]),
+            OrderBy("author.name", "asc"),
+            OrderBy("views", "desc"),
+            LimitOffset(limit=1, offset=1),
+        ]
+        mock_items, mock_total = await mock_repo.get_many_and_count(*grid_filters)
+        db_items, db_total = db_repo.get_many_and_count(*grid_filters)
+        assert mock_total == db_total == 2
+        assert [item.id for item in mock_items] == [item.id for item in db_items] == [1]
+
+        group_filters = [
+            FilterGroup(
+                logical_operator=or_,
+                filters=[
+                    ComparisonFilter("title", "istartswith", "async"),
+                    ComparisonFilter("id", "eq", 999),
+                ],
+            ),
+            NotInCollectionFilter("tags", [2]),
+        ]
+        async_items, async_total = await mock_repo.get_many_and_count(*group_filters)
+        assert async_total == 1
+        assert [item.title for item in async_items] == ["Async Queues"]
+
+        inclusive_items = await mock_repo.get_many(
+            OnBeforeAfter(
+                "published_at",
+                on_or_before=datetime.datetime(2026, 1, 10, 12, 0),
+                on_or_after=datetime.datetime(2026, 1, 10, 12, 0),
+            )
+        )
+        assert [item.id for item in inclusive_items] == [1]
+
+        assert len(await mock_repo.get_many(BeforeAfter("published_at", before=None, after=None))) == 4
+        assert [
+            item.id
+            for item in await mock_repo.get_many(
+                OnBeforeAfter(
+                    "published_at",
+                    on_or_before=datetime.datetime(2026, 2, 15, 8, 30),
+                    on_or_after=datetime.datetime(2026, 2, 15, 8, 30),
+                )
+            )
+        ] == [2]
+        assert [
+            item.id
+            for item in await mock_repo.get_many(
+                BeforeAfter(
+                    "published_at",
+                    before=datetime.datetime(2026, 2, 15, 8, 30),
+                    after=datetime.datetime(2026, 1, 10, 12, 0),
+                )
+            )
+        ] == []
+        assert [item.id for item in await mock_repo.get_many(BooleanFilter("is_featured", True))] == [3]
+        assert len(await mock_repo.get_many(BooleanFilter("is_featured", None))) == 4
+        assert {
+            item.id
+            for item in await mock_repo.get_many(
+                RelationshipFilter(MockGridArticle.author, [ComparisonFilter("name", "eq", "Ada")]),
+                ComparisonFilter("views", "lt", 500),
+                ComparisonFilter("views", "gt", 200),
+                ComparisonFilter("published_at", "dateeq", datetime.date(2026, 2, 15)),
+            )
+        } == {2}
+        assert {
+            item.id
+            for item in await mock_repo.get_many(
+                ComparisonFilter("status", "in", ["draft", "published"]),
+                ComparisonFilter("status", "notin", ["published"]),
+                OrderBy("id", "asc"),
+            )
+        } == {1, 2, 4}
+        assert {
+            item.id
+            for item in await mock_repo.get_many(
+                RelationshipFilter(
+                    "tags",
+                    [or_(and_(MockGridTag.id >= 2, ~(MockGridTag.name == "missing")), MockGridTag.name == "python")],
+                )
+            )
+        } == {1, 2, 3}
+        assert [
+            item.id
+            for item in await mock_repo.get_many(
+                MultiFilter(
+                    {
+                        "and_": cast(
+                            "Any",
+                            ["skip-non-dict", {"type": "comparison", "field_name": "id", "operator": "eq", "value": 1}],
+                        ),
+                        "or_": cast("Any", "non-list"),
+                    }
+                )
+            )
+        ] == [1]
+
+        with pytest.raises(ValueError, match="Invalid operator"):
+            await mock_repo.get_many(ComparisonFilter("views", "approx", 1))
+        with pytest.raises(RepositoryError, match="Unexpected filter"):
+            await mock_repo.get_many(cast("Any", object()))
+        with pytest.raises(RepositoryError, match="Unsupported expression"):
+            await mock_repo.get_many((column("id") + 1) == 2)
+        with pytest.raises(RepositoryError, match="not supported in mock repositories"):
+            await mock_repo.get_many(column("title").desc())
+
+
+@pytest.mark.parametrize("mode", ["sync", "async"])
+@pytest.mark.parametrize("seed_mode", ["relationship", "foreign_key"])
+@pytest.mark.parametrize("filter_type", [CollectionFilter, NotInCollectionFilter])
+async def test_relationship_collection_renamed_primary_key_sqlite_parity(
+    mode: str, seed_mode: str, filter_type: Any
+) -> None:
+    """Relationship collections resolve mapped PK attributes independently of SQL column names."""
+
+    class RenamedRelationshipBase(DeclarativeBase):
+        pass
+
+    class Child(RenamedRelationshipBase):
+        __tablename__ = "renamed_relationship_child"
+        child_id: Mapped[int] = mapped_column("db_child_id", primary_key=True)
+
+    class Parent(RenamedRelationshipBase):
+        __tablename__ = "renamed_relationship_parent"
+        id: Mapped[int] = mapped_column(primary_key=True)
+        child_id: Mapped[Union[int, None]] = mapped_column(
+            "db_parent_child_id", ForeignKey("renamed_relationship_child.db_child_id")
+        )
+        child: Mapped[Union[Child, None]] = relationship(Child)
+
+    def seed() -> list[Parent]:
+        return [Parent(id=1, child=Child(child_id=7)), Parent(id=2, child=Child(child_id=9)), Parent(id=3)]
+
+    engine = create_engine("sqlite://")
+    RenamedRelationshipBase.metadata.create_all(engine)
+    repo: Any
+    if mode == "async":
+        repo = type("ParentAsyncRepo", (SQLAlchemyAsyncMockRepository,), {"model_type": Parent})(
+            session=AsyncMock(spec=AsyncSession, bind=MagicMock())
+        )
+    else:
+        repo = type("ParentSyncRepo", (SQLAlchemySyncMockRepository,), {"model_type": Parent})(
+            session=MagicMock(spec=Session, bind=MagicMock())
+        )
+    repo.__database_clear__()
+    try:
+        if seed_mode == "relationship":
+            parents = seed()
+        else:
+            child_repo = type("ChildRepo", (type(repo),), {"model_type": Child})(session=repo.session)
+            await maybe_async(child_repo.add_many([Child(child_id=7), Child(child_id=9)]))
+            parents = [Parent(id=1, child_id=7), Parent(id=2, child_id=9), Parent(id=3)]
+        await maybe_async(repo.add_many(parents))
+        assert [parent.child_id for parent in parents] == [7, 9, None]
+        assert [parent.child.child_id if parent.child else None for parent in parents] == [7, 9, None]
+        filter_ = filter_type(field_name="child", values=[7])
+        with Session(engine) as session:
+            session.add_all(seed())
+            session.flush()
+            sql_repo = type("ParentDBRepo", (SQLAlchemySyncRepository,), {"model_type": Parent})(session=session)
+            expected = sorted(item.id for item in sql_repo.get_many(filter_))
+            assert expected == ([1] if filter_type is CollectionFilter else [2, 3])
+            assert sorted(item.id for item in await maybe_async(repo.get_many(filter_))) == expected
+    finally:
+        repo.__database_clear__()
+        engine.dispose()
