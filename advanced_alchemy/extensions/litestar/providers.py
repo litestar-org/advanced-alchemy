@@ -55,20 +55,20 @@ from advanced_alchemy.utils.dependencies import (
     DependencyCache,
     FieldNameType,
     FilterConfig,
+    FilterFieldSpec,
     FilterFieldsSpec,
-    GridFieldFilter,
-    GridOperator,
+    FilterOperator,
     build_order_by_filters,
+    create_field_filter_provider,
     filter_cache_key,
-    group_grid_filter_fields,
-    make_grid_provider_callable,
+    filter_parameter_type,
+    group_filter_fields,
     normalize_choice_field_types,
     normalize_field_name_types,
     normalize_sort_field,
     normalize_sort_fields,
-    query_type_for_grid_filter,
     resolve_filter_aliases,
-    resolve_grid_filter_fields,
+    resolve_filter_fields,
 )
 from advanced_alchemy.utils.singleton import SingletonMeta
 from advanced_alchemy.utils.text import camelize
@@ -99,7 +99,7 @@ __all__ = (
     "FieldNameType",
     "FilterConfig",
     "FilterFieldsSpec",
-    "GridOperator",
+    "FilterOperator",
     "SingletonMeta",
     "create_filter_dependencies",
     "create_service_dependencies",
@@ -793,28 +793,28 @@ def _create_statement_filters(  # noqa: C901, PLR0915
             )
 
     if filter_fields_cfg := config.get("filter_fields"):
-        grid_specs = resolve_grid_filter_fields(filter_fields_cfg, model)
-        grid_ignore_case = bool(config["search_ignore_case"]) if "search_ignore_case" in config else True
-        grid_escape_wildcards = bool(config.get("search_escape_wildcards", False))
+        field_specs = resolve_filter_fields(filter_fields_cfg, model)
+        field_ignore_case = bool(config["search_ignore_case"]) if "search_ignore_case" in config else True
+        field_escape_wildcards = bool(config.get("search_escape_wildcards", False))
 
-        def _litestar_grid_annotation(spec: GridFieldFilter, alias: str) -> Any:
+        def _litestar_field_annotation(spec: FilterFieldSpec, alias: str) -> Any:
             return Annotated[
-                query_type_for_grid_filter(spec),
+                filter_parameter_type(spec),
                 QueryParameter(name=alias),
             ]
 
-        for rel_path, local_field, group_specs in group_grid_filter_fields(grid_specs):
+        for rel_path, local_field, group_specs in group_filter_fields(field_specs):
             group_slug = f"rel_{'_'.join(rel_path)}" if rel_path else local_field.replace(".", "_")
-            grid_provider = make_grid_provider_callable(
+            field_provider = create_field_filter_provider(
                 group_specs,
                 rel_path=rel_path,
                 alias_for=alias_for,
-                annotation_factory=_litestar_grid_annotation,
-                name=f"provide_grid_filter_{group_slug}",
-                ignore_case=grid_ignore_case,
-                escape_wildcards=grid_escape_wildcards,
+                annotation_factory=_litestar_field_annotation,
+                name=f"provide_field_filter_{group_slug}",
+                ignore_case=field_ignore_case,
+                escape_wildcards=field_escape_wildcards,
             )
-            filters[f"{prefix_str}grid_{group_slug}_filter"] = Provide(grid_provider, sync_to_thread=False)
+            filters[f"{prefix_str}field_{group_slug}_filter"] = Provide(field_provider, sync_to_thread=False)
 
     if clean_prefix and filters:
         ident = re.sub(r"\W+", "_", clean_prefix).strip("_")

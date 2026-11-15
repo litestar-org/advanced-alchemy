@@ -39,30 +39,30 @@ __all__ = (
     "DependencyCache",
     "FieldNameType",
     "FilterConfig",
+    "FilterFieldSpec",
     "FilterFieldsSpec",
-    "GridFieldFilter",
-    "GridOperator",
-    "build_grid_filter",
-    "build_grid_filters_for_group",
+    "FilterOperator",
+    "build_field_filter",
+    "build_field_filters",
     "build_order_by_filters",
+    "create_field_filter_provider",
     "filter_cache_key",
-    "group_grid_filter_fields",
-    "make_grid_provider_callable",
+    "filter_parameter_type",
+    "group_filter_fields",
     "make_hashable",
     "normalize_choice_field_types",
     "normalize_field_name_types",
     "normalize_sort_field",
     "normalize_sort_fields",
-    "query_type_for_grid_filter",
     "resolve_filter_aliases",
-    "resolve_grid_filter_fields",
+    "resolve_filter_fields",
 )
 
 HashableValue = Union[str, int, float, bool, None]
 HashableType = Union[HashableValue, tuple[Any, ...], tuple[tuple[str, Any], ...], tuple[HashableValue, ...]]
 SortOrder = Literal["asc", "desc"]
 SortField = Union[str, set[str], list[str]]
-GridOperator: TypeAlias = Literal[
+FilterOperator: TypeAlias = Literal[
     "eq",
     "ne",
     "contains",
@@ -75,9 +75,9 @@ GridOperator: TypeAlias = Literal[
     "in",
     "is_null",
 ]
-FilterFieldsSpec: TypeAlias = Union[AbstractSet[str], Sequence[str], Mapping[str, AbstractSet[GridOperator]]]
+FilterFieldsSpec: TypeAlias = Union[AbstractSet[str], Sequence[str], Mapping[str, AbstractSet[FilterOperator]]]
 FIELD_TUPLE_LENGTH = 2
-_GRID_OPERATOR_ORDER: tuple[GridOperator, ...] = (
+_FILTER_OPERATOR_ORDER: tuple[FilterOperator, ...] = (
     "eq",
     "ne",
     "contains",
@@ -90,9 +90,9 @@ _GRID_OPERATOR_ORDER: tuple[GridOperator, ...] = (
     "in",
     "is_null",
 )
-_VALID_GRID_OPERATORS: frozenset[str] = frozenset(_GRID_OPERATOR_ORDER)
-_STRING_GRID_OPERATORS: frozenset[str] = frozenset({"contains", "startswith", "endswith"})
-_RANGE_GRID_OPERATORS: frozenset[str] = frozenset({"gt", "ge", "lt", "le"})
+_VALID_FILTER_OPERATORS: frozenset[str] = frozenset(_FILTER_OPERATOR_ORDER)
+_STRING_FILTER_OPERATORS: frozenset[str] = frozenset({"contains", "startswith", "endswith"})
+_RANGE_FILTER_OPERATORS: frozenset[str] = frozenset({"gt", "ge", "lt", "le"})
 _ORDERED_PYTHON_TYPES: tuple[type[Any], ...] = (
     int,
     float,
@@ -176,7 +176,7 @@ class FilterConfig(TypedDict):
     choice_fields: NotRequired[ChoiceFieldConfig]
     """Fields that support choices filters."""
     filter_fields: NotRequired[FilterFieldsSpec]
-    """Model columns or dotted relationship paths exposed as operator-suffixed data-grid filters."""
+    """Model columns or dotted relationship paths exposed as operator-suffixed field filters."""
     sort_fields: NotRequired[Union[AbstractSet[str], Sequence[str]]]
     """Allowlisted column or single-valued relationship paths accepted by ``orderBy``."""
     alias_generator: NotRequired[Union[Literal["snake_case", "camel_case"], Callable[[str], str]]]
@@ -362,7 +362,7 @@ def normalize_sort_field(sort_field: SortField) -> str:
     return min(sort_field)
 
 
-class GridFieldFilter:
+class FilterFieldSpec:
     """Normalized query parameter descriptor derived from ``FilterConfig['filter_fields']``."""
 
     __slots__ = ("field_path", "leaf_field", "operator", "param_name", "rel_path", "value_type")
@@ -373,7 +373,7 @@ class GridFieldFilter:
         field_path: str,
         rel_path: tuple[str, ...],
         leaf_field: str,
-        operator: GridOperator,
+        operator: FilterOperator,
         param_name: str,
         value_type: Any,
     ) -> None:
@@ -440,15 +440,15 @@ def _inspect_mapper(model: Any, field_path: str) -> Any:
     return model_info.mapper
 
 
-def _infer_column_grid_type_and_ops(column_type: Any, *, nullable: bool) -> tuple[Any, tuple[GridOperator, ...]]:
-    """Infer Python parameter type and default grid operators from a SQLAlchemy column type."""
+def _infer_column_type_and_ops(column_type: Any, *, nullable: bool) -> tuple[Any, tuple[FilterOperator, ...]]:
+    """Infer Python parameter type and default filter operators from a SQLAlchemy column type."""
     py_type, ops = _classify_column_type(column_type)
     if nullable and "is_null" not in ops:
         ops = (*ops, "is_null")
     return py_type, ops
 
 
-_PYTHON_TYPE_OPS: dict[Any, tuple[GridOperator, ...]] = {
+_PYTHON_TYPE_OPS: dict[Any, tuple[FilterOperator, ...]] = {
     UUID: ("eq", "ne", "in"),
     datetime.datetime: ("eq", "ne", "gt", "ge", "lt", "le", "in"),
     datetime.date: ("eq", "ne", "gt", "ge", "lt", "le", "in"),
@@ -458,7 +458,7 @@ _PYTHON_TYPE_OPS: dict[Any, tuple[GridOperator, ...]] = {
     Decimal: ("eq", "ne", "gt", "ge", "lt", "le", "in"),
 }
 
-_SA_TYPE_TABLE: tuple[tuple[Any, Optional[type[Any]], tuple[GridOperator, ...]], ...] = (
+_SA_TYPE_TABLE: tuple[tuple[Any, Optional[type[Any]], tuple[FilterOperator, ...]], ...] = (
     (Uuid, UUID, ("eq", "ne", "in")),
     (DateTime, datetime.datetime, ("eq", "ne", "gt", "ge", "lt", "le", "in")),
     (Date, datetime.date, ("eq", "ne", "gt", "ge", "lt", "le", "in")),
@@ -468,8 +468,8 @@ _SA_TYPE_TABLE: tuple[tuple[Any, Optional[type[Any]], tuple[GridOperator, ...]],
 )
 
 
-def _classify_sa_column_type(column_type: Any) -> Optional[tuple[Any, tuple[GridOperator, ...]]]:
-    """Match SQLAlchemy type classes and ``TypeDecorator`` wrappers into grid metadata."""
+def _classify_sa_column_type(column_type: Any) -> Optional[tuple[Any, tuple[FilterOperator, ...]]]:
+    """Match SQLAlchemy type classes and ``TypeDecorator`` wrappers into filter metadata."""
     for sa_types, default_py, ops in _SA_TYPE_TABLE:
         if isinstance(column_type, sa_types):
             if default_py is not None:
@@ -483,7 +483,7 @@ def _classify_sa_column_type(column_type: Any) -> Optional[tuple[Any, tuple[Grid
     return None
 
 
-def _classify_column_type(column_type: Any) -> tuple[Any, tuple[GridOperator, ...]]:
+def _classify_column_type(column_type: Any) -> tuple[Any, tuple[FilterOperator, ...]]:
     """Classify a SQLAlchemy ``TypeEngine`` instance into Python type and operators."""
     py_type = _safe_python_type(column_type)
     if isinstance(column_type, Boolean):
@@ -503,56 +503,56 @@ def _classify_column_type(column_type: Any) -> tuple[Any, tuple[GridOperator, ..
     return (fallback_type, ("eq", "ne", "in"))
 
 
-def _validate_and_order_grid_ops(
+def _validate_and_order_filter_ops(
     field_path: str,
     py_type: Any,
-    inferred_ops: tuple[GridOperator, ...],
-    requested_ops: Optional[Iterable[GridOperator]],
-) -> tuple[GridOperator, ...]:
+    inferred_ops: tuple[FilterOperator, ...],
+    requested_ops: Optional[Iterable[FilterOperator]],
+) -> tuple[FilterOperator, ...]:
     """Validate optional explicit operator narrowing against inferred column capabilities."""
     if requested_ops is None:
         return inferred_ops
     requested_list = list(requested_ops)
     for operator in requested_list:
-        if operator not in _VALID_GRID_OPERATORS:
-            msg = f"Unsupported grid operator {operator!r} for field {field_path!r}"
+        if operator not in _VALID_FILTER_OPERATORS:
+            msg = f"Unsupported filter operator {operator!r} for field {field_path!r}"
             raise ImproperConfigurationError(msg)
-        if operator in _STRING_GRID_OPERATORS and py_type is not str:
-            msg = f"String grid operator {operator!r} is not supported for non-text field {field_path!r}"
+        if operator in _STRING_FILTER_OPERATORS and py_type is not str:
+            msg = f"String filter operator {operator!r} is not supported for non-text field {field_path!r}"
             raise ImproperConfigurationError(msg)
-        if operator in _RANGE_GRID_OPERATORS and py_type not in _ORDERED_PYTHON_TYPES:
-            msg = f"Range grid operator {operator!r} is not supported for field {field_path!r}"
+        if operator in _RANGE_FILTER_OPERATORS and py_type not in _ORDERED_PYTHON_TYPES:
+            msg = f"Range filter operator {operator!r} is not supported for field {field_path!r}"
             raise ImproperConfigurationError(msg)
     requested_set = set(requested_list)
-    return tuple(op_name for op_name in _GRID_OPERATOR_ORDER if op_name in requested_set)
+    return tuple(op_name for op_name in _FILTER_OPERATOR_ORDER if op_name in requested_set)
 
 
-def resolve_grid_filter_fields(
+def resolve_filter_fields(
     filter_fields: FilterFieldsSpec,
     model: Optional[type[Any]],
-) -> tuple[GridFieldFilter, ...]:
-    """Expand ``FilterConfig['filter_fields']`` into normalized grid filter specs."""
+) -> tuple[FilterFieldSpec, ...]:
+    """Expand ``FilterConfig['filter_fields']`` into normalized field filter specs."""
     if model is None:
         msg = "FilterConfig 'filter_fields' requires a SQLAlchemy model; pass model=... or use create_service_dependencies(...)"
         raise ImproperConfigurationError(msg)
 
-    field_entries: list[tuple[str, Optional[Iterable[GridOperator]]]]
+    field_entries: list[tuple[str, Optional[Iterable[FilterOperator]]]]
     if isinstance(filter_fields, Mapping):
-        typed_mapping = cast("Mapping[str, Iterable[GridOperator]]", filter_fields)
+        typed_mapping = cast("Mapping[str, Iterable[FilterOperator]]", filter_fields)
         field_entries = list(typed_mapping.items())
     elif isinstance(filter_fields, AbstractSet):
         field_entries = [(field_name, None) for field_name in sorted(filter_fields)]
     else:
         field_entries = [(field_name, None) for field_name in filter_fields]
 
-    specs: list[GridFieldFilter] = []
+    specs: list[FilterFieldSpec] = []
     for field_path, explicit_ops in field_entries:
         rel_path, leaf_field, column_type, nullable = _resolve_model_column(model, field_path)
-        py_type, inferred_ops = _infer_column_grid_type_and_ops(column_type, nullable=nullable)
-        ops = _validate_and_order_grid_ops(field_path, py_type, inferred_ops, explicit_ops)
+        py_type, inferred_ops = _infer_column_type_and_ops(column_type, nullable=nullable)
+        ops = _validate_and_order_filter_ops(field_path, py_type, inferred_ops, explicit_ops)
         base_param = field_path.replace(".", "_")
         specs.extend(
-            GridFieldFilter(
+            FilterFieldSpec(
                 field_path=field_path,
                 rel_path=rel_path,
                 leaf_field=leaf_field,
@@ -609,36 +609,36 @@ def normalize_sort_fields(
     return tuple(normalized)
 
 
-def group_grid_filter_fields(
-    specs: Sequence[GridFieldFilter],
-) -> tuple[tuple[tuple[str, ...], str, tuple[GridFieldFilter, ...]], ...]:
-    """Group grid parameter specs so shared relationship paths compile to one ``RelationshipFilter``."""
-    grouped: dict[tuple[tuple[str, ...], str], list[GridFieldFilter]] = {}
+def group_filter_fields(
+    specs: Sequence[FilterFieldSpec],
+) -> tuple[tuple[tuple[str, ...], str, tuple[FilterFieldSpec, ...]], ...]:
+    """Group field parameter specs so shared relationship paths compile to one ``RelationshipFilter``."""
+    grouped: dict[tuple[tuple[str, ...], str], list[FilterFieldSpec]] = {}
     for spec in specs:
         key = (spec.rel_path, "" if spec.rel_path else spec.field_path)
         grouped.setdefault(key, []).append(spec)
     return tuple((rel_path, local_field, tuple(group)) for (rel_path, local_field), group in grouped.items())
 
 
-def query_type_for_grid_filter(spec: GridFieldFilter) -> Any:
-    """Return the framework query parameter type annotation for a ``GridFieldFilter``."""
+def filter_parameter_type(spec: FilterFieldSpec) -> Any:
+    """Return the framework query parameter type annotation for a ``FilterFieldSpec``."""
     if spec.operator == "is_null":
         return Optional[bool]
-    if spec.operator in _STRING_GRID_OPERATORS:
+    if spec.operator in _STRING_FILTER_OPERATORS:
         return Optional[str]
     if spec.operator == "in":
         return Optional[cast("Any", list).__class_getitem__(spec.value_type)]
     return Optional[spec.value_type]
 
 
-def build_grid_filter(
-    spec: GridFieldFilter,
+def build_field_filter(
+    spec: FilterFieldSpec,
     value: Any,
     *,
     ignore_case: bool = True,
     escape_wildcards: bool = False,
 ) -> Optional[StatementFilter]:
-    """Build a :class:`~advanced_alchemy.filters.StatementFilter` for one grid query value."""
+    """Build a :class:`~advanced_alchemy.filters.StatementFilter` for one field query value."""
     built: Optional[StatementFilter] = None
     if value is not None:
         if spec.operator == "is_null":
@@ -660,8 +660,8 @@ def build_grid_filter(
     return built
 
 
-def build_grid_filters_for_group(
-    specs: Sequence[GridFieldFilter],
+def build_field_filters(
+    specs: Sequence[FilterFieldSpec],
     values: Mapping[str, Any],
     *,
     rel_path: tuple[str, ...],
@@ -673,7 +673,7 @@ def build_grid_filters_for_group(
         filter_obj
         for spec in specs
         if (
-            filter_obj := build_grid_filter(
+            filter_obj := build_field_filter(
                 spec,
                 values.get(spec.param_name),
                 ignore_case=ignore_case,
@@ -690,23 +690,23 @@ def build_grid_filters_for_group(
     return RelationshipFilter(relationship=rel_arg, filters=resolved)
 
 
-def make_grid_provider_callable(
-    specs: Sequence[GridFieldFilter],
+def create_field_filter_provider(
+    specs: Sequence[FilterFieldSpec],
     *,
     rel_path: tuple[str, ...],
     alias_for: Callable[[str], str],
-    annotation_factory: Callable[[GridFieldFilter, str], Any],
+    annotation_factory: Callable[[FilterFieldSpec, str], Any],
     name: str,
     ignore_case: bool = True,
     escape_wildcards: bool = False,
 ) -> Callable[..., Any]:
-    """Construct a signatured dependency callable for a local or relationship grid filter group."""
+    """Construct a signatured dependency callable for a local or relationship field filter group."""
     import inspect
 
     return_annotation: Any = Optional[RelationshipFilter] if rel_path else Optional[list[StatementFilter]]
 
-    def provide_grid_filters(**kwargs: Any) -> Any:
-        return build_grid_filters_for_group(
+    def provide_field_filters(**kwargs: Any) -> Any:
+        return build_field_filters(
             specs,
             kwargs,
             rel_path=rel_path,
@@ -729,13 +729,13 @@ def make_grid_provider_callable(
         )
         annotations[spec.param_name] = annotation
 
-    provide_grid_filters.__name__ = name
-    provide_grid_filters.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+    provide_field_filters.__name__ = name
+    provide_field_filters.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
         parameters=parameters,
         return_annotation=return_annotation,
     )
-    provide_grid_filters.__annotations__ = annotations
-    return provide_grid_filters
+    provide_field_filters.__annotations__ = annotations
+    return provide_field_filters
 
 
 def build_order_by_filters(
@@ -796,7 +796,7 @@ def _collect_filter_parameter_names(config: FilterConfig, model: Optional[type[A
     if choices := config.get("choice_fields"):
         names.extend(field.name for field in normalize_choice_field_types(choices))
     if filter_fields := config.get("filter_fields"):
-        names.extend(spec.param_name for spec in resolve_grid_filter_fields(filter_fields, model))
+        names.extend(spec.param_name for spec in resolve_filter_fields(filter_fields, model))
     return names
 
 

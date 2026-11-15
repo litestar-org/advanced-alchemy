@@ -30,7 +30,7 @@ from advanced_alchemy.extensions.fastapi.providers import (
     FieldNameType,
     FilterConfig,
     FilterFieldsSpec,
-    GridOperator,
+    FilterOperator,
     _create_filter_aggregate_function_fastapi,  # pyright: ignore[reportPrivateUsage]
     dep_cache,  # Import the global cache instance
     provide_filters,
@@ -1171,11 +1171,11 @@ def test_equal_dependency_defaults_still_share_a_dependency() -> None:
 
 
 class _FastAPIGridBase(DeclarativeBase):
-    """Isolated declarative base for FastAPI data-grid tests."""
+    """Isolated declarative base for FastAPI field filter tests."""
 
 
 class _FastAPIGridAuthor(_FastAPIGridBase):
-    """Author model for FastAPI data-grid tests."""
+    """Author model for FastAPI field filter tests."""
 
     __tablename__ = "fastapi_grid_author"
 
@@ -1185,7 +1185,7 @@ class _FastAPIGridAuthor(_FastAPIGridBase):
 
 
 class _FastAPIGridArticle(_FastAPIGridBase):
-    """Article model for FastAPI data-grid tests."""
+    """Article model for FastAPI field filter tests."""
 
     __tablename__ = "fastapi_grid_article"
 
@@ -1258,9 +1258,9 @@ def _serialize_fastapi_grid_filters(filters: Sequence[Any]) -> list[dict[str, An
     return serialized
 
 
-def test_fastapi_grid_filter_fields_and_sort_fields_openapi_and_parsing() -> None:
+def test_fastapi_field_filter_fields_and_sort_fields_openapi_and_parsing() -> None:
     """Verify grouped relationship filters, repeatable orderBy, 422 validation, and OpenAPI schema."""
-    ops: set[GridOperator] = {"contains", "eq"}
+    ops: set[FilterOperator] = {"contains", "eq"}
     field_spec: FilterFieldsSpec = {
         "title": ops,
         "views": {"ge", "le"},
@@ -1339,8 +1339,8 @@ def test_fastapi_grid_filter_fields_and_sort_fields_openapi_and_parsing() -> Non
         assert invalid_sort.status_code == 422
 
 
-def test_fastapi_grid_snake_case_and_e2e_async_sqlite_prototype() -> None:
-    """Exercise FastAPI grid filtering + relationship OrderBy + pagination against async SQLite."""
+def test_fastapi_field_snake_case_and_e2e_async_sqlite_prototype() -> None:
+    """Exercise FastAPI field filtering + relationship OrderBy + pagination against async SQLite."""
     config: FilterConfig = {
         "filter_fields": {
             "title": {"contains", "eq"},

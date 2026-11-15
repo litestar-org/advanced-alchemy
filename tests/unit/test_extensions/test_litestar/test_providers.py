@@ -30,7 +30,7 @@ from advanced_alchemy.extensions.litestar.providers import (
     DependencyDefaults,
     FilterConfig,
     FilterFieldsSpec,
-    GridOperator,
+    FilterOperator,
     SingletonMeta,
     _create_filter_aggregate_function,  # pyright: ignore[reportPrivateUsage]
     _create_statement_filters,  # pyright: ignore[reportPrivateUsage]
@@ -1468,11 +1468,11 @@ def test_scoped_filters_snake_case_query_aliases() -> None:
 
 
 class _LitestarGridBase(DeclarativeBase):
-    """Isolated base for Litestar grid filtering tests."""
+    """Isolated base for Litestar field filtering tests."""
 
 
 class _LitestarGridAuthor(_LitestarGridBase):
-    """Author model for Litestar data-grid tests."""
+    """Author model for Litestar field filter tests."""
 
     __tablename__ = "litestar_grid_author"
 
@@ -1482,7 +1482,7 @@ class _LitestarGridAuthor(_LitestarGridBase):
 
 
 class _LitestarGridArticle(_LitestarGridBase):
-    """Article model for Litestar data-grid tests."""
+    """Article model for Litestar field filter tests."""
 
     __tablename__ = "litestar_grid_article"
 
@@ -1555,9 +1555,9 @@ def _serialize_grid_filters(filters: Sequence[Any]) -> list[dict[str, Any]]:
     return serialized
 
 
-def test_litestar_grid_filter_fields_and_sort_fields_openapi_and_parsing() -> None:
+def test_litestar_field_filter_fields_and_sort_fields_openapi_and_parsing() -> None:
     """Verify grouped relationship filters, repeatable orderBy, 400 validation, and OpenAPI schema."""
-    ops: set[GridOperator] = {"contains", "eq"}
+    ops: set[FilterOperator] = {"contains", "eq"}
     field_spec: FilterFieldsSpec = {
         "title": ops,
         "views": {"ge", "le"},
@@ -1644,7 +1644,7 @@ def test_litestar_grid_filter_fields_and_sort_fields_openapi_and_parsing() -> No
         assert invalid_sort.status_code == 400
 
 
-def test_litestar_grid_filters_snake_case_scoped_and_explicit_model() -> None:
+def test_litestar_field_filters_snake_case_scoped_and_explicit_model() -> None:
     """Verify snake_case query names, scoped prefixes, and explicit create_filter_dependencies model binding."""
     config: FilterConfig = {
         "filter_fields": {"title": {"contains"}, "author.name": {"eq"}},
@@ -1682,7 +1682,7 @@ def test_litestar_grid_filters_snake_case_scoped_and_explicit_model() -> None:
         assert {"type": "OrderBy", "field_name": "author.name", "sort_order": "desc"} in parsed
 
 
-def test_litestar_grid_e2e_async_sqlite_prototype() -> None:
+def test_litestar_field_e2e_async_sqlite_prototype() -> None:
     """Exercise full HTTP -> Litestar DI -> SQLAlchemyAsyncRepositoryService -> SQLite grid query flow."""
     db_config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
 

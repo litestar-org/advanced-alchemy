@@ -149,14 +149,14 @@ Use :class:`~advanced_alchemy.filters.RelationshipFilter` to correlate related p
             NotInCollectionFilter(field_name=FilteringPost.tags, values=excluded_tag_ids),
         )
 
-Data-Grid Filtering and Sorting
--------------------------------
+Field Filtering and Sorting
+---------------------------
 
 Declare ``filter_fields`` and ``sort_fields`` in ``FilterConfig`` so Litestar and FastAPI infer column operators, group dotted relationship parameters into one ``RelationshipFilter``, and validate repeatable ``orderBy`` (``-col`` descending):
 
 .. code-block:: python
 
-    grid_filters: FilterConfig = {
+    field_filters: FilterConfig = {
         "filter_fields": {
             "title": {"contains", "eq"},
             "published": {"eq"},
