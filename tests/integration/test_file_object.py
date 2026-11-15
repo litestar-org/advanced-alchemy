@@ -1,6 +1,6 @@
 import logging
 import sys
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 from contextlib import suppress
 from pathlib import Path
 from typing import Any, Optional
@@ -37,7 +37,7 @@ pytestmark = [
 @pytest.fixture(autouse=True)
 def preserve_global_file_object_listeners() -> Generator[None, None, None]:
     """Restore legacy listener registrations after each storage test."""
-    listeners = {
+    listeners: dict[str, Callable[..., Any]] = {
         "before_flush": FileObjectListener.before_flush,
         "after_commit": FileObjectListener.after_commit,
         "after_rollback": FileObjectListener.after_rollback,
