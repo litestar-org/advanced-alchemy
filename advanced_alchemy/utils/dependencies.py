@@ -367,6 +367,8 @@ class FilterFieldSpec:
 
     __slots__ = ("field_path", "leaf_field", "operator", "param_name", "rel_path", "value_type")
 
+    operator: FilterOperator
+
     def __init__(
         self,
         *,

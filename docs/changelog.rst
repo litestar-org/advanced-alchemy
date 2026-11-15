@@ -5,6 +5,17 @@
 
 .. changelog:: 1.13.0
 
+    .. change:: declare reusable FilterSets with inferred relationship loading
+        :type: feature
+
+        ``FilterSet[Model]`` defines allowed query fields, custom filters, search,
+        and sorting with double-underscore field parameters. Operators on one
+        field match the same related row; different fields match independently.
+        Repository and service reads infer relationship loading while preserving
+        explicit loading options, pagination totals, and mock repository behavior.
+        With contributions from `Morteza Karimi
+        <https://github.com/MortezaKarimi77>`_.
+
     .. change:: coordinate shared-session services with ServiceGroup
         :type: feature
         :pr: 722

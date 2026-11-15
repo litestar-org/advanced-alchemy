@@ -618,6 +618,11 @@ class SQLAlchemyAsyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemyAsyn
         *filters: Union[StatementFilter, ColumnElement[bool]],
         apply_pagination: bool = True,
     ) -> List[ModelT]:
+        from advanced_alchemy.filterset import FilterSet
+
+        if any(isinstance(filter_, FilterSet) and filter_.model_type is not self.model_type for filter_ in filters):
+            msg = "FilterSet model does not match the repository model"
+            raise ValueError(msg)
         return InMemoryFilterEvaluator.apply_filters(result, *filters, apply_pagination=apply_pagination)
 
     def _get_collection_items(self) -> List[ModelT]:

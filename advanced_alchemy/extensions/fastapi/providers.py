@@ -45,6 +45,7 @@ from advanced_alchemy.filters import (
     SearchFilter,
     StatementFilter,
 )
+from advanced_alchemy.filterset import FilterSet
 from advanced_alchemy.service import (
     Empty,
     EmptyType,
@@ -410,16 +411,82 @@ def provide_service(  # noqa: C901, PLR0915
     )
 
 
+def _create_filterset_dependency(
+    filterset_type: type[FilterSet[Any]], dep_defaults: DependencyDefaults
+) -> Callable[..., list[FilterSet[Any]]]:
+    config = filterset_type.filter_config()
+    standard_config = dict(config)
+    standard_config.pop("filter_fields", None)
+    prefix = getattr(dep_defaults, "prefix", None)
+    aliases = resolve_filter_aliases(
+        cast("FilterConfig", standard_config), prefix=prefix, model=filterset_type.model_type
+    )
+    parameters: list[inspect.Parameter] = []
+    annotations: dict[str, Any] = {}
+    entries: list[tuple[str, Any, str]] = []
+    for spec in filterset_type.parameter_specs():
+        alias = f"{prefix.rstrip('_')}_{spec.param_name}" if prefix else spec.param_name
+        entries.append((spec.param_name, filter_parameter_type(spec), alias))
+    if config.get("pagination_type"):
+        entries.extend(
+            [
+                ("page", Optional[int], aliases.get("current_page", "currentPage")),
+                ("pageSize", Optional[int], aliases.get("page_size", "pageSize")),
+            ]
+        )
+    if config.get("sort_fields") or config.get("sort_field"):
+        entries.extend(
+            [
+                ("orderBy", Optional[list[str]], aliases.get("order_by", "orderBy")),
+                ("sortOrder", Optional[Literal["asc", "desc"]], aliases.get("sort_order", "sortOrder")),
+            ]
+        )
+    if config.get("search"):
+        entries.append(("searchString", Optional[str], aliases.get("search_string", "searchString")))
+    for name, annotation, alias in entries:
+        annotated = cast("Any", Annotated)[annotation, Query(alias=alias)]
+        annotations[name] = annotated
+        parameters.append(inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, annotation=annotated, default=None))
+
+    def provide_filterset(**kwargs: Any) -> list[FilterSet[Any]]:
+        try:
+            instance = filterset_type(**{key: value for key, value in kwargs.items() if value is not None})
+            return [instance]  # noqa: TRY300
+        except (ValueError, TypeError) as exc:
+            raise RequestValidationError(errors=[{"loc": ["query"], "msg": str(exc), "type": "value_error"}]) from exc
+
+    provide_filterset.__name__ = f"provide_{filterset_type.__name__}"
+    provide_filterset.__annotations__ = {**annotations, "return": list[FilterSet[Any]]}
+    provide_filterset.__signature__ = inspect.Signature(parameters, return_annotation=list[FilterSet[Any]])  # type: ignore[attr-defined]
+    return provide_filterset
+
+
+@overload
 def provide_filters(
-    config: FilterConfig,
+    config: FilterConfig, dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS, model: Optional[type[Any]] = None
+) -> Callable[..., list[FilterTypes]]: ...
+
+
+@overload
+def provide_filters(
+    config: type[FilterSet[Any]],
     dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
     model: Optional[type[Any]] = None,
-) -> Callable[..., list[FilterTypes]]:
+) -> Callable[..., list[FilterSet[Any]]]: ...
+
+
+def provide_filters(
+    config: Union[FilterConfig, type[FilterSet[Any]]],
+    dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
+    model: Optional[type[Any]] = None,
+) -> Union[Callable[..., list[FilterTypes]], Callable[..., list[FilterSet[Any]]]]:
     """Create FastAPI dependency providers for filters based on the provided configuration.
 
     Returns:
         A FastAPI dependency provider function that aggregates multiple filter dependencies.
     """
+    if isinstance(config, type):
+        return _create_filterset_dependency(config, dep_defaults)
     filter_keys = {
         "id_filter",
         "created_at",

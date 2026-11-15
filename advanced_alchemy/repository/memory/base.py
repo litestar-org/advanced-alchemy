@@ -833,7 +833,9 @@ class InMemoryFilterEvaluator:
         """Apply `StatementFilter` instances and SQLAlchemy boolean expressions to `result`."""
         order_filters: List[OrderBy] = []
         pagination_filters: List[LimitOffset] = []
-        for filter_ in filters:
+        from advanced_alchemy.repository._util import _expand_filtersets  # pyright: ignore[reportPrivateUsage]
+
+        for filter_ in _expand_filtersets(filters):
             if isinstance(filter_, LimitOffset):
                 if apply_pagination:
                     pagination_filters.append(filter_)
@@ -854,7 +856,9 @@ class InMemoryFilterEvaluator:
         *filters: Union[StatementFilter, ColumnElement[bool]],
     ) -> List[ModelT]:
         """Apply only `LimitOffset` pagination filters from `filters` to `result`."""
-        for filter_ in filters:
+        from advanced_alchemy.repository._util import _expand_filtersets  # pyright: ignore[reportPrivateUsage]
+
+        for filter_ in _expand_filtersets(filters):
             if isinstance(filter_, LimitOffset):
                 result = cls.apply_limit_offset_pagination(result, filter_.limit, filter_.offset)
         return result

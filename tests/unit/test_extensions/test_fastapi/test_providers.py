@@ -1158,8 +1158,8 @@ def test_one_config_with_two_dependency_defaults_does_not_share_a_dependency() -
     """
     config: FilterConfig = {"pagination_type": "limit_offset"}
 
-    default = provide_filters(dict(config))  # type: ignore[arg-type]
-    big = provide_filters(dict(config), _BigPages())  # type: ignore[arg-type]
+    default = provide_filters(config.copy())
+    big = provide_filters(config.copy(), _BigPages())
 
     assert default is not big
     assert _page_size(default, "/default") == DEPENDENCY_DEFAULTS.DEFAULT_PAGINATION_SIZE
