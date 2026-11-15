@@ -224,10 +224,18 @@ class StatementFilter(ABC):
         """
         if isinstance(key, str):
             return cast("InstrumentedAttribute[Any]", getattr(model, key))
-        if isinstance(key, InstrumentedAttribute) and not isinstance(model, type):
+        if not isinstance(model, type):
             model_inspector = inspect(model, raiseerr=False)
-            if model_inspector is not None and issubclass(model_inspector.mapper.class_, key.parent.class_):
-                return cast("InstrumentedField", getattr(model, key.key))
+            if model_inspector is not None and model_inspector.is_aliased_class:
+                if isinstance(key, InstrumentedAttribute) and issubclass(
+                    model_inspector.mapper.class_, key.parent.class_
+                ):
+                    return cast("InstrumentedField", getattr(model, key.key))
+                if isinstance(key, ColumnElement):
+                    return cast(
+                        "InstrumentedField",
+                        model_inspector._adapter.traverse(key),  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+                    )
         return key
 
 
@@ -1243,7 +1251,7 @@ class RelationshipFilter(StatementFilter):
     relationship: RelationshipPath
     """Relationship name, instrumented attribute, or sequence of hops."""
     filters: Sequence[Union[StatementFilter, ColumnElement[bool]]]
-    """Filters or column predicates applied against the related model."""
+    """Filters or column predicates applied against the related model, including SQL expressions in filter fields."""
     negate: bool
     """If True, wraps the correlated subquery in ``NOT EXISTS`` instead of ``EXISTS``."""
 
