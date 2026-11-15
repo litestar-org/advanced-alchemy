@@ -258,7 +258,7 @@ dev = [
     { name = "pytest-click" },
     { name = "pytest-cov" },
     { name = "pytest-databases", version = "0.19.0", source = { registry = "https://pypi.org/simple" }, extra = ["bigquery", "cockroachdb", "oracle", "postgres", "spanner"], marker = "python_full_version < '3.11'" },
-    { name = "pytest-databases", version = "0.20.0b1", source = { registry = "https://pypi.org/simple" }, extra = ["embedded-postgres"], marker = "python_full_version >= '3.11'" },
+    { name = "pytest-databases", version = "0.20.0b3", source = { registry = "https://pypi.org/simple" }, extra = ["embedded-postgres"], marker = "python_full_version >= '3.11'" },
     { name = "pytest-lazy-fixtures" },
     { name = "pytest-mock" },
     { name = "pytest-rerunfailures", version = "16.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -522,7 +522,7 @@ test = [
     { name = "pytest-click" },
     { name = "pytest-cov" },
     { name = "pytest-databases", version = "0.19.0", source = { registry = "https://pypi.org/simple" }, extra = ["bigquery", "cockroachdb", "oracle", "postgres", "spanner"], marker = "python_full_version < '3.11'" },
-    { name = "pytest-databases", version = "0.20.0b1", source = { registry = "https://pypi.org/simple" }, extra = ["embedded-postgres"], marker = "python_full_version >= '3.11'" },
+    { name = "pytest-databases", version = "0.20.0b3", source = { registry = "https://pypi.org/simple" }, extra = ["embedded-postgres"], marker = "python_full_version >= '3.11'" },
     { name = "pytest-lazy-fixtures" },
     { name = "pytest-mock" },
     { name = "pytest-rerunfailures", version = "16.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -655,7 +655,7 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.23.8" },
     { name = "pytest-click" },
     { name = "pytest-cov", specifier = ">=5.0.0" },
-    { name = "pytest-databases", extras = ["embedded-postgres"], marker = "python_full_version >= '3.11'", specifier = ">=0.20.0b1" },
+    { name = "pytest-databases", extras = ["embedded-postgres"], marker = "python_full_version >= '3.11'", specifier = ">=0.20.0b3" },
     { name = "pytest-databases", extras = ["postgres", "oracle", "cockroachdb", "bigquery", "spanner"], marker = "python_full_version < '3.11'", specifier = ">=0.19.0" },
     { name = "pytest-lazy-fixtures", specifier = ">=1.1.1" },
     { name = "pytest-mock", specifier = ">=3.14.0" },
@@ -828,7 +828,7 @@ test = [
     { name = "pytest-asyncio", specifier = ">=0.23.8" },
     { name = "pytest-click" },
     { name = "pytest-cov", specifier = ">=5.0.0" },
-    { name = "pytest-databases", extras = ["embedded-postgres"], marker = "python_full_version >= '3.11'", specifier = ">=0.20.0b1" },
+    { name = "pytest-databases", extras = ["embedded-postgres"], marker = "python_full_version >= '3.11'", specifier = ">=0.20.0b3" },
     { name = "pytest-databases", extras = ["postgres", "oracle", "cockroachdb", "bigquery", "spanner"], marker = "python_full_version < '3.11'", specifier = ">=0.19.0" },
     { name = "pytest-lazy-fixtures", specifier = ">=1.1.1" },
     { name = "pytest-mock", specifier = ">=3.14.0" },
@@ -8179,7 +8179,7 @@ spanner = [
 
 [[package]]
 name = "pytest-databases"
-version = "0.20.0b1"
+version = "0.20.0b3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -8193,9 +8193,9 @@ dependencies = [
     { name = "filelock", version = "3.29.0", source = { registry = "https://pypi.org/simple" } },
     { name = "pytest", version = "9.1.1", source = { registry = "https://pypi.org/simple" } },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/89/93/f8856358a2070f4edf7023f72bb4c7a4c6c88851338544369afb00cec07b/pytest_databases-0.20.0b1.tar.gz", hash = "sha256:d63422b8e0610d23c1d78f8d430495cd160a47ab0d3c3858430dd98d67d6b0e0", size = 495110, upload-time = "2026-11-09T01:12:49.529Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2e/a7/58d0570b618b83d58cd8800d8aca7be7ef8b8f7e33adfabfc048d390d3da/pytest_databases-0.20.0b3.tar.gz", hash = "sha256:31be0433b904dd0b4c31e28ad63d7e0a56e95622a5f9d9ab167be804c4ffa6b7", size = 623733, upload-time = "2026-11-12T19:18:20.29Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4d/b1/6e93f308201505b2f5b56e0b2468657a64d7f036be3747d6483c873f5c55/pytest_databases-0.20.0b1-py3-none-any.whl", hash = "sha256:15c444f84ef35a3078ffc273f4f337a0df89f65009b540e650ec7b02fa0f0539", size = 141805, upload-time = "2026-11-09T01:12:48.239Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/77/fca15e5e4f50b97a945cd15beef5ec0bfdc64d3966c429229fe2a56cf648/pytest_databases-0.20.0b3-py3-none-any.whl", hash = "sha256:567dcfc95d79d824131ccea5b9d86f7d226c1438bca2c4a1b7e17dc09bef3c1b", size = 201822, upload-time = "2026-11-12T19:18:18.782Z" },
 ]
 
 [package.optional-dependencies]
