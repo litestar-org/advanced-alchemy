@@ -4,10 +4,11 @@ import contextlib
 import datetime
 import re
 from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, Any, ClassVar, Optional, Protocol, Union, cast, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Optional, Protocol, Union, cast, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy import Date, MetaData, String
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -157,6 +158,9 @@ class ModelProtocol(Protocol):
         __mapper__: ClassVar[Mapper[Any]]
 
 
+_DEFAULT_EXCLUDED_FIELDS: Final[frozenset[str]] = frozenset({"sa_orm_sentinel", "_sentinel"})
+
+
 def model_to_dict(instance: "ModelProtocol", exclude: Optional[set[str]] = None) -> dict[str, Any]:
     """Convert a mapped model instance to a dictionary.
 
@@ -176,16 +180,13 @@ def model_to_dict(instance: "ModelProtocol", exclude: Optional[set[str]] = None)
     if to_dict_fn is not None and callable(to_dict_fn):
         return to_dict_fn(exclude=exclude)  # type: ignore[no-any-return]
 
-    exclude_fields: set[str] = {"sa_orm_sentinel", "_sentinel"}
-    with contextlib.suppress(AttributeError):
-        exclude_fields = exclude_fields.union(cast("set[str]", instance._sa_instance_state.unloaded))  # type: ignore[attr-defined,union-attr]  # noqa: SLF001
-    if exclude:
-        exclude_fields = exclude_fields.union(exclude)
+    ins = sa_inspect(instance)
+    unloaded = ins.unloaded if ins is not None and hasattr(ins, "unloaded") else ()
     mapper = class_mapper(type(instance))
     return {
         field: getattr(instance, field)
         for field in mapper.columns.keys()  # noqa: SIM118
-        if field not in exclude_fields
+        if field not in _DEFAULT_EXCLUDED_FIELDS and field not in unloaded and (not exclude or field not in exclude)
     }
 
 
@@ -208,11 +209,12 @@ class BasicAttributes:
         Returns:
             Dict[str, Any]: A dict representation of the model
         """
-        exclude = {"sa_orm_sentinel", "_sentinel"}.union(self._sa_instance_state.unloaded).union(exclude or [])  # type: ignore[attr-defined]
+        ins = sa_inspect(self)
+        unloaded = ins.unloaded if ins is not None and hasattr(ins, "unloaded") else ()
         return {
             field: getattr(self, field)
             for field in self.__mapper__.columns.keys()  # noqa: SIM118
-            if field not in exclude
+            if field not in _DEFAULT_EXCLUDED_FIELDS and field not in unloaded and (not exclude or field not in exclude)
         }
 
 

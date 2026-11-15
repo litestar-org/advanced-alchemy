@@ -49,5 +49,5 @@ def test_mock_literal_predicates_match_sqlite(predicate: ColumnElement[bool]) ->
         session.add_all(rows)
         session.commit()
         expected = list(session.scalars(select(LiteralRow.id).where(predicate).order_by(LiteralRow.id)))
-        actual = [row.id for row in rows if InMemoryFilterEvaluator._evaluate_column_element(row, predicate)]
+        actual = [row.id for row in rows if InMemoryFilterEvaluator.evaluate_sql_expression(row, predicate) is True]
         assert actual == expected

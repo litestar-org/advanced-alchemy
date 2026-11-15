@@ -6,8 +6,10 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any, cast
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 import pytest
 
@@ -16,6 +18,17 @@ FORBIDDEN_UNIT_MODULE_PREFIXES: tuple[str, ...] = (
     "google.cloud.spanner",
     "tests.integration",
 )
+
+
+def isolated_pytest_env() -> dict[str, str]:
+    """Return the environment for a standalone nested pytest process."""
+    env = os.environ.copy()
+    for name in ("PYTEST_XDIST_WORKER", "PYTEST_XDIST_WORKER_COUNT", "PYTEST_XDIST_TESTRUNUID"):
+        env.pop(name, None)
+    env["PYTEST_DATABASES_NAMESPACE"] = f"harness_{uuid4().hex[:8]}"
+    env["UV_NO_BUILD_ISOLATION"] = "1"
+    env["UV_NO_SYNC"] = "1"
+    return env
 
 
 def run_unit_suite_isolated() -> list[str]:
@@ -33,9 +46,7 @@ def run_unit_suite_isolated() -> list[str]:
         "]\n"
         "sys.stdout.write('__MODULES_START__' + json.dumps(loaded) + '__MODULES_END__')\n"
     )
-    env = os.environ.copy()
-    env["UV_NO_BUILD_ISOLATION"] = "1"
-    env["UV_NO_SYNC"] = "1"
+    env = isolated_pytest_env()
     result = subprocess.run(
         [sys.executable, "-c", python_code],
         capture_output=True,
@@ -57,9 +68,7 @@ def test_unit_suite_does_not_import_container_or_spanner_modules() -> None:
 
 def test_full_collection_registers_integration_plugins_cleanly() -> None:
     """Ensure test collection across all directories succeeds without plugin registration conflicts."""
-    env = os.environ.copy()
-    env["UV_NO_BUILD_ISOLATION"] = "1"
-    env["UV_NO_SYNC"] = "1"
+    env = isolated_pytest_env()
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "--strict-markers", "--collect-only", "-q", "tests", "docs"],
         capture_output=True,
@@ -208,9 +217,7 @@ def test_fast_suite_deselects_all_container_service_fixtures() -> None:
         f"pytest.main(['--collect-only', '-q', '--use-embedded-postgres', '-m', 'not ({fast_exclude_markers})', 'tests', 'docs'], plugins=[plugin])\n"
         "sys.stdout.write('__FAST_LEAKED_START__' + json.dumps(plugin.collected) + '__FAST_LEAKED_END__')\n"
     )
-    env = os.environ.copy()
-    env["UV_NO_BUILD_ISOLATION"] = "1"
-    env["UV_NO_SYNC"] = "1"
+    env = isolated_pytest_env()
     result = subprocess.run(
         [sys.executable, "-c", python_code],
         capture_output=True,
@@ -250,9 +257,7 @@ def test_integration_items_do_not_combine_multiple_xdist_groups() -> None:
         "pytest.main(['--collect-only', '-q', 'tests/integration'], plugins=[plugin])\n"
         "sys.stdout.write('__GROUPS_START__' + json.dumps({'multi': plugin.multi_groups, 'missing': plugin.missing_groups}) + '__GROUPS_END__')\n"
     )
-    env = os.environ.copy()
-    env["UV_NO_BUILD_ISOLATION"] = "1"
-    env["UV_NO_SYNC"] = "1"
+    env = isolated_pytest_env()
     result = subprocess.run(
         [sys.executable, "-c", python_code],
         capture_output=True,
@@ -278,3 +283,48 @@ def test_file_object_rustfs_helpers_use_upstream_service_contract() -> None:
     assert not hasattr(test_file_object, "rustfs_endpoint_url"), (
         "rustfs_endpoint_url should be removed in favor of rustfs_service.endpoint_url"
     )
+
+
+def test_nested_collection_preserves_parent_container_ownership(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A collect-only child cannot act as controller for inherited worker services."""
+    service_module = pytest.importorskip(
+        "pytest_databases._service", reason="Container ownership requires pytest-databases 0.20"
+    )
+    if not hasattr(service_module, "derive_session_owner_id"):
+        pytest.skip("Container ownership requires pytest-databases 0.20")
+    derive_session_owner_id = getattr(service_module, "derive_session_owner_id")
+
+    monkeypatch.setenv("PYTEST_XDIST_WORKER", "gw0")
+    monkeypatch.setenv("PYTEST_XDIST_WORKER_COUNT", "2")
+    monkeypatch.setenv("PYTEST_XDIST_TESTRUNUID", "parent-run")
+    monkeypatch.setenv("PYTEST_DATABASES_NAMESPACE", "parent-run")
+    parent_owner = derive_session_owner_id(Path.cwd())
+    control_file = tmp_path / "ctrl"
+    control_file.write_text(parent_owner, encoding="utf-8")
+    python_code = (
+        "import json, pathlib, sys, pytest\n"
+        "from pytest_databases import _service\n"
+        "cleaned = []\n"
+        "class CleanupProbe:\n"
+        "    def pytest_configure(self, config):\n"
+        "        _service._cleanup_session_containers = lambda session, ctrl: cleaned.append(ctrl.read_text())\n"
+        "code = pytest.main(['--collect-only', '-q', '--basetemp', sys.argv[1], 'tests/unit/test_docs.py'], plugins=[CleanupProbe()])\n"
+        "result = {'cleaned': cleaned, 'owner': _service.derive_session_owner_id(pathlib.Path.cwd())}\n"
+        "sys.stdout.write('__CLEANUP_START__' + json.dumps(result) + '__CLEANUP_END__')\n"
+        "sys.exit(code)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", python_code, str(tmp_path / "child")],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=isolated_pytest_env(),
+    )
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    data = json.loads(result.stdout.split("__CLEANUP_START__")[1].split("__CLEANUP_END__")[0])
+    assert data["cleaned"] == [], f"Child attempted to stop parent-owned services: {data['cleaned']}"
+    assert data["owner"] != parent_owner
+    assert control_file.read_text(encoding="utf-8") == parent_owner

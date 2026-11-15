@@ -22,7 +22,7 @@ from litestar.testing import TestClient
 from sqlalchemy import ForeignKey, FromClause, Integer, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Mapper, mapped_column, relationship
 
-from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.plugin import signature_namespace_values
 from advanced_alchemy.extensions.litestar.providers import (
     DEPENDENCY_DEFAULTS,
@@ -35,6 +35,8 @@ from advanced_alchemy.extensions.litestar.providers import (
     SingletonMeta,
     _create_filter_aggregate_function,  # pyright: ignore[reportPrivateUsage]
     _create_statement_filters,  # pyright: ignore[reportPrivateUsage]
+    _is_async_provider_target,  # pyright: ignore[reportPrivateUsage]
+    _with_dep_defaults_prefix,  # pyright: ignore[reportPrivateUsage]
     create_filter_dependencies,
     create_service_dependencies,
     create_service_provider,
@@ -57,6 +59,7 @@ from advanced_alchemy.filters import (
 )
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 from advanced_alchemy.service import (
+    ServiceGroup,
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
 )
@@ -1466,6 +1469,88 @@ def test_scoped_filters_snake_case_query_aliases() -> None:
         "search_string": "users_search_string",
         "search_ignore_case": "users_search_ignore_case",
     }
+
+
+class _LitestarPlainHelper:
+    """Plain helper service whose async mode cannot be inferred without config."""
+
+    def __init__(self, session: Any) -> None:
+        self.session = session
+
+
+class _LitestarUndeterminedGroup(ServiceGroup):
+    """ServiceGroup composed solely of plain classes without SQLAlchemy base classes."""
+
+    helper: _LitestarPlainHelper
+
+
+class _LitestarPairGroup(ServiceGroup):
+    """ServiceGroup with two async services for scoped filter dependency coverage."""
+
+    primary: MockAsyncService
+    secondary: MockAsyncService
+
+
+def test_dependency_defaults_pagination_override_and_prefix_cloning() -> None:
+    defaults = DependencyDefaults(filters_key="custom_filters", default_pagination_size=25)
+    assert defaults.DEFAULT_PAGINATION_SIZE == 25
+    cloned = _with_dep_defaults_prefix(defaults, "grp")
+    assert cloned.FILTERS_DEPENDENCY_KEY == "grp_custom_filters"
+    assert cloned.DEFAULT_PAGINATION_SIZE == 25
+
+
+def test_is_async_provider_target_for_undetermined_group() -> None:
+    sync_cfg = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:")
+    assert _is_async_provider_target(_LitestarUndeterminedGroup, sync_cfg) is False
+    assert _is_async_provider_target(_LitestarUndeterminedGroup, None) is True
+
+
+@pytest.mark.parametrize(
+    ("dep_defaults", "scoped_filters", "expected_filter_key"),
+    [
+        (None, True, "items_filters"),
+        (DependencyDefaults(filters_key="q"), True, "items_q"),
+        (DependencyDefaults(prefix="custom"), True, "custom_filters"),
+    ],
+)
+def test_create_service_dependencies_single_service_prefix_resolution(
+    dep_defaults: DependencyDefaults | None,
+    scoped_filters: bool,
+    expected_filter_key: str,
+) -> None:
+    deps = create_service_dependencies(
+        MockAsyncService,
+        key="items",
+        filters=cast(FilterConfig, {"id_filter": int}),
+        dep_defaults=dep_defaults,
+        scoped_filters=scoped_filters,
+    )
+    assert "items" in deps
+    assert expected_filter_key in deps
+
+
+@pytest.mark.parametrize(
+    ("dep_defaults", "scoped_filters", "expected_filter_key"),
+    [
+        (DependencyDefaults(prefix="grp"), False, "grp_primary_filters"),
+        (None, True, "auth_primary_filters"),
+    ],
+)
+def test_create_service_dependencies_group_prefix_and_empty_branch(
+    dep_defaults: DependencyDefaults | None,
+    scoped_filters: bool,
+    expected_filter_key: str,
+) -> None:
+    deps = create_service_dependencies(
+        _LitestarPairGroup,
+        key="auth",
+        filters={"primary": cast(FilterConfig, {"id_filter": int}), "secondary": {}},
+        dep_defaults=dep_defaults,
+        scoped_filters=scoped_filters,
+    )
+    assert "auth" in deps
+    assert expected_filter_key in deps
+    assert "auth_secondary_filters" not in deps
 
 
 class _LitestarGridBase(DeclarativeBase):

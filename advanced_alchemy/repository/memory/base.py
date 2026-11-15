@@ -1,28 +1,42 @@
+# ruff: noqa: PLR0911
 import builtins
 import contextlib
 import datetime
 import re
-from collections import defaultdict
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections import abc, defaultdict
+from collections.abc import Callable, Collection, Iterable, Mapping
 from inspect import isclass, signature
 from typing import TYPE_CHECKING, Any, Generic, List, Literal, Optional, Union, cast, overload
 
-from sqlalchemy import BooleanClauseList, ColumnElement, and_, inspect
+from sqlalchemy import BinaryExpression, BooleanClauseList, Column, ColumnElement, inspect, or_
+from sqlalchemy.exc import NoInspectionAvailable
 from sqlalchemy.orm import InstrumentedAttribute, RelationshipProperty, Session, class_mapper, object_mapper
 from sqlalchemy.orm.exc import UnmappedClassError
-from sqlalchemy.sql import operators as sa_op
-from sqlalchemy.sql.elements import BinaryExpression, BindParameter, False_, Null, True_, UnaryExpression
+from sqlalchemy.sql import operators as sql_op
+from sqlalchemy.sql.elements import (
+    BindParameter,
+    ClauseList,
+    ExpressionClauseList,
+    False_,
+    Grouping,
+    Null,
+    True_,
+    UnaryExpression,
+)
 from typing_extensions import TypeVar
 
-from advanced_alchemy.exceptions import AdvancedAlchemyError, RepositoryError
+from advanced_alchemy.exceptions import AdvancedAlchemyError, IntegrityError, RepositoryError
 from advanced_alchemy.filters import (
+    VALID_OPERATORS,
     BeforeAfter,
     BooleanFilter,
     CollectionFilter,
     ComparisonFilter,
+    ExistsFilter,
     FilterGroup,
     LimitOffset,
     MultiFilter,
+    NotExistsFilter,
     NotInCollectionFilter,
     NotInSearchFilter,
     NotNullFilter,
@@ -34,12 +48,21 @@ from advanced_alchemy.filters import (
     StatementFilter,
 )
 from advanced_alchemy.operations import validate_identifier
-from advanced_alchemy.repository.typing import _MISSING, MISSING, ModelT  # pyright: ignore[reportPrivateUsage]
+from advanced_alchemy.repository._util import (
+    allows_explicit_none_update,
+    column_has_defaults,
+    compare_values,
+    get_primary_key_info,
+    was_attribute_set,
+)
+from advanced_alchemy.repository.typing import (
+    _MISSING,  # pyright: ignore[reportPrivateUsage]
+    MISSING,
+    ModelT,
+)
 from advanced_alchemy.utils.deprecation import warn_deprecation
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
     from sqlalchemy.orm import Mapper
 
 
@@ -55,23 +78,6 @@ class _NotSet:
 class InMemoryStore(Generic[T]):
     def __init__(self) -> None:
         self._store: dict[Any, T] = {}
-
-    def _resolve_key(self, key: Any) -> Any:
-        """Test different key representations
-
-        Args:
-            key: The key to test
-
-        Raises:
-            KeyError: Raised if key is not present
-
-        Returns:
-            The key representation that is present in the store
-        """
-        for key_ in (key, str(key)):
-            if key_ in self._store:
-                return key_
-        raise KeyError
 
     def key(self, obj: T) -> Any:
         return hash(obj)
@@ -154,6 +160,23 @@ class InMemoryStore(Generic[T]):
     def __bool__(self) -> bool:
         return bool(self._store)
 
+    def _resolve_key(self, key: Any) -> Any:
+        """Test different key representations
+
+        Args:
+            key: The key to test
+
+        Raises:
+            KeyError: Raised if key is not present
+
+        Returns:
+            The key representation that is present in the store
+        """
+        for key_ in (key, str(key)):
+            if key_ in self._store:
+                return key_
+        raise KeyError
+
 
 class MultiStore(Generic[T]):
     def __init__(self, store_type: "type[InMemoryStore[T]]") -> None:
@@ -176,20 +199,81 @@ class MultiStore(Generic[T]):
 class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
     id_attribute: str = "id"
 
+    @staticmethod
+    def changed_attrs(data: ModelT) -> "Iterable[str]":
+        res: List[str] = []
+        try:
+            mapper = inspect(data)
+        except NoInspectionAvailable as exc:
+            msg = f"Cannot inspect {data.__class__} model"
+            raise AdvancedAlchemyError(msg) from exc
+        if mapper is None:
+            msg = f"Cannot inspect {data.__class__} model"
+            raise AdvancedAlchemyError(msg)
+        for column in mapper.mapper.columns:
+            field_name = mapper.mapper.get_property_by_column(column).key
+            new_field_value = getattr(data, field_name, MISSING)
+            if new_field_value is MISSING:
+                continue
+            if was_attribute_set(data, mapper, field_name):
+                res.append(field_name)
+        for relationship in mapper.mapper.relationships:
+            if relationship.viewonly or relationship.lazy in {
+                "write_only",
+                "dynamic",
+                "raise",
+                "raise_on_sql",
+            }:
+                continue
+            if was_attribute_set(data, mapper, relationship.key):
+                res.append(relationship.key)
+        return res
+
+    def key(self, obj: ModelT) -> str:
+        """Generate a store key from a model instance.
+
+        Supports both single and composite primary keys.
+
+        Args:
+            obj: Model instance to generate key from.
+
+        Returns:
+            String key for storage. For composite keys, returns tuple representation.
+        """
+        _pk_columns, pk_attr_names = get_primary_key_info(type(obj))
+        if len(pk_attr_names) > 1:
+            pk_values = tuple(getattr(obj, attr_name) for attr_name in pk_attr_names)
+            return str(pk_values)
+        attr_name = pk_attr_names[0] if pk_attr_names else self.id_attribute
+        return str(getattr(obj, attr_name, getattr(obj, self.id_attribute, None)))
+
+    def add(self, obj: ModelT) -> ModelT:
+        self._set_defaults(obj)
+        self._update_fks(obj)
+        return super().add(obj)
+
+    def update(self, obj: ModelT) -> ModelT:
+        existing = self.get(self.key(obj))
+        mapper = object_mapper(existing)
+        explicit_none = allows_explicit_none_update(inspect(obj, raiseerr=False))
+        for attr in self.changed_attrs(obj):
+            new_value = getattr(obj, attr, MISSING)
+            existing_value = getattr(existing, attr, MISSING)
+            if new_value is None:
+                prop: Any = mapper.attrs.get(attr)
+                prop_columns: list[Column[Any]] = list(getattr(prop, "columns", ()))
+                if prop_columns and not explicit_none and column_has_defaults(prop_columns[0]):
+                    continue
+                if any(not col.nullable and not col.primary_key for col in prop_columns):
+                    msg = f"Column '{attr}' on {existing.__class__.__name__} cannot be None"
+                    raise IntegrityError(msg)
+            if new_value is not MISSING and not compare_values(existing_value, new_value):
+                setattr(existing, attr, new_value)
+        self._update_fks(existing)
+        return super().update(existing)
+
     def _update_relationship(self, data: ModelT, ref: ModelT) -> None:  # pragma: no cover
         """Set relationship data fields targeting ref class to ref.
-
-        Example:
-        ```python
-            class Parent(Base):
-                child = relationship("Child")
-
-            class Child(Base):
-                pass
-        ```
-
-        If data and ref are respectively a `Parent` and `Child` instances,
-        then `data.child` will be set to `ref`
 
         Args:
             data: Model instance on which to update relationships
@@ -219,9 +303,6 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
     def _update_fks(self, data: ModelT) -> None:  # pragma: no cover
         """Update foreign key fields according to their corresponding relationships.
 
-        This make sure that `data.child_id` == `data.child.id`
-        or `data.children[0].parent_id` == `data.id`
-
         Args:
             data: Instance to be updated
         """
@@ -244,7 +325,6 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                         if local_value := getattr(data, local_attr):
                             setattr(elem, remote_attr, local_value)
                         self._update_relationship(elem, data)
-                    # Remove duplicates added by orm when updating list items
                     if isinstance(value, list):
                         setattr(data, relationship.key, type(value)(set(value)))  # pyright: ignore[reportUnknownArgumentType]
                 else:
@@ -252,30 +332,24 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                         setattr(data, local_attr, remote_value)
                     self._update_relationship(value, data)
 
-    def _set_defaults(self, data: ModelT) -> None:  # pragma: no cover
+    def _set_defaults(self, data: ModelT) -> None:
         """Set fields with dynamic defaults.
 
         Args:
             data: Instance to be updated
         """
-        for elem in object_mapper(data).c:
+        mapper = object_mapper(data)
+        for elem in mapper.c:
+            attr_name = mapper.get_property_by_column(elem).key
             default = getattr(elem, "default", MISSING)
-            value = getattr(data, elem.key, MISSING)
-            # If value is MISSING, it may be a declared_attr whose name can't be
-            # determined from the column/relationship element returned
-            if value is not MISSING and not value and not isinstance(default, _MISSING) and default is not None:
+            value = getattr(data, attr_name, MISSING)
+            if value is None and not isinstance(default, _MISSING) and default is not None:
                 if default.is_scalar:
                     default_value: Any = default.arg
                 elif default.is_callable:
                     default_callable = default.arg.__func__ if isinstance(default.arg, staticmethod) else default.arg  # pyright: ignore[reportUnknownMemberType]
                     if (
-                        # Eager test because inspect.signature() does not
-                        # recognize builtins
                         hasattr(builtins, default_callable.__name__)
-                        # If present, context contains information about the current
-                        # statement and can be used to access values from other columns.
-                        # As we can't reproduce such context in Pydantic, we don't want
-                        # include a default_factory in that case.
                         or "context" not in signature(default_callable).parameters
                     ):
                         default_value = default.arg({})  # pyright: ignore
@@ -283,58 +357,19 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                         continue
                 else:
                     continue
-                setattr(data, elem.key, default_value)
-
-    @staticmethod
-    def changed_attrs(data: ModelT) -> "Iterable[str]":  # pragma: no cover
-        res: List[str] = []
-        mapper = inspect(data)
-        if mapper is None:
-            msg = f"Cannot inspect {data.__class__} model"
-            raise AdvancedAlchemyError(msg)
-        attrs = class_mapper(data.__class__).column_attrs
-        for attr in attrs:
-            hist = getattr(mapper.attrs, attr.key).history
-            if hist.has_changes():
-                res.append(attr.key)
-        return res
-
-    def key(self, obj: ModelT) -> str:
-        """Generate a store key from a model instance.
-
-        Supports both single and composite primary keys.
-
-        Args:
-            obj: Model instance to generate key from.
-
-        Returns:
-            String key for storage. For composite keys, returns tuple representation.
-        """
-        mapper = object_mapper(obj)
-        pk_columns = mapper.primary_key
-
-        if len(pk_columns) == 1:
-            # Single PK - use simple string representation
-            return str(getattr(obj, mapper.get_property_by_column(pk_columns[0]).key))
-
-        # Composite PK - use tuple of all PK values
-        pk_values = tuple(getattr(obj, mapper.get_property_by_column(col).key) for col in pk_columns)
-        return str(pk_values)
-
-    def add(self, obj: ModelT) -> ModelT:
-        self._set_defaults(obj)
-        self._update_fks(obj)
-        return super().add(obj)
-
-    def update(self, obj: ModelT) -> ModelT:
-        existing = self.get(self.key(obj))
-        for attr in self.changed_attrs(obj):
-            setattr(existing, attr, getattr(obj, attr))
-        self._update_fks(existing)
-        return super().update(existing)
+                setattr(data, attr_name, default_value)
 
 
 class SQLAlchemyMultiStore(MultiStore[ModelT]):
+    def add(self, identity: Any, obj: ModelT) -> ModelT:
+        for relation in self._new_instances(obj):
+            instance_type = self.identity(relation)
+            self._set_relationships_for_fks(relation)
+            if relation in self.store(instance_type):
+                continue
+            self.store(instance_type).add(relation)
+        return obj
+
     @staticmethod
     def _new_instances(instance: ModelT) -> "Iterable[ModelT]":
         session = Session()
@@ -345,19 +380,6 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
 
     def _set_relationships_for_fks(self, data: ModelT) -> None:  # pragma: no cover
         """Set relationships matching newly added foreign keys on the instance.
-
-        Example:
-            ```python
-                class Parent(Base):
-                    id: Mapped[UUID]
-
-                class Child(Base):
-                    id: Mapped[UUID]
-                    parent_id: Mapped[UUID] = mapped_column(ForeignKey("parent.id"))
-                    parent: Mapped[Parent] = relationship(Parent)
-            ```
-            If `data` is a Child instance and `parent_id` is set, `parent` will be set
-            to the matching Parent instance if found in the repository
 
         Args:
             data: The model to update
@@ -373,7 +395,6 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
         for relationship in obj_mapper.relationships:
             for column in relationship.local_columns:
                 column_relationships[column] = relationship
-        # sourcery skip: assign-if-exp
         if state := inspect(data):
             new_attrs: dict[str, Any] = state.dict
         else:
@@ -394,143 +415,9 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
             with contextlib.suppress(KeyError):
                 setattr(data, column_relationships[column].key, obj)
 
-    def add(self, identity: Any, obj: ModelT) -> ModelT:
-        for relation in self._new_instances(obj):
-            instance_type = self.identity(relation)
-            self._set_relationships_for_fks(relation)
-            if relation in self.store(instance_type):
-                continue
-            self.store(instance_type).add(relation)
-        return obj
-
-
-def _like_to_regex(pattern_text: str, *, case_sensitive: bool) -> re.Pattern[str]:
-    """Compile a SQL LIKE pattern using ``%`` and ``_`` into a regex."""
-    parts: list[str] = []
-    for char in pattern_text:
-        if char == "%":
-            parts.append(".*")
-        elif char == "_":
-            parts.append(".")
-        else:
-            parts.append(re.escape(char))
-    flags = re.DOTALL if case_sensitive else (re.IGNORECASE | re.DOTALL)
-    return re.compile(f"^{''.join(parts)}$", flags)
-
-
-def _cmp_gt(attr: Any, expected: Any) -> bool:
-    return bool(attr > expected)
-
-
-def _cmp_ge(attr: Any, expected: Any) -> bool:
-    return bool(attr >= expected)
-
-
-def _cmp_lt(attr: Any, expected: Any) -> bool:
-    return bool(attr < expected)
-
-
-def _cmp_le(attr: Any, expected: Any) -> bool:
-    return bool(attr <= expected)
-
-
-def _cmp_between(attr: Any, expected: Any) -> bool:
-    return bool(expected[0] <= attr <= expected[1])
-
-
-def _cmp_like(attr: Any, expected: Any) -> bool:
-    return isinstance(attr, str) and _like_to_regex(str(expected), case_sensitive=True).match(attr) is not None
-
-
-def _cmp_ilike(attr: Any, expected: Any) -> bool:
-    return isinstance(attr, str) and _like_to_regex(str(expected), case_sensitive=False).match(attr) is not None
-
-
-def _cmp_startswith(attr: Any, expected: Any) -> bool:
-    return isinstance(attr, str) and attr.startswith(str(expected))
-
-
-def _cmp_istartswith(attr: Any, expected: Any) -> bool:
-    return isinstance(attr, str) and attr.lower().startswith(str(expected).lower())
-
-
-def _cmp_endswith(attr: Any, expected: Any) -> bool:
-    return isinstance(attr, str) and attr.endswith(str(expected))
-
-
-def _cmp_iendswith(attr: Any, expected: Any) -> bool:
-    return isinstance(attr, str) and attr.lower().endswith(str(expected).lower())
-
-
-def _elem_is(left_val: Any, right_val: Any) -> bool:
-    return left_val is right_val
-
-
-def _elem_is_not(left_val: Any, right_val: Any) -> bool:
-    return left_val is not right_val
-
-
-def _elem_eq(left_val: Any, right_val: Any) -> bool:
-    return left_val is not None and right_val is not None and bool(left_val == right_val)
-
-
-def _elem_ne(left_val: Any, right_val: Any) -> bool:
-    return left_val is not None and right_val is not None and bool(left_val != right_val)
-
-
-def _elem_in(left_val: Any, right_val: Any) -> bool:
-    return left_val in right_val
-
-
-def _elem_notin(left_val: Any, right_val: Any) -> bool:
-    return left_val not in right_val
-
-
-_COMPARISON_NON_NULL_OPS: dict[str, Callable[[Any, Any], bool]] = {
-    "gt": _cmp_gt,
-    "ge": _cmp_ge,
-    "lt": _cmp_lt,
-    "le": _cmp_le,
-    "between": _cmp_between,
-    "like": _cmp_like,
-    "ilike": _cmp_ilike,
-    "startswith": _cmp_startswith,
-    "istartswith": _cmp_istartswith,
-    "endswith": _cmp_endswith,
-    "iendswith": _cmp_iendswith,
-}
-
-_BINARY_ELEMENT_OPS: dict[Any, Callable[[Any, Any], bool]] = {
-    sa_op.is_: _elem_is,
-    sa_op.is_not: _elem_is_not,
-    sa_op.eq: _elem_eq,
-    sa_op.ne: _elem_ne,
-    sa_op.in_op: _elem_in,
-    sa_op.notin_op: _elem_notin,
-}
-
-_BINARY_ORDERED_OPS: dict[Any, Callable[[Any, Any], bool]] = {
-    sa_op.lt: _cmp_lt,
-    sa_op.le: _cmp_le,
-    sa_op.gt: _cmp_gt,
-    sa_op.ge: _cmp_ge,
-}
-
 
 class InMemoryFilterEvaluator:
-    """Stateless in-memory evaluator mirroring SQL :class:`~advanced_alchemy.filters.StatementFilter` semantics."""
-
-    __slots__ = ()
-
-    @staticmethod
-    def extract_field_name(field: Any) -> str:
-        """Extract attribute name from a string or ``InstrumentedAttribute``."""
-        if isinstance(field, str):
-            return field
-        if isinstance(field, InstrumentedAttribute):
-            return field.key
-        msg = f"{type(field)} columns are not supported in mock repositories (in-memory filtering)"
-        raise RepositoryError(msg)
+    """Synchronous filter, ordering, pagination, and SQLAlchemy AST evaluator for in-memory repositories."""
 
     @staticmethod
     def resolve_attr_value(item: Any, field_name: str) -> Any:
@@ -541,43 +428,6 @@ class InMemoryFilterEvaluator:
                 return None
             current = getattr(current, part)
         return current
-
-    @staticmethod
-    def apply_limit_offset(result: List[ModelT], limit: int, offset: int) -> List[ModelT]:
-        """Slice ``result`` honoring ``offset`` and ``limit`` bounds."""
-        return result[offset : offset + limit]
-
-    @classmethod
-    def filter_in_collection(
-        cls,
-        result: List[ModelT],
-        field_name: Any,
-        values: Collection[Any],
-    ) -> List[ModelT]:
-        """Filter items whose scalar field or relationship PK belongs to ``values``."""
-        if not values:
-            return []
-        field_str = cls.extract_field_name(field_name)
-        rel_filter = cls._relationship_collection_filter(result, field_str, values, negate=False)
-        if rel_filter is not None:
-            return cls.filter_by_relationship(result, rel_filter)
-        return [item for item in result if cls.resolve_attr_value(item, field_str) in values]
-
-    @classmethod
-    def filter_not_in_collection(
-        cls,
-        result: List[ModelT],
-        field_name: Any,
-        values: Collection[Any],
-    ) -> List[ModelT]:
-        """Exclude items whose scalar field or relationship PK belongs to ``values``."""
-        if not values:
-            return result
-        field_str = cls.extract_field_name(field_name)
-        rel_filter = cls._relationship_collection_filter(result, field_str, values, negate=True)
-        if rel_filter is not None:
-            return cls.filter_by_relationship(result, rel_filter)
-        return [item for item in result if cls.resolve_attr_value(item, field_str) not in values]
 
     @staticmethod
     def _relationship_collection_filter(
@@ -610,139 +460,6 @@ class InMemoryFilterEvaluator:
             ],
             negate=negate,
         )
-
-    @classmethod
-    def filter_on_datetime(
-        cls,
-        result: List[ModelT],
-        field_name: Any,
-        before: Optional[datetime.datetime] = None,
-        after: Optional[datetime.datetime] = None,
-        on_or_before: Optional[datetime.datetime] = None,
-        on_or_after: Optional[datetime.datetime] = None,
-    ) -> List[ModelT]:
-        """Filter items satisfying all non-None datetime boundaries."""
-        if before is None and after is None and on_or_before is None and on_or_after is None:
-            return result
-        field_str = cls.extract_field_name(field_name)
-        matched: List[ModelT] = []
-        for item in result:
-            attr = cls.resolve_attr_value(item, field_str)
-            if attr is None:
-                continue
-            if before is not None and attr >= before:
-                continue
-            if after is not None and attr <= after:
-                continue
-            if on_or_before is not None and attr > on_or_before:
-                continue
-            if on_or_after is not None and attr < on_or_after:
-                continue
-            matched.append(item)
-        return matched
-
-    @classmethod
-    def filter_by_like(
-        cls,
-        result: List[ModelT],
-        field_name: Union[str, set[str]],
-        value: str,
-        ignore_case: bool,
-        escape_wildcards: bool = False,
-    ) -> List[ModelT]:
-        """Filter items matching substring ``value`` while preserving input order."""
-        pattern_value = re.escape(value) if escape_wildcards else value
-        flags = (re.IGNORECASE | re.DOTALL) if ignore_case else re.DOTALL
-        pattern = re.compile(rf".*{pattern_value}.*", flags)
-        fields = (field_name,) if isinstance(field_name, str) else tuple(field_name)
-        return [
-            item
-            for item in result
-            if any(
-                isinstance((attr := cls.resolve_attr_value(item, field)), str) and pattern.match(attr) is not None
-                for field in fields
-            )
-        ]
-
-    @classmethod
-    def filter_by_not_like(
-        cls,
-        result: List[ModelT],
-        field_name: Union[str, set[str]],
-        value: str,
-        ignore_case: bool,
-        escape_wildcards: bool = False,
-    ) -> List[ModelT]:
-        """Exclude items matching substring ``value`` while preserving input order."""
-        pattern_value = re.escape(value) if escape_wildcards else value
-        flags = (re.IGNORECASE | re.DOTALL) if ignore_case else re.DOTALL
-        pattern = re.compile(rf".*{pattern_value}.*", flags)
-        fields = (field_name,) if isinstance(field_name, str) else tuple(field_name)
-        return [
-            item
-            for item in result
-            if not any(
-                isinstance((attr := cls.resolve_attr_value(item, field)), str) and pattern.match(attr) is not None
-                for field in fields
-            )
-        ]
-
-    @classmethod
-    def order_by(
-        cls,
-        result: List[ModelT],
-        field_name: Any,
-        sort_desc: bool = False,
-        nulls: Optional[Literal["first", "last"]] = None,
-    ) -> List[ModelT]:
-        """Order ``result`` by ``field_name`` with SQL-parity NULL placement."""
-        attribute = cls.extract_field_name(field_name)
-        missing = [item for item in result if cls.resolve_attr_value(item, attribute) is None]
-        present = sorted(
-            (item for item in result if cls.resolve_attr_value(item, attribute) is not None),
-            key=lambda item: cls.resolve_attr_value(item, attribute),
-            reverse=sort_desc,
-        )
-        if not missing:
-            return present
-        default_nulls: Literal["first", "last"] = "first" if sort_desc else "last"
-        effective_nulls = default_nulls if nulls is None else nulls
-        return [*missing, *present] if effective_nulls == "first" else [*present, *missing]
-
-    @classmethod
-    def filter_by_comparison(cls, result: List[ModelT], filter_: ComparisonFilter) -> List[ModelT]:
-        """Evaluate :class:`~advanced_alchemy.filters.ComparisonFilter` in memory."""
-        field_str = cls.extract_field_name(filter_.field_name)
-        return [
-            item
-            for item in result
-            if cls._matches_comparison(cls.resolve_attr_value(item, field_str), filter_.operator, filter_.value)
-        ]
-
-    @staticmethod
-    def _matches_comparison(attr: Any, operator_name: str, expected: Any) -> bool:
-        """Compare a single scalar field value against a comparison operator."""
-        matched = False
-        if operator_name in {"eq", "ne", "in", "notin"}:
-            if operator_name == "eq":
-                matched = bool(attr == expected)
-            elif operator_name == "ne":
-                matched = attr is not None and bool(attr != expected)
-            elif operator_name == "in":
-                matched = attr in expected
-            else:
-                matched = attr not in expected
-        elif operator_name == "dateeq":
-            if attr is not None:
-                attr_date = attr.date() if isinstance(attr, datetime.datetime) else attr
-                expected_date = expected.date() if isinstance(expected, datetime.datetime) else expected
-                matched = bool(attr_date == expected_date)
-        elif operator_name not in _COMPARISON_NON_NULL_OPS:
-            msg = f"Invalid operator '{operator_name}'"
-            raise ValueError(msg)
-        elif attr is not None:
-            matched = _COMPARISON_NON_NULL_OPS[operator_name](attr, expected)
-        return matched
 
     @classmethod
     def filter_by_relationship(cls, result: List[ModelT], filter_: RelationshipFilter) -> List[ModelT]:
@@ -814,198 +531,585 @@ class InMemoryFilterEvaluator:
         """Return whether a single object satisfies all predicates in ``filters``."""
         return bool(cls.apply_filters([instance], *filters, apply_pagination=False))
 
-    @classmethod
-    def _evaluate_column_element(cls, item: Any, element: Any) -> bool:
-        """Evaluate basic SQLAlchemy column expressions against a single loaded instance."""
-        raw_element: Any = element
-        if isinstance(element, BinaryExpression):
-            left_key = getattr(element.left, "key", None)
-            if left_key is None:
-                msg = f"Unsupported expression {element!r} in mock repositories"
-                raise RepositoryError(msg)
-            left_val = getattr(item, left_key)
-            if isinstance(element.right, True_):
-                right_val: Any = True
-            elif isinstance(element.right, False_):
-                right_val = False
-            elif isinstance(element.right, Null):
-                right_val = None
-            elif isinstance(element.right, BindParameter):
-                right_val = element.right.value
-            else:
-                msg = f"Unsupported expression {element!r} in mock repositories"
-                raise RepositoryError(msg)
-            operator_fn = element.operator
-            if operator_fn in _BINARY_ELEMENT_OPS:
-                return bool(_BINARY_ELEMENT_OPS[operator_fn](left_val, right_val))
-            if operator_fn in _BINARY_ORDERED_OPS:
-                return (
-                    left_val is not None
-                    and right_val is not None
-                    and bool(_BINARY_ORDERED_OPS[operator_fn](left_val, right_val))
-                )
-        if isinstance(element, BooleanClauseList):
-            clauses = list(element.clauses)
-            if element.operator is sa_op.and_:
-                return all(cls._evaluate_column_element(item, clause) for clause in clauses)
-            if element.operator is sa_op.or_:
-                return any(cls._evaluate_column_element(item, clause) for clause in clauses)
-        if isinstance(element, UnaryExpression) and element.operator is sa_op.inv:
-            return not cls._evaluate_column_element(item, element.element)
-        msg = f"{raw_element.__class__} expressions are not supported in mock repositories (in-memory filtering)"
+    @staticmethod
+    def extract_field_name(field: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]") -> str:
+        """Extract string field name from string, InstrumentedAttribute, or Column."""
+        if isinstance(field, str):
+            return field
+        if isinstance(field, InstrumentedAttribute):
+            return field.key
+        if isinstance(field, Column):
+            return field.key
+        msg = f"{type(field)} columns are not supported in mock repositories (in-memory filtering)"
         raise RepositoryError(msg)
 
+    @staticmethod
+    def apply_limit_offset_pagination(result: List[ModelT], limit: int, offset: int) -> List[ModelT]:
+        """Slice items using SQL LIMIT/OFFSET semantics (`result[offset : offset + limit]`)."""
+        return result[offset : offset + limit]
+
     @classmethod
-    def _filter_group(cls, result: List[ModelT], group: FilterGroup) -> List[ModelT]:
-        """Evaluate :class:`~advanced_alchemy.filters.FilterGroup` conjunction or disjunction."""
-        if not group.filters:
+    def filter_in_collection(
+        cls,
+        result: List[ModelT],
+        field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
+        values: abc.Collection[Any],
+    ) -> List[ModelT]:
+        """Filter items whose field value is in `values` (returning `[]` when `values` is empty)."""
+        if not values:
+            return []
+        field_str = cls.extract_field_name(field_name)
+        relationship_filter = cls._relationship_collection_filter(result, field_str, values, negate=False)
+        if relationship_filter is not None:
+            return cls.filter_by_relationship(result, relationship_filter)
+        return [item for item in result if cls.resolve_attr_value(item, field_str) in values]
+
+    @classmethod
+    def filter_not_in_collection(
+        cls,
+        result: List[ModelT],
+        field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
+        values: abc.Collection[Any],
+    ) -> List[ModelT]:
+        """Filter items whose field value is non-null and not in `values`."""
+        if not values:
             return result
-        if group.logical_operator is and_:
-            return cls.apply_filters(result, *group.filters, apply_pagination=False)
+        field_str = cls.extract_field_name(field_name)
+        relationship_filter = cls._relationship_collection_filter(result, field_str, values, negate=True)
+        if relationship_filter is not None:
+            return cls.filter_by_relationship(result, relationship_filter)
         return [
             item
             for item in result
-            if any(bool(cls.apply_filters([item], sub_filter, apply_pagination=False)) for sub_filter in group.filters)
+            if (val := cls.resolve_attr_value(item, field_str)) is not None and val not in values
         ]
 
-    @staticmethod
-    def _extract_multi_branch_filters(multi: MultiFilter, conditions: Any) -> list[StatementFilter]:
-        """Convert one logical branch's raw conditions into concrete ``StatementFilter`` objects."""
-        if not isinstance(conditions, list):
+    @classmethod
+    def filter_on_datetime_field(
+        cls,
+        result: List[ModelT],
+        field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
+        before: Optional[datetime.datetime] = None,
+        after: Optional[datetime.datetime] = None,
+        on_or_before: Optional[datetime.datetime] = None,
+        on_or_after: Optional[datetime.datetime] = None,
+    ) -> List[ModelT]:
+        """Filter items by conjunctive (`AND`) datetime range bounds."""
+        if before is None and after is None and on_or_before is None and on_or_after is None:
+            return result
+        field_str = cls.extract_field_name(field_name)
+        result_: List[ModelT] = []
+        for item in result:
+            attr: Optional[datetime.datetime] = cls.resolve_attr_value(item, field_str)
+            if attr is None:
+                continue
+            if before is not None and attr >= before:
+                continue
+            if after is not None and attr <= after:
+                continue
+            if on_or_before is not None and attr > on_or_before:
+                continue
+            if on_or_after is not None and attr < on_or_after:
+                continue
+            result_.append(item)
+        return result_
+
+    @classmethod
+    def filter_by_like(
+        cls,
+        result: List[ModelT],
+        field_name: Union[str, set[str]],
+        value: str,
+        ignore_case: bool,
+        escape_wildcards: bool = False,
+    ) -> List[ModelT]:
+        """Filter items matching a SQL LIKE substring pattern across one or more fields (`OR` semantics)."""
+        pattern = cls._build_search_regex(value, ignore_case=ignore_case, escape_wildcards=escape_wildcards)
+        fields = {field_name} if isinstance(field_name, str) else field_name
+        return [
+            item
+            for item in result
+            if any(
+                isinstance(attr_val := cls.resolve_attr_value(item, field), str) and bool(pattern.match(attr_val))
+                for field in fields
+            )
+        ]
+
+    @classmethod
+    def filter_by_not_like(
+        cls,
+        result: List[ModelT],
+        field_name: Union[str, set[str]],
+        value: str,
+        ignore_case: bool,
+        escape_wildcards: bool = False,
+    ) -> List[ModelT]:
+        """Exclude items matching a SQL LIKE substring pattern or NULL across specified fields (`AND NOT` semantics)."""
+        if not result:
             return []
-        valid_filters: list[StatementFilter] = []
-        for condition in cast("Sequence[Any]", conditions):
-            if not isinstance(condition, dict):
-                continue
-            built = multi._create_filter(cast("dict[str, Any]", condition))  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
-            if built is not None:
-                valid_filters.append(built)
-        return valid_filters
+        pattern = cls._build_search_regex(value, ignore_case=ignore_case, escape_wildcards=escape_wildcards)
+        fields = {field_name} if isinstance(field_name, str) else field_name
+        present_fields = [field for field in fields if hasattr(type(result[0]), field.split(".")[0])]
+        if not present_fields:
+            return result
+        return [
+            item
+            for item in result
+            if all(
+                isinstance(attr_val := cls.resolve_attr_value(item, field), str) and not pattern.match(attr_val)
+                for field in present_fields
+            )
+        ]
 
     @classmethod
-    def _filter_multi(cls, result: List[ModelT], multi: MultiFilter) -> List[ModelT]:
-        """Evaluate :class:`~advanced_alchemy.filters.MultiFilter` trees in memory."""
-        filtered = result
-        for filter_type, conditions in multi.filters.items():
-            operator = multi._logical_map.get(filter_type)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
-            if operator is None:
-                continue
-            valid_filters = cls._extract_multi_branch_filters(multi, conditions)
-            if valid_filters:
-                filtered = cls._filter_group(
-                    filtered,
-                    FilterGroup(logical_operator=operator, filters=valid_filters),  # type: ignore[arg-type]
-                )
-        return filtered
-
-    @classmethod
-    def _apply_collection_or_search_filter(cls, filtered: List[ModelT], filter_: Any) -> Optional[List[ModelT]]:
-        """Evaluate collection and text-search filters, returning ``None`` for other filter types."""
-        raw_filter: Any = filter_
-        matched: Optional[List[ModelT]] = None
-        if isinstance(filter_, NotInCollectionFilter):
-            not_in_filter = cast("NotInCollectionFilter[Any]", raw_filter)
-            matched = (
-                filtered
-                if not_in_filter.values is None  # pyright: ignore[reportUnnecessaryComparison]
-                else cls.filter_not_in_collection(filtered, not_in_filter.field_name, not_in_filter.values)
-            )
-        elif isinstance(filter_, CollectionFilter):
-            in_filter = cast("CollectionFilter[Any]", raw_filter)
-            matched = (
-                filtered
-                if in_filter.values is None  # pyright: ignore[reportUnnecessaryComparison]
-                else cls.filter_in_collection(filtered, in_filter.field_name, in_filter.values)
-            )
-        elif isinstance(filter_, NotInSearchFilter):
-            matched = cls.filter_by_not_like(
-                filtered,
-                {cls.extract_field_name(f) for f in filter_.normalized_field_names},
-                value=filter_.value,
-                ignore_case=bool(filter_.ignore_case),
-                escape_wildcards=filter_.escape_wildcards,
-            )
-        elif isinstance(filter_, SearchFilter):
-            matched = cls.filter_by_like(
-                filtered,
-                {cls.extract_field_name(f) for f in filter_.normalized_field_names},
-                value=filter_.value,
-                ignore_case=bool(filter_.ignore_case),
-                escape_wildcards=filter_.escape_wildcards,
-            )
+    def filter_comparison(cls, result: List[ModelT], filter_: ComparisonFilter) -> List[ModelT]:
+        """Evaluate a `ComparisonFilter` against `result`."""
+        if filter_.operator not in VALID_OPERATORS:
+            msg = f"Invalid operator '{filter_.operator}'. Must be one of: {', '.join(sorted(VALID_OPERATORS))}"
+            raise ValueError(msg)
+        field_str = cls.extract_field_name(filter_.field_name)
+        op_name = filter_.operator
+        target = filter_.value
+        matched: List[ModelT] = []
+        for item in result:
+            val = cls.resolve_attr_value(item, field_str)
+            if cls._eval_comparison_op(val, op_name, target):
+                matched.append(item)
         return matched
 
     @classmethod
-    def _apply_single_filter(cls, filtered: List[ModelT], filter_: Any) -> List[ModelT]:
-        """Apply one non-ordering, non-pagination filter to ``filtered``."""
-        result: Optional[List[ModelT]] = None
-        if isinstance(filter_, BeforeAfter):
-            result = cls.filter_on_datetime(
-                filtered, field_name=filter_.field_name, before=filter_.before, after=filter_.after
+    def filter_boolean(cls, result: List[ModelT], filter_: BooleanFilter) -> List[ModelT]:
+        """Evaluate a `BooleanFilter` against `result`."""
+        if filter_.value is None:
+            return result
+        field_str = cls.extract_field_name(filter_.field_name)
+        return [item for item in result if cls.resolve_attr_value(item, field_str) == filter_.value]
+
+    @classmethod
+    def filter_null(cls, result: List[ModelT], filter_: NullFilter) -> List[ModelT]:
+        """Evaluate a `NullFilter` (`IS NULL`) against `result`."""
+        field_str = cls.extract_field_name(filter_.field_name)
+        return [item for item in result if cls.resolve_attr_value(item, field_str) is None]
+
+    @classmethod
+    def filter_not_null(cls, result: List[ModelT], filter_: NotNullFilter) -> List[ModelT]:
+        """Evaluate a `NotNullFilter` (`IS NOT NULL`) against `result`."""
+        field_str = cls.extract_field_name(filter_.field_name)
+        return [item for item in result if cls.resolve_attr_value(item, field_str) is not None]
+
+    @classmethod
+    def filter_group(cls, result: List[ModelT], filter_: FilterGroup) -> List[ModelT]:
+        """Evaluate a `FilterGroup` (`and_` / `or_`) recursively against `result`."""
+        if not filter_.filters:
+            return result
+        is_or = filter_.logical_operator is or_ or getattr(filter_.logical_operator, "__name__", "") == "or_"
+        if is_or:
+            matched_ids: set[int] = set()
+            for sub_filter in filter_.filters:
+                sub_matches = cls.apply_filters(result, sub_filter, apply_pagination=False)
+                for item in sub_matches:
+                    matched_ids.add(id(item))
+            return [item for item in result if id(item) in matched_ids]
+        current = result
+        for sub_filter in filter_.filters:
+            current = cls.apply_filters(current, sub_filter, apply_pagination=False)
+        return current
+
+    @classmethod
+    def filter_multi(cls, result: List[ModelT], filter_: MultiFilter) -> List[ModelT]:
+        """Evaluate a `MultiFilter` dictionary tree against `result`."""
+        current = result
+        for filter_type, conditions in filter_.filters.items():
+            operator = cast(
+                "Optional[Callable[..., ColumnElement[bool]]]",
+                filter_._logical_map.get(filter_type),  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
             )
-        elif isinstance(filter_, OnBeforeAfter):
-            result = cls.filter_on_datetime(
-                filtered,
-                field_name=filter_.field_name,
-                on_or_before=filter_.on_or_before,
-                on_or_after=filter_.on_or_after,
-            )
-        elif isinstance(filter_, BooleanFilter):
-            if filter_.value is None:
-                result = filtered
-            else:
-                field_str = cls.extract_field_name(filter_.field_name)
-                result = [item for item in filtered if cls.resolve_attr_value(item, field_str) == filter_.value]
-        elif isinstance(filter_, NullFilter):
-            field_str = cls.extract_field_name(filter_.field_name)
-            result = [item for item in filtered if cls.resolve_attr_value(item, field_str) is None]
-        elif isinstance(filter_, NotNullFilter):
-            field_str = cls.extract_field_name(filter_.field_name)
-            result = [item for item in filtered if cls.resolve_attr_value(item, field_str) is not None]
-        elif isinstance(filter_, ComparisonFilter):
-            result = cls.filter_by_comparison(filtered, filter_)
-        elif (collection_or_search := cls._apply_collection_or_search_filter(filtered, filter_)) is not None:
-            result = collection_or_search
-        elif isinstance(filter_, FilterGroup):
-            result = cls._filter_group(filtered, filter_)
-        elif isinstance(filter_, RelationshipFilter):
-            result = cls.filter_by_relationship(filtered, filter_)
-        elif isinstance(filter_, MultiFilter):
-            result = cls._filter_multi(filtered, filter_)
-        elif isinstance(filter_, ColumnElement):
-            result = [item for item in filtered if cls._evaluate_column_element(item, filter_)]
-        else:
-            msg = f"Unexpected filter: {filter_}"
+            if not operator or not isinstance(conditions, list):
+                continue
+            valid_filters: List[StatementFilter] = []
+            for cond in conditions:  # pyright: ignore[reportUnknownVariableType]
+                if not isinstance(cond, dict):
+                    continue
+                cond_dict = cast("dict[str, Any]", cond)
+                filter_instance = filter_._create_filter(cond_dict)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+                if filter_instance is not None:
+                    valid_filters.append(filter_instance)
+            if valid_filters:
+                group = FilterGroup(logical_operator=operator, filters=valid_filters)
+                current = cls.filter_group(current, group)
+        return current
+
+    @classmethod
+    def filter_exists(cls, result: List[ModelT], filter_: Union[ExistsFilter, NotExistsFilter]) -> List[ModelT]:
+        """Evaluate an `ExistsFilter` or `NotExistsFilter` against `result`."""
+        negate = isinstance(filter_, NotExistsFilter)
+        if not filter_.values:
+            return result if negate else []
+        is_and = filter_.operator == "and"
+        matched: List[ModelT] = []
+        for item in result:
+            outcomes = [cls.evaluate_sql_expression(item, expr) is True for expr in filter_.values]
+            exists_match = all(outcomes) if is_and else any(outcomes)
+            if (not exists_match) if negate else exists_match:
+                matched.append(item)
+        return matched
+
+    @classmethod
+    def evaluate_sql_expression(cls, item: Any, expr: Any) -> Any:
+        """Evaluate a SQLAlchemy `ColumnElement` AST expression against an in-memory model instance."""
+        if isinstance(expr, Grouping):
+            return cls.evaluate_sql_expression(item, expr.element)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
+        if isinstance(expr, True_):
+            return True
+        if isinstance(expr, False_):
+            return False
+        if isinstance(expr, Null):
+            return None
+        if isinstance(expr, BindParameter):
+            return expr.value  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+        if isinstance(expr, BooleanClauseList):
+            outcomes = [cls.evaluate_sql_expression(item, clause) for clause in expr.clauses]
+            if expr.operator is sql_op.or_:
+                if any(outcome is True for outcome in outcomes):
+                    return True
+                return None if any(outcome is None for outcome in outcomes) else False
+            if any(outcome is False for outcome in outcomes):
+                return False
+            return None if any(outcome is None for outcome in outcomes) else True
+        if isinstance(expr, (ClauseList, ExpressionClauseList)):
+            return tuple(cls.evaluate_sql_expression(item, clause) for clause in expr.clauses)
+        if isinstance(expr, UnaryExpression):
+            inner = cls.evaluate_sql_expression(item, expr.element)
+            if expr.operator in (sql_op.inv, sql_op.is_false):
+                return None if inner is None else not bool(inner)
+            if expr.operator is sql_op.is_true:
+                return False if inner is None else bool(inner)
+            msg = "Unary expressions are not supported in mock repositories (in-memory filtering)"
             raise RepositoryError(msg)
-        return result
+        if isinstance(expr, InstrumentedAttribute):
+            return getattr(item, expr.key, None)
+        if isinstance(expr, Column):
+            return getattr(item, expr.key, None)
+        if isinstance(expr, BinaryExpression):
+            left = cls.evaluate_sql_expression(item, expr.left)
+            right = cls.evaluate_sql_expression(item, expr.right)
+            return cls._eval_binary_operator(left, right, expr.operator, escape=expr.modifiers.get("escape"))
+        if isinstance(expr, ColumnElement):
+            key = getattr(expr, "key", None) or getattr(expr, "name", None)  # pyright: ignore[reportUnknownArgumentType]
+            if isinstance(key, str) and hasattr(item, key):
+                return getattr(item, key)
+        msg = f"{type(expr)} expressions are not supported in mock repositories (in-memory filtering)"  # pyright: ignore[reportUnknownArgumentType]
+        raise RepositoryError(msg)
+
+    @classmethod
+    def order_by(
+        cls,
+        result: List[ModelT],
+        field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
+        sort_desc: bool = False,
+        nulls: Optional[Literal["first", "last"]] = None,
+    ) -> List[ModelT]:
+        """Sort `result` by `field_name` with optional `nulls` placement (`first` or `last`)."""
+        attribute = cls.extract_field_name(field_name)
+        missing = [item for item in result if cls.resolve_attr_value(item, attribute) is None]
+        present = sorted(
+            (item for item in result if cls.resolve_attr_value(item, attribute) is not None),
+            key=lambda item: cls.resolve_attr_value(item, attribute),
+            reverse=sort_desc,
+        )
+        if nulls == "first":
+            return [*missing, *present]
+        if nulls == "last":
+            return [*present, *missing]
+        return [*present, *missing] if sort_desc else [*missing, *present]
 
     @classmethod
     def apply_filters(
         cls,
         result: List[ModelT],
-        *filters: Any,
+        *filters: Union[StatementFilter, ColumnElement[bool]],
         apply_pagination: bool = True,
     ) -> List[ModelT]:
-        """Apply filters and ordering to ``result`` with SQL-compatible semantics."""
-        pending_orders: list[OrderBy] = []
-        pending_pagination: list[LimitOffset] = []
-        filtered = result
+        """Apply `StatementFilter` instances and SQLAlchemy boolean expressions to `result`."""
+        order_filters: List[OrderBy] = []
+        pagination_filters: List[LimitOffset] = []
         for filter_ in filters:
             if isinstance(filter_, LimitOffset):
                 if apply_pagination:
-                    pending_pagination.append(filter_)
+                    pagination_filters.append(filter_)
             elif isinstance(filter_, OrderBy):
-                pending_orders.append(filter_)
+                order_filters.append(filter_)
             else:
-                filtered = cls._apply_single_filter(filtered, filter_)
+                result = cls._apply_statement_filter(result, filter_)
+        for order_filter in reversed(order_filters):
+            result = cls._apply_statement_filter(result, order_filter)
+        for pag in pagination_filters:
+            result = cls.apply_limit_offset_pagination(result, pag.limit, pag.offset)
+        return result
 
-        for order_filter in reversed(pending_orders):
-            filtered = cls.order_by(
-                filtered,
-                order_filter.field_name,
-                sort_desc=order_filter.sort_order == "desc",
-                nulls=order_filter.nulls,
+    @classmethod
+    def paginate_items(
+        cls,
+        result: List[ModelT],
+        *filters: Union[StatementFilter, ColumnElement[bool]],
+    ) -> List[ModelT]:
+        """Apply only `LimitOffset` pagination filters from `filters` to `result`."""
+        for filter_ in filters:
+            if isinstance(filter_, LimitOffset):
+                result = cls.apply_limit_offset_pagination(result, filter_.limit, filter_.offset)
+        return result
+
+    @staticmethod
+    def filter_by_kwargs(
+        result: Iterable[ModelT],
+        kwargs: dict[str, Any],
+    ) -> List[ModelT]:
+        """Filter `result` by exact attribute equality for all key/value pairs in `kwargs`."""
+        try:
+            return [item for item in result if all(getattr(item, field) == value for field, value in kwargs.items())]
+        except AttributeError as error:
+            raise RepositoryError from error
+
+    @classmethod
+    def _apply_statement_filter(
+        cls,
+        result: List[ModelT],
+        filter_: Union[StatementFilter, ColumnElement[bool]],
+    ) -> List[ModelT]:
+        if isinstance(filter_, BeforeAfter):
+            return cls.filter_on_datetime_field(
+                result,
+                field_name=filter_.field_name,
+                before=filter_.before,
+                after=filter_.after,
             )
-        for pagination in pending_pagination:
-            filtered = cls.apply_limit_offset(filtered, pagination.limit, pagination.offset)
-        return filtered
+        if isinstance(filter_, OnBeforeAfter):
+            return cls.filter_on_datetime_field(
+                result,
+                field_name=filter_.field_name,
+                on_or_before=filter_.on_or_before,
+                on_or_after=filter_.on_or_after,
+            )
+        if isinstance(filter_, NotInCollectionFilter):
+            values: Optional[abc.Collection[Any]] = filter_.values  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+            if values is None:
+                return result
+            return cls.filter_not_in_collection(result, filter_.field_name, values)  # pyright: ignore[reportUnknownArgumentType]
+        if isinstance(filter_, CollectionFilter):
+            in_values: Optional[abc.Collection[Any]] = filter_.values  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+            if in_values is None:
+                return result
+            return cls.filter_in_collection(result, filter_.field_name, in_values)  # pyright: ignore[reportUnknownArgumentType]
+        if isinstance(filter_, OrderBy):
+            return cls.order_by(
+                result,
+                filter_.field_name,
+                sort_desc=filter_.sort_order == "desc",
+                nulls=filter_.nulls,
+            )
+        if isinstance(filter_, NotInSearchFilter):
+            return cls.filter_by_not_like(
+                result,
+                {cls.extract_field_name(field) for field in filter_.normalized_field_names},
+                value=filter_.value,
+                ignore_case=bool(filter_.ignore_case),
+                escape_wildcards=filter_.escape_wildcards,
+            )
+        if isinstance(filter_, SearchFilter):
+            return cls.filter_by_like(
+                result,
+                {cls.extract_field_name(field) for field in filter_.normalized_field_names},
+                value=filter_.value,
+                ignore_case=bool(filter_.ignore_case),
+                escape_wildcards=filter_.escape_wildcards,
+            )
+        if isinstance(filter_, ComparisonFilter):
+            return cls.filter_comparison(result, filter_)
+        if isinstance(filter_, BooleanFilter):
+            return cls.filter_boolean(result, filter_)
+        if isinstance(filter_, NullFilter):
+            return cls.filter_null(result, filter_)
+        if isinstance(filter_, NotNullFilter):
+            return cls.filter_not_null(result, filter_)
+        if isinstance(filter_, FilterGroup):
+            return cls.filter_group(result, filter_)
+        if isinstance(filter_, RelationshipFilter):
+            return cls.filter_by_relationship(result, filter_)
+        if isinstance(filter_, MultiFilter):
+            return cls.filter_multi(result, filter_)
+        if isinstance(filter_, (ExistsFilter, NotExistsFilter)):
+            return cls.filter_exists(result, filter_)
+        if isinstance(filter_, ColumnElement):
+            return [item for item in result if cls.evaluate_sql_expression(item, filter_) is True]
+        msg = f"Unexpected filter: {filter_}"
+        raise RepositoryError(msg)
+
+    @classmethod
+    def _build_search_regex(
+        cls,
+        value: str,
+        *,
+        ignore_case: bool = False,
+        escape_wildcards: bool = False,
+    ) -> re.Pattern[str]:
+        if escape_wildcards:
+            flags = re.IGNORECASE | re.DOTALL if ignore_case else re.DOTALL
+            return re.compile(rf"^.*{re.escape(value)}.*$", flags)
+        return cls._like_to_regex(f"%{value}%", ignore_case=ignore_case)
+
+    @staticmethod
+    def _like_to_regex(pattern_str: str, ignore_case: bool = False, escape: Optional[str] = None) -> re.Pattern[str]:
+        parts: List[str] = ["^"]
+        characters = iter(pattern_str)
+        for ch in characters:
+            if escape is not None and ch == escape:
+                escaped = next(characters, None)
+                parts.append(re.escape(escaped) if escaped is not None else "(?!)")
+            elif ch == "%":
+                parts.append(".*")
+            elif ch == "_":
+                parts.append(".")
+            else:
+                parts.append(re.escape(ch))
+        parts.append("$")
+        flags = re.IGNORECASE | re.DOTALL if ignore_case else re.DOTALL
+        return re.compile("".join(parts), flags)
+
+    _COMPARISON_VALUE_OPS: dict[str, Callable[[Any, Any], bool]] = {
+        "gt": lambda val, target: bool(val > target),
+        "ge": lambda val, target: bool(val >= target),
+        "lt": lambda val, target: bool(val < target),
+        "le": lambda val, target: bool(val <= target),
+        "in": lambda val, target: bool(val in target),
+        "notin": lambda val, target: bool(val not in target),
+        "between": lambda val, target: bool(target[0] <= val <= target[1]),
+    }
+
+    @classmethod
+    def _eval_string_comparison_op(cls, val: str, op_name: str, target: Any) -> bool:
+        if op_name == "like":
+            return bool(cls._like_to_regex(str(target), ignore_case=False).match(val))
+        if op_name == "ilike":
+            return bool(cls._like_to_regex(str(target), ignore_case=True).match(val))
+        if op_name == "startswith":
+            return val.startswith(str(target))
+        if op_name == "istartswith":
+            return val.lower().startswith(str(target).lower())
+        if op_name == "endswith":
+            return val.endswith(str(target))
+        if op_name == "iendswith":
+            return val.lower().endswith(str(target).lower())
+        return False
+
+    @classmethod
+    def _eval_comparison_op(cls, val: Any, op_name: str, target: Any) -> bool:
+        if target is None and op_name in {"eq", "ne"}:
+            return (val is None) if op_name == "eq" else (val is not None)
+        if val is None:
+            return False
+        if op_name == "eq":
+            return bool(val == target)
+        if op_name == "ne":
+            return bool(val != target)
+        value_op = cls._COMPARISON_VALUE_OPS.get(op_name)
+        if value_op is not None:
+            return value_op(val, target)
+        if op_name == "dateeq":
+            val_date = val.date() if isinstance(val, datetime.datetime) else val
+            target_date = target.date() if isinstance(target, datetime.datetime) else target
+            return bool(val_date == target_date)
+        if isinstance(val, str):
+            return cls._eval_string_comparison_op(val, op_name, target)
+        return False
+
+    _BINARY_ORDER_OPS: dict[Any, Callable[[Any, Any], bool]] = {
+        sql_op.gt: lambda left, right: bool(left > right),
+        sql_op.ge: lambda left, right: bool(left >= right),
+        sql_op.lt: lambda left, right: bool(left < right),
+        sql_op.le: lambda left, right: bool(left <= right),
+    }
+
+    @staticmethod
+    def _eval_equality_value(left: Any, right: Any) -> bool:
+        return bool(compare_values(left, right) if not isinstance(left, (int, str, float, bool)) else left == right)
+
+    @classmethod
+    def _eval_null_aware_binary_op(cls, left: Any, right: Any, operator: Any) -> tuple[bool, Optional[bool]]:
+        if operator is sql_op.is_:
+            if right is None:
+                return True, left is None
+            return True, False if left is None else cls._eval_equality_value(left, right)
+        if operator is sql_op.is_not:
+            if right is None:
+                return True, left is not None
+            return True, True if left is None else not cls._eval_equality_value(left, right)
+        if operator is sql_op.eq:
+            return True, None if (left is None or right is None) else cls._eval_equality_value(left, right)
+        if operator is sql_op.ne:
+            return True, None if (left is None or right is None) else not cls._eval_equality_value(left, right)
+        if operator is sql_op.in_op:
+            if right is None or not right:
+                return True, False
+            if left is None:
+                return True, None
+            return True, True if left in right else (None if None in right else False)
+        if operator is sql_op.notin_op:
+            if right is None or not right:
+                return True, True
+            if left is None:
+                return True, None
+            return True, False if left in right else (None if None in right else True)
+        return False, None
+
+    @classmethod
+    def _eval_string_binary_op(
+        cls, left: Any, right_str: str, operator: Any, escape: Optional[str] = None
+    ) -> Optional[bool]:
+        if operator is sql_op.like_op:
+            return isinstance(left, str) and bool(
+                cls._like_to_regex(right_str, ignore_case=False, escape=escape).match(left)
+            )
+        if operator is sql_op.ilike_op:
+            return isinstance(left, str) and bool(
+                cls._like_to_regex(right_str, ignore_case=True, escape=escape).match(left)
+            )
+        if operator is sql_op.not_like_op:
+            return isinstance(left, str) and not bool(
+                cls._like_to_regex(right_str, ignore_case=False, escape=escape).match(left)
+            )
+        if operator is sql_op.not_ilike_op:
+            return isinstance(left, str) and not bool(
+                cls._like_to_regex(right_str, ignore_case=True, escape=escape).match(left)
+            )
+        if operator is sql_op.startswith_op:
+            return isinstance(left, str) and bool(cls._like_to_regex(f"{right_str}%", escape=escape).match(left))
+        if operator is sql_op.endswith_op:
+            return isinstance(left, str) and bool(cls._like_to_regex(f"%{right_str}", escape=escape).match(left))
+        if operator is sql_op.contains_op:
+            return isinstance(left, str) and bool(cls._like_to_regex(f"%{right_str}%", escape=escape).match(left))
+        return None
+
+    @classmethod
+    def _eval_binary_operator(cls, left: Any, right: Any, operator: Any, escape: Optional[str] = None) -> Any:
+        handled, null_aware_result = cls._eval_null_aware_binary_op(left, right, operator)
+        if handled:
+            return null_aware_result
+        if left is None or right is None:
+            return None
+        order_op = cls._BINARY_ORDER_OPS.get(operator)
+        if order_op is not None:
+            return order_op(left, right)
+        if operator is sql_op.between_op and isinstance(right, tuple):
+            right_tuple: tuple[Any, ...] = right  # pyright: ignore[reportUnknownVariableType]
+            if len(right_tuple) > 1:
+                if right_tuple[0] is None or right_tuple[1] is None:
+                    return None
+                return bool(right_tuple[0] <= left <= right_tuple[1])
+        string_result = cls._eval_string_binary_op(left, str(cast("Any", right)), operator, escape=escape)
+        if string_result is not None:
+            return string_result
+        try:
+            return operator(left, right)
+        except Exception as error:
+            msg = f"{operator} expressions are not supported in mock repositories (in-memory filtering)"
+            raise RepositoryError(msg) from error

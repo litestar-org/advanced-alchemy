@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sybil import Sybil
+from sybil.integration.pytest import SybilItem
 from sybil.parsers.rest import PythonCodeBlockParser, SkipParser
 
 if TYPE_CHECKING:
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
 
 EXECUTABLE_DOCS = (
     "usage/database_seeding.rst",
+    "usage/service_composition.rst",
     "usage/**/*.rst",
     "getting-started.rst",
 )
@@ -38,6 +40,14 @@ async def db_session_fixture(engine: AsyncEngine) -> AsyncGenerator[AsyncSession
 def _setup_sybil_namespace(namespace: dict[str, object]) -> None:
     """Assign a unique module name to each Sybil document execution namespace."""
     namespace["__name__"] = f"sybil_doc_{id(namespace)}"
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Keep each document's shared example namespace on one xdist worker."""
+    for item in items:
+        if isinstance(item, SybilItem):
+            item.add_marker(pytest.mark.xdist_group(name=str(item.path)))
 
 
 pytest_collect_file = Sybil(
