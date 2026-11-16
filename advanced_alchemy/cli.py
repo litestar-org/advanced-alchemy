@@ -254,7 +254,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     Returns:
         The database group with the migration commands added.
     """
-    from advanced_alchemy.utils.cli_tools import BYTE_SIZE, click
+    from advanced_alchemy.utils.cli_tools import BYTE_SIZE, argument, click, option
 
     console = _ConsoleProxy()
 
@@ -263,20 +263,20 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
 
     config_option = _config_option(click)
     validate_config_option = _validate_config_option(click)
-    bind_key_option = click.option(
+    bind_key_option = option(
         "--bind-key",
         help="Specify which SQLAlchemy config to use by bind key",
         type=str,
         default=None,
     )
-    verbose_option = click.option(
+    verbose_option = option(
         "--verbose",
         help="Enable verbose output.",
         type=bool,
         default=False,
         is_flag=True,
     )
-    no_prompt_option = click.option(
+    no_prompt_option = option(
         "--no-prompt",
         help="Do not prompt for confirmation before executing the command.",
         type=bool,
@@ -365,15 +365,15 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @config_option
     @validate_config_option
     @bind_key_option
-    @click.option("--sql", type=bool, help="Generate SQL output for offline migrations.", default=False, is_flag=True)
-    @click.option(
+    @option("--sql", type=bool, help="Generate SQL output for offline migrations.", default=False, is_flag=True)
+    @option(
         "--tag",
         help="an arbitrary 'tag' that can be intercepted by custom env.py scripts via the .EnvironmentContext.get_tag_argument method.",
         type=str,
         default=None,
     )
     @no_prompt_option
-    @click.argument(
+    @argument(
         "revision",
         type=str,
         default="-1",
@@ -405,15 +405,15 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @config_option
     @validate_config_option
     @bind_key_option
-    @click.option("--sql", type=bool, help="Generate SQL output for offline migrations.", default=False, is_flag=True)
-    @click.option(
+    @option("--sql", type=bool, help="Generate SQL output for offline migrations.", default=False, is_flag=True)
+    @option(
         "--tag",
         help="an arbitrary 'tag' that can be intercepted by custom env.py scripts via the .EnvironmentContext.get_tag_argument method.",
         type=str,
         default=None,
     )
     @no_prompt_option
-    @click.argument(
+    @argument(
         "revision",
         type=str,
         default="head",
@@ -443,13 +443,11 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     )
     @config_option
     @validate_config_option
-    @click.argument("revision", type=str)
+    @argument("revision", type=str)
     @bind_key_option
-    @click.option("--sql", is_flag=True, default=False, help="Generate SQL output for offline migrations")
-    @click.option(
-        "--tag", type=str, default=None, help="Arbitrary 'tag' that can be intercepted by custom env.py scripts"
-    )
-    @click.option("--purge", is_flag=True, default=False, help="Delete all entries in version table before stamping")
+    @option("--sql", is_flag=True, default=False, help="Generate SQL output for offline migrations")
+    @option("--tag", type=str, default=None, help="Arbitrary 'tag' that can be intercepted by custom env.py scripts")
+    @option("--purge", is_flag=True, default=False, help="Delete all entries in version table before stamping")
     def stamp(bind_key: Optional[str], revision: str, sql: bool, tag: Optional[str], purge: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Stamp the revision table with the given revision."""
         from advanced_alchemy.alembic.commands import AlembicCommands
@@ -483,7 +481,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     )
     @config_option
     @validate_config_option
-    @click.argument("revision", type=str)
+    @argument("revision", type=str)
     @bind_key_option
     def edit_revision(bind_key: Optional[str], revision: str) -> None:  # pyright: ignore[reportUnusedFunction]
         """Edit revision script with system editor."""
@@ -502,7 +500,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @config_option
     @validate_config_option
     @bind_key_option
-    @click.option("--sql", is_flag=True, default=False, help="Generate SQL output instead of executing")
+    @option("--sql", is_flag=True, default=False, help="Generate SQL output instead of executing")
     def ensure_version_table(bind_key: Optional[str], sql: bool) -> None:  # pyright: ignore[reportUnusedFunction]
         """Ensure alembic version table exists."""
         from advanced_alchemy.alembic.commands import AlembicCommands
@@ -521,7 +519,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @validate_config_option
     @bind_key_option
     @verbose_option
-    @click.option(
+    @option(
         "--resolve-dependencies",
         is_flag=True,
         default=False,
@@ -545,13 +543,13 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @validate_config_option
     @bind_key_option
     @verbose_option
-    @click.option(
+    @option(
         "--rev-range",
         type=str,
         default=None,
         help="Revision range (e.g., 'base:head', 'abc:def')",
     )
-    @click.option(
+    @option(
         "--indicate-current",
         is_flag=True,
         default=False,
@@ -582,11 +580,11 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     )
     @config_option
     @validate_config_option
-    @click.argument("revisions", type=str)
+    @argument("revisions", type=str)
     @bind_key_option
-    @click.option("-m", "--message", type=str, default=None, help="Merge message")
-    @click.option("--branch-label", type=str, default=None, help="Branch label for merge revision")
-    @click.option("--rev-id", type=str, default=None, help="Specify custom revision ID")
+    @option("-m", "--message", type=str, default=None, help="Merge message")
+    @option("--branch-label", type=str, default=None, help="Branch label for merge revision")
+    @option("--rev-id", type=str, default=None, help="Specify custom revision ID")
     @no_prompt_option
     def merge_revisions(  # pyright: ignore[reportUnusedFunction]
         bind_key: Optional[str],
@@ -622,7 +620,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     )
     @config_option
     @validate_config_option
-    @click.argument("revision", type=str)
+    @argument("revision", type=str)
     @bind_key_option
     def show_revision(bind_key: Optional[str], revision: str) -> None:  # pyright: ignore[reportUnusedFunction]
         """Show details of a specific revision."""
@@ -676,13 +674,13 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @config_option
     @validate_config_option
     @bind_key_option
-    @click.argument(
+    @argument(
         "directory",
         default=None,
         required=False,
     )
-    @click.option("--multidb", is_flag=True, default=False, help="Support multiple databases")
-    @click.option("--package", is_flag=True, default=True, help="Create `__init__.py` for created folder")
+    @option("--multidb", is_flag=True, default=False, help="Support multiple databases")
+    @option("--package", is_flag=True, default=True, help="Create `__init__.py` for created folder")
     @no_prompt_option
     def init_alembic(  # pyright: ignore[reportUnusedFunction]
         bind_key: Optional[str], directory: Optional[str], multidb: bool, package: bool, no_prompt: bool
@@ -711,18 +709,16 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @config_option
     @validate_config_option
     @bind_key_option
-    @click.option("-m", "--message", default=None, help="Revision message")
-    @click.option(
+    @option("-m", "--message", default=None, help="Revision message")
+    @option(
         "--autogenerate/--no-autogenerate", default=True, help="Automatically populate revision with detected changes"
     )
-    @click.option("--sql", is_flag=True, default=False, help="Export to `.sql` instead of writing to the database.")
-    @click.option("--head", default="head", help="Specify head revision to use as base for new revision.")
-    @click.option(
-        "--splice", is_flag=True, default=False, help='Allow a non-head revision as the "head" to splice onto'
-    )
-    @click.option("--branch-label", default=None, help="Specify a branch label to apply to the new revision")
-    @click.option("--version-path", default=None, help="Specify specific path from config for version file")
-    @click.option("--rev-id", default=None, help="Specify a ID to use for revision.")
+    @option("--sql", is_flag=True, default=False, help="Export to `.sql` instead of writing to the database.")
+    @option("--head", default="head", help="Specify head revision to use as base for new revision.")
+    @option("--splice", is_flag=True, default=False, help='Allow a non-head revision as the "head" to splice onto')
+    @option("--branch-label", default=None, help="Specify a branch label to apply to the new revision")
+    @option("--version-path", default=None, help="Specify specific path from config for version file")
+    @option("--rev-id", default=None, help="Specify a ID to use for revision.")
     @no_prompt_option
     def create_revision(  # pyright: ignore[reportUnusedFunction]
         bind_key: Optional[str],
@@ -818,7 +814,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
     @config_option
     @validate_config_option
     @bind_key_option
-    @click.option(
+    @option(
         "--table",
         "table_names",
         help="Name of the table to dump. Multiple tables can be specified. Use '*' to dump all tables.",
@@ -826,7 +822,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         required=True,
         multiple=True,
     )
-    @click.option(
+    @option(
         "--dir",
         "dump_dir",
         help="Directory to save the fixture files. Defaults to WORKDIR/fixtures",
@@ -834,7 +830,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         default=Path.cwd() / "fixtures",
         required=False,
     )
-    @click.option(
+    @option(
         "--format",
         "file_format",
         type=click.Choice(["json", "jsonl", "csv"]),
@@ -842,7 +838,7 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         show_default=True,
         help="Fixture file format.",
     )
-    @click.option(
+    @option(
         "--compression",
         "compression",
         type=click.Choice(["none", "gzip", "zip"]),
@@ -850,14 +846,14 @@ def add_migration_commands(database_group: Optional["Group"] = None) -> "Group":
         show_default=True,
         help="Compression applied to each fixture file.",
     )
-    @click.option(
+    @option(
         "--max-file-size",
         "max_file_size",
         type=BYTE_SIZE,
         default=None,
         help="Start a new numbered shard before a file would exceed this on-disk size, in bytes or with a K, M, or G suffix (1024-based), for example 50M.",
     )
-    @click.option(
+    @option(
         "--max-records",
         "max_records",
         type=click.IntRange(min=1),

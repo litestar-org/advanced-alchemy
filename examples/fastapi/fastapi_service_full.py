@@ -6,7 +6,7 @@
 #   "orjson"
 # ]
 # ///
-import datetime
+import datetime as dt
 from typing import Annotated, Optional
 from uuid import UUID
 
@@ -48,7 +48,7 @@ class AuthorModel(base.UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[Optional[datetime.date]]
+    dob: Mapped[Optional[dt.date]]
     books: Mapped[list[BookModel]] = relationship(
         back_populates="author", lazy="selectin", cascade="all, delete-orphan", uselist=True
     )
@@ -108,19 +108,19 @@ class AuthorBooks(BaseModel):
 class Author(BaseModel):
     id: Optional[UUID]
     name: str
-    dob: Optional[datetime.date]
+    dob: Optional[dt.date]
     books: list[AuthorBooks]
 
 
 class AuthorCreate(BaseModel):
     name: str
-    dob: Optional[datetime.date] = None
+    dob: Optional[dt.date] = None
     books: Optional[list[str]] = None
 
 
 class AuthorUpdate(BaseModel):
     name: Optional[str] = None
-    dob: Optional[datetime.date] = None
+    dob: Optional[dt.date] = None
     books: Optional[list[str]] = None
 
 

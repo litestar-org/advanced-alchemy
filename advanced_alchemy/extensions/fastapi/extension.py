@@ -15,7 +15,6 @@ from advanced_alchemy.service import (
     EmptyType,
     ErrorMessages,
     LoadSpec,
-    ModelT,
 )
 
 if TYPE_CHECKING:
@@ -91,7 +90,7 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         service_class: type["AsyncServiceT_co"],  # pyright: ignore
         /,
         key: "Optional[str]" = None,
-        statement: "Optional[Select[tuple[ModelT]]]" = None,
+        statement: "Optional[Select[Any]]" = None,
         error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
         load: "Optional[LoadSpec]" = None,
         execution_options: "Optional[dict[str, Any]]" = None,
@@ -105,7 +104,7 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         service_class: type["SyncServiceT_co"],  # pyright: ignore
         /,
         key: "Optional[str]" = None,
-        statement: "Optional[Select[tuple[ModelT]]]" = None,
+        statement: "Optional[Select[Any]]" = None,
         error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
         load: "Optional[LoadSpec]" = None,
         execution_options: "Optional[dict[str, Any]]" = None,
@@ -119,7 +118,7 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         service_class: type["ServiceGroupT"],  # pyright: ignore
         /,
         key: "Optional[str]" = None,
-        statement: "Optional[Select[tuple[ModelT]]]" = None,
+        statement: "Optional[Select[Any]]" = None,
         error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
         load: "Optional[LoadSpec]" = None,
         execution_options: "Optional[dict[str, Any]]" = None,
@@ -132,7 +131,7 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co", "ServiceGroupT"]],
         /,
         key: "Optional[str]" = None,
-        statement: "Optional[Select[tuple[ModelT]]]" = None,
+        statement: "Optional[Select[Any]]" = None,
         error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
         load: "Optional[LoadSpec]" = None,
         execution_options: "Optional[dict[str, Any]]" = None,

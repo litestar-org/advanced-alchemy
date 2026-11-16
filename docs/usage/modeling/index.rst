@@ -2,9 +2,7 @@
 Data Modeling
 =============
 
-Every database table needs a few essentials: a primary key, clear column types, and usually ``created_at`` and ``updated_at`` timestamps so you know when rows changed.
-
-Advanced Alchemy gives you ready-to-use base classes and portable column types so you only write the columns unique to your app.
+Advanced Alchemy provides declarative base classes, column mixins, and dialect-portable column types for primary keys, audit timestamps, encrypted fields, password hashes, and object storage.
 
 .. grid:: 1 1 2 2
     :padding: 0

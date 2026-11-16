@@ -1,36 +1,16 @@
-"""Advanced database operations for SQLAlchemy.
+"""Cross-dialect bulk upsert and ``MERGE`` statement compilation for SQLAlchemy.
 
-This module provides high-performance database operations that extend beyond basic CRUD
-functionality. It implements specialized database operations optimized for bulk data
-handling and schema management.
+Provides :class:`OnConflictUpsert`, :class:`MergeStatement`, and :func:`resolve_upsert_strategy`
+for dialect-native bulk upserts across PostgreSQL, CockroachDB, SQLite, DuckDB, MySQL, MariaDB,
+Oracle, Microsoft SQL Server, and Google Cloud Spanner.
 
-The operations module is designed to work seamlessly with SQLAlchemy Core and ORM,
-providing efficient implementations for common database operations patterns.
-
-Features
---------
-- Cross-database ON CONFLICT/ON DUPLICATE KEY UPDATE operations
-- MERGE statement support for Oracle and PostgreSQL 15+
-
-Security
---------
-This module constructs SQL statements using database identifiers (table and column names)
-that MUST come from trusted sources only. All identifiers should originate from:
-
-- SQLAlchemy model metadata (e.g., Model.__table__)
-- Hardcoded strings in application code
-- Validated configuration files
-
-Never pass user input directly as table names, column names, or other SQL identifiers.
-Data values are properly parameterized using bindparam() to prevent SQL injection.
-
-Notes:
-    This module is designed to be database-agnostic where possible, with specialized
-    optimizations for specific database backends where appropriate.
+.. warning::
+    Table and column identifiers passed to these constructs must originate from trusted
+    sources (such as SQLAlchemy model ``__table__`` metadata or static application code).
+    Row values are parameterized via :func:`sqlalchemy.bindparam`.
 
 See Also:
-    - :mod:`sqlalchemy.sql.expression`: SQLAlchemy Core expression language
-    - :mod:`sqlalchemy.orm`: SQLAlchemy ORM functionality
+    - :mod:`advanced_alchemy.repository`: Repository bulk ``upsert_many`` integration
     - :mod:`advanced_alchemy.extensions.litestar`: Litestar framework integration
 """
 
@@ -252,6 +232,7 @@ def compile_merge_postgresql(element: MergeStatement, compiler: "SQLCompiler", *
     if (
         hasattr(dialect, "server_version_info")
         and dialect.server_version_info
+        and isinstance(dialect.server_version_info[0], int)
         and dialect.server_version_info[0] < POSTGRES_MERGE_VERSION
     ):
         msg = "MERGE statement requires PostgreSQL 15 or higher"

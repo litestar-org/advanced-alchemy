@@ -22,6 +22,7 @@ from litestar.testing import TestClient
 from sqlalchemy import ForeignKey, FromClause, Integer, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Mapper, mapped_column, relationship
 
+from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.plugins.init.plugin import signature_namespace_values
 from advanced_alchemy.extensions.litestar.providers import (
@@ -1937,8 +1938,6 @@ def test_litestar_field_e2e_async_sqlite_prototype() -> None:
 
 
 def test_litestar_pagination_max_size_validation_and_openapi() -> None:
-    from advanced_alchemy.exceptions import ImproperConfigurationError
-
     deps = create_filter_dependencies(
         {"pagination_type": "limit_offset", "pagination_max_size": 15},
         DependencyDefaults(default_pagination_size=25),

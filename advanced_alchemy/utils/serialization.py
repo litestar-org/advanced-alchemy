@@ -27,12 +27,13 @@ Example:
         '{"price":"19.99"}'
 """
 
-import datetime
+import datetime  # noqa: ICN001
 import enum
 import json
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections import deque
+from collections.abc import Mapping, Sequence
 from dataclasses import MISSING as DATACLASS_MISSING
 from dataclasses import dataclass
 from dataclasses import fields as dataclass_fields
@@ -52,6 +53,7 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    get_origin,
     overload,
     runtime_checkable,
 )
@@ -79,6 +81,7 @@ from advanced_alchemy.typing import (
     FailFast,
     Struct,
     StructLike,
+    TypeAdapter,
     attrs_nothing,
     convert,
 )
@@ -91,10 +94,9 @@ from advanced_alchemy.utils.dataclass import Empty as DataclassEmpty
 from advanced_alchemy.utils.dataclass import is_dataclass_instance
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from sqlalchemy.engine.row import Row
 
+    from advanced_alchemy._typing import TypeAdapterProtocol
     from advanced_alchemy.filters import StatementFilter
     from advanced_alchemy.repository.typing import ModelT
 
@@ -281,14 +283,27 @@ def convert_date_to_iso(dt: datetime.date) -> str:
     return dt.isoformat()
 
 
-@lru_cache(typed=True)
-def get_type_adapter(f: "type[T]") -> Any:
-    """Caches and returns a pydantic type adapter."""
-    from advanced_alchemy.typing import TypeAdapter
+_FAILFAST_COLLECTION_ORIGINS: tuple[Any, ...] = (list, tuple, set, frozenset, dict, deque, Sequence)
 
-    if PYDANTIC_USE_FAILFAST:
-        return TypeAdapter(Annotated[f, FailFast()])  # pyright: ignore
+
+@lru_cache(typed=True)
+def _build_type_adapter(f: Any) -> "TypeAdapterProtocol[Any]":
+    if PYDANTIC_USE_FAILFAST and get_origin(f) in _FAILFAST_COLLECTION_ORIGINS:
+        return TypeAdapter(cast("Any", Annotated[f, FailFast()]))
     return TypeAdapter(f)
+
+
+@overload
+def get_type_adapter(f: "type[T]") -> "TypeAdapterProtocol[T]": ...
+
+
+@overload
+def get_type_adapter(f: Any) -> "TypeAdapterProtocol[Any]": ...
+
+
+def get_type_adapter(f: Any) -> "TypeAdapterProtocol[Any]":
+    """Caches and returns a pydantic type adapter."""
+    return _build_type_adapter(f)
 
 
 @lru_cache(maxsize=128, typed=True)

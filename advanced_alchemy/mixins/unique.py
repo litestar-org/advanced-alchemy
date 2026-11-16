@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union, cast
 
 from sqlalchemy import ColumnElement, select
 from typing_extensions import Self
@@ -45,7 +45,7 @@ class UniqueMixin:
         key: "tuple[type[Self], Hashable]",
         *args: Any,
         **kwargs: Any,
-    ) -> "tuple[dict[tuple[type[Self], Hashable], Self], Select[tuple[Self]], Optional[Self]]":
+    ) -> "tuple[dict[tuple[type[Self], Hashable], Self], Select[Any], Optional[Self]]":
         if cache is None:
             cache = {}
             setattr(session, "_unique_cache", cache)
@@ -82,7 +82,7 @@ class UniqueMixin:
         if obj:
             return obj
         with cls._prevent_autoflush(session):
-            if (obj := (await session.execute(statement)).scalar_one_or_none()) is None:
+            if (obj := cast("Optional[Self]", (await session.execute(statement)).scalar_one_or_none())) is None:
                 session.add(obj := cls(*args, **kwargs))
         cache[key] = obj
         return obj
@@ -117,7 +117,7 @@ class UniqueMixin:
         if obj:
             return obj
         with cls._prevent_autoflush(session):
-            if (obj := session.execute(statement).scalar_one_or_none()) is None:
+            if (obj := cast("Optional[Self]", session.execute(statement).scalar_one_or_none())) is None:
                 session.add(obj := cls(*args, **kwargs))
         cache[key] = obj
         return obj

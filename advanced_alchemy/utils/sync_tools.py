@@ -1,4 +1,4 @@
-# ruff: noqa: PYI036, SLF001, ARG001
+# ruff: noqa: SLF001, ARG001
 """Utilities for async/sync interoperability in Advanced Alchemy.
 
 This module provides utilities for converting between async and sync functions,

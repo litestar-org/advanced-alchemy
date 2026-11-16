@@ -2,9 +2,7 @@
 CLI & Migrations
 =================
 
-Whenever you add a column or create a new table in Python, your SQL database needs a migration script to apply that change safely.
-
-Advanced Alchemy includes a terminal tool called ``alchemy`` (plus ``litestar database`` and ``flask database`` when using web frameworks) that wraps Alembic so you can create migrations, upgrade databases, and export seed data with one command.
+Advanced Alchemy provides the ``alchemy`` CLI (along with ``litestar database`` and ``flask database`` in framework integrations) for generating and applying Alembic migrations, checking schema drift, and exporting or loading fixture data.
 
 Installation
 ------------
@@ -43,7 +41,7 @@ Installation
 Pointing the CLI at Your Database Config
 ----------------------------------------
 
-Tell ``alchemy`` where your database config lives once in ``pyproject.toml`` (recommended), with an environment variable, or with ``--config`` on the command line:
+Configure the target database configuration path in ``pyproject.toml`` (recommended), via ``ALCHEMY_CONFIG``, or with ``--config``:
 
 .. tab-set::
 
@@ -85,7 +83,7 @@ Common Flags
    :widths: 28 72
 
    * - Flag
-     - What It Does
+     - Description
    * - ``-c``, ``--config``
      - Import path (``myapp.db:alchemy_config``) to your config or app plugin.
    * - ``--validate-config``
@@ -98,7 +96,7 @@ Common Flags
 Adding Commands to Your Own Click App
 -------------------------------------
 
-Already have a custom project CLI built with Click? Attach Advanced Alchemy's migration commands directly to your group:
+Attach Advanced Alchemy's migration commands to an existing Click command group with ``add_migration_commands``:
 
 .. code-block:: python
 
@@ -120,8 +118,8 @@ Already have a custom project CLI built with Click? Attach Advanced Alchemy's mi
 Next Steps
 ----------
 
-* :doc:`cli_commands` — Step-by-step commands for creating migrations, checking drift, and exporting fixtures.
-* :doc:`/reference/cli` — Full list of ``alchemy`` commands and flags.
+* :doc:`cli_commands`: Commands for generating migrations, checking schema drift, and exporting fixtures.
+* :doc:`/reference/cli`: Full ``alchemy`` CLI command and option reference.
 
 .. toctree::
     :titlesonly:

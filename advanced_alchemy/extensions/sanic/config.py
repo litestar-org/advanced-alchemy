@@ -10,7 +10,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, cast
 
-from sanic import HTTPResponse, Request, Sanic
+from sanic import Request, Sanic
+from sanic.response import BaseHTTPResponse
 from sqlalchemy import Engine
 from sqlalchemy.exc import OperationalError
 
@@ -202,14 +203,14 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
             if hasattr(self.app.ctx, self.session_maker_key):  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
                 delattr(self.app.ctx, self.session_maker_key)  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType,reportOptionalMemberAccess]
 
-        @self.app.middleware("request")  # type: ignore[misc,untyped-decorator]  # pyright: ignore[reportUnknownMemberType]
+        @self.app.middleware("request")  # pyright: ignore[reportUnknownMemberType]
         async def on_request(request: Request) -> None:  # pyright: ignore[reportUnusedFunction]
             session = cast("Optional[AsyncSession]", getattr(request.ctx, self.session_key, None))
             if session is None:
                 setattr(request.ctx, self.session_key, self.get_session())
 
-        @self.app.middleware("response")  # type: ignore[misc,untyped-decorator]
-        async def on_response(request: Request, response: HTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
+        @self.app.middleware("response")  # pyright: ignore[reportUnknownMemberType]
+        async def on_response(request: Request, response: BaseHTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
             session = cast("Optional[AsyncSession]", getattr(request.ctx, self.session_key, None))
             if session is not None:
                 await self.session_handler(session=session, request=request, response=response)
@@ -236,7 +237,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
         return super().create_session_maker()
 
     async def session_handler(
-        self, session: "AsyncSession", request: "Request", response: "HTTPResponse"
+        self, session: "AsyncSession", request: "Request", response: "BaseHTTPResponse"
     ) -> None:  # pragma: no cover
         """Handles the session after a request is processed.
 
@@ -247,7 +248,7 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 The database session.
             request (sanic.Request):
                 The incoming HTTP request.
-            response (sanic.HTTPResponse):
+            response (sanic.response.BaseHTTPResponse):
                 The outgoing HTTP response.
         """
         try:
@@ -257,12 +258,12 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 await session.commit()
             else:
                 await session.rollback()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
         finally:
             try:
                 await session.close()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("Session close failed during cleanup", exc_info=True)
             with contextlib.suppress(AttributeError, KeyError):
                 delattr(request.ctx, self.session_key)
@@ -414,14 +415,14 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         async def on_shutdown(_: Any) -> None:  # pyright: ignore[reportUnusedFunction]
             await self.on_shutdown()
 
-        @self.app.middleware("request")  # type: ignore[misc,untyped-decorator]  # pyright: ignore[reportUnknownMemberType]
+        @self.app.middleware("request")  # pyright: ignore[reportUnknownMemberType]
         async def on_request(request: Request) -> None:  # pyright: ignore[reportUnusedFunction]
             session = cast("Optional[Session]", getattr(request.ctx, self.session_key, None))
             if session is None:
                 setattr(request.ctx, self.session_key, self.get_session())
 
-        @self.app.middleware("response")  # type: ignore[misc,untyped-decorator]
-        async def on_response(request: Request, response: HTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
+        @self.app.middleware("response")  # pyright: ignore[reportUnknownMemberType]
+        async def on_response(request: Request, response: BaseHTTPResponse) -> None:  # pyright: ignore[reportUnusedFunction]
             session = cast("Optional[Session]", getattr(request.ctx, self.session_key, None))
             if session is not None:
                 await self.session_handler(session=session, request=request, response=response)
@@ -448,7 +449,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
         return super().create_session_maker()
 
     async def session_handler(
-        self, session: "Session", request: "Request", response: "HTTPResponse"
+        self, session: "Session", request: "Request", response: "BaseHTTPResponse"
     ) -> None:  # pragma: no cover
         """Handles the session after a request is processed.
 
@@ -459,7 +460,7 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 The database session.
             request (sanic.Request):
                 The incoming HTTP request.
-            response (sanic.HTTPResponse):
+            response (sanic.response.BaseHTTPResponse):
                 The outgoing HTTP response.
         """
         loop = asyncio.get_event_loop()
@@ -470,12 +471,12 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 await loop.run_in_executor(None, session.commit)
             else:
                 await loop.run_in_executor(None, session.rollback)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
         finally:
             try:
                 await loop.run_in_executor(None, session.close)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("Session close failed during cleanup", exc_info=True)
             with contextlib.suppress(AttributeError, KeyError):
                 delattr(request.ctx, self.session_key)

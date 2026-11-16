@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 from collections.abc import Iterable, Sequence
 from typing import Any, List, Optional, Union, cast, overload
 from unittest.mock import create_autospec
@@ -82,7 +82,7 @@ class SQLAlchemyAsyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemyAsyn
     def __init__(
         self,
         *,
-        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
+        statement: Union[Select[Any], StatementLambdaElement, None] = None,
         session: Union[AsyncSession, async_scoped_session[AsyncSession]],
         model_type: Optional[type[ModelT]] = None,
         auto_expunge: bool = False,
@@ -161,7 +161,7 @@ class SQLAlchemyAsyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemyAsyn
         item_id: PrimaryKeyType,
         *,
         auto_expunge: Optional[bool] = None,
-        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
+        statement: Union[Select[Any], StatementLambdaElement, None] = None,
         id_attribute: Union[str, InstrumentedAttribute[Any], None] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
@@ -178,7 +178,7 @@ class SQLAlchemyAsyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemyAsyn
         item_id: PrimaryKeyType,
         *,
         auto_expunge: Optional[bool] = None,
-        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
+        statement: Union[Select[Any], StatementLambdaElement, None] = None,
         id_attribute: Union[str, InstrumentedAttribute[Any], None] = None,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -193,7 +193,7 @@ class SQLAlchemyAsyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemyAsyn
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
-        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
+        statement: Union[Select[Any], StatementLambdaElement, None] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -207,7 +207,7 @@ class SQLAlchemyAsyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemyAsyn
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
-        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
+        statement: Union[Select[Any], StatementLambdaElement, None] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -479,7 +479,7 @@ class SQLAlchemyAsyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemyAsyn
     async def get_many_and_count(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
+        statement: Union[Select[Any], StatementLambdaElement, None] = None,
         auto_expunge: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
@@ -496,7 +496,7 @@ class SQLAlchemyAsyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemyAsyn
     async def list_and_count(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Union[Select[tuple[ModelT]], StatementLambdaElement, None] = None,
+        statement: Union[Select[Any], StatementLambdaElement, None] = None,
         auto_expunge: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
@@ -588,10 +588,10 @@ class SQLAlchemyAsyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemyAsyn
         self,
         result: List[ModelT],
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
-        before: Optional[datetime.datetime] = None,
-        after: Optional[datetime.datetime] = None,
-        on_or_before: Optional[datetime.datetime] = None,
-        on_or_after: Optional[datetime.datetime] = None,
+        before: Optional[dt.datetime] = None,
+        after: Optional[dt.datetime] = None,
+        on_or_before: Optional[dt.datetime] = None,
+        on_or_after: Optional[dt.datetime] = None,
     ) -> List[ModelT]:
         return InMemoryFilterEvaluator.filter_on_datetime_field(
             result,

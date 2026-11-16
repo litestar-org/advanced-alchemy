@@ -1,25 +1,16 @@
-"""SQLAlchemy filter constructs for advanced query operations.
+"""SQLAlchemy statement filter constructs for repositories and services.
 
-This module provides a comprehensive collection of filter datastructures designed to
-enhance SQLAlchemy query construction. It implements type-safe, reusable filter patterns
-for common database query operations.
-
-Features:
-    Type-safe filter construction, datetime range filtering, collection-based filtering,
-    pagination support, search operations, and customizable ordering.
-
-Note:
-    All filter classes implement the :class:`StatementFilter` ABC, ensuring consistent
-    interface across different filter types.
-
-See Also:
-    - :class:`sqlalchemy.sql.expression.Select`: Core SQLAlchemy select expression
-    - :class:`sqlalchemy.orm.Query`: SQLAlchemy ORM query interface
-    - :class:`~advanced_alchemy.base.BasicAttributes`: Base model definitions
-
+Provides :class:`StatementFilter` implementations for pagination (:class:`LimitOffset`),
+ordering (:class:`OrderBy`), datetime ranges (:class:`BeforeAfter`, :class:`OnBeforeAfter`),
+collection membership (:class:`CollectionFilter`, :class:`NotInCollectionFilter`, :class:`ChoicesFilter`),
+nullability (:class:`NullFilter`, :class:`NotNullFilter`), boolean and comparison checks
+(:class:`BooleanFilter`, :class:`ComparisonFilter`), substring search (:class:`SearchFilter`,
+:class:`NotInSearchFilter`), correlated subqueries (:class:`ExistsFilter`, :class:`NotExistsFilter`,
+:class:`RelationshipFilter`), logical groups (:class:`AndGroup`, :class:`OrGroup`,
+:class:`LogicalFilterGroup`), and structured JSON filter payloads (:class:`MultiFilter`).
 """
 
-import datetime
+import datetime as dt
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Collection, Iterable, Sequence
@@ -254,9 +245,9 @@ class BeforeAfter(StatementFilter):
 
     field_name: FilterFieldName
     """Field name, model attribute, or func expression."""
-    before: Optional[datetime.datetime]
+    before: Optional[dt.datetime]
     """Filter results where field is earlier than this value."""
-    after: Optional[datetime.datetime]
+    after: Optional[dt.datetime]
     """Filter results where field is later than this value."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
@@ -293,9 +284,9 @@ class OnBeforeAfter(StatementFilter):
 
     field_name: FilterFieldName
     """Field name, model attribute, or func expression."""
-    on_or_before: Optional[datetime.datetime]
+    on_or_before: Optional[dt.datetime]
     """Filter results where field is on or earlier than this value."""
-    on_or_after: Optional[datetime.datetime]
+    on_or_after: Optional[dt.datetime]
     """Filter results where field is on or later than this value."""
 
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:

@@ -130,7 +130,7 @@ async def dump_tables(
 
     console = get_console()
 
-    def _statement(model: "type[DeclarativeBase]") -> "Select[tuple[DeclarativeBase]]":
+    def _statement(model: "type[DeclarativeBase]") -> "Select[Any]":
         return (
             select(model)
             .options(lazyload("*"))
@@ -164,7 +164,7 @@ async def dump_tables(
         with session as _session:
             for model in models:
                 _announce(model)
-                rows = _session.execute(_statement(model)).scalars()
+                rows: Iterable[DeclarativeBase] = _session.execute(_statement(model)).scalars()
                 _report(
                     write_fixture_sync(
                         dump_dir,
@@ -184,10 +184,10 @@ async def dump_tables(
                 statement = _statement(model)
                 records: Union[Iterable[dict[str, Any]], AsyncIterator[dict[str, Any]]]
                 if _session.get_bind(mapper=model).dialect.supports_server_side_cursors:
-                    streamed = await _session.stream_scalars(statement)
+                    streamed: AsyncIterator[DeclarativeBase] = await _session.stream_scalars(statement)
                     records = (model_to_dict(row) async for row in streamed)
                 else:
-                    buffered = await _session.scalars(statement)
+                    buffered: Iterable[DeclarativeBase] = await _session.scalars(statement)
                     records = (model_to_dict(row) for row in buffered)
                 _report(
                     await write_fixture_async(

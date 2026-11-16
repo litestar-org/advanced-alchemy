@@ -2,12 +2,12 @@
 FastAPI Services and Filter Depends
 ===================================
 
-FastAPI routes use ``Depends(...)`` to inject database sessions, services, and query parameters. Advanced Alchemy's ``AdvancedAlchemy`` extension builds these ``Depends`` callables for you and adds pagination, search, sorting, and date-range parameters straight into FastAPI's Swagger UI.
+The ``AdvancedAlchemy`` extension builds FastAPI ``Depends(...)`` providers for SQLAlchemy sessions, services, and OpenAPI-documented pagination, search, sort, and date-range query filters.
 
 Injecting Sessions and Services
 -------------------------------
 
-Use ``alchemy.provide_session()`` when a route needs a raw SQLAlchemy session, or ``alchemy.provide_service(ServiceClass)`` when you want a ready-to-use service:
+Use ``alchemy.provide_session()`` to inject a SQLAlchemy session directly, or ``alchemy.provide_service(ServiceClass)`` to inject a bound service instance:
 
 .. tab-set::
 
@@ -107,6 +107,6 @@ Pass a ``FilterConfig`` dictionary to ``alchemy.provide_filters(...)`` to genera
 Related Guides
 --------------
 
-* :doc:`/usage/frameworks/fastapi` — FastAPI extension setup and complete runnable example.
-* :doc:`/usage/frameworks/fastapi_storage` — Uploading files and connecting multiple databases.
-* :doc:`/reference/extensions/fastapi/index` — FastAPI extension API reference.
+* :doc:`/usage/frameworks/fastapi`: FastAPI extension setup and complete runnable example.
+* :doc:`/usage/frameworks/fastapi_storage`: Uploading files and connecting multiple databases.
+* :doc:`/reference/extensions/fastapi/index`: FastAPI extension API reference.

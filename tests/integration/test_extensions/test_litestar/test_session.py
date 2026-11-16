@@ -5,7 +5,7 @@ work correctly across all supported database backends.
 """
 
 import asyncio
-import datetime
+import datetime as dt
 import uuid
 from collections.abc import AsyncGenerator, Generator
 from functools import partial
@@ -414,7 +414,7 @@ async def test_async_session_backend_delete_expired(
     if getattr(async_session.bind.dialect, "name", "") == "mock":
         pytest.skip("Mock engine cannot test real database operations")
 
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = dt.datetime.now(dt.timezone.utc)
     test_session_model = async_session_backend.model
 
     # Create mix of expired and active sessions
@@ -427,7 +427,7 @@ async def test_async_session_backend_delete_expired(
             session_obj = test_session_model(
                 session_id=sid,
                 data=b"expired",
-                expires_at=now - datetime.timedelta(hours=1),
+                expires_at=now - dt.timedelta(hours=1),
             )
             db_session.add(session_obj)
         await db_session.commit()

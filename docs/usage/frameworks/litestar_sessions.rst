@@ -2,25 +2,25 @@
 Litestar Database and Server Sessions
 =====================================
 
-This guide covers two kinds of "sessions" in Litestar:
+This guide covers two distinct session layers in Litestar:
 
-1. **Database sessions**: The SQLAlchemy connection used by your routes to read and save rows during a request.
-2. **Server-side user sessions**: Keeping logged-in user state (like shopping carts or auth data) inside a database table instead of Redis.
+1. **Database sessions**: Per-request SQLAlchemy ``Session`` or ``AsyncSession`` instances used by repositories and services.
+2. **Server-side HTTP sessions and key-value stores**: Persisting Litestar server-side session payloads and store entries in a SQL table instead of Redis.
 
 Per-Request Database Sessions
 -----------------------------
 
-When ``SQLAlchemyPlugin`` is registered, Litestar injects a database session under the ``db_session`` parameter name. You can control when changes commit by setting ``before_send_handler`` on your config:
+When ``SQLAlchemyPlugin`` is registered, Litestar injects a database session under the ``db_session`` parameter name. Control transaction commits by setting ``before_send_handler`` on your config:
 
-* ``"autocommit"`` saves changes automatically when a route returns a normal ``2xx`` response and rolls back on errors.
-* ``"autocommit_include_redirects"`` also commits when a route returns a ``3xx`` redirect (useful for HTML form submissions).
+* ``"autocommit"`` commits automatically when a route returns a ``2xx`` response and rolls back on errors.
+* ``"autocommit_include_redirects"`` also commits when a route returns a ``3xx`` redirect (such as after HTML form submissions).
 
-Need a session outside a web request, such as in a startup hook or background script? Open one directly with ``async with config.get_session() as db_session:``.
+Outside an HTTP request (such as in a startup hook or background task), open a session directly with ``async with config.get_session() as db_session:``.
 
 Connecting Multiple Databases
 -----------------------------
 
-To talk to both a main database and an analytics database in one Litestar app, pass a list of configs with unique ``session_dependency_key``, ``engine_dependency_key``, and ``bind_key`` names:
+To configure multiple databases in one Litestar application, pass a list of configs with unique ``session_dependency_key``, ``engine_dependency_key``, and ``bind_key`` names:
 
 .. code-block:: python
 
@@ -43,7 +43,7 @@ To talk to both a main database and an analytics database in one Litestar app, p
 Storing User Sessions in Your Database
 --------------------------------------
 
-Instead of running a separate Redis server just for user login cookies or rate-limit counters, you can store them in your SQL database using ``SQLAlchemyStore`` or ``SQLAlchemyAsyncSessionBackend``:
+Persist server-side session payloads, rate-limit counters, or general key-value entries in SQL using ``SQLAlchemyStore`` or ``SQLAlchemyAsyncSessionBackend``:
 
 .. tab-set::
 
@@ -83,11 +83,11 @@ Instead of running a separate Redis server just for user login cookies or rate-l
             assert issubclass(UserSessionModel, SessionModelMixin)
             assert SQLAlchemyAsyncSessionBackend is not None
 
-Both approaches use native database upserts and include a ``delete_expired()`` helper to clear old session rows on a schedule.
+Both backends use native database upserts and expose ``delete_expired()`` for removing expired rows from scheduled jobs or lifecycle hooks.
 
 Related Guides
 --------------
 
-* :doc:`/usage/frameworks/litestar` — Core Litestar plugin, DTOs, and controllers.
-* :doc:`/usage/frameworks/litestar_storage` — Uploading files with ``StoredObject``.
-* :doc:`/reference/extensions/litestar/store` — Store and session backend API reference.
+* :doc:`/usage/frameworks/litestar`: Core Litestar plugin, DTOs, and controllers.
+* :doc:`/usage/frameworks/litestar_storage`: Uploading files with ``StoredObject``.
+* :doc:`/reference/extensions/litestar/store`: Store and session backend API reference.

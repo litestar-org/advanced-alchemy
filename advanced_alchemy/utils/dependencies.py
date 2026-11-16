@@ -4,7 +4,7 @@ These primitives are framework-agnostic and reused by framework
 ``advanced_alchemy.extensions`` provider modules.
 """
 
-import datetime
+import datetime as dt
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
@@ -98,9 +98,9 @@ _ORDERED_PYTHON_TYPES: tuple[type[Any], ...] = (
     int,
     float,
     Decimal,
-    datetime.datetime,
-    datetime.date,
-    datetime.time,
+    dt.datetime,
+    dt.date,
+    dt.time,
 )
 
 
@@ -485,9 +485,9 @@ def _infer_column_type_and_ops(column_type: Any, *, nullable: bool) -> tuple[Any
 
 _PYTHON_TYPE_OPS: dict[Any, tuple[FilterOperator, ...]] = {
     UUID: ("eq", "ne", "in"),
-    datetime.datetime: ("eq", "ne", "gt", "ge", "lt", "le", "in"),
-    datetime.date: ("eq", "ne", "gt", "ge", "lt", "le", "in"),
-    datetime.time: ("eq", "ne", "gt", "ge", "lt", "le", "in"),
+    dt.datetime: ("eq", "ne", "gt", "ge", "lt", "le", "in"),
+    dt.date: ("eq", "ne", "gt", "ge", "lt", "le", "in"),
+    dt.time: ("eq", "ne", "gt", "ge", "lt", "le", "in"),
     int: ("eq", "ne", "gt", "ge", "lt", "le", "in"),
     float: ("eq", "ne", "gt", "ge", "lt", "le", "in"),
     Decimal: ("eq", "ne", "gt", "ge", "lt", "le", "in"),
@@ -495,9 +495,9 @@ _PYTHON_TYPE_OPS: dict[Any, tuple[FilterOperator, ...]] = {
 
 _SA_TYPE_TABLE: tuple[tuple[Any, Optional[type[Any]], tuple[FilterOperator, ...]], ...] = (
     (Uuid, UUID, ("eq", "ne", "in")),
-    (DateTime, datetime.datetime, ("eq", "ne", "gt", "ge", "lt", "le", "in")),
-    (Date, datetime.date, ("eq", "ne", "gt", "ge", "lt", "le", "in")),
-    (Time, datetime.time, ("eq", "ne", "gt", "ge", "lt", "le", "in")),
+    (DateTime, dt.datetime, ("eq", "ne", "gt", "ge", "lt", "le", "in")),
+    (Date, dt.date, ("eq", "ne", "gt", "ge", "lt", "le", "in")),
+    (Time, dt.time, ("eq", "ne", "gt", "ge", "lt", "le", "in")),
     ((Integer, SAFloat, Numeric), None, ("eq", "ne", "gt", "ge", "lt", "le", "in")),
     (String, str, ("eq", "ne", "contains", "startswith", "endswith", "in")),
 )

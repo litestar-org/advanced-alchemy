@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import os
 import warnings
 from pathlib import Path
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 warnings.filterwarnings("ignore", category=SAWarning)
 
 DOCS_DIR = Path(__file__).resolve().parent
-current_year = datetime.datetime.now(tz=datetime.timezone.utc).year
+current_year = dt.datetime.now(tz=dt.timezone.utc).year
 project = "Advanced Alchemy"
 copyright = f"{current_year}, Litestar Organization"
 release = os.getenv("_ADVANCED_ALCHEMY_DOCS_BUILD_VERSION", __version__.rsplit(".")[0])

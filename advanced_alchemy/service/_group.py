@@ -112,9 +112,13 @@ def _resolve_annotation(raw_annotation: Any, globalns: dict[str, Any], localns: 
 
 
 def _get_own_raw_annotations(cls: type[Any]) -> dict[str, Any]:
-    """Return annotations declared directly on ``cls`` across Python versions (including PEP 649)."""
+    """Return annotations declared directly on ``cls`` across Python versions (including PEP 649).
+
+    Reads ``cls.__dict__`` directly rather than calling ``typing_extensions.get_annotations`` to
+    preserve compatibility with ``typing-extensions>=4.0.0`` and Python 3.9 inheritance semantics.
+    """
     if "__annotations__" in cls.__dict__:
-        return dict(cls.__dict__["__annotations__"])
+        return dict(cls.__dict__["__annotations__"])  # noqa: RUF063
     if _ANNOTATIONLIB is not None and ("__annotate__" in cls.__dict__ or "__annotate_func__" in cls.__dict__):
         try:
             return dict(_ANNOTATIONLIB.get_annotations(cls, format=_ANNOTATIONLIB.Format.FORWARDREF))

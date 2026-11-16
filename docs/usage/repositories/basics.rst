@@ -2,30 +2,30 @@
 Repository Basics
 =================
 
-Think of a **Repository** as a dedicated helper for one database table. The Repository Pattern separates SQLAlchemy queries and persistence logic from your HTTP routes and business rules behind a uniform collection-like interface (``add``, ``get``, ``get_many``, ``update``, ``delete``), keeping query logic reusable and straightforward to test—including against mock repositories. Instead of repeating raw ``select()`` and ``session.add()`` calls everywhere, you bind a repository to your ``Post`` model once and call its methods directly.
+A **Repository** encapsulates SQLAlchemy queries and persistence logic for one mapped model behind a uniform interface (``add``, ``get``, ``get_many``, ``update``, ``delete``), keeping query logic reusable and testable against SQL or in-memory mock repositories.
 
 Choosing a Repository Class
 ---------------------------
 
-Every async repository has an identical synchronous version—pick async when using ``AsyncSession`` and sync when using ``Session``:
+Every async repository has a synchronous counterpart; use the async classes with ``AsyncSession`` and the sync classes with ``Session``:
 
 .. list-table::
    :header-rows: 1
    :widths: 38 62
 
    * - Repository Type
-     - When to Use It
+     - Description
    * - ``SQLAlchemyAsyncRepository`` / ``SQLAlchemySyncRepository``
-     - Everyday tables: create, read, update, delete, filter, paginate, and bulk upsert.
+     - Standard model CRUD, filtering, pagination, and bulk upserts.
    * - ``SQLAlchemyAsyncSlugRepository`` / ``SQLAlchemySyncSlugRepository``
-     - Tables with URL slugs (like ``/posts/hello-world``): generates unique slugs and looks up rows by slug.
+     - Models with URL slugs (such as ``/posts/hello-world``): generates unique slugs and queries rows by slug.
    * - ``SQLAlchemyAsyncQueryRepository`` / ``SQLAlchemySyncQueryRepository``
-     - Custom ``SELECT`` queries, joins, and ``GROUP BY`` summaries that don't map to a single model.
+     - Arbitrary ``SELECT`` statements, joins, and ``GROUP BY`` aggregations not bound to a single model.
 
 Creating and Reading Rows
 -------------------------
 
-Suppose our blog has ``Post`` and ``Tag`` tables. Subclass ``SQLAlchemyAsyncRepository`` and set ``model_type = Post``:
+Subclass ``SQLAlchemyAsyncRepository`` and set ``model_type`` to your mapped model class:
 
 .. code-block:: python
 
@@ -77,7 +77,7 @@ When missing records are expected, use ``get_or_none`` to return ``None`` instea
 Saving, Updating, and Deleting in Bulk
 --------------------------------------
 
-When importing a batch of drafts or publishing ten posts at once, looping one query at a time is slow. Use the ``*_many`` methods to handle whole batches in a single step:
+Use ``add_many``, ``update_many``, and ``delete_many`` to persist, modify, or remove batches of records without per-row round-trips:
 
 .. tab-set::
 
@@ -128,9 +128,7 @@ When importing a batch of drafts or publishing ten posts at once, looping one qu
 Syncing External Data with Upserts
 ----------------------------------
 
-Imagine syncing posts from an external CMS: some posts are brand new, and others are updates to rows already in your database.
-
-``upsert_many`` inserts new rows and updates matching ones in one call. Behind the scenes, it uses your database's native upsert command (such as ``ON CONFLICT DO UPDATE`` on PostgreSQL/SQLite or ``MERGE`` on Oracle/SQL Server) whenever ``match_fields`` points to a unique column, and safely falls back to a standard lookup-and-save flow otherwise:
+``upsert_many`` inserts new rows and updates matching records in a single call. When ``match_fields`` targets a unique or primary-key constraint, it compiles a native dialect upsert (``ON CONFLICT DO UPDATE`` on PostgreSQL, CockroachDB, SQLite, and DuckDB, ``ON DUPLICATE KEY UPDATE`` on MySQL and MariaDB, ``MERGE`` on Oracle and SQL Server, or ``INSERT OR UPDATE`` on Spanner) and falls back to an ORM select-then-save path otherwise:
 
 .. code-block:: python
 
@@ -149,7 +147,7 @@ Imagine syncing posts from an external CMS: some posts are brand new, and others
 URL Slugs and Summary Queries
 -----------------------------
 
-Need to look up tags by URL slug (like ``/tags/python``) or run a custom ``GROUP BY`` count? Use the slug or query repository:
+Use ``SQLAlchemyAsyncSlugRepository`` for slug-based lookups (such as ``/tags/python``) and ``SQLAlchemyAsyncQueryRepository`` for arbitrary ``SELECT`` and ``GROUP BY`` statements:
 
 .. tab-set::
 
@@ -188,5 +186,5 @@ Need to look up tags by URL slug (like ``/tags/python``) or run a custom ``GROUP
 Next Steps
 ----------
 
-* :doc:`filtering` — Search text, filter by lists or null values, and paginate results.
-* :doc:`/reference/repository` — Complete repository API reference.
+* :doc:`filtering`: Search text, filter by collections or nullability, and paginate results.
+* :doc:`/reference/repository`: Complete repository API reference.

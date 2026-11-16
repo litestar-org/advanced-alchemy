@@ -39,6 +39,7 @@ from sqlalchemy.orm import (
     WriteOnlyMapped,
 )
 from sqlalchemy.sql.expression import ColumnClause, Label
+from sqlalchemy.types import UserDefinedType
 from typing_extensions import TypeAlias, TypeVar
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
@@ -568,6 +569,9 @@ def parse_type_from_element(elem: ElementType, orm_descriptor: InspectionAttr) -
     """
 
     if isinstance(elem, Column):
+        if isinstance(elem.type, UserDefinedType) and elem.type.python_type is object:
+            msg = f"Column type {elem.type!r} does not define a specific python_type"
+            raise NotImplementedError(msg)
         if elem.nullable:
             return FieldDefinition.from_annotation(Optional[elem.type.python_type])
         return FieldDefinition.from_annotation(elem.type.python_type)

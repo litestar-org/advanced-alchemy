@@ -1,6 +1,6 @@
 """Unit tests for shared dependency-injection utilities."""
 
-import datetime
+import datetime as dt
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Optional, cast
@@ -237,9 +237,9 @@ class _GridTestPost(_GridTestBase):
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     is_published: Mapped[bool] = mapped_column()
     status: Mapped[StatusChoice] = mapped_column(SAEnum(StatusChoice))
-    published_date: Mapped[datetime.date] = mapped_column(Date)
-    published_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    publish_time: Mapped[datetime.time] = mapped_column(Time)
+    published_date: Mapped[dt.date] = mapped_column(Date)
+    published_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    publish_time: Mapped[dt.time] = mapped_column(Time)
     author_id: Mapped[UUID] = mapped_column(ForeignKey("grid_meta_author.id"))
     author: Mapped[_GridTestAuthor] = relationship(back_populates="posts")
 
@@ -255,9 +255,9 @@ class _GridTestPost(_GridTestBase):
         ("is_published", ("eq",), bool),
         ("status", ("eq", "ne", "in"), StatusChoice),
         ("id", ("eq", "ne", "in"), UUID),
-        ("published_date", ("eq", "ne", "gt", "ge", "lt", "le", "in"), datetime.date),
-        ("published_at", ("eq", "ne", "gt", "ge", "lt", "le", "in", "is_null"), datetime.datetime),
-        ("publish_time", ("eq", "ne", "gt", "ge", "lt", "le", "in"), datetime.time),
+        ("published_date", ("eq", "ne", "gt", "ge", "lt", "le", "in"), dt.date),
+        ("published_at", ("eq", "ne", "gt", "ge", "lt", "le", "in", "is_null"), dt.datetime),
+        ("publish_time", ("eq", "ne", "gt", "ge", "lt", "le", "in"), dt.time),
         ("author.name", ("eq", "ne", "contains", "startswith", "endswith", "in"), str),
         ("author.country", ("eq", "ne", "contains", "startswith", "endswith", "in", "is_null"), str),
     ],

@@ -2,9 +2,7 @@
 Litestar File and Object Storage
 =================================
 
-Uploading user avatars, invoices, or attachments usually creates headaches: if a database commit fails after uploading to S3, you get orphaned files; if a row is deleted, someone forgets to delete the file in storage.
-
-``StoredObject`` and ``FileObject`` keep your files and database rows in lockstep—uploading files when your transaction commits and deleting old files automatically when rows are removed or replaced.
+``StoredObject`` and ``FileObject`` coordinate object storage writes with SQLAlchemy session lifecycle events, writing pending files when transactions commit and deleting superseded or removed files automatically.
 
 Uploading Files in Three Steps
 ------------------------------
@@ -60,6 +58,6 @@ Complete Runnable Example
 Related Guides
 --------------
 
-* :doc:`/usage/frameworks/litestar` — Core Litestar setup and controllers.
-* :doc:`/usage/modeling/security_and_storage_types` — Storage backends (local disk, S3, GCS, Azure).
-* :doc:`/reference/types` — ``StoredObject`` and ``FileObject`` API reference.
+* :doc:`/usage/frameworks/litestar`: Core Litestar setup and controllers.
+* :doc:`/usage/modeling/security_and_storage_types`: Storage backends (local disk, S3, GCS, Azure).
+* :doc:`/reference/types`: ``StoredObject`` and ``FileObject`` API reference.

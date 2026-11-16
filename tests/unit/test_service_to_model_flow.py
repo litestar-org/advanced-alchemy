@@ -7,7 +7,7 @@ input normalization before repository delegation.
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import warnings
 from typing import Any, Generic, Optional, TypeVar, Union, cast
 from unittest.mock import AsyncMock, MagicMock
@@ -41,7 +41,7 @@ class MockModel(UUIDAuditBase):
     """Minimal SQLAlchemy model for service flow tests."""
 
     name: Mapped[str] = mapped_column(String(length=100))  # pyright: ignore[reportUninitializedInstanceVariable]
-    dob: Mapped[Optional[datetime.date]] = mapped_column(nullable=True)  # pyright: ignore[reportUninitializedInstanceVariable]
+    dob: Mapped[Optional[dt.date]] = mapped_column(nullable=True)  # pyright: ignore[reportUninitializedInstanceVariable]
 
 
 class MockRepository(SQLAlchemyAsyncRepository[MockModel]):
@@ -231,11 +231,11 @@ async def test_update_pydantic_per_call_schema_dump_config_includes_unset_defaul
     """Per-call schema_dump_config should include Pydantic defaults when exclude_unset is disabled."""
     from pydantic import BaseModel
 
-    default_dob = datetime.date(2000, 1, 1)
+    default_dob = dt.date(2000, 1, 1)
 
     class AuthorSchema(BaseModel):
         name: str
-        dob: datetime.date = default_dob
+        dob: dt.date = default_dob
 
     service = TrackingService()
 
@@ -255,11 +255,11 @@ async def test_update_pydantic_class_schema_dump_config_includes_unset_defaults(
     """Service class schema_dump_config should apply when no per-call override is passed."""
     from pydantic import BaseModel
 
-    default_dob = datetime.date(2000, 1, 1)
+    default_dob = dt.date(2000, 1, 1)
 
     class AuthorSchema(BaseModel):
         name: str
-        dob: datetime.date = default_dob
+        dob: dt.date = default_dob
 
     class IncludeUnsetDefaultsService(TrackingService):
         schema_dump_config = SchemaDumpConfig(exclude_unset=False)
@@ -278,11 +278,11 @@ async def test_update_pydantic_per_call_schema_dump_config_does_not_leak() -> No
     """A per-call schema_dump_config override should not affect later service calls."""
     from pydantic import BaseModel
 
-    default_dob = datetime.date(2000, 1, 1)
+    default_dob = dt.date(2000, 1, 1)
 
     class AuthorSchema(BaseModel):
         name: str
-        dob: datetime.date = default_dob
+        dob: dt.date = default_dob
 
     service = TrackingService()
     first_existing = MockModel()
@@ -462,11 +462,11 @@ def test_sync_update_pydantic_per_call_schema_dump_config_includes_unset_default
     """Sync services should honor per-call schema_dump_config for Pydantic defaults."""
     from pydantic import BaseModel
 
-    default_dob = datetime.date(2000, 1, 1)
+    default_dob = dt.date(2000, 1, 1)
 
     class AuthorSchema(BaseModel):
         name: str
-        dob: datetime.date = default_dob
+        dob: dt.date = default_dob
 
     service = TrackingSyncService()
 

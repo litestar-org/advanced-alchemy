@@ -5,7 +5,7 @@
 #   "orjson"
 # ]
 # ///
-import datetime
+import datetime as dt
 from typing import Annotated, Optional
 from uuid import UUID
 
@@ -36,13 +36,13 @@ author_router = APIRouter()
 class AuthorModel(base.UUIDBase):
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[Optional[datetime.date]]
+    dob: Mapped[Optional[dt.date]]
 
 
 class Author(BaseModel):
     id: Optional[UUID]
     name: str
-    dob: Optional[datetime.date]
+    dob: Optional[dt.date]
 
 
 class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):

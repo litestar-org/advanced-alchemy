@@ -7,7 +7,7 @@ and MERGE operations work correctly across different database backends.
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from collections.abc import AsyncGenerator, Generator
 from typing import TYPE_CHECKING, Any, Optional, cast
 
@@ -329,7 +329,7 @@ def upsert_values() -> dict[str, Any]:
         "key": "test_key",
         "namespace": "test_ns",
         "value": "test_value",
-        "created_at": datetime.datetime.now().isoformat(),
+        "created_at": dt.datetime.now().isoformat(),
     }
 
 
@@ -341,7 +341,7 @@ def updated_values() -> dict[str, Any]:
         "key": "test_key",
         "namespace": "test_ns",
         "value": "updated_value",
-        "created_at": datetime.datetime.now().isoformat(),
+        "created_at": dt.datetime.now().isoformat(),
     }
 
 
@@ -836,7 +836,7 @@ async def test_merge_statement_with_oracle_postgres(
         "key": "new_key",
         "namespace": "new_ns",
         "value": "new_value",
-        "created_at": datetime.datetime.now().isoformat(),
+        "created_at": dt.datetime.now().isoformat(),
     }
 
     merge_stmt2, additional_params2 = OnConflictUpsert.create_merge_upsert(
@@ -967,7 +967,7 @@ async def test_store_upsert_integration(
         "key": "cache_key",
         "namespace": "default",
         "value": "cached_data",
-        "expires_at": (datetime.datetime.now() + datetime.timedelta(hours=1)).isoformat(),
+        "expires_at": (dt.datetime.now() + dt.timedelta(hours=1)).isoformat(),
     }
 
     # CockroachDB and Spanner require the primary key to be provided for upserts
@@ -1033,7 +1033,7 @@ async def test_store_upsert_integration(
         # Update with new expiration
         updated_store = store_data.copy()
         updated_store["value"] = "updated_cache"
-        updated_store["expires_at"] = (datetime.datetime.now() + datetime.timedelta(hours=2)).isoformat()
+        updated_store["expires_at"] = (dt.datetime.now() + dt.timedelta(hours=2)).isoformat()
 
         if OnConflictUpsert.supports_native_upsert(dialect_name):
             upsert_stmt2 = OnConflictUpsert.create_upsert(
@@ -1045,7 +1045,7 @@ async def test_store_upsert_integration(
             )
         else:
             upsert_stmt2, additional_params2 = OnConflictUpsert.create_merge_upsert(  # type: ignore[assignment]
-                table=TestStoreModel.__table__,  # type: ignore[arg-type]  # type: ignore[arg-type]
+                table=TestStoreModel.__table__,  # type: ignore[arg-type]
                 values=updated_store,
                 conflict_columns=["key", "namespace"],
                 update_columns=["value", "expires_at"],
@@ -1094,7 +1094,7 @@ async def test_store_upsert_integration(
         # Update with new expiration
         updated_store = store_data.copy()
         updated_store["value"] = "updated_cache"
-        updated_store["expires_at"] = (datetime.datetime.now() + datetime.timedelta(hours=2)).isoformat()
+        updated_store["expires_at"] = (dt.datetime.now() + dt.timedelta(hours=2)).isoformat()
 
         if OnConflictUpsert.supports_native_upsert(dialect_name):
             upsert_stmt2 = OnConflictUpsert.create_upsert(
@@ -1106,7 +1106,7 @@ async def test_store_upsert_integration(
             )
         else:
             upsert_stmt2, additional_params2 = OnConflictUpsert.create_merge_upsert(  # type: ignore[assignment]
-                table=TestStoreModel.__table__,  # type: ignore[arg-type]  # type: ignore[arg-type]
+                table=TestStoreModel.__table__,  # type: ignore[arg-type]
                 values=updated_store,
                 conflict_columns=["key", "namespace"],
                 update_columns=["value", "expires_at"],

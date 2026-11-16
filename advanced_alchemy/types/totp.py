@@ -1,12 +1,13 @@
 """TOTP shared-secret column type with pyotp-backed helpers."""
 
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.encrypted_string import EncryptedString, EncryptionBackend, FernetBackend
 from advanced_alchemy.typing import PYOTP_INSTALLED
 
 if TYPE_CHECKING:
+    from pyotp.totp import TOTP
     from sqlalchemy.engine import Dialect
 
 __all__ = ("TOTPProvider", "TOTPSecret", "generate_totp_secret")
@@ -74,10 +75,10 @@ class TOTPProvider:
         """The decrypted base32 secret."""
         return self._secret
 
-    def _totp(self) -> Any:
-        import pyotp
+    def _totp(self) -> "TOTP":
+        from pyotp.totp import TOTP
 
-        return pyotp.TOTP(
+        return TOTP(
             self._secret,
             digits=self._digits,
             digest=self._digest,
@@ -91,7 +92,7 @@ class TOTPProvider:
         Returns:
             The zero-padded code for the current time step.
         """
-        return cast("str", self._totp().now())
+        return self._totp().now()
 
     def verify(self, code: str, valid_window: int = 1) -> bool:
         """Verify a code, tolerating ``valid_window`` ticks of clock drift each way.
@@ -103,7 +104,7 @@ class TOTPProvider:
         Returns:
             True if the code is valid within the window, False otherwise.
         """
-        return cast("bool", self._totp().verify(code, valid_window=valid_window))
+        return self._totp().verify(code, valid_window=valid_window)
 
     def provisioning_uri(self, name: "Optional[str]" = None, issuer_name: "Optional[str]" = None) -> str:
         """Return an ``otpauth://`` provisioning URI for QR enrollment.
@@ -115,7 +116,7 @@ class TOTPProvider:
         Returns:
             The provisioning URI string.
         """
-        return cast("str", self._totp().provisioning_uri(name=name, issuer_name=issuer_name or self._issuer))
+        return self._totp().provisioning_uri(name=name, issuer_name=issuer_name or self._issuer)
 
 
 class TOTPSecret(EncryptedString):

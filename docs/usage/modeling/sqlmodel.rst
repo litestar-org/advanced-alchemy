@@ -2,7 +2,7 @@
 SQLModel Integration
 ====================
 
-If your team already writes tables with `SQLModel <https://sqlmodel.tiangolo.com/>`_, you can plug those models straight into Advanced Alchemy repositories without rewriting your model classes.
+`SQLModel <https://sqlmodel.tiangolo.com/>`_ classes configured with ``table=True`` work directly with Advanced Alchemy repositories and services.
 
 Defining and Querying a SQLModel Table
 --------------------------------------
@@ -44,7 +44,7 @@ Mark your SQLModel class with ``table=True`` and point a repository at it just l
         finally:
             await engine.dispose()
 
-Good to Know
-------------
+Metadata Configuration
+----------------------
 
-SQLModel uses its own ``SQLModel.metadata`` registry instead of Advanced Alchemy's ``orm_registry``. Pass ``metadata=SQLModel.metadata`` in your framework config so migrations and table creation helpers target your SQLModel tables.
+SQLModel registers tables on ``SQLModel.metadata`` rather than Advanced Alchemy's ``orm_registry.metadata``. Pass ``metadata=SQLModel.metadata`` to ``SQLAlchemyAsyncConfig`` or ``SQLAlchemySyncConfig`` so Alembic migrations and ``create_all`` target your SQLModel tables.

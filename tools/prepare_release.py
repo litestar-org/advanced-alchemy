@@ -1,6 +1,6 @@
 import asyncio
 import contextlib
-import datetime
+import datetime as dt
 import os
 import pathlib
 import re
@@ -57,7 +57,7 @@ class PRInfo:
     cc_type: str
     number: int
     closes: list[int]
-    created_at: datetime.datetime
+    created_at: dt.datetime
     description: str
     user: RepoUser
 
@@ -217,7 +217,7 @@ class _Thing:
             url=f"https://github.com/litestar-org/advanced-alchemy/pull/{pr.number}",
             closes=closes_issues,
             title=pr.title,
-            created_at=datetime.datetime.strptime(pr.created_at, "%Y-%m-%dT%H:%M:%S%z"),
+            created_at=dt.datetime.strptime(pr.created_at, "%Y-%m-%dT%H:%M:%S%z"),
             description=pr.body,
             user=pr.user,
         )
@@ -246,7 +246,7 @@ class _Thing:
         first_prs: list[PRInfo] = []
 
         async def is_user_first_commit(user_login: str) -> None:
-            first_pr = sorted(prs_by_user_login[user_login], key=lambda p: p.created_at)[0]
+            first_pr = min(prs_by_user_login[user_login], key=lambda p: p.created_at)
             res = await self._request_with_retries(
                 self._api_client,
                 "GET",
@@ -381,7 +381,7 @@ def build_gh_release_notes(release_info: ReleaseInfo) -> str:
 def build_changelog_entry(release_info: ReleaseInfo, interactive: bool = False) -> str:
     doc = ChangelogEntryWriter()
     with doc.directive("changelog", release_info.version):
-        doc.add_line(f":date: {datetime.datetime.now(tz=datetime.timezone.utc).date().isoformat()}")
+        doc.add_line(f":date: {dt.datetime.now(tz=dt.timezone.utc).date().isoformat()}")
         doc.add_line("")
         change_types = {"fix", "feat"}
         for prs in release_info.pull_requests.values():

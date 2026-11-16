@@ -10,7 +10,7 @@ import msgspec
 from litestar import Litestar, Request, get, post
 from litestar.di import NamedDependency
 from litestar.middleware.session.server_side import ServerSideSessionConfig
-from litestar.params import FromPath
+from litestar.params import FromPath, JSONBody
 from litestar.stores.registry import StoreRegistry
 from litestar.testing import TestClient
 from sqlalchemy.orm import Mapped, mapped_column
@@ -99,7 +99,7 @@ async def get_session_value(
     dependencies=providers.create_service_dependencies(AttachmentService, "attachments_service"),
 )
 async def upload_attachment(
-    data: dict[str, str],
+    data: JSONBody[dict[str, str]],
     attachments_service: NamedDependency[AttachmentService],
 ) -> AttachmentSchema:
     """Persist an attachment record and its StoredObject file payload."""

@@ -2,9 +2,7 @@
 Portable Column Types
 =====================
 
-Different SQL databases use different column types for UUIDs, UTC timestamps, JSON, and AI vector embeddings—especially when you test against SQLite locally and deploy to PostgreSQL, MySQL, or Oracle in production.
-
-Advanced Alchemy's column types automatically pick the best native database type on each engine while keeping your Python types consistent.
+Advanced Alchemy provides custom SQLAlchemy ``TypeDecorator`` implementations that compile to dialect-appropriate SQL types across SQLite, PostgreSQL, CockroachDB, MySQL, MariaDB, Oracle, DuckDB, SQL Server, and Spanner while preserving consistent Python types.
 
 Common Column Types at a Glance
 -------------------------------
@@ -14,17 +12,17 @@ Common Column Types at a Glance
    :widths: 28 72
 
    * - Column Type
-     - What It Does
+     - Description
    * - ``DateTimeUTC``
      - Converts datetimes to UTC before saving, returns timezone-aware UTC datetimes on read, and supports configurable fractional-second precision (``DateTimeUTC(fsp=6)``).
    * - ``GUID``
-     - Stores Python ``UUID`` objects natively on PostgreSQL, CockroachDB, DuckDB, MSSQL, and Oracle, or compactly on SQLite/MySQL.
+     - Stores Python ``UUID`` objects using native ``UUID`` / ``UNIQUEIDENTIFIER`` types on PostgreSQL, CockroachDB, DuckDB, and SQL Server, ``RAW(16)`` or ``CHAR(32)`` on Oracle, and ``BINARY(16)`` or ``CHAR(32)`` on SQLite and MySQL.
    * - ``BigIntIdentity``
-     - Uses 64-bit ``BIGINT`` in production and ``INTEGER`` on SQLite so auto-incrementing IDs work in local tests.
+     - Compiles to 64-bit ``BIGINT`` on server databases and ``INTEGER`` on SQLite so auto-incrementing primary keys work across dialects.
    * - ``JsonB``
-     - Uses fast binary JSON on PostgreSQL, CockroachDB, and Oracle, and standard ``JSON`` everywhere else.
+     - Compiles to binary JSON on PostgreSQL, CockroachDB (``JSONB``), and Oracle (``ORA_JSONB``), and standard ``JSON`` on other dialects.
    * - ``Vector(dim=...)``
-     - Stores float embeddings for similarity search (``pgvector``, Oracle 23ai+, CockroachDB, DuckDB, and SQLite fallback).
+     - Stores float vector embeddings using native vector columns on PostgreSQL (``pgvector``), CockroachDB, and Oracle 23ai+, with ``JSON`` array storage on SQLite, DuckDB, and other dialects.
 
 Examples by Type
 ----------------
@@ -114,5 +112,5 @@ By default, SQLAlchemy's ``Enum`` persists member **names** (such as ``"ACTIVE"`
 Related Guides
 --------------
 
-* :doc:`security_and_storage_types` — Field encryption, password hashing, authenticator codes, and uploaded files.
-* :doc:`/reference/types` — Full API reference for ``advanced_alchemy.types``.
+* :doc:`security_and_storage_types`: Field encryption, password hashing, authenticator codes, and file storage.
+* :doc:`/reference/types`: Full API reference for ``advanced_alchemy.types``.

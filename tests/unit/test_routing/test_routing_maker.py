@@ -5,7 +5,7 @@ Tests the factory classes that create routing sessions.
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -608,7 +608,7 @@ def test_sync_routing_session_executes_listeners(tmp_path: Path) -> None:
         __tablename__ = "audit_items_sync"
         id: Mapped[int] = mapped_column(primary_key=True)
         name: Mapped[str] = mapped_column()
-        updated_at: Mapped[datetime.datetime | None] = mapped_column(DateTimeUTC(timezone=True), nullable=True)
+        updated_at: Mapped[dt.datetime | None] = mapped_column(DateTimeUTC(timezone=True), nullable=True)
 
     db_file = tmp_path / "routing_sync_test.db"
     routing = RoutingConfig(
@@ -620,7 +620,7 @@ def test_sync_routing_session_executes_listeners(tmp_path: Path) -> None:
     assert isinstance(maker, RoutingSyncSessionMaker)
     Base.metadata.create_all(maker.primary_engine)
 
-    initial_time = datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)
+    initial_time = dt.datetime(2020, 1, 1, tzinfo=dt.timezone.utc)
     with maker() as session:
         item = AuditModel(id=1, name="initial", updated_at=initial_time)
         session.add(item)
@@ -648,7 +648,7 @@ async def test_async_routing_session_executes_listeners(tmp_path: Path) -> None:
         __tablename__ = "audit_items_async"
         id: Mapped[int] = mapped_column(primary_key=True)
         name: Mapped[str] = mapped_column()
-        updated_at: Mapped[datetime.datetime | None] = mapped_column(DateTimeUTC(timezone=True), nullable=True)
+        updated_at: Mapped[dt.datetime | None] = mapped_column(DateTimeUTC(timezone=True), nullable=True)
 
     db_file = tmp_path / "routing_async_test.db"
     routing = RoutingConfig(
@@ -662,7 +662,7 @@ async def test_async_routing_session_executes_listeners(tmp_path: Path) -> None:
     async with maker.primary_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    initial_time = datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)
+    initial_time = dt.datetime(2020, 1, 1, tzinfo=dt.timezone.utc)
     async with maker() as session:
         item = AuditModel(id=1, name="initial", updated_at=initial_time)
         session.add(item)

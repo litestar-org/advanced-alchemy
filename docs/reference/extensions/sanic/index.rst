@@ -2,7 +2,7 @@
 Sanic
 =====
 
-API Reference for the ``Sanic`` extensions module.
+Sanic and ``sanic-ext`` SQLAlchemy extension, request-context session middleware, and configuration classes.
 
 .. py:module:: advanced_alchemy.extensions.sanic
 

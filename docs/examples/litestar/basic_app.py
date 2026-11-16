@@ -7,7 +7,7 @@ from uuid import UUID
 import msgspec
 from litestar import Controller, Litestar, get, post
 from litestar.di import NamedDependency
-from litestar.params import SkipValidation
+from litestar.params import JSONBody, SkipValidation
 from litestar.testing import TestClient
 from sqlalchemy.orm import Mapped
 
@@ -92,7 +92,7 @@ class AuthorController(Controller):
     async def create_author(
         self,
         authors_service: NamedDependency[AuthorService],
-        data: AuthorCreate,
+        data: JSONBody[AuthorCreate],
     ) -> AuthorSchema:
         """Create a new author record."""
         obj = await authors_service.create(data, auto_commit=True)

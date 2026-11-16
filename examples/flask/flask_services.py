@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import datetime  # noqa: TC003
+import datetime as dt  # noqa: TC003
 import os
 from uuid import UUID  # noqa: TC003
 
@@ -24,7 +24,7 @@ class Author(base.UUIDBase):
     """Author model."""
 
     name: Mapped[str]
-    dob: Mapped[datetime.date | None]
+    dob: Mapped[dt.date | None]
     books: Mapped[list[Book]] = relationship(back_populates="author", lazy="noload")
 
 
@@ -52,7 +52,7 @@ class AuthorSchema(Struct):
 
     name: str
     id: UUID | None = None
-    dob: datetime.date | None = None
+    dob: dt.date | None = None
 
 
 app = Flask(__name__)

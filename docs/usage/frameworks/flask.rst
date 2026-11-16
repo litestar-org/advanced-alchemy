@@ -2,7 +2,7 @@
 Flask Integration
 =================
 
-Advanced Alchemy plugs into both classic synchronous Flask apps and ``async def`` Flask routes—giving every request a managed SQLAlchemy session, adding a ``jsonify()`` helper onto your services, and registering ``flask database`` migration commands automatically.
+Advanced Alchemy integrates with synchronous WSGI Flask applications and ``async def`` Flask routes, providing app-context SQLAlchemy sessions on ``flask.g``, a ``jsonify()`` service response helper, and ``flask database`` CLI commands.
 
 What's Included for Flask
 -------------------------
@@ -12,10 +12,10 @@ What's Included for Flask
    :widths: 28 46 26
 
    * - Feature
-     - What It Gives You
+     - Capabilities
      - Reference
    * - **App-Context Sessions**
-     - Reuses one session per Flask request and closes or commits it cleanly on teardown.
+     - Binds one session per Flask app or request context and commits or closes it on teardown.
      - :doc:`API </reference/extensions/flask/index>`
    * - **FlaskServiceMixin**
      - Adds ``service.jsonify(...)`` to return paginated ``msgspec`` or Pydantic schemas directly from routes.
@@ -24,7 +24,7 @@ What's Included for Flask
      - Works with standard sync engines, async engines, and multiple databases via ``bind_key``.
      - :doc:`API </reference/extensions/flask/index>`
    * - **Flask CLI**
-     - Registers ``flask database init``, ``upgrade``, and ``downgrade`` commands automatically.
+     - Registers ``flask database init``, ``make-migrations``, ``upgrade``, and ``downgrade`` commands.
      - :doc:`CLI Guide </usage/cli>`
 
 Installation
@@ -133,7 +133,7 @@ Sync, Async, and Multi-Database Setup
 Using Services and JSON Responses
 ---------------------------------
 
-Mix ``FlaskServiceMixin`` into your service class so route handlers can paginate, convert rows to schemas, and return a Flask JSON ``Response`` in one clean step:
+Mix ``FlaskServiceMixin`` into your service class to serialize paginated ``msgspec`` or Pydantic schemas directly into a Flask JSON ``Response``:
 
 .. code-block:: python
 
@@ -189,7 +189,7 @@ Running Migrations with Flask CLI
 .. code-block:: bash
 
     flask database init
-    flask database revision --autogenerate -m "add users table"
+    flask database make-migrations -m "add users table"
     flask database upgrade
 
 See :doc:`/reference/extensions/flask/index` for full API signatures.

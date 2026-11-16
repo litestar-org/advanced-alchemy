@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import uuid
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
@@ -155,7 +155,7 @@ def test_app_state(config_cls: type[SQLAlchemySyncConfig], monkeypatch: MonkeyPa
 
 def test_namespace_resolution() -> None:
     @get("/")
-    async def handler(param: FromQuery[datetime.datetime], other_param: FromQuery[uuid.UUID]) -> None:
+    async def handler(param: FromQuery[dt.datetime], other_param: FromQuery[uuid.UUID]) -> None:
         return None
 
     Litestar([handler])

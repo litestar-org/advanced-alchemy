@@ -2,16 +2,14 @@
 Advanced Repository
 ===================
 
-Most tables have a single ``id`` column and simple single-row updates. When you run into trickier real-world cases—join tables with two-part keys, concurrent checkout updates, or clearing old drafts in one query—repositories handle them cleanly.
+Repositories support composite primary keys, row-level ``SELECT ... FOR UPDATE`` locking, conditional bulk deletes, and cross-dialect exception translation.
 
 .. _composite-primary-keys:
 
 Composite Primary Keys
 ----------------------
 
-Some tables identify a row by **two columns together** rather than a single ``id``—for example, a ``UserRole`` table keyed by ``(user_id, role_id)``.
-
-You can pass composite keys to ``get`` or ``delete_many`` as a dictionary (recommended because column names are explicit) or as an ordered tuple:
+Models keyed by multiple primary-key columns (such as ``(user_id, role_id)`` on ``UserRole``) accept composite keys in ``get`` and ``delete_many`` either as a column-name dictionary (recommended) or as an ordered tuple:
 
 .. tab-set::
 
@@ -90,7 +88,7 @@ You can pass composite keys to ``get`` or ``delete_many`` as a dictionary (recom
 Row Locking
 -----------
 
-Imagine two requests trying to deduct credits from the same user account at the exact same instant. Passing ``with_for_update=True`` locks that row in the database until your transaction finishes so the second request waits its turn:
+Pass ``with_for_update=True`` (or a dictionary of ``FOR UPDATE`` options such as ``nowait`` and ``of``) to acquire a row-level lock for the duration of the current transaction:
 
 .. code-block:: python
 
@@ -109,7 +107,7 @@ Imagine two requests trying to deduct credits from the same user account at the 
 Deleting Rows by Condition
 --------------------------
 
-Need to purge every unpublished draft in one query without loading each post into Python first? Call ``delete_where``:
+Call ``delete_where`` to delete matching rows directly by SQL predicate without loading every row first:
 
 .. code-block:: python
 
@@ -117,13 +115,14 @@ Need to purge every unpublished draft in one query without loading each post int
         repo = AdvancedPostRepository(session=db_session)
         return await repo.delete_where(AdvancedPost.published.is_(False))
 
-Catching Database Errors Cleanly
---------------------------------
+Handling Database Exceptions
+----------------------------
 
-Every database driver raises different low-level error codes when a unique constraint or foreign key fails. Repositories automatically translate native database errors across PostgreSQL, SQLite, MySQL, MariaDB, DuckDB, CockroachDB, Oracle, MSSQL, and Spanner into consistent Python exceptions:
+Database drivers raise backend-specific DBAPI error codes when unique or foreign-key constraints fail. Repositories translate native constraint errors across PostgreSQL, CockroachDB, SQLite, MySQL, MariaDB, DuckDB, Oracle, SQL Server, and Spanner into typed Python exceptions:
 
 .. code-block:: python
 
+    from typing import Optional
     from advanced_alchemy.exceptions import DuplicateKeyError, ForeignKeyError, NotFoundError
 
 
@@ -131,7 +130,7 @@ Every database driver raises different low-level error codes when a unique const
         db_session: AsyncSession,
         user_id: int,
         role_id: int,
-    ) -> AdvancedUserRole | None:
+    ) -> Optional[AdvancedUserRole]:
         repo = AdvancedUserRoleRepository(session=db_session)
         try:
             return await repo.add(AdvancedUserRole(user_id=user_id, role_id=role_id), auto_commit=True)

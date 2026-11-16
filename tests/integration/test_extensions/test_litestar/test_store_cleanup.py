@@ -1,6 +1,6 @@
 """Verify expired-store cleanup against SQLite with both session configurations."""
 
-import datetime
+import datetime as dt
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Optional, Union
@@ -25,7 +25,7 @@ class CleanupStoreModel(StoreModelMixin):
     __tablename__ = "cleanup_store"
 
     # Use a nullable custom column to exercise the store API's non-expiring values.
-    expires_at: Mapped[Optional[datetime.datetime]] = mapped_column(  # type: ignore[assignment]
+    expires_at: Mapped[Optional[dt.datetime]] = mapped_column(  # type: ignore[assignment]
         DateTimeUTC(), nullable=True, index=True
     )
 
@@ -52,13 +52,13 @@ async def cleanup_config(
 async def test_delete_expired_preserves_other_entries(
     cleanup_config: Union[SQLAlchemySyncConfig, SQLAlchemyAsyncConfig], namespace: str
 ) -> None:
-    now = datetime.datetime(2026, 9, 7, tzinfo=datetime.timezone.utc)
+    now = dt.datetime(2026, 9, 7, tzinfo=dt.timezone.utc)
     rows = [
         CleanupStoreModel(
-            key="expired", namespace=namespace, value=b"expired", expires_at=now - datetime.timedelta(seconds=1)
+            key="expired", namespace=namespace, value=b"expired", expires_at=now - dt.timedelta(seconds=1)
         ),
         CleanupStoreModel(key="boundary", namespace=namespace, value=b"boundary", expires_at=now),
-        CleanupStoreModel(key="live", namespace=namespace, value=b"live", expires_at=now + datetime.timedelta(hours=1)),
+        CleanupStoreModel(key="live", namespace=namespace, value=b"live", expires_at=now + dt.timedelta(hours=1)),
         CleanupStoreModel(key="permanent", namespace=namespace, value=b"permanent", expires_at=None),
         CleanupStoreModel(key="other", namespace="other", value=b"other", expires_at=now),
         CleanupStoreModel(key="nested", namespace=f"{namespace}_child", value=b"nested", expires_at=now),

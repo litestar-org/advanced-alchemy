@@ -328,3 +328,64 @@ def test_nested_collection_preserves_parent_container_ownership(
     assert data["cleaned"] == [], f"Child attempted to stop parent-owned services: {data['cleaned']}"
     assert data["owner"] != parent_owner
     assert control_file.read_text(encoding="utf-8") == parent_owner
+
+
+def test_schema_manager_build_schema_key_isolates_shared_dialect_urls() -> None:
+    """Schema cache keys must separate distinct containers sharing a dialect name."""
+    from sqlalchemy import create_engine
+
+    from tests.integration.repository_fixtures import SchemaManager
+
+    engine_18c = create_engine("oracle+oracledb://user:secret@127.0.0.1:1521/?service_name=XEPDB1")
+    engine_23ai = create_engine("oracle+oracledb://user:secret@127.0.0.1:1522/?service_name=FREEPDB1")
+    try:
+        key_18c = SchemaManager.build_schema_key("uuid_sync", engine_18c, "gw0")
+        key_23ai = SchemaManager.build_schema_key("uuid_sync", engine_23ai, "gw0")
+    finally:
+        engine_18c.dispose()
+        engine_23ai.dispose()
+
+    assert key_18c != key_23ai
+    assert "secret" not in key_18c
+    assert "secret" not in key_23ai
+
+
+def test_integration_pytest_configure_ignores_missing_optional_plugins() -> None:
+    """Integration plugin loading tolerates UsageError raised by newer pytest on missing optional plugins."""
+    from tests.integration.conftest import pytest_configure as integration_pytest_configure
+
+    class FakePluginManager:
+        def has_plugin(self, name: str) -> bool:
+            return False
+
+        def import_plugin(self, name: str) -> None:
+            raise pytest.UsageError(f'Error importing plugin "{name}"')
+
+    config = MagicMock()
+    config.pluginmanager = FakePluginManager()
+
+    integration_pytest_configure(config)
+
+
+def test_root_pytest_collection_modifyitems_syncs_node_id() -> None:
+    """Root collection hook synchronizes pytest 9.2 NodeId storage with loadgroup _nodeid suffixes."""
+    from _pytest import nodes
+
+    from tests.conftest import pytest_collection_modifyitems
+
+    coerce_node_id: Any = getattr(nodes, "coerce_node_id", None)
+    if coerce_node_id is None:
+        pytest.skip("Requires pytest 9.2 NodeId")
+
+    class FakeItem:
+        def __init__(self, initial: str, raw: str) -> None:
+            self._id = coerce_node_id(initial)
+            self._nodeid = raw
+
+        @property
+        def nodeid(self) -> str:
+            return str(self._id)
+
+    item: Any = FakeItem("tests/integration/test_a.py::test_x[pg]", "tests/integration/test_a.py::test_x[pg]@pg_1")
+    pytest_collection_modifyitems([item])
+    assert item.nodeid == "tests/integration/test_a.py::test_x[pg]@pg_1"

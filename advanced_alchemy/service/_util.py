@@ -4,7 +4,7 @@ RepositoryService object is generic on the domain model type which
 should be a SQLAlchemy model.
 """
 
-import datetime
+import datetime as dt
 from collections.abc import Sequence
 from enum import Enum
 from functools import lru_cache, partial
@@ -51,9 +51,9 @@ __all__ = ("ResultConverter", "configure_service_subclass", "find_filter", "reso
 
 DEFAULT_TYPE_DECODERS = [  # pyright: ignore[reportUnknownVariableType]
     (lambda x: x is UUID, lambda t, v: t(v.hex)),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-    (lambda x: x is datetime.datetime, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-    (lambda x: x is datetime.date, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-    (lambda x: x is datetime.time, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    (lambda x: x is dt.datetime, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    (lambda x: x is dt.date, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    (lambda x: x is dt.time, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
     (lambda x: x is Enum, lambda t, v: t(v.value)),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
 ]
 
@@ -420,7 +420,8 @@ def _convert_attrs_item(item: Any, schema_type: "type[ModelDTOT]", field_names: 
     """
     item_dict = schema_dump(item)
     filtered_dict = {k: v for k, v in item_dict.items() if k in field_names}
-    return schema_type(**filtered_dict)  # type: ignore[return-value]
+    converted: Any = schema_type(**filtered_dict)
+    return cast("ModelDTOT", converted)
 
 
 def _create_pagination(items: Any, filters: Any, total: "Optional[int]") -> "OffsetPagination[Any]":

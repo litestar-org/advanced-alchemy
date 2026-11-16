@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 from collections.abc import Awaitable, Generator
 from typing import Any, Callable, TypeVar
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -22,10 +22,10 @@ F = TypeVar("F", bound=Callable[..., Any])
 class MockDateTime:
     """Mock datetime class for testing time-dependent behavior."""
 
-    def __init__(self, fixed_time: datetime.datetime) -> None:
+    def __init__(self, fixed_time: dt.datetime) -> None:
         self.fixed_time = fixed_time
 
-    def now(self, tz: datetime.timezone = datetime.timezone.utc) -> datetime.datetime:
+    def now(self, tz: dt.timezone = dt.timezone.utc) -> dt.datetime:
         return self.fixed_time
 
 
@@ -110,9 +110,9 @@ def sync_store(mock_sync_config: MagicMock) -> SQLAlchemyStore[SQLAlchemySyncCon
 
 def test_store_model_mixin_is_expired_property() -> None:
     """Test the is_expired hybrid property."""
-    now = datetime.datetime.now(datetime.timezone.utc)
-    expired_store = MockStoreModel(expires_at=now - datetime.timedelta(seconds=1))
-    active_store = MockStoreModel(expires_at=now + datetime.timedelta(seconds=10))
+    now = dt.datetime.now(dt.timezone.utc)
+    expired_store = MockStoreModel(expires_at=now - dt.timedelta(seconds=1))
+    active_store = MockStoreModel(expires_at=now + dt.timedelta(seconds=10))
 
     assert expired_store.is_expired is True
     assert active_store.is_expired is False
@@ -451,9 +451,9 @@ async def test_store_expires_in_async(
     async_store: SQLAlchemyStore[SQLAlchemyAsyncConfig], mock_async_session: AsyncMock, monkeypatch: MonkeyPatch
 ) -> None:
     """Test getting expiration time using async store."""
-    now = datetime.datetime.now(datetime.timezone.utc)
-    expires_at = now + datetime.timedelta(seconds=3600)
-    monkeypatch.setattr("advanced_alchemy.extensions.litestar.store.datetime.datetime", MockDateTime(now))
+    now = dt.datetime.now(dt.timezone.utc)
+    expires_at = now + dt.timedelta(seconds=3600)
+    monkeypatch.setattr("advanced_alchemy.extensions.litestar.store.dt.datetime", MockDateTime(now))
 
     # Set up the mock to return the expiration time directly
     mock_result = MagicMock()
@@ -475,10 +475,10 @@ async def test_store_expires_in_sync(
 ) -> None:
     """Test getting expiration time using sync store."""
     key = "test_key"
-    now = datetime.datetime.now(datetime.timezone.utc)
-    expires_at = now + datetime.timedelta(seconds=3600)
+    now = dt.datetime.now(dt.timezone.utc)
+    expires_at = now + dt.timedelta(seconds=3600)
     mock_datetime = MockDateTime(now)
-    monkeypatch.setattr("advanced_alchemy.extensions.litestar.store.datetime.datetime", mock_datetime)
+    monkeypatch.setattr("advanced_alchemy.extensions.litestar.store.dt.datetime", mock_datetime)
     mock_sync_session.execute.return_value.scalar_one_or_none.return_value = expires_at
 
     result = await sync_store_with_mock_async.expires_in(key)

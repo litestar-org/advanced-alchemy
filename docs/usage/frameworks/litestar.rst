@@ -2,7 +2,7 @@
 Litestar Integration
 ====================
 
-Advanced Alchemy is built by the Litestar team and plugs into Litestar with a single ``SQLAlchemyPlugin``. One plugin setup handles database connections, per-request sessions, JSON serialization, error responses, and ``litestar database`` CLI migrations.
+Advanced Alchemy is the official SQLAlchemy integration for Litestar. ``SQLAlchemyPlugin`` configures engine lifecycles, per-request sessions, DTO and msgspec serialization, repository exception handlers, and ``litestar database`` CLI commands.
 
 What's Included for Litestar
 ----------------------------
@@ -12,13 +12,13 @@ What's Included for Litestar
    :widths: 26 48 26
 
    * - Feature
-     - What It Gives You
+     - Capabilities
      - Guide & API
    * - **Plugin & Configs**
      - Starts engines on app startup, opens a session per request, and maps database errors to HTTP responses.
      - :doc:`API </reference/extensions/litestar/plugins>`
    * - **Service & Filter DI**
-     - Injects services and ready-made search/pagination filters straight into controller routes.
+     - Injects services and OpenAPI search, sort, and pagination filters into controller routes.
      - :doc:`Guide <litestar_dtos>` · :doc:`API </reference/extensions/litestar/index>`
    * - **SQLAlchemy DTOs**
      - Auto-generates request/response DTOs from your SQLAlchemy models and ``@property`` fields.
@@ -70,7 +70,7 @@ Installation
 Building an Author API Step by Step
 -----------------------------------
 
-Click through each tab to see how a model, service, controller, and Litestar app fit together:
+Connect a model, repository, service, controller, and ``SQLAlchemyPlugin``:
 
 .. tab-set::
 
@@ -103,7 +103,7 @@ Click through each tab to see how a model, service, controller, and Litestar app
 Auto-Generating DTOs from Models
 --------------------------------
 
-Don't want to write separate ``msgspec`` or Pydantic schemas for simple CRUD endpoints? ``SQLAlchemyDTO`` inspects your model's columns, relationships, and read-only ``@property`` fields automatically:
+``SQLAlchemyDTO`` generates Litestar request and response DTOs directly from SQLAlchemy columns, relationships, and read-only ``@property`` or ``@cached_property`` descriptors:
 
 .. code-block:: python
 
@@ -140,10 +140,10 @@ Complete Runnable App
 More Litestar Guides
 --------------------
 
-* :doc:`litestar_dtos` — Injecting services, OpenAPI query filters, and auto-generated ``SQLAlchemyDTO`` schemas.
-* :doc:`litestar_sessions` — Request transactions, multi-database setups, and server-side session stores.
-* :doc:`litestar_storage` — File uploads and cloud/local object storage.
-* `Litestar SQLAlchemy Docs <https://docs.litestar.dev/latest/usage/databases/sqlalchemy/>`_ — Upstream Litestar framework guide.
+* :doc:`litestar_dtos`: Injecting services, OpenAPI query filters, and auto-generated ``SQLAlchemyDTO`` schemas.
+* :doc:`litestar_sessions`: Request transactions, multi-database setups, and server-side session stores.
+* :doc:`litestar_storage`: File uploads and cloud or local object storage.
+* `Litestar SQLAlchemy Docs <https://docs.litestar.dev/latest/usage/databases/sqlalchemy/>`_: Upstream Litestar framework guide.
 
 .. toctree::
     :titlesonly:

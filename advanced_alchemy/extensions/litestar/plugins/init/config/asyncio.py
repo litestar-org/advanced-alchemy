@@ -121,13 +121,13 @@ def autocommit_handler_maker(
                     await session.commit()
                 else:
                     await session.rollback()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
         finally:
             if session and message["type"] in SESSION_TERMINUS_ASGI_EVENTS:
                 try:
                     await session.close()
-                except Exception:  # noqa: BLE001
+                except Exception:
                     logger.debug("Session close failed during cleanup", exc_info=True)
                 delete_aa_scope_state(scope, session_scope_key)
 

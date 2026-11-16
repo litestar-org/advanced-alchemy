@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 from typing import Annotated, Optional
 from uuid import UUID
 
@@ -31,24 +31,24 @@ class BookModel(base.UUIDAuditBase):
 class AuthorModel(base.UUIDBase):
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[Optional[datetime.date]]
+    dob: Mapped[Optional[dt.date]]
     books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="selectin")
 
 
 class Author(BaseModel):
     id: Optional[UUID] = None
     name: str
-    dob: Optional[datetime.date] = None
+    dob: Optional[dt.date] = None
 
 
 class AuthorCreate(BaseModel):
     name: str
-    dob: Optional[datetime.date] = None
+    dob: Optional[dt.date] = None
 
 
 class AuthorUpdate(BaseModel):
     name: Optional[str] = None
-    dob: Optional[datetime.date] = None
+    dob: Optional[dt.date] = None
 
 
 class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):

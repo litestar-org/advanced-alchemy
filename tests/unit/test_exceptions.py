@@ -244,8 +244,10 @@ def test_wrap_sqlalchemy_exception_ignores_non_string_sqlstate() -> None:
         (1062, "Duplicate entry '1' for key 'uq_table_id'", DuplicateKeyError),
         (
             1452,
-            "Cannot add or update a child row: a foreign key constraint fails "
-            "(`db`.`child`, CONSTRAINT `fk_parent` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`id`))",
+            (
+                "Cannot add or update a child row: a foreign key constraint fails "
+                "(`db`.`child`, CONSTRAINT `fk_parent` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`id`))"
+            ),
             ForeignKeyError,
         ),
     ],
@@ -310,8 +312,10 @@ def test_wrap_sqlalchemy_exception_integrity_error_by_oracle_code(
     ("message", "expected", "expected_detail"),
     [
         (
-            "ORA-00001: unique constraint (APP.UQ_PARENT_NAME) violated\n"
-            "Help: https://docs.oracle.com/error-help/db/ora-00001/",
+            (
+                "ORA-00001: unique constraint (APP.UQ_PARENT_NAME) violated\n"
+                "Help: https://docs.oracle.com/error-help/db/ora-00001/"
+            ),
             DuplicateKeyError,
             "duplicate",
         ),
@@ -511,39 +515,51 @@ def test_wrap_sqlalchemy_exception_integrity_error_by_mssql_number(message: str)
     ("message", "expected", "expected_detail"),
     [
         (
-            f"{_MSSQL_PREFIX}Violation of PRIMARY KEY constraint 'PK__parent__3213E83F6F227CE8'. "
-            "Cannot insert duplicate key in object 'dbo.parent'. The duplicate key value is (1).",
+            (
+                f"{_MSSQL_PREFIX}Violation of PRIMARY KEY constraint 'PK__parent__3213E83F6F227CE8'. "
+                "Cannot insert duplicate key in object 'dbo.parent'. The duplicate key value is (1)."
+            ),
             DuplicateKeyError,
             "duplicate",
         ),
         (
-            f"{_MSSQL_PREFIX}Violation of UNIQUE KEY constraint 'uq_parent_code'. "
-            "Cannot insert duplicate key in object 'dbo.parent'. The duplicate key value is (a).",
+            (
+                f"{_MSSQL_PREFIX}Violation of UNIQUE KEY constraint 'uq_parent_code'. "
+                "Cannot insert duplicate key in object 'dbo.parent'. The duplicate key value is (a)."
+            ),
             DuplicateKeyError,
             "duplicate",
         ),
         (
-            f"{_MSSQL_PREFIX}Cannot insert duplicate key row in object 'dbo.plain' with unique index 'ix_plain_v'. "
-            "The duplicate key value is (1).",
+            (
+                f"{_MSSQL_PREFIX}Cannot insert duplicate key row in object 'dbo.plain' with unique index 'ix_plain_v'. "
+                "The duplicate key value is (1)."
+            ),
             DuplicateKeyError,
             "duplicate",
         ),
         (
-            f'{_MSSQL_PREFIX}The INSERT statement conflicted with the FOREIGN KEY constraint "fk_child_parent". '
-            'The conflict occurred in database "master", table "dbo.parent", column \'id\'. (547) (SQLExecDirectW)',
+            (
+                f'{_MSSQL_PREFIX}The INSERT statement conflicted with the FOREIGN KEY constraint "fk_child_parent". '
+                'The conflict occurred in database "master", table "dbo.parent", column \'id\'. (547) (SQLExecDirectW)'
+            ),
             ForeignKeyError,
             "foreign",
         ),
         (
-            f'{_MSSQL_PREFIX}The DELETE statement conflicted with the REFERENCE constraint "fk_child_parent". '
-            'The conflict occurred in database "master", table "dbo.child", column \'parent_id\'. '
-            "(547) (SQLExecDirectW)",
+            (
+                f'{_MSSQL_PREFIX}The DELETE statement conflicted with the REFERENCE constraint "fk_child_parent". '
+                'The conflict occurred in database "master", table "dbo.child", column \'parent_id\'. '
+                "(547) (SQLExecDirectW)"
+            ),
             ForeignKeyError,
             "foreign",
         ),
         (
-            f'{_MSSQL_PREFIX}The INSERT statement conflicted with the CHECK constraint "ck_child_qty". '
-            'The conflict occurred in database "master", table "dbo.child", column \'qty\'. (547) (SQLExecDirectW)',
+            (
+                f'{_MSSQL_PREFIX}The INSERT statement conflicted with the CHECK constraint "ck_child_qty". '
+                'The conflict occurred in database "master", table "dbo.child", column \'qty\'. (547) (SQLExecDirectW)'
+            ),
             IntegrityError,
             "check",
         ),
@@ -798,8 +814,10 @@ def test_wrap_sqlalchemy_exception_spanner_real_already_exists() -> None:
             DuplicateKeyError,
         ),
         (
-            'insert or update on table "child" violates foreign key constraint "fk_parent"\n'
-            'DETAIL:  Key (parent_id)=(1) is not present in table "parent".',
+            (
+                'insert or update on table "child" violates foreign key constraint "fk_parent"\n'
+                'DETAIL:  Key (parent_id)=(1) is not present in table "parent".'
+            ),
             ForeignKeyError,
         ),
         ('new row for relation "child" violates check constraint "ck_positive"', IntegrityError),

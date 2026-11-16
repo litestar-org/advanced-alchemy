@@ -2,9 +2,7 @@
 Framework Integrations
 ======================
 
-Instead of manually opening, committing, and closing SQLAlchemy sessions inside every web route, Advanced Alchemy plugs directly into your web framework.
-
-Each integration starts and stops database engines cleanly with your app, gives every incoming request its own session, and re-exports core models, repositories, services, and filters from one place.
+Advanced Alchemy provides first-party web framework integrations that manage engine startup and disposal, configure per-request session lifecycles, and re-export core models, repositories, services, and filters.
 
 At a Glance
 -----------
@@ -27,15 +25,15 @@ At a Glance
      - ``alchemy``
    * - :doc:`Starlette <starlette>`
      - ``AdvancedAlchemy``
-     - ASGI session middleware, sync & async sessions, and multi-database support
+     - ASGI session middleware, lazy ``request.state`` sessions, and multi-database support
      - ``alchemy``
    * - :doc:`Flask <flask>`
      - ``AdvancedAlchemy``
-     - Request-context sessions, sync/async bridge, and ``jsonify()`` service helper
+     - App-context sessions, sync/async bridge, and ``jsonify()`` service helper
      - ``flask database``
    * - :doc:`Sanic <sanic>`
      - ``AdvancedAlchemy``
-     - ``sanic-ext`` dependency injection, ``request.ctx`` sessions, and multi-binds
+     - ``sanic-ext`` dependency injection, per-request ``request.ctx`` sessions, and multi-binds
      - ``alchemy``
 
 Choose Your Framework
@@ -61,19 +59,19 @@ Choose Your Framework
       :link: starlette
       :link-type: doc
 
-      Lightweight ASGI middleware that attaches sync or async sessions to ``request.state`` across single or multiple databases.
+      ASGI middleware that creates lazy per-request sync or async sessions on ``request.state`` across single or multiple databases.
 
     .. grid-item-card:: :octicon:`server` Flask
       :link: flask
       :link-type: doc
 
-      WSGI and async route sessions, ``FlaskServiceMixin`` JSON responses, and built-in ``flask database`` migration commands.
+      App-context WSGI and async route sessions, ``FlaskServiceMixin`` JSON responses, and built-in ``flask database`` migration commands.
 
     .. grid-item-card:: :octicon:`flame` Sanic
       :link: sanic
       :link-type: doc
 
-      Automatic session injection with ``sanic-ext``, lazy ``request.ctx`` sessions, and multi-database bind keys.
+      Automatic session injection with ``sanic-ext``, per-request ``request.ctx`` sessions, and multi-database bind keys.
 
     .. grid-item-card:: :octicon:`book` Extensions API Reference
       :link: /reference/extensions/index

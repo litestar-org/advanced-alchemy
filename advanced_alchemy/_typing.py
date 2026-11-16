@@ -13,7 +13,7 @@ optional-dependency placeholder types.  Public re-exports live in
 import enum
 from dataclasses import dataclass
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any, ClassVar, Final, Optional, Protocol, Union, cast, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Generic, Optional, Protocol, Union, cast, runtime_checkable
 
 from typing_extensions import Literal, TypeVar, dataclass_transform
 
@@ -136,7 +136,24 @@ class BaseModelLike:
         return "{}"
 
 
-class TypeAdapterStub:
+class TypeAdapterProtocol(Protocol[T_co]):
+    """Structural protocol satisfied by Pydantic ``TypeAdapter`` and ``TypeAdapterStub``."""
+
+    def validate_python(
+        self,
+        object: Any,
+        /,
+        *,
+        strict: "Optional[bool]" = ...,
+        from_attributes: "Optional[bool]" = ...,
+        context: "Optional[dict[str, Any]]" = ...,
+        experimental_allow_partial: "Union[bool, Literal['off', 'on', 'trailing-strings']]" = ...,
+    ) -> T_co:
+        """Validate a Python object against the adapted type."""
+        ...
+
+
+class TypeAdapterStub(Generic[T]):
     """Placeholder implementation."""
 
     def __init__(
@@ -159,9 +176,9 @@ class TypeAdapterStub:
         from_attributes: "Optional[bool]" = None,  # noqa: ARG002
         context: "Optional[dict[str, Any]]" = None,  # noqa: ARG002
         experimental_allow_partial: "Union[bool, Literal['off', 'on', 'trailing-strings']]" = False,  # noqa: ARG002
-    ) -> Any:
+    ) -> T:
         """Validate Python object."""
-        return object
+        return cast("T", object)
 
 
 @dataclass
@@ -418,6 +435,7 @@ __all__ = (
     "T",
     "T_co",
     "TypeAdapter",
+    "TypeAdapterProtocol",
     "TypeAdapterStub",
     "UnsetType",
     "UnsetTypeStub",

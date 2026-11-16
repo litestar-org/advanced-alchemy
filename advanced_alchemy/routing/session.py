@@ -21,7 +21,7 @@ from advanced_alchemy.routing.context import (
 
 if TYPE_CHECKING:
     from sqlalchemy import Engine
-    from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
+    from sqlalchemy.ext.asyncio import AsyncEngine
     from sqlalchemy.orm import Mapper
 
     from advanced_alchemy.config.routing import RoutingConfig
@@ -73,7 +73,7 @@ class RoutingSyncSession(Session):
         """
         kwargs.pop("bind", None)
         kwargs.pop("binds", None)
-        self.bind = None
+        self.bind = cast("Any", None)
         super().__init__(**kwargs)
         self._default_engine = default_engine
         self._selectors = selectors
@@ -221,7 +221,6 @@ class RoutingAsyncSession(AsyncSession):
         kwargs.pop("binds", None)
 
         sync_selectors = {name: _SyncEngineSelectorWrapper(selector) for name, selector in selectors.items()}
-        self.bind: Optional[Union[AsyncEngine, AsyncConnection]] = None  # type: ignore[assignment]
         sync_session_class = kwargs.pop("sync_session_class", RoutingSyncSession)
 
         super().__init__(
@@ -231,6 +230,7 @@ class RoutingAsyncSession(AsyncSession):
             default_engine=default_engine.sync_engine,
             **kwargs,
         )
+        self.bind = cast("Any", None)
         self._default_engine = default_engine
         self._selectors = selectors
         self._routing_config = routing_config

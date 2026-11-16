@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import datetime  # noqa: TC003
+import datetime as dt  # noqa: TC003
 from uuid import UUID  # noqa: TC003
 
 from sanic import Sanic
@@ -25,7 +25,7 @@ class AuthorModel(base.UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[datetime.date | None]
+    dob: Mapped[dt.date | None]
     books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
 
 

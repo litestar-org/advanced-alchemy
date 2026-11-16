@@ -17,7 +17,7 @@ Usage:
 import inspect
 import re
 from collections.abc import Iterable
-from typing import Any, Callable, ClassVar, Final, Optional
+from typing import Any, Callable, ClassVar, Final, Optional, TypeVar, Union, cast
 
 from typing_extensions import ParamSpec
 
@@ -42,12 +42,15 @@ _RICH_CLICK_ALIASES_SUPPORTED: Final[bool] = _rich_click_aliases_supported
 __all__ = [
     "BYTE_SIZE",
     "AliasedGroup",
+    "argument",
     "click",
     "command",
     "group",
+    "option",
 ]
 
 P = ParamSpec("P")
+FC = TypeVar("FC", bound="Union[click.Command, Callable[..., Any]]")
 _base_click_group: "type[click.Group]" = click.Group
 
 
@@ -109,7 +112,7 @@ class AliasedGroup(click.Group):
         return canonical_name, cmd, remaining_args
 
 
-class _ByteSizeParamType(click.ParamType):
+class _ByteSizeParamType(click.ParamType):  # pyright: ignore[reportMissingTypeArgument]
     """Click parameter type for byte sizes such as ``1048576``, ``512K``, ``50M``, or ``2GiB``.
 
     The number is a whole number of bytes, optionally followed by ``K``, ``M``, or ``G``
@@ -285,3 +288,29 @@ def command(
         return decorator
 
     return click.command(name=name, cls=target_cls, **attrs)
+
+
+def argument(
+    *param_decls: str,
+    cls: "Optional[type[click.Argument]]" = None,
+    **attrs: Any,
+) -> "Callable[[FC], FC]":
+    """Wrapper around ``click.argument`` preserving typed decorator signatures."""
+
+    if cls is not None:
+        attrs["cls"] = cls
+    decorator: Any = click.argument(*param_decls, **attrs)  # pyright: ignore[reportUnknownMemberType]
+    return cast("Callable[[FC], FC]", decorator)
+
+
+def option(
+    *param_decls: str,
+    cls: "Optional[type[click.Option]]" = None,
+    **attrs: Any,
+) -> "Callable[[FC], FC]":
+    """Wrapper around ``click.option`` preserving typed decorator signatures."""
+
+    if cls is not None:
+        attrs["cls"] = cls
+    decorator: Any = click.option(*param_decls, **attrs)  # pyright: ignore[reportUnknownMemberType]
+    return cast("Callable[[FC], FC]", decorator)

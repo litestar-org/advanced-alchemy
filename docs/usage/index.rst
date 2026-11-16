@@ -2,9 +2,7 @@
 Usage Guide
 ===========
 
-Imagine you are building a blog with **Posts**, **Authors**, and **Tags**. A reader opens your home page, asks for page 2 of published posts, and creates a comment.
-
-Advanced Alchemy organizes that work into three clear steps so your route handlers stay tiny and easy to test:
+Advanced Alchemy separates database access into three layers so route handlers remain concise and testable:
 
 .. raw:: html
 
@@ -13,9 +11,9 @@ Advanced Alchemy organizes that work into three clear steps so your route handle
         <img src="../_static/diagrams/architecture-overview-dark.svg" alt="How Advanced Alchemy Fits Into Your App" class="aa-diagram--dark" />
     </div>
 
-1. **Models** describe what your tables look like in the database (such as a post's title, author, and timestamps).
-2. **Repositories** run SQL queries for one table—adding rows, filtering, sorting, and paginating without repeating query code.
-3. **Services** sit in front of repositories to validate incoming API schemas (Pydantic or Msgspec) and enforce your app's business rules.
+1. **Models** define SQLAlchemy declarative tables with primary keys, audit timestamps, and custom column types.
+2. **Repositories** execute single-model CRUD, filtering, sorting, pagination, and bulk upsert queries.
+3. **Services** wrap repositories to convert between ORM models and typed API schemas (Pydantic, Msgspec, dataclass, ``attrs``, or SQLModel) and apply domain logic.
 
 .. grid:: 1 1 2 2
     :padding: 0
@@ -37,7 +35,7 @@ Advanced Alchemy organizes that work into three clear steps so your route handle
       :link: services
       :link-type: doc
 
-      Keep business rules in one place and convert database rows straight into Pydantic or Msgspec responses.
+      Convert database rows into Pydantic, Msgspec, dataclass, attrs, or SQLModel schemas and centralize domain logic.
 
     .. grid-item-card:: :octicon:`plug` 4. Framework Integrations
       :link: frameworks/index
@@ -45,12 +43,12 @@ Advanced Alchemy organizes that work into three clear steps so your route handle
 
       Connect your services to Litestar, FastAPI, Starlette, Flask, or Sanic with automatic session management.
 
-Scaling and Day-Two Tools
--------------------------
+Operational Features
+--------------------
 
-Once your core tables and routes are running, you can turn on operational features without rewriting your queries:
+Enable routing, caching, migrations, and fixture seeding without rewriting repository queries:
 
-* :doc:`Replica Routing <routing>` — Send writes to your primary database and spread reads across read replicas.
-* :doc:`Caching <caching>` — Cache frequent lookups in Redis or memory and clear stale entries automatically on commit.
-* :doc:`CLI & Migrations <cli>` — Generate and apply Alembic schema migrations from the terminal.
-* :doc:`Database Seeding <database_seeding>` — Load starter data from JSON or CSV files.
+* :doc:`Replica Routing <routing>`: Route writes to a primary database and distribute reads across replica pools.
+* :doc:`Caching <caching>`: Cache lookups in memory, Redis, or Memcached with automatic invalidation on commit.
+* :doc:`CLI & Migrations <cli>`: Generate and apply Alembic schema migrations from the terminal.
+* :doc:`Database Seeding <database_seeding>`: Stream and load seed data from JSON, JSONL, or CSV fixtures.

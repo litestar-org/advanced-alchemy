@@ -33,7 +33,7 @@ class _OracleAwareBoolean(TypeDecorator[bool]):
         if ora_boolean is None:
             return dialect.type_descriptor(Boolean())
         sv = dialect.server_version_info
-        if sv and sv[0] >= _ORACLE_NATIVE_BOOLEAN_MIN_VERSION:
+        if sv and isinstance(sv[0], int) and sv[0] >= _ORACLE_NATIVE_BOOLEAN_MIN_VERSION:
             return dialect.type_descriptor(ora_boolean())
         return dialect.type_descriptor(Boolean())
 
