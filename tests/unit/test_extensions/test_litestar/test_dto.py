@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 import sys
-from typing import TYPE_CHECKING, Annotated, ClassVar
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Optional
 from uuid import UUID, uuid4
 
 import pytest
@@ -15,21 +15,22 @@ from litestar.plugins.pydantic import PydanticInitPlugin
 from litestar.serialization import encode_json
 from litestar.testing import RequestFactory, create_test_client
 from litestar.typing import FieldDefinition
-from sqlalchemy import ForeignKey, func
+from sqlalchemy import ForeignKey, func, null, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedAsDataclass, declared_attr, mapped_column, relationship
 from typing_extensions import TypeVar
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.litestar.dto import (
+    Empty,
     SQLAlchemyDTO,
     SQLAlchemyDTOConfig,
+    _detect_defaults,
     parse_type_from_element,  # type: ignore
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import ModuleType
-    from typing import Any
 
 
 @pytest.fixture(name="base")
@@ -202,18 +203,150 @@ async def test_dto_instrumented_attribute_key(
     assert_model_values(model, {"field": val})
 
 
-async def test_write_dto_for_model_field_unsupported_default(
+def test_write_dto_for_model_field_unsupported_default() -> None:
+    """Ensure genuinely unrecognized default objects raise ValueError."""
+
+    class _UnsupportedDefault:
+        is_scalar = False
+        is_callable = False
+        is_sequence = False
+        is_sentinel = False
+        is_clause_element = False
+
+    class _ColumnStub:
+        default = _UnsupportedDefault()
+        nullable = False
+
+    with pytest.raises(ValueError, match="Unexpected default type"):
+        _detect_defaults(_ColumnStub())  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "default_expr",
+    [
+        pytest.param(func.now(), id="func-now"),
+        pytest.param(null(), id="sql-null"),
+        pytest.param(text("CURRENT_TIMESTAMP"), id="sql-text"),
+    ],
+)
+def test_clause_element_defaults_do_not_crash_dto_generation(
     base: type[DeclarativeBase],
-    asgi_connection: Request[Any, Any, Any],
+    default_expr: Any,
 ) -> None:
-    """Test for error condition where we don't know what to do with a default
-    type."""
+    """Ensure SQL clause-element defaults leave DTO default as Empty without crashing startup."""
 
-    class Model(base):  # type: ignore
-        field: Mapped[datetime.datetime] = mapped_column(default=func.now())
+    class Model(base):  # type: ignore[valid-type, misc]
+        field: Mapped[Optional[datetime.datetime]] = mapped_column(default=default_expr)
 
-    with pytest.raises(ValueError):
-        await get_model_from_dto(SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig()]], Model, asgi_connection, b"")
+    dto_cls = SQLAlchemyDTO[Annotated[Model, SQLAlchemyDTOConfig()]]
+    field_defs = {f.name: f for f in dto_cls.generate_field_definitions(Model)}
+    assert field_defs["field"].default is Empty
+
+
+@pytest.mark.parametrize(
+    "config_expr",
+    [
+        pytest.param('SQLAlchemyDTOConfig(include={"id", "name"})', id="include-only"),
+        pytest.param(
+            'SQLAlchemyDTOConfig(exclude={"geom", "topic", "topic_id", "untyped_computed"})',
+            id="exclude-bad",
+        ),
+    ],
+)
+def test_dto_skips_excluded_unreflectable_columns_and_relationships(
+    create_module: Callable[[str], ModuleType],
+    config_expr: str,
+) -> None:
+    """Ensure root include/exclude skips unreflectable types and relationships before type resolution."""
+    module = create_module(
+        f"""
+from __future__ import annotations
+
+from typing import Annotated, Any, Optional
+from litestar import get
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.types import UserDefinedType
+from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
+
+
+class UnsupportedGeo(UserDefinedType[Any]):
+    def get_col_spec(self, **kw: Any) -> str:
+        return "GEOGRAPHY"
+
+
+class Base(DeclarativeBase):
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+
+class Topic(Base):
+    __tablename__ = "dto_236_topic"
+    geom = mapped_column(UnsupportedGeo())
+
+
+class Item(Base):
+    __tablename__ = "dto_236_item"
+    name: Mapped[str]
+    geom = mapped_column(UnsupportedGeo())
+    topic_id: Mapped[Optional[int]] = mapped_column(ForeignKey("dto_236_topic.id"))
+    topic: Mapped[Optional[Topic]] = relationship()
+
+    @property
+    def untyped_computed(self):
+        return self.name
+
+
+dto_cls = SQLAlchemyDTO[Annotated[Item, {config_expr}]]
+
+
+@get("/items", return_dto=dto_cls, sync_to_thread=False)
+def get_items() -> list[Item]:
+    return [Item(id=1, name="alpha")]
+""",
+    )
+
+    field_names = {f.name for f in module.dto_cls.generate_field_definitions(module.Item)}
+    assert {"id", "name"}.issubset(field_names)
+    assert "geom" not in field_names
+    assert "untyped_computed" not in field_names
+
+    with create_test_client(route_handlers=[module.get_items]) as client:
+        response = client.get("/items")
+        assert response.status_code == 200
+        assert response.json() == [{"id": 1, "name": "alpha"}]
+
+
+def test_dto_preserves_nested_include_and_exclude_paths(base: type[DeclarativeBase]) -> None:
+    """Ensure dotted nested include and exclude keys still reflect the parent relationship."""
+
+    class Topic(base):  # type: ignore[valid-type, misc]
+        name: Mapped[str]
+        secret: Mapped[str]
+
+    class Item(base):  # type: ignore[valid-type, misc]
+        name: Mapped[str]
+        topic_id: Mapped[UUID] = mapped_column(ForeignKey(Topic.id))
+        topic: Mapped[Topic] = relationship()
+
+    @get(
+        "/items/{item_id:str}", return_dto=SQLAlchemyDTO[Annotated[Item, SQLAlchemyDTOConfig(exclude={"topic.secret"})]]
+    )
+    async def get_item_exclude() -> Item:
+        raise NotImplementedError
+
+    @get(
+        "/items-inc/{item_id:str}",
+        return_dto=SQLAlchemyDTO[Annotated[Item, SQLAlchemyDTOConfig(include={"id", "topic.name"})]],
+    )
+    async def get_item_include() -> Item:
+        raise NotImplementedError
+
+    assert get_item_exclude.return_dto is not None
+    assert get_item_include.return_dto is not None
+    excluded_defs = {f.name: f for f in get_item_exclude.return_dto.generate_field_definitions(Item)}
+    included_defs = {f.name: f for f in get_item_include.return_dto.generate_field_definitions(Item)}
+    assert "topic" in excluded_defs
+    assert "topic" in included_defs
 
 
 async def test_dto_for_private_model_field(
