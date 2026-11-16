@@ -168,3 +168,5 @@ Declare ``filter_fields`` and ``sort_fields`` in ``FilterConfig`` so Litestar an
     }
 
 Frontend grids such as TanStack Table, AG Grid, and MUI Data Grid map column filters directly to ``?titleContains=sql&publishedAtIsNull=false&tagsSlugIn=python&orderBy=-published_at&orderBy=title&currentPage=2&pageSize=25``.
+
+See :doc:`filtersets` for reusable class-based filters and automatic relationship loading.

@@ -44,4 +44,5 @@ A **Repository** wraps one table model and gives you ready-made, type-checked me
 
     basics
     filtering
+    filtersets
     advanced

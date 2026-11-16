@@ -43,6 +43,7 @@ from advanced_alchemy.filters import (
     OrderBy,
     SearchFilter,
 )
+from advanced_alchemy.filterset import FilterSet
 from advanced_alchemy.service import (
     Empty,
     EmptyType,
@@ -403,7 +404,7 @@ def _resolve_single_service_dep_defaults(
 def _create_service_group_filter_dependencies(
     service_class: "type[ServiceGroup]",
     key: str,
-    filters: "Union[FilterConfig, Mapping[str, FilterConfig]]",
+    filters: "Union[FilterConfig, type[FilterSet[Any]], Mapping[str, Union[FilterConfig, type[FilterSet[Any]]]]]",
     dep_defaults: "Optional[DependencyDefaults]",
     scoped_filters: bool,
 ) -> dict[str, Provide]:
@@ -418,7 +419,9 @@ def _create_service_group_filter_dependencies(
     elif scoped_filters:
         base_prefix = key.rstrip("_")
     deps: dict[str, Provide] = {}
-    for attr_name, attr_filter_config in cast("Mapping[str, FilterConfig]", filters).items():
+    for attr_name, attr_filter_config in cast(
+        "Mapping[str, Union[FilterConfig, type[FilterSet[Any]]]]", filters
+    ).items():
         if attr_name not in group_fields:
             msg = f"Filter configuration key {attr_name!r} does not match any service attribute on {service_class.__name__}."
             raise ImproperConfigurationError(msg)
@@ -426,6 +429,9 @@ def _create_service_group_filter_dependencies(
             continue
         scoped_prefix = f"{base_prefix}_{attr_name}" if base_prefix else attr_name
         attr_defaults = _with_dep_defaults_prefix(dep_defaults, scoped_prefix)
+        if isinstance(attr_filter_config, type):
+            deps.update(create_filter_dependencies(attr_filter_config, attr_defaults))
+            continue
         if attr_filter_config.get("filter_fields") is not None or attr_filter_config.get("sort_fields") is not None:
             member_class = group_fields[attr_name]
             model = getattr(getattr(member_class, "repository_type", None), "model_type", None)
@@ -444,7 +450,7 @@ def create_service_dependencies(
     error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
     load: "Optional[LoadSpec]" = None,
     execution_options: "Optional[dict[str, Any]]" = None,
-    filters: "Optional[Union[FilterConfig, Mapping[str, FilterConfig]]]" = None,
+    filters: "Optional[Union[FilterConfig, type[FilterSet[Any]], Mapping[str, Union[FilterConfig, type[FilterSet[Any]]]]]]" = None,
     uniquify: Optional[bool] = None,
     count_with_window_function: Optional[bool] = None,
     dep_defaults: "Optional[DependencyDefaults]" = None,
@@ -512,6 +518,9 @@ def create_service_dependencies(
         return deps
 
     effective_dep_defaults = _resolve_single_service_dep_defaults(key, dep_defaults, scoped_filters)
+    if isinstance(filters, type):
+        deps.update(create_filter_dependencies(filters, effective_dep_defaults))
+        return deps
     filter_config = cast("FilterConfig", filters)
     if filter_config.get("filter_fields") is not None or filter_config.get("sort_fields") is not None:
         model = getattr(getattr(service_class, "repository_type", None), "model_type", None)
@@ -521,8 +530,58 @@ def create_service_dependencies(
     return deps
 
 
+def _create_filterset_dependency(
+    filterset_type: type[FilterSet[Any]], dep_defaults: DependencyDefaults
+) -> Callable[..., list[FilterSet[Any]]]:
+    config = filterset_type.filter_config()
+    standard_config = dict(config)
+    standard_config.pop("filter_fields", None)
+    prefix = getattr(dep_defaults, "prefix", None)
+    aliases = resolve_filter_aliases(
+        cast("FilterConfig", standard_config), prefix=prefix, model=filterset_type.model_type
+    )
+    parameters: list[inspect.Parameter] = []
+    annotations: dict[str, Any] = {}
+    entries: list[tuple[str, Any, str]] = []
+    for spec in filterset_type.parameter_specs():
+        alias = f"{prefix.rstrip('_')}_{spec.param_name}" if prefix else spec.param_name
+        entries.append((spec.param_name, filter_parameter_type(spec), alias))
+    if config.get("pagination_type"):
+        entries.extend(
+            [
+                ("page", Optional[int], aliases.get("current_page", "currentPage")),
+                ("pageSize", Optional[int], aliases.get("page_size", "pageSize")),
+            ]
+        )
+    if config.get("sort_fields") or config.get("sort_field"):
+        entries.extend(
+            [
+                ("orderBy", Optional[list[str]], aliases.get("order_by", "orderBy")),
+                ("sortOrder", Optional[Literal["asc", "desc"]], aliases.get("sort_order", "sortOrder")),
+            ]
+        )
+    if config.get("search"):
+        entries.append(("searchString", Optional[str], aliases.get("search_string", "searchString")))
+    for name, annotation, alias in entries:
+        annotated = cast("Any", Annotated)[annotation, QueryParameter(name=alias)]
+        annotations[name] = annotated
+        parameters.append(inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, annotation=annotated, default=None))
+
+    def provide_filterset(**kwargs: Any) -> list[FilterSet[Any]]:
+        try:
+            instance = filterset_type(**{key: value for key, value in kwargs.items() if value is not None})
+            return [instance]  # noqa: TRY300
+        except (ValueError, TypeError) as exc:
+            raise ValidationException(detail=str(exc)) from exc
+
+    provide_filterset.__name__ = f"provide_{filterset_type.__name__}"
+    provide_filterset.__annotations__ = {**annotations, "return": list[FilterSet[Any]]}
+    provide_filterset.__signature__ = inspect.Signature(parameters, return_annotation=list[FilterSet[Any]])  # type: ignore[attr-defined]
+    return provide_filterset
+
+
 def create_filter_dependencies(
-    config: FilterConfig,
+    config: Union[FilterConfig, type[FilterSet[Any]]],
     dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
     model: Optional[type[Any]] = None,
 ) -> dict[str, Provide]:
@@ -536,6 +595,12 @@ def create_filter_dependencies(
     Returns:
         A dependency provider function for the combined filter function.
     """
+    if isinstance(config, type):
+        return {
+            dep_defaults.FILTERS_DEPENDENCY_KEY: Provide(
+                _create_filterset_dependency(config, dep_defaults), sync_to_thread=False
+            )
+        }
     prefix = getattr(dep_defaults, "prefix", None)
     aliases = resolve_filter_aliases(config, prefix=prefix, model=model)
     cache_key = filter_cache_key(_CACHE_NAMESPACE, config, dep_defaults, aliases, model=model)

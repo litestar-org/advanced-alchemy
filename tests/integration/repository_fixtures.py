@@ -619,6 +619,10 @@ def bigint_models_dba(request: "FixtureRequest") -> dict[str, type]:
 @pytest.fixture(scope="session")
 def uuid_schema_sync(engine: Engine, uuid_models_dba: dict[str, type], request: "FixtureRequest") -> None:
     """Ensure UUID schema exists for sync engine."""
+    if engine.dialect.name.startswith("spanner"):
+        pytest.skip(
+            "Generic repository schema uses UNIQUE constraints unsupported by Spanner; use Spanner-specific models"
+        )
     if getattr(engine.dialect, "name", "") != "mock":
         worker_id = get_worker_id(request)
         schema_key = f"uuid_sync_{engine.dialect.name}_{worker_id}"

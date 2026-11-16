@@ -4,6 +4,8 @@ Filters
 
 .. py:module:: advanced_alchemy.filters
 
+See :doc:`filterset` for reusable class-based filter definitions.
+
 Base & Pagination Filters
 -------------------------
 
