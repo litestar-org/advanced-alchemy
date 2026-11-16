@@ -1,6 +1,6 @@
 """Native FilterSet query contracts."""
 
-from typing import Union
+from typing import Optional, Union
 
 import pytest
 from sqlalchemy import ColumnElement, ForeignKey, create_engine, func, select
@@ -281,3 +281,54 @@ def test_default_sort_shorthands(default: Union[list[str], set[str]]) -> None:
     filter_ = DefaultSort().to_statement_filters()[0]
     assert filter_.field_name == "name"
     assert filter_.sort_order == "desc"
+
+
+def test_pagination_max_size_config_and_class_attr() -> None:
+    class CappedViaConfig(CustomerFilters):
+        config = {"pagination_type": "limit_offset", "pagination_max_size": 10}
+
+    class CappedViaAttr(CustomerFilters):
+        pagination_type = "limit_offset"
+        pagination_size = 5
+        pagination_max_size: Optional[int] = 10
+
+    class OverriddenToUnbounded(CappedViaAttr):
+        pagination_max_size = None
+
+    default_limit = next(f.limit for f in CappedViaConfig().to_statement_filters() if isinstance(f, LimitOffset))
+    assert default_limit == 10
+
+    at_limit = next(f.limit for f in CappedViaConfig(pageSize=10).to_statement_filters() if isinstance(f, LimitOffset))
+    assert at_limit == 10
+
+    attr_default = next(f.limit for f in CappedViaAttr().to_statement_filters() if isinstance(f, LimitOffset))
+    assert attr_default == 5
+
+    with pytest.raises(ValueError, match="exceeds maximum allowed size 10"):
+        CappedViaConfig(pageSize=11)
+
+    with pytest.raises(ValueError, match="exceeds maximum allowed size 10"):
+        CappedViaAttr(page_size=11)
+
+    unbounded_limit = next(
+        f.limit for f in OverriddenToUnbounded(pageSize=100).to_statement_filters() if isinstance(f, LimitOffset)
+    )
+    assert unbounded_limit == 100
+
+
+@pytest.mark.parametrize(
+    ("cfg", "match"),
+    [
+        ({"pagination_type": "limit_offset", "pagination_max_size": 0}, "pagination_max_size"),
+        ({"pagination_type": "limit_offset", "pagination_max_size": -1}, "pagination_max_size"),
+        ({"pagination_type": "limit_offset", "pagination_max_size": True}, "pagination_max_size"),
+        ({"pagination_type": "limit_offset", "pagination_max_size": "10"}, "pagination_max_size"),
+        ({"pagination_type": "limit_offset", "pagination_size": 20, "pagination_max_size": 10}, "cannot exceed"),
+    ],
+)
+def test_pagination_max_size_invalid_config_raises(cfg: dict[str, object], match: str) -> None:
+    class BadPaged(FilterSet[Customer]):
+        config = cfg  # type: ignore[assignment]
+
+    with pytest.raises(ImproperConfigurationError, match=match):
+        BadPaged()

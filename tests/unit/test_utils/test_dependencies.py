@@ -37,6 +37,7 @@ from advanced_alchemy.utils.dependencies import (
     normalize_sort_field,
     normalize_sort_fields,
     resolve_filter_fields,
+    resolve_pagination_bounds,
 )
 from advanced_alchemy.utils.singleton import SingletonMeta
 
@@ -449,3 +450,54 @@ def test_normalize_sort_fields_validation_and_without_model(
             normalize_sort_fields(sort_fields, model=model)
         return
     assert normalize_sort_fields(sort_fields, model=model) == ("author.name",)
+
+
+@pytest.mark.parametrize(
+    ("config", "default_size", "expected"),
+    [
+        ({}, 20, (20, None)),
+        ({}, 25, (25, None)),
+        ({"pagination_max_size": None}, 20, (20, None)),
+        ({"pagination_max_size": 10}, 20, (10, 10)),
+        ({"pagination_max_size": 50}, 20, (20, 50)),
+        ({"pagination_size": 10, "pagination_max_size": 50}, 20, (10, 50)),
+        ({"pagination_size": 50, "pagination_max_size": 50}, 20, (50, 50)),
+    ],
+)
+def test_resolve_pagination_bounds_valid(
+    config: FilterConfig,
+    default_size: int,
+    expected: tuple[int, Optional[int]],
+) -> None:
+    assert resolve_pagination_bounds(config, default_size=default_size) == expected
+
+
+@pytest.mark.parametrize(
+    ("config", "match"),
+    [
+        ({"pagination_max_size": 0}, "pagination_max_size"),
+        ({"pagination_max_size": -5}, "pagination_max_size"),
+        ({"pagination_max_size": True}, "pagination_max_size"),
+        ({"pagination_max_size": False}, "pagination_max_size"),
+        ({"pagination_max_size": "10"}, "pagination_max_size"),
+        ({"pagination_size": 0}, "pagination_size"),
+        ({"pagination_size": -1}, "pagination_size"),
+        ({"pagination_size": True}, "pagination_size"),
+        ({"pagination_size": False}, "pagination_size"),
+        ({"pagination_size": "10"}, "pagination_size"),
+        ({"pagination_size": 51, "pagination_max_size": 50}, "cannot exceed"),
+    ],
+)
+def test_resolve_pagination_bounds_invalid(config: dict[str, Any], match: str) -> None:
+    with pytest.raises(ImproperConfigurationError, match=match):
+        resolve_pagination_bounds(cast("FilterConfig", config))
+
+
+def test_filter_cache_separates_pagination_max_size_across_frameworks() -> None:
+    for factory in _get_framework_filter_factories():
+        unbounded = factory({"pagination_type": "limit_offset"})
+        capped_10 = factory({"pagination_type": "limit_offset", "pagination_max_size": 10})
+        capped_20 = factory({"pagination_type": "limit_offset", "pagination_max_size": 20})
+        assert unbounded is not capped_10
+        assert capped_10 is not capped_20
+        assert capped_10 is factory({"pagination_type": "limit_offset", "pagination_max_size": 10})

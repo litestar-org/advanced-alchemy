@@ -77,6 +77,7 @@ from advanced_alchemy.utils.dependencies import (
     normalize_sort_fields,
     resolve_filter_aliases,
     resolve_filter_fields,
+    resolve_pagination_bounds,
 )
 
 logger = logging.getLogger("advanced_alchemy.extensions.fastapi")
@@ -415,6 +416,7 @@ def _create_filterset_dependency(
     filterset_type: type[FilterSet[Any]], dep_defaults: DependencyDefaults
 ) -> Callable[..., list[FilterSet[Any]]]:
     config = filterset_type.filter_config()
+    _, max_pagination_size = resolve_pagination_bounds(config)
     standard_config = dict(config)
     standard_config.pop("filter_fields", None)
     prefix = getattr(dep_defaults, "prefix", None)
@@ -423,28 +425,33 @@ def _create_filterset_dependency(
     )
     parameters: list[inspect.Parameter] = []
     annotations: dict[str, Any] = {}
-    entries: list[tuple[str, Any, str]] = []
+    entries: list[tuple[str, Any, Any]] = []
     for spec in filterset_type.parameter_specs():
         alias = f"{prefix.rstrip('_')}_{spec.param_name}" if prefix else spec.param_name
-        entries.append((spec.param_name, filter_parameter_type(spec), alias))
+        entries.append((spec.param_name, filter_parameter_type(spec), Query(alias=alias)))
     if config.get("pagination_type"):
+        page_size_query = (
+            Query(alias=aliases.get("page_size", "pageSize"), ge=1, le=max_pagination_size)
+            if max_pagination_size is not None
+            else Query(alias=aliases.get("page_size", "pageSize"), ge=1)
+        )
         entries.extend(
             [
-                ("page", Optional[int], aliases.get("current_page", "currentPage")),
-                ("pageSize", Optional[int], aliases.get("page_size", "pageSize")),
+                ("page", Optional[int], Query(alias=aliases.get("current_page", "currentPage"), ge=1)),
+                ("pageSize", Optional[int], page_size_query),
             ]
         )
     if config.get("sort_fields") or config.get("sort_field"):
         entries.extend(
             [
-                ("orderBy", Optional[list[str]], aliases.get("order_by", "orderBy")),
-                ("sortOrder", Optional[Literal["asc", "desc"]], aliases.get("sort_order", "sortOrder")),
+                ("orderBy", Optional[list[str]], Query(alias=aliases.get("order_by", "orderBy"))),
+                ("sortOrder", Optional[Literal["asc", "desc"]], Query(alias=aliases.get("sort_order", "sortOrder"))),
             ]
         )
     if config.get("search"):
-        entries.append(("searchString", Optional[str], aliases.get("search_string", "searchString")))
-    for name, annotation, alias in entries:
-        annotated = cast("Any", Annotated)[annotation, Query(alias=alias)]
+        entries.append(("searchString", Optional[str], Query(alias=aliases.get("search_string", "searchString"))))
+    for name, annotation, query_param in entries:
+        annotated = cast("Any", Annotated)[annotation, query_param]
         annotations[name] = annotated
         parameters.append(inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, annotation=annotated, default=None))
 
@@ -487,6 +494,7 @@ def provide_filters(
     """
     if isinstance(config, type):
         return _create_filterset_dependency(config, dep_defaults)
+    resolve_pagination_bounds(config, default_size=dep_defaults.DEFAULT_PAGINATION_SIZE)
     filter_keys = {
         "id_filter",
         "created_at",
@@ -689,7 +697,25 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
         annotations[param_name] = Annotated[Optional[BeforeAfter], Depends(provide_updated_at_filter)]
 
     # Add pagination filter providers
+    default_pagination_size, max_pagination_size = resolve_pagination_bounds(
+        config, default_size=dep_defaults.DEFAULT_PAGINATION_SIZE
+    )
     if config.get("pagination_type") == "limit_offset":
+        page_size_alias = alias_for("page_size")
+        page_size_query = (
+            Query(
+                ge=1,
+                le=max_pagination_size,
+                alias=page_size_alias,
+                description="Number of items per page.",
+            )
+            if max_pagination_size is not None
+            else Query(
+                ge=1,
+                alias=page_size_alias,
+                description="Number of items per page.",
+            )
+        )
 
         def provide_limit_offset_pagination(
             current_page: Annotated[
@@ -700,15 +726,13 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     description="Page number for pagination.",
                 ),
             ] = 1,
-            page_size: Annotated[
-                int,
-                Query(
-                    ge=1,
-                    alias=alias_for("page_size"),
-                    description="Number of items per page.",
-                ),
-            ] = config.get("pagination_size", dep_defaults.DEFAULT_PAGINATION_SIZE),
+            page_size: Annotated[int, page_size_query] = default_pagination_size,
         ) -> LimitOffset:
+            if max_pagination_size is not None and page_size > max_pagination_size:
+                msg = f"Pagination page size {page_size} exceeds maximum allowed size {max_pagination_size}"
+                raise RequestValidationError(
+                    errors=[{"loc": ["query", page_size_alias], "msg": msg, "type": "less_than_equal"}]
+                )
             return LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
 
         param_name = dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY

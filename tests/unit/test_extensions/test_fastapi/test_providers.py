@@ -1535,3 +1535,60 @@ def test_fastapi_grid_snake_case_and_e2e_async_sqlite_prototype() -> None:
         assert data["total"] == 2
         assert [item["title"] for item in data["items"]] == ["SQL Tuning", "SQL Basics"]
     anyio.run(engine.dispose)
+
+
+def test_fastapi_pagination_max_size_validation_and_openapi() -> None:
+    from fastapi.exceptions import RequestValidationError
+
+    filter_dep = provide_filters(
+        {"pagination_type": "limit_offset", "pagination_max_size": 15},
+        DependencyDefaults(),
+    )
+
+    app = FastAPI()
+
+    @app.get("/items")
+    def list_items(filters: Annotated[list[FilterTypes], Depends(filter_dep)]) -> dict[str, int]:
+        limit_offset = next(f for f in filters if isinstance(f, LimitOffset))
+        return {"limit": limit_offset.limit, "offset": limit_offset.offset}
+
+    with TestClient(app) as client:
+        assert client.get("/items").json() == {"limit": 15, "offset": 0}
+        assert client.get("/items", params={"pageSize": "15"}).json() == {"limit": 15, "offset": 0}
+        assert client.get("/items", params={"pageSize": "16"}).status_code == 422
+        params = {
+            param["name"]: param["schema"]
+            for param in client.get("/openapi.json").json()["paths"]["/items"]["get"]["parameters"]
+        }
+        assert params["pageSize"]["minimum"] == 1
+        assert params["pageSize"]["maximum"] == 15
+
+    capped_defaults = DependencyDefaults()
+    capped_defaults.DEFAULT_PAGINATION_SIZE = 25
+    clamped_dep = provide_filters({"pagination_type": "limit_offset", "pagination_max_size": 10}, capped_defaults)
+    clamped_app = FastAPI()
+
+    @clamped_app.get("/clamped")
+    def list_clamped(filters: Annotated[list[FilterTypes], Depends(clamped_dep)]) -> dict[str, int]:
+        limit_offset = next(f for f in filters if isinstance(f, LimitOffset))
+        return {"limit": limit_offset.limit, "offset": limit_offset.offset}
+
+    with TestClient(clamped_app) as client:
+        assert client.get("/clamped").json() == {"limit": 10, "offset": 0}
+
+    aggregate = _create_filter_aggregate_function_fastapi(
+        {"pagination_type": "limit_offset", "pagination_max_size": 15}
+    )
+    limit_offset_dep = (
+        inspect.signature(aggregate)
+        .parameters[DEPENDENCY_DEFAULTS.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY]
+        .annotation.__metadata__[0]
+        .dependency
+    )
+    with pytest.raises(RequestValidationError):
+        limit_offset_dep(current_page=1, page_size=16)
+
+    with pytest.raises(ImproperConfigurationError, match="cannot exceed"):
+        provide_filters({"pagination_type": "limit_offset", "pagination_size": 30, "pagination_max_size": 15})
+    with pytest.raises(ImproperConfigurationError, match="pagination_max_size"):
+        provide_filters({"pagination_max_size": 0})
