@@ -370,7 +370,7 @@ def resolve_pagination_bounds(
     default_size: int = 20,
 ) -> tuple[int, Optional[int]]:
     """Validate and resolve default and maximum pagination sizes from ``config``."""
-    raw_max_size = config.get("pagination_max_size")
+    raw_max_size: Any = config.get("pagination_max_size")
     max_size: Optional[int]
     if raw_max_size is None:
         max_size = None
@@ -380,7 +380,7 @@ def resolve_pagination_bounds(
             raise ImproperConfigurationError(msg)
         max_size = raw_max_size
 
-    raw_default_size = config.get("pagination_size")
+    raw_default_size: Any = config.get("pagination_size")
     if raw_default_size is not None:
         if not isinstance(raw_default_size, int) or isinstance(raw_default_size, bool) or raw_default_size < 1:
             msg = f"pagination_size must be a positive integer, got {raw_default_size!r}"
