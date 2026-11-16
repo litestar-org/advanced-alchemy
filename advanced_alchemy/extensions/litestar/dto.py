@@ -381,7 +381,7 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
             else set()
         )
 
-        seen_hybrid_descriptors: set[hybrid_property] = set()  # pyright: ignore[reportUnknownVariableType,reportMissingTypeArgument]
+        seen_hybrid_descriptors: set[Any] = set()
         skipped_descriptors = cls._collect_composite_keys(mapper)
         processed_fields: set[str] = set(skipped_descriptors)
         yielded_sqla_keys: set[str] = set()
@@ -391,35 +391,17 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
             if key in skipped_descriptors:
                 continue
 
-            is_filtered_out = cls._is_filtered_out(key, excluded_keys, included_keys)
-            if is_filtered_out and isinstance(orm_descriptor, AssociationProxy) and key not in model_type_hints:
-                continue
-
-            if is_hybrid_property := isinstance(orm_descriptor, hybrid_property):
-                if orm_descriptor in seen_hybrid_descriptors:
-                    continue
-
-                seen_hybrid_descriptors.add(orm_descriptor)  # pyright: ignore[reportUnknownMemberType]
-
-            if cls._should_skip_implicit_descriptor(
-                key,
-                orm_descriptor,
-                is_hybrid_property=is_hybrid_property,
-                include_implicit_fields=include_implicit_fields,
+            definitions = cls._resolve_descriptor_definitions(
+                model_type=model_type,
+                key=key,
+                orm_descriptor=orm_descriptor,
                 model_type_hints=model_type_hints,
-            ):
-                continue
-
-            definitions = cls.handle_orm_descriptor(
-                orm_descriptor.extension_type,
-                key,
-                orm_descriptor,
-                model_type_hints,
-                model_name,
+                model_name=model_name,
+                seen_hybrid_descriptors=seen_hybrid_descriptors,
+                include_implicit_fields=include_implicit_fields,
+                is_filtered_out=cls._is_filtered_out(key, excluded_keys, included_keys),
             )
             for definition in definitions:
-                if is_filtered_out and definition.annotation is Empty:
-                    continue
                 yielded_sqla_keys.add(definition.name)
                 yield definition
 
@@ -490,8 +472,64 @@ class SQLAlchemyDTO(AbstractDTO[T], Generic[T]):
         )
         return not is_field_marked_not_private and (should_exclude_anything_implicit or should_exclude_non_hybrid_only)
 
+    @classmethod
+    def _resolve_descriptor_definitions(
+        cls,
+        *,
+        model_type: type[DeclarativeBase],
+        key: str,
+        orm_descriptor: InspectionAttr,
+        model_type_hints: dict[str, FieldDefinition],
+        model_name: str,
+        seen_hybrid_descriptors: set[Any],
+        include_implicit_fields: Union[bool, Literal["hybrid-only"]],
+        is_filtered_out: bool,
+    ) -> list[DTOFieldDefinition]:
+        """Resolve DTO field definitions for one ORM descriptor, skipping unreflectable filtered-out entries."""
+        prop_obj: object = getattr(orm_descriptor, "property", None)
+        rel_mapper: Any = getattr(prop_obj, "mapper", None)
+        if is_filtered_out and (
+            (isinstance(orm_descriptor, AssociationProxy) and key not in model_type_hints)
+            or (isinstance(prop_obj, RelationshipProperty) and getattr(rel_mapper, "class_", None) is not model_type)
+        ):
+            return []
+
+        if is_hybrid_property := isinstance(orm_descriptor, hybrid_property):
+            if orm_descriptor in seen_hybrid_descriptors:
+                return []
+            seen_hybrid_descriptors.add(orm_descriptor)  # pyright: ignore[reportUnknownMemberType]
+
+        if cls._should_skip_implicit_descriptor(
+            key,
+            orm_descriptor,
+            is_hybrid_property=is_hybrid_property,
+            include_implicit_fields=include_implicit_fields,
+            model_type_hints=model_type_hints,
+        ):
+            return []
+
+        try:
+            definitions = cls.handle_orm_descriptor(
+                orm_descriptor.extension_type,
+                key,
+                orm_descriptor,
+                model_type_hints,
+                model_name,
+            )
+        except (NotImplementedError, ImproperConfigurationError):
+            if is_filtered_out:
+                return []
+            raise
+
+        return [d for d in definitions if not (is_filtered_out and d.annotation is Empty)]
+
 
 def _detect_defaults(elem: ElementType) -> tuple[Any, Any]:
+    """Detect client-inferable default and default factory values for a mapped SQLAlchemy attribute.
+
+    Sequence, sentinel, and SQL clause-element defaults (such as ``func.now()`` or ``null()``)
+    are evaluated database-side and leave the client DTO default as ``Empty``.
+    """
     default: Any = Empty
     default_factory: Any = None  # pyright:ignore
     if sqla_default := getattr(elem, "default", None):
@@ -502,10 +540,7 @@ def _detect_defaults(elem: ElementType) -> tuple[Any, Any]:
             def default_factory(d: Any = sqla_default) -> Any:
                 return d.arg({})
 
-        elif sqla_default.is_sequence or sqla_default.is_sentinel:
-            # SQLAlchemy sequences represent server side defaults
-            # so we cannot infer a reasonable default value for
-            # them on the client side
+        elif sqla_default.is_sequence or sqla_default.is_sentinel or sqla_default.is_clause_element:
             pass
         else:
             msg = "Unexpected default type"

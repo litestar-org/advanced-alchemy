@@ -23,13 +23,46 @@ __all__ = (
 )
 
 
+_POSTGRESQL_DUPLICATE_KEY_REGEXES = [
+    re.compile(
+        r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$",
+    ),
+    re.compile(r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*$"),
+]
+_POSTGRESQL_FOREIGN_KEY_REGEXES = [
+    re.compile(
+        r".*on table \"(?P<table>[^\"]+)\" violates "
+        r"foreign key constraint \"(?P<constraint>[^\"]+)\".*\n"
+        r"DETAIL:  Key \((?P<key>.+)\)=\(.+\) "
+        r"is (not present in|still referenced from) table "
+        r"\"(?P<key_table>[^\"]+)\".",
+    ),
+]
+_POSTGRESQL_CHECK_CONSTRAINT_REGEXES = [
+    re.compile(r".*new row for relation \"(?P<table>.+)\" violates check constraint (?P<check_name>.+)"),
+]
+
+_SPANNER_DUPLICATE_KEY_REGEXES = [
+    re.compile(
+        r"(?:unique\s+index\s+violation|already\s+exists|duplicate\s+key\s+value\s+violates\s+unique\s+constraint)",
+        re.IGNORECASE,
+    ),
+]
+_SPANNER_FOREIGN_KEY_REGEXES = [
+    re.compile(
+        r"(?:foreign\s+key\s+constraint|parent\s+row\s+.*\s+is\s+missing|referenced\s+by\s+foreign\s+key|violates\s+foreign\s+key\s+constraint)",
+        re.IGNORECASE,
+    ),
+]
+_SPANNER_CHECK_CONSTRAINT_REGEXES = [
+    re.compile(
+        r"(?:check\s+constraint\s+.*\s+is\s+violated|violates\s+check\s+constraint)",
+        re.IGNORECASE,
+    ),
+]
+
 DUPLICATE_KEY_REGEXES = {
-    "postgresql": [
-        re.compile(
-            r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*Key\s+\((?P<key>.*)\)=\((?P<value>.*)\)\s+already\s+exists.*$",
-        ),
-        re.compile(r"^.*duplicate\s+key.*\"(?P<columns>[^\"]+)\"\s*\n.*$"),
-    ],
+    "postgresql": _POSTGRESQL_DUPLICATE_KEY_REGEXES,
     "sqlite": [
         re.compile(r"^.*columns?(?P<columns>[^)]+)(is|are)\s+not\s+unique$"),
         re.compile(r"^.*UNIQUE\s+constraint\s+failed:\s+(?P<columns>.+)$"),
@@ -47,7 +80,8 @@ DUPLICATE_KEY_REGEXES = {
         re.compile(r"ORA-00001:\s*unique\s+constraint\s*\((?P<columns>[^)]+)\)\s*violated", re.IGNORECASE),
         re.compile(r"\bORA-00001:", re.IGNORECASE),
     ],
-    "spanner+spanner": [],
+    "spanner": _SPANNER_DUPLICATE_KEY_REGEXES,
+    "spanner+spanner": _SPANNER_DUPLICATE_KEY_REGEXES,
     "duckdb": [
         re.compile(
             r"^.*Duplicate\s+key\s+\"(?P<columns>[^\"]+)\"\s+violates\s+(primary\s+key|unique)\s+constraint.*$",
@@ -63,19 +97,12 @@ DUPLICATE_KEY_REGEXES = {
         re.compile(r"Cannot\s+insert\s+duplicate\s+key\s+row\s+in\s+object\s+'(?P<table>[^']+)'", re.IGNORECASE),
     ],
     "bigquery": [],
-    "cockroach": [],
+    "cockroach": _POSTGRESQL_DUPLICATE_KEY_REGEXES,
+    "cockroachdb": _POSTGRESQL_DUPLICATE_KEY_REGEXES,
 }
 
 FOREIGN_KEY_REGEXES = {
-    "postgresql": [
-        re.compile(
-            r".*on table \"(?P<table>[^\"]+)\" violates "
-            r"foreign key constraint \"(?P<constraint>[^\"]+)\".*\n"
-            r"DETAIL:  Key \((?P<key>.+)\)=\(.+\) "
-            r"is (not present in|still referenced from) table "
-            r"\"(?P<key_table>[^\"]+)\".",
-        ),
-    ],
+    "postgresql": _POSTGRESQL_FOREIGN_KEY_REGEXES,
     "sqlite": [
         re.compile(r"(?i).*foreign key constraint failed"),
     ],
@@ -99,7 +126,8 @@ FOREIGN_KEY_REGEXES = {
         re.compile(r"ORA-0229[12]:\s*integrity\s+constraint\s*\((?P<constraint>[^)]+)\)\s*violated", re.IGNORECASE),
         re.compile(r"\bORA-0229[12]:", re.IGNORECASE),
     ],
-    "spanner+spanner": [],
+    "spanner": _SPANNER_FOREIGN_KEY_REGEXES,
+    "spanner+spanner": _SPANNER_FOREIGN_KEY_REGEXES,
     "duckdb": [
         re.compile(r".*Violates\s+foreign\s+key\s+constraint.*", re.IGNORECASE),
     ],
@@ -110,13 +138,12 @@ FOREIGN_KEY_REGEXES = {
         ),
     ],
     "bigquery": [],
-    "cockroach": [],
+    "cockroach": _POSTGRESQL_FOREIGN_KEY_REGEXES,
+    "cockroachdb": _POSTGRESQL_FOREIGN_KEY_REGEXES,
 }
 
 CHECK_CONSTRAINT_REGEXES = {
-    "postgresql": [
-        re.compile(r".*new row for relation \"(?P<table>.+)\" violates check constraint (?P<check_name>.+)"),
-    ],
+    "postgresql": _POSTGRESQL_CHECK_CONSTRAINT_REGEXES,
     "sqlite": [
         re.compile(r"(?i).*CHECK constraint failed.*"),
     ],
@@ -132,7 +159,8 @@ CHECK_CONSTRAINT_REGEXES = {
         re.compile(r"ORA-02290:\s*check\s+constraint\s*\((?P<check_name>[^)]+)\)\s*violated", re.IGNORECASE),
         re.compile(r"\bORA-02290:", re.IGNORECASE),
     ],
-    "spanner+spanner": [],
+    "spanner": _SPANNER_CHECK_CONSTRAINT_REGEXES,
+    "spanner+spanner": _SPANNER_CHECK_CONSTRAINT_REGEXES,
     "duckdb": [
         re.compile(r".*CHECK\s+constraint\s+failed.*", re.IGNORECASE),
     ],
@@ -140,7 +168,8 @@ CHECK_CONSTRAINT_REGEXES = {
         re.compile(r"conflicted\s+with\s+the\s+CHECK\s+constraint\s+\"(?P<check_name>[^\"]+)\"", re.IGNORECASE),
     ],
     "bigquery": [],
-    "cockroach": [],
+    "cockroach": _POSTGRESQL_CHECK_CONSTRAINT_REGEXES,
+    "cockroachdb": _POSTGRESQL_CHECK_CONSTRAINT_REGEXES,
 }
 
 SQLSTATE_TO_ERROR_KEY = {
@@ -367,14 +396,86 @@ def _get_error_message(error_messages: ErrorMessages, key: str, exc: Exception) 
     return template  # pyright: ignore[reportUnknownVariableType]
 
 
+_INTEGRITY_ERROR_CLASSES: dict[str, type[IntegrityError]] = {
+    "duplicate_key": DuplicateKeyError,
+    "check_constraint": IntegrityError,
+    "foreign_key": ForeignKeyError,
+}
+
+
+def _get_spanner_error_key(orig: BaseException) -> Optional[str]:
+    """Classify a Cloud Spanner DBAPI exception from native gRPC status or exception class."""
+    for candidate in (orig, getattr(orig, "__cause__", None)):
+        if candidate is None:
+            continue
+        grpc_status = getattr(candidate, "grpc_status_code", None)
+        if getattr(grpc_status, "name", None) == "ALREADY_EXISTS" or type(candidate).__name__ == "AlreadyExists":
+            return "duplicate_key"
+    return None
+
+
+def _build_integrity_error_detail(orig: Optional[BaseException]) -> str:
+    """Collect driver diagnostic text from ``orig`` and its chained ``__cause__``."""
+    if orig is None:
+        return ""
+    driver_args: tuple[Any, ...] = getattr(orig, "args", ())
+    parts = [str(exc_arg) for exc_arg in driver_args]
+    if not parts:
+        parts.append(str(orig))
+    cause = getattr(orig, "__cause__", None)
+    if cause is not None:
+        parts.append(str(cause))
+        cause_msg = getattr(cause, "message", None)
+        if isinstance(cause_msg, str) and cause_msg:
+            parts.append(cause_msg)
+    return " - ".join(part for part in parts if part)
+
+
+def _classify_integrity_error(
+    exc: SQLAlchemyIntegrityError,
+    error_messages: Optional[ErrorMessages],
+    dialect_name: Optional[str],
+) -> IntegrityError:
+    """Map a SQLAlchemy ``IntegrityError`` to a specific Advanced Alchemy subclass."""
+    resolved_messages: ErrorMessages = error_messages if error_messages is not None else {}
+    base_dialect = dialect_name.split("+", 1)[0] if dialect_name is not None else ""
+    if (key := _get_error_key_by_code(exc.orig, base_dialect)) is not None:
+        return _INTEGRITY_ERROR_CLASSES[key](
+            detail=_get_error_message(error_messages=resolved_messages, key=key, exc=exc),
+        )
+
+    if dialect_name is not None:
+        regex_maps: tuple[tuple[str, dict[str, list[re.Pattern[str]]]], ...] = (
+            ("duplicate_key", DUPLICATE_KEY_REGEXES),
+            ("check_constraint", CHECK_CONSTRAINT_REGEXES),
+            ("foreign_key", FOREIGN_KEY_REGEXES),
+        )
+        detail = _build_integrity_error_detail(exc.orig)
+        for key, regex_map in regex_maps:
+            regexes = regex_map.get(dialect_name) or regex_map.get(base_dialect, [])
+            for regex in regexes:
+                if regex.search(detail):
+                    return _INTEGRITY_ERROR_CLASSES[key](
+                        detail=_get_error_message(error_messages=resolved_messages, key=key, exc=exc),
+                    )
+
+    fallback_detail = (
+        _get_error_message(error_messages=error_messages, key="integrity", exc=exc)
+        if error_messages is not None
+        else f"An integrity error occurred: {exc}"
+    )
+    return IntegrityError(detail=fallback_detail)
+
+
 def _get_error_key_by_code(orig: Optional[BaseException], dialect_name: str) -> Optional[str]:
     """Classify a DBAPI integrity error by the native error code exposed by the driver.
 
     Checks ``error_type`` for DuckDB, ``sqlstate`` / ``pgcode`` for PostgreSQL and
     CockroachDB, ``sqlite_errorcode`` for SQLite on Python 3.11+, ``errno`` or
     ``args[0]`` for MySQL and MariaDB drivers, ``args[0].code`` for Oracle
-    ``oracledb``, and the native error number in the ``args[-1]`` message for
-    SQL Server ``pyodbc`` / ``aioodbc``.
+    ``oracledb``, ``grpc_status_code`` / ``__cause__`` for Cloud Spanner, and the
+    native error number in the ``args[-1]`` message for SQL Server ``pyodbc`` /
+    ``aioodbc``.
 
     Args:
         orig: The underlying DBAPI exception, if present.
@@ -412,11 +513,59 @@ def _get_error_key_by_code(orig: Optional[BaseException], dialect_name: str) -> 
     elif dialect_name == "mssql" and driver_args and isinstance(driver_args[-1], str):
         if (match := MSSQL_ERROR_NUMBER_REGEX.search(driver_args[-1])) is not None:
             dialect_key = MSSQL_ERROR_NUMBER_TO_ERROR_KEY.get(int(match["number"]))
+    elif dialect_name == "spanner":
+        dialect_key = _get_spanner_error_key(orig)
     return dialect_key
 
 
+def _translate_repository_exception(
+    exc: Exception,
+    error_messages: Optional[ErrorMessages],
+    dialect_name: Optional[str],
+) -> Optional[Exception]:
+    """Translate a SQLAlchemy or repository exception into an Advanced Alchemy error."""
+    translated: Optional[Exception] = None
+    if isinstance(exc, NotFoundError):
+        msg = (
+            _get_error_message(error_messages=error_messages, key="not_found", exc=exc)
+            if error_messages is not None
+            else "No rows matched the specified data"
+        )
+        translated = NotFoundError(detail=msg)
+    elif isinstance(exc, MultipleResultsFound):
+        msg = (
+            _get_error_message(error_messages=error_messages, key="multiple_rows", exc=exc)
+            if error_messages is not None
+            else "Multiple rows matched the specified data"
+        )
+        translated = MultipleResultsFoundError(detail=msg)
+    elif isinstance(exc, SQLAlchemyIntegrityError):
+        translated = _classify_integrity_error(exc, error_messages, dialect_name)
+    elif isinstance(exc, SQLAlchemyInvalidRequestError):
+        translated = InvalidRequestError(detail="An invalid request was made.")
+    elif isinstance(exc, StatementError):
+        translated = IntegrityError(
+            detail=cast("str", getattr(exc.orig, "detail", "There was an issue processing the statement."))
+        )
+    elif isinstance(exc, SQLAlchemyError):
+        msg = (
+            _get_error_message(error_messages=error_messages, key="other", exc=exc)
+            if error_messages is not None
+            else f"An exception occurred: {exc}"
+        )
+        translated = RepositoryError(detail=msg)
+    elif isinstance(exc, AttributeError):
+        msg = (
+            _get_error_message(error_messages=error_messages, key="other", exc=exc)
+            if error_messages is not None
+            else f"An attribute error occurred during processing: {exc}"
+        )
+        translated = RepositoryError(detail=msg)
+    return translated
+
+
 @contextmanager
-def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
+def wrap_sqlalchemy_exception(
     error_messages: Optional[ErrorMessages] = None,
     dialect_name: Optional[str] = None,
     wrap_exceptions: bool = True,
@@ -453,81 +602,17 @@ def wrap_sqlalchemy_exception(  # noqa: C901, PLR0915
     try:
         yield
 
-    except NotFoundError as exc:
+    except (
+        NotFoundError,
+        MultipleResultsFound,
+        SQLAlchemyIntegrityError,
+        SQLAlchemyInvalidRequestError,
+        StatementError,
+        SQLAlchemyError,
+        AttributeError,
+    ) as exc:
         if wrap_exceptions is False:
             raise
-        if error_messages is not None:
-            msg = _get_error_message(error_messages=error_messages, key="not_found", exc=exc)
-        else:
-            msg = "No rows matched the specified data"
-        raise NotFoundError(detail=msg) from exc
-    except MultipleResultsFound as exc:
-        if wrap_exceptions is False:
-            raise
-        if error_messages is not None:
-            msg = _get_error_message(error_messages=error_messages, key="multiple_rows", exc=exc)
-        else:
-            msg = "Multiple rows matched the specified data"
-        raise MultipleResultsFoundError(detail=msg) from exc
-    except SQLAlchemyIntegrityError as exc:
-        if wrap_exceptions is False:
-            raise
-        if error_messages is not None and dialect_name is not None:
-            base_dialect = dialect_name.split("+", 1)[0]
-            keys_to_regex = {
-                "duplicate_key": (
-                    DUPLICATE_KEY_REGEXES.get(dialect_name) or DUPLICATE_KEY_REGEXES.get(base_dialect, []),
-                    DuplicateKeyError,
-                ),
-                "check_constraint": (
-                    CHECK_CONSTRAINT_REGEXES.get(dialect_name) or CHECK_CONSTRAINT_REGEXES.get(base_dialect, []),
-                    IntegrityError,
-                ),
-                "foreign_key": (
-                    FOREIGN_KEY_REGEXES.get(dialect_name) or FOREIGN_KEY_REGEXES.get(base_dialect, []),
-                    ForeignKeyError,
-                ),
-            }
-            if (key := _get_error_key_by_code(exc.orig, base_dialect)) is not None:
-                raise keys_to_regex[key][1](
-                    detail=_get_error_message(error_messages=error_messages, key=key, exc=exc),
-                ) from exc
-            driver_args: tuple[Any, ...] = getattr(exc.orig, "args", ())
-            detail = " - ".join(str(exc_arg) for exc_arg in driver_args) if driver_args else ""
-            for key, (regexes, exception) in keys_to_regex.items():
-                for regex in regexes:
-                    if regex.search(detail):
-                        raise exception(
-                            detail=_get_error_message(error_messages=error_messages, key=key, exc=exc),
-                        ) from exc
-
-            raise IntegrityError(
-                detail=_get_error_message(error_messages=error_messages, key="integrity", exc=exc),
-            ) from exc
-        raise IntegrityError(detail=f"An integrity error occurred: {exc}") from exc
-    except SQLAlchemyInvalidRequestError as exc:
-        if wrap_exceptions is False:
-            raise
-        raise InvalidRequestError(detail="An invalid request was made.") from exc
-    except StatementError as exc:
-        if wrap_exceptions is False:
-            raise
-        raise IntegrityError(
-            detail=cast("str", getattr(exc.orig, "detail", "There was an issue processing the statement."))
-        ) from exc
-    except SQLAlchemyError as exc:
-        if wrap_exceptions is False:
-            raise
-        if error_messages is not None:
-            msg = _get_error_message(error_messages=error_messages, key="other", exc=exc)
-        else:
-            msg = f"An exception occurred: {exc}"
-        raise RepositoryError(detail=msg) from exc
-    except AttributeError as exc:
-        if wrap_exceptions is False:
-            raise
-        if error_messages is not None:
-            msg = _get_error_message(error_messages=error_messages, key="other", exc=exc)
-        else:
-            msg = f"An attribute error occurred during processing: {exc}"
-        raise RepositoryError(detail=msg) from exc
+        if (translated := _translate_repository_exception(exc, error_messages, dialect_name)) is not None:
+            raise translated from exc
+        raise

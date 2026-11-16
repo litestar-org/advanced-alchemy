@@ -1,4 +1,6 @@
-from typing import Optional
+from types import SimpleNamespace
+from typing import Any, Optional
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import sqlalchemy as sa
@@ -25,6 +27,8 @@ from advanced_alchemy.exceptions import (
     RepositoryError,
     wrap_sqlalchemy_exception,
 )
+from advanced_alchemy.mixins import UniqueMixin
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 
 
 def test_wrap_sqlalchemy_exception_multiple_results_found() -> None:
@@ -702,3 +706,169 @@ def test_wrap_sqlalchemy_exception_duckdb_real_engine() -> None:
     with pytest.raises(IntegrityError), engine.begin() as conn:
         with wrap_sqlalchemy_exception(dialect_name=engine.dialect.name, error_messages={}):
             conn.execute(sa.text("INSERT INTO child VALUES (-1, 1);"))
+
+
+@pytest.mark.parametrize("dialect_name", ["spanner", "spanner+spanner"])
+@pytest.mark.parametrize(
+    ("orig_factory", "expected"),
+    [
+        (
+            lambda: (
+                _DriverError("conflict")
+                if False
+                else _build_spanner_orig(
+                    "conflict", cause=_DriverError("exists", grpc_status_code=SimpleNamespace(name="ALREADY_EXISTS"))
+                )
+            ),
+            DuplicateKeyError,
+        ),
+        (
+            lambda: _DriverError("Row [1] in table items already exists"),
+            DuplicateKeyError,
+        ),
+        (
+            lambda: _DriverError("Unique index violation on index uq_items_slug"),
+            DuplicateKeyError,
+        ),
+        (
+            lambda: _build_spanner_orig(
+                "400 error",
+                cause=_DriverError(
+                    "Foreign key constraint `fk_orders_user` is violated on table `orders`.",
+                    grpc_status_code=SimpleNamespace(name="FAILED_PRECONDITION"),
+                ),
+            ),
+            ForeignKeyError,
+        ),
+        (
+            lambda: _DriverError("Parent row for row [1] in table orders is missing"),
+            ForeignKeyError,
+        ),
+        (
+            lambda: _build_spanner_orig(
+                "400 error",
+                cause=_DriverError(
+                    "Check constraint `ck_positive` on table `orders` is violated.",
+                    grpc_status_code=SimpleNamespace(name="FAILED_PRECONDITION"),
+                ),
+            ),
+            IntegrityError,
+        ),
+    ],
+)
+def test_wrap_sqlalchemy_exception_spanner_classification(
+    dialect_name: str,
+    orig_factory: Any,
+    expected: type[IntegrityError],
+) -> None:
+    """Classify Spanner DBAPI errors using chained gRPC status causes and constraint messages."""
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(
+            dialect_name=dialect_name,
+            error_messages={"duplicate_key": "duplicate", "foreign_key": "foreign", "check_constraint": "check"},
+        ),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, orig_factory())
+
+    assert excinfo.type is expected
+
+
+def _build_spanner_orig(message: str, *, cause: BaseException) -> Exception:
+    exc = Exception(message)
+    exc.__cause__ = cause
+    return exc
+
+
+def test_wrap_sqlalchemy_exception_spanner_real_already_exists() -> None:
+    """Classify a genuine google.api_core.exceptions.AlreadyExists chained from DBAPI orig."""
+    api_exceptions = pytest.importorskip("google.api_core.exceptions")
+    dbapi_exc = Exception("bound details placeholder")
+    dbapi_exc.__cause__ = api_exceptions.AlreadyExists("entity already exists")
+    with pytest.raises(DuplicateKeyError), wrap_sqlalchemy_exception(dialect_name="spanner+spanner"):
+        raise SQLAlchemyIntegrityError("INSERT", {}, dbapi_exc)
+
+
+@pytest.mark.parametrize("dialect_name", ["cockroach", "cockroachdb"])
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        (
+            'duplicate key value violates unique constraint "uq_table_id"\nDETAIL: Key (id)=(1) already exists.',
+            DuplicateKeyError,
+        ),
+        (
+            'insert or update on table "child" violates foreign key constraint "fk_parent"\n'
+            'DETAIL:  Key (parent_id)=(1) is not present in table "parent".',
+            ForeignKeyError,
+        ),
+        ('new row for relation "child" violates check constraint "ck_positive"', IntegrityError),
+    ],
+)
+def test_wrap_sqlalchemy_exception_cockroach_regexes(
+    dialect_name: str,
+    message: str,
+    expected: type[IntegrityError],
+) -> None:
+    """Classify CockroachDB constraint messages with both cockroach and cockroachdb dialect names."""
+    with (
+        pytest.raises(IntegrityError) as excinfo,
+        wrap_sqlalchemy_exception(
+            dialect_name=dialect_name,
+            error_messages={"duplicate_key": "duplicate", "foreign_key": "foreign", "check_constraint": "check"},
+        ),
+    ):
+        raise SQLAlchemyIntegrityError("INSERT", {}, Exception(message))
+
+    assert excinfo.type is expected
+
+
+@pytest.mark.parametrize(
+    ("dialect_name", "orig", "expected"),
+    [
+        (
+            "postgresql",
+            Exception('duplicate key value violates unique constraint "uq_t"\nDETAIL: Key (id)=(1) already exists.'),
+            DuplicateKeyError,
+        ),
+        (None, _DriverError("duplicate", sqlstate="23505"), DuplicateKeyError),
+        (None, _DriverError("unique", sqlite_errorcode=2067), DuplicateKeyError),
+        (None, _DriverError("duplicate", error_type="duplicate_key"), DuplicateKeyError),
+        (None, _DriverError("fk", sqlstate="23503"), ForeignKeyError),
+    ],
+)
+def test_wrap_sqlalchemy_exception_decoupled_classification(
+    dialect_name: Optional[str],
+    orig: BaseException,
+    expected: type[IntegrityError],
+) -> None:
+    """Classify integrity errors by code or regex even when error_messages or dialect_name is omitted."""
+    with pytest.raises(IntegrityError) as excinfo, wrap_sqlalchemy_exception(dialect_name=dialect_name):
+        raise SQLAlchemyIntegrityError("INSERT", {}, orig)
+
+    assert excinfo.type is expected
+
+
+def test_unique_mixin_prevent_autoflush_passes_session_dialect() -> None:
+    """Propagate the bound dialect name when UniqueMixin prevents autoflush."""
+    session = MagicMock()
+    session.bind.dialect.name = "postgresql"
+    with pytest.raises(DuplicateKeyError), UniqueMixin._prevent_autoflush(session):
+        raise SQLAlchemyIntegrityError("INSERT", {}, _DriverError("dup", sqlstate="23505"))
+
+
+async def test_check_health_passes_session_dialect() -> None:
+    """Propagate the session dialect name from check_health to exception wrapping."""
+    sync_session = MagicMock()
+    sync_session.bind.dialect.name = "postgresql"
+    sync_session.execute.side_effect = SQLAlchemyIntegrityError("SELECT 1", {}, _DriverError("dup", sqlstate="23505"))
+    with pytest.raises(DuplicateKeyError):
+        SQLAlchemySyncRepository.check_health(sync_session)
+
+    async_session = MagicMock()
+    async_session.bind.dialect.name = "postgresql"
+    async_session.execute = AsyncMock(
+        side_effect=SQLAlchemyIntegrityError("SELECT 1", {}, _DriverError("dup", sqlstate="23505"))
+    )
+    with pytest.raises(DuplicateKeyError):
+        await SQLAlchemyAsyncRepository.check_health(async_session)

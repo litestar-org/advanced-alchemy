@@ -3417,7 +3417,11 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         Returns:
             ``True`` if healthy.
         """
-        with wrap_sqlalchemy_exception():
+        bind = getattr(session, "bind", None)
+        dialect = getattr(bind, "dialect", None)
+        raw_name = getattr(dialect, "name", None)
+        dialect_name = raw_name if isinstance(raw_name, str) else None
+        with wrap_sqlalchemy_exception(dialect_name=dialect_name):
             return (  # type: ignore[no-any-return]
                 await session.execute(cls._get_health_check_statement(session))
             ).scalar_one() == 1

@@ -27,7 +27,7 @@ from sqlalchemy.orm import (
     selectinload,
 )
 from sqlalchemy.orm.decl_base import _declarative_constructor  # pyright: ignore[reportPrivateUsage]
-from sqlalchemy.orm.strategy_options import _AbstractLoad  # pyright: ignore[reportPrivateUsage]
+from sqlalchemy.orm.interfaces import LoaderOption
 from sqlalchemy.sql import ColumnElement, ColumnExpressionArgument
 from sqlalchemy.sql.base import ExecutableOption
 from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
@@ -90,7 +90,7 @@ _EXPLICIT_NONE_UPDATE_KEY = "_aa_explicit_none_update"
 
 WhereClauseT = ColumnExpressionArgument[bool]
 SingleLoad: TypeAlias = Union[
-    _AbstractLoad,
+    LoaderOption,
     Literal["*"],
     InstrumentedAttribute[Any],
     RelationshipProperty[Any],
@@ -1263,7 +1263,7 @@ def _strategy_is_joined(strategy: Any) -> bool:
 
 
 def _joins_collection(option: ExecutableOption, *, fallback: bool = False) -> bool:
-    if not isinstance(option, _AbstractLoad):
+    if not isinstance(option, LoaderOption):
         return False
     has_strategy = hasattr(option, "strategy")
     has_context = hasattr(option, "context")

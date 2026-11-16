@@ -1,13 +1,15 @@
 """Unit tests for advanced_alchemy.types.json.ORA_JSONB dialect dispatch."""
 
 import sys
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy import CheckConstraint, Column, MetaData, Table
+from sqlalchemy import CheckConstraint, Column, MetaData, Table, literal_column
 from sqlalchemy.dialects.oracle import BLOB as ORA_BLOB
 from sqlalchemy.engine import Dialect
+from sqlalchemy.sql import operators
 
 from advanced_alchemy.types.json import ORA_JSONB, JsonB
 
@@ -152,3 +154,30 @@ def test_set_table_check_constraint_only_created_for_oracle() -> None:
     assert rule is not None
     assert rule(oracle) is True
     assert rule(postgres) is False
+
+
+def test_ora_jsonb_coerce_compared_value_initializes_impl() -> None:
+    """Calling super().__init__ ensures self.impl is an instance rather than the class."""
+    ora_type = ORA_JSONB(oracle_strict=False, name="payload_is_json")
+    assert ora_type.oracle_strict is False
+    assert ora_type.name == "payload_is_json"
+    coerced = ora_type.coerce_compared_value(operators.eq, literal_column("'a'"))
+    assert coerced is not None
+
+
+@pytest.mark.parametrize(
+    ("dialect", "raw", "expected"),
+    [
+        (SimpleNamespace(oracledb_ver=(1, 4, 0)), b'{"a": 1}', {"a": 1}),
+        (SimpleNamespace(oracledb_ver=(2, 1, 0)), b'{"a": 1}', b'{"a": 1}'),
+        (SimpleNamespace(), b'{"a": 1}', {"a": 1}),
+        (SimpleNamespace(), None, None),
+    ],
+)
+def test_ora_jsonb_process_result_value_oracledb_ver_guard(
+    dialect: Any,
+    raw: Any,
+    expected: Any,
+) -> None:
+    """Safely guard dialect.oracledb_ver access across drivers and non-Oracle dialects."""
+    assert ORA_JSONB().process_result_value(raw, dialect) == expected

@@ -30,7 +30,11 @@ class UniqueMixin:
         cls,
         session: "Union[AsyncSession, async_scoped_session[AsyncSession], Session, scoped_session[Session]]",
     ) -> "Generator[None, None, None]":
-        with session.no_autoflush, wrap_sqlalchemy_exception():
+        bind = getattr(session, "bind", None)
+        dialect = getattr(bind, "dialect", None)
+        raw_name = getattr(dialect, "name", None)
+        dialect_name = raw_name if isinstance(raw_name, str) else None
+        with session.no_autoflush, wrap_sqlalchemy_exception(dialect_name=dialect_name):
             yield
 
     @classmethod

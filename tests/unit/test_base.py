@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import importlib
+import os
+import subprocess
 import sys
 import types
 import uuid as uuid_module
 import warnings
 from dataclasses import dataclass, fields
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -424,3 +427,33 @@ def test_sentinel_mixin_compatible_with_mapped_as_dataclass_and_subsequent_model
     assert std_instance.name == "beta"
     assert "sa_orm_sentinel" in StandardSentinelModel.__table__.c
     assert list(StandardSentinelModel.__table__.c.keys()) == ["id", "name", "sa_orm_sentinel"]
+
+
+def test_mixin_modules_import_without_sqlalchemy_deprecation_warnings() -> None:
+    """Importing all mixin modules and Litestar session stores emits no SQLAlchemy deprecation warnings."""
+    repo_root = str(Path(__file__).resolve().parents[2])
+    env = {**os.environ, "PYTHONPATH": repo_root}
+    script = (
+        "import importlib\n"
+        "for name in ("
+        "'advanced_alchemy.mixins',"
+        "'advanced_alchemy.mixins.audit',"
+        "'advanced_alchemy.mixins.bigint',"
+        "'advanced_alchemy.mixins.nanoid',"
+        "'advanced_alchemy.mixins.sentinel',"
+        "'advanced_alchemy.mixins.slug',"
+        "'advanced_alchemy.mixins.unique',"
+        "'advanced_alchemy.mixins.uuid',"
+        "'advanced_alchemy.extensions.litestar.session',"
+        "'advanced_alchemy.extensions.litestar.store'"
+        "):\n"
+        "    importlib.import_module(name)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-W", "error::sqlalchemy.exc.SADeprecationWarning", "-c", script],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
