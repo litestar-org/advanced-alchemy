@@ -86,6 +86,31 @@ Examples by Type
 
     On MySQL/MariaDB and Oracle, SQLAlchemy's default ``DateTime(timezone=True)`` stores whole seconds only. Pass ``DateTimeUTC(fsp=6)`` (or set ``custom_annotation_map={datetime: DateTimeUTC(fsp=6)}`` via :func:`~advanced_alchemy.base.create_registry`) to preserve microseconds, or pass ``DateTimeUTC(fsp=0)`` to keep legacy whole-second DDL without migration churn. In v2.0, ``fsp=6`` becomes the default.
 
+Storing Python Enums
+--------------------
+
+By default, SQLAlchemy's ``Enum`` persists member **names** (such as ``"ACTIVE"``). Pass ``values_callable`` when your database schema stores member **values** (such as ``"active"``), and set ``native_enum=False`` for portable ``VARCHAR`` constraints across backends:
+
+.. code-block:: python
+
+    import enum
+    import sqlalchemy as sa
+    from sqlalchemy.orm import Mapped, mapped_column
+    from advanced_alchemy.base import BigIntBase
+
+
+    class JobState(str, enum.Enum):
+        PENDING = "pending"
+        RUNNING = "running"
+
+
+    class BackgroundJob(BigIntBase):
+        __tablename__ = "types_background_job"
+        state: Mapped[JobState] = mapped_column(
+            sa.Enum(JobState, values_callable=lambda obj: [item.value for item in obj], native_enum=False),
+            default=JobState.PENDING,
+        )
+
 Related Guides
 --------------
 

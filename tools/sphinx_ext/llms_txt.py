@@ -56,7 +56,7 @@ class LlmsConfig(msgspec.Struct, frozen=True, gc=False):
 
     site_title: str = "Advanced Alchemy"
     site_tagline: str = "A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy."
-    base_url: str = "https://docs.advanced-alchemy.litestar.dev/latest/"
+    base_url: str = "https://advanced-alchemy.litestar.dev/latest/"
     excluded_docs: frozenset[str] = frozenset({"genindex", "modindex", "py-modindex", "search"})
 
 
@@ -289,7 +289,7 @@ class SphinxLlmsGenerator:
         base_url = getattr(
             app.config,
             "llms_txt_base_url",
-            "https://docs.advanced-alchemy.litestar.dev/latest/",
+            "https://advanced-alchemy.litestar.dev/latest/",
         )
         html_meta = getattr(app.config, "html_meta", {}) or {}
         tagline = html_meta.get(
@@ -751,7 +751,7 @@ def setup(app: Sphinx) -> dict[str, str | bool]:
     if "llms_txt_base_url" not in app.config.values:
         app.add_config_value(
             "llms_txt_base_url",
-            "https://docs.advanced-alchemy.litestar.dev/latest/",
+            "https://advanced-alchemy.litestar.dev/latest/",
             "html",
         )
     app.connect("build-finished", on_build_finished)

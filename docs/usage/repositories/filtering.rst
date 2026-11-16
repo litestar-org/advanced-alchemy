@@ -108,13 +108,20 @@ Built-In Filter Helpers
 Paginating Results
 ------------------
 
-Combine ``LimitOffset`` with ``get_many_and_count`` for both page rows and total matching counts:
+Combine ``LimitOffset`` with ``get_many_and_count`` for both page rows and total matching counts. By default (``count_with_window_function=True``), ``get_many_and_count`` runs a single query using an analytical ``COUNT(*) OVER()`` window function. Pass ``count_with_window_function=False`` (per call, or as a class default on your repository or service) to run two focused queries—an indexed page ``SELECT`` and a separate ``COUNT(*)``—which avoids extra sorting or scattered heap reads on large sorted tables or random/UUID primary keys (Cloud Spanner always uses the two-query path):
 
 .. code-block:: python
 
     async def get_posts_page(db_session: AsyncSession, page: int = 1, page_size: int = 20) -> tuple[list[FilteringPost], int]:
         repo = FilteringPostRepository(session=db_session)
-        return await repo.get_many_and_count(LimitOffset(offset=(page - 1) * page_size, limit=page_size))
+        return await repo.get_many_and_count(
+            LimitOffset(offset=(page - 1) * page_size, limit=page_size),
+            count_with_window_function=False,
+        )
+
+.. warning::
+
+    ``count_with_window_function`` currently defaults to ``True`` in 1.x and is planned to change to ``False`` in v2.0. Set ``count_with_window_function=False`` explicitly where two-query pagination performs better, or ``True`` to preserve single-query counting after upgrading.
 
 Naming URL Query Parameters
 ---------------------------
@@ -148,6 +155,8 @@ Use :class:`~advanced_alchemy.filters.RelationshipFilter` to correlate related p
             ),
             NotInCollectionFilter(field_name=FilteringPost.tags, values=excluded_tag_ids),
         )
+
+For structured JSON/dict query payloads, :class:`~advanced_alchemy.filters.MultiFilter` accepts ``allowed_relationships``, ``allowed_fields``, ``max_depth``, and ``strict=True`` to restrict permitted fields and nesting depth.
 
 Field Filtering and Sorting
 ---------------------------

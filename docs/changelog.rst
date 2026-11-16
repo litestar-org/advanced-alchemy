@@ -7,6 +7,7 @@
 
     .. change:: declare reusable FilterSets with inferred relationship loading
         :type: feature
+        :pr: 639 845
 
         ``FilterSet[Model]`` defines allowed query fields, custom filters, search,
         and sorting with double-underscore field parameters. Operators on one
@@ -15,6 +16,200 @@
         explicit loading options, pagination totals, and mock repository behavior.
         With contributions from `Morteza Karimi
         <https://github.com/MortezaKarimi77>`_.
+
+    .. change:: add RelationshipFilter and relationship collection filtering
+        :type: feature
+        :pr: 639
+        :issue: 364 505
+
+        Adds :class:`~advanced_alchemy.filters.RelationshipFilter` for correlated
+        ``EXISTS`` / ``NOT EXISTS`` filtering across one-to-many, many-to-one,
+        many-to-many, self-referential, joined-table inheritance, and multi-hop
+        relationships, alongside relationship attribute support in
+        :class:`~advanced_alchemy.filters.CollectionFilter` and
+        :class:`~advanced_alchemy.filters.NotInCollectionFilter`, ``"relationship"``
+        nodes (with ``allowed_relationships``, ``max_relationship_depth``,
+        ``allowed_fields``, ``max_depth``, and ``strict`` validation guards)
+        in :class:`~advanced_alchemy.filters.MultiFilter`,
+        :class:`~sqlalchemy.orm.attributes.InstrumentedAttribute` field support in
+        :class:`~advanced_alchemy.filters.SearchFilter` and
+        :class:`~advanced_alchemy.filters.NotInSearchFilter`, and a suffix pattern
+        fix for ``operators_map["iendswith"]``.
+
+    .. change:: add get_or_none across repositories and services
+        :type: feature
+        :pr: 843
+        :issue: 117
+
+        Adds ``get_or_none`` to ``SQLAlchemyAsyncRepository``,
+        ``SQLAlchemySyncRepository``, their protocols and mock counterparts, and
+        ``SQLAlchemyAsyncRepositoryReadService`` /
+        ``SQLAlchemySyncRepositoryReadService`` to return ``None`` instead of
+        raising ``NotFoundError`` when no record matches, and fixes
+        ``InMemoryStore.get_or_none`` miss handling.
+
+    .. change:: support JSONL fixtures, streaming compression, and sharded rollover
+        :type: feature
+        :pr: 842
+
+        Extends ``advanced_alchemy.utils.fixtures`` and ``database dump-data`` with
+        JSON Lines support, chunked gzip/zip streaming, numbered fixture shards
+        (``iter_fixture_sync`` / ``iter_fixture_async``, ``write_fixture_sync`` /
+        ``write_fixture_async``), and streaming ``dump_tables`` queries. Renames
+        ``open_fixture`` to ``open_fixture_sync`` with a deprecated alias kept
+        until 2.0.
+
+    .. change:: add typed Litestar submodule re-exports and exception handler safety
+        :type: feature
+        :pr: 822
+        :issue: 504
+
+        Adds lazy typed ``base``, ``exceptions``, ``filters``, ``mixins``,
+        ``operations``, ``repository``, ``service``, ``types``, and ``utils``
+        submodules under ``advanced_alchemy.extensions.litestar``, skips
+        excluded DTO descriptors earlier, precomputes search field names in
+        Litestar and FastAPI filter providers, and preserves user-configured
+        ``exception_handlers``.
+
+    .. change:: classify integrity errors by native SQLSTATE and driver error codes
+        :type: feature
+        :pr: 807 813 839 834 840
+        :issue: 803 828 829 831
+
+        Updates ``wrap_sqlalchemy_exception`` to classify integrity violations by
+        driver SQLSTATE, native error codes, or error types before falling back to
+        regex matching across PostgreSQL, CockroachDB, SQLite, MySQL, MariaDB,
+        Oracle, DuckDB, and MSSQL.
+
+    .. change:: add opt-in fractional-second precision to DateTimeUTC
+        :type: feature
+        :pr: 819
+        :issue: 777
+
+        Adds opt-in ``fsp`` (with ``precision`` alias) to ``DateTimeUTC`` to
+        compile ``DATETIME(fsp)`` on MySQL/MariaDB and ``TIMESTAMP WITH TIME ZONE``
+        on Oracle while emitting a deprecation warning when omitted on those
+        dialects in 1.x.
+
+    .. change:: auto-enable PostgreSQL enum migration detection in Alembic templates
+        :type: feature
+        :pr: 774
+        :issue: 492
+
+        Conditionally imports ``alembic_postgresql_enum`` in generated Alembic
+        sync and asyncio ``env.py`` templates when installed and adds the
+        ``postgresql`` optional extra.
+
+    .. change:: add CLI pyproject.toml config discovery and validation commands
+        :type: feature
+        :pr: 825
+        :issue: 604
+
+        Resolves ``alchemy`` configurations from ``--config``/``-c`` (before or
+        after subcommands), ``ALCHEMY_CONFIG``, and ``pyproject.toml``, supporting
+        colon/dotted targets and sync/async factory callables, alongside
+        ``--validate-config`` and ``show-config``.
+
+    .. change:: add BcryptHasher password hashing backend
+        :type: feature
+        :pr: 789
+
+        Adds an optional ``BcryptHasher`` backend for ``PasswordHash`` backed by
+        ``bcrypt``.
+
+    .. change:: add Python 3.15 support
+        :type: feature
+        :pr: 818
+
+        Adds Python 3.15 classifier metadata, dependency lock updates, and CI
+        matrix coverage.
+
+    .. change:: harden SQLAlchemyDTO reflection and clause-element defaults
+        :type: bugfix
+        :pr: 846
+        :issue: 236 238
+
+        Updates ``SQLAlchemyDTO`` reflection to skip excluded or un-included
+        foreign relationships and unreflectable descriptors while preserving
+        self-referential nested filtering, and handles SQL clause-element defaults
+        such as ``func.now()`` and ``null()`` in ``_detect_defaults``.
+
+    .. change:: classify Cloud Spanner and CockroachDB integrity errors and decouple exception wrapping
+        :type: bugfix
+        :pr: 846
+        :issue: 830
+
+        Classifies Cloud Spanner ``orig.__cause__`` exceptions and constraint
+        messages alongside ``"cockroachdb"`` dialect regex aliases, decouples
+        ``wrap_sqlalchemy_exception`` classification from ``error_messages``, and
+        passes bound dialect names from ``UniqueMixin._prevent_autoflush`` and
+        repository ``check_health``.
+
+    .. change:: align ORA_JSONB and loader option checks with SQLAlchemy 2.1
+        :type: bugfix
+        :pr: 812 846
+        :issue: 811
+
+        Calls ``super().__init__(*args, **kwargs)`` in ``ORA_JSONB.__init__``,
+        guards ``dialect.oracledb_ver`` access, replaces removed
+        ``util.portable_instancemethod``, and uses public
+        ``sqlalchemy.orm.interfaces.LoaderOption`` in repository utilities.
+
+    .. change:: prevent filter dependency collisions in merged Litestar service bundles
+        :type: bugfix
+        :pr: 833
+        :issue: 733
+
+        Adds ``prefix`` support to ``DependencyDefaults`` and ``scoped_filters``
+        / ``dep_defaults`` parameters to ``create_service_dependencies`` so
+        merged routes keep distinct filter dependency keys.
+
+    .. change:: register routing session listeners and fix Sanic and Starlette state keys
+        :type: bugfix
+        :pr: 827
+
+        Registers timestamp, file-object, and cache listeners on
+        ``RoutingSyncSessionMaker`` and ``RoutingAsyncSessionMaker``, fixes state
+        key counter collisions in Sanic and Starlette extensions, and binds sync
+        session dependencies in Sanic.
+
+    .. change:: respect GUID binary=False on Oracle and export PGCryptoBackend and Vector in Alembic
+        :type: bugfix
+        :pr: 826
+
+        Compiles ``GUID(binary=False)`` to ``CHAR(32)`` on Oracle, exports
+        ``PGCryptoBackend`` from ``advanced_alchemy.types``, registers ``Vector``
+        in Alembic migration templates, and simplifies ``SentinelMixin._sentinel``.
+
+    .. change:: remove deprecated declarative_mixin decorator
+        :type: bugfix
+        :pr: 805
+        :issue: 804
+
+        Removes ``@declarative_mixin`` from built-in mixins, Litestar
+        session/store models, and tests for SQLAlchemy 2.1 compatibility.
+
+    .. change:: use distinct parameter names for date-filter dependencies
+        :type: bugfix
+        :pr: 814
+        :issue: 791
+
+        Uses distinct ``created_at_before``/``created_at_after`` and
+        ``updated_at_before``/``updated_at_after`` parameter names in Litestar
+        and FastAPI filter providers while keeping public query aliases intact.
+
+    .. change:: update documentation pipeline, canonical URLs, and usage guides
+        :type: misc
+        :pr: 782 838 841 847
+        :issue: 200 359 436 734 778
+
+        Reorganizes usage guides with doctree-generated ``llms.txt`` and
+        ``llms-full.txt`` exports, updates canonical URLs to
+        ``https://advanced-alchemy.litestar.dev/latest/``, documents
+        ``count_with_window_function`` behavior and the planned 2.0 default
+        change, adds nested ``SQLAlchemyDTO``, many-to-many linking, and Python
+        ``Enum`` ``values_callable`` examples, and clarifies correlated
+        ``EXISTS`` filtering.
 
     .. change:: coordinate shared-session services with ServiceGroup
         :type: feature
@@ -98,24 +293,6 @@
 
 .. changelog:: 1.12.0
     :date: 2026-10-19
-
-    .. change:: add RelationshipFilter and relationship collection filtering
-        :type: feature
-        :pr: 639
-        :issue: 364, 505
-
-        Adds :class:`~advanced_alchemy.filters.RelationshipFilter` for correlated
-        ``EXISTS`` / ``NOT EXISTS`` filtering across one-to-many, many-to-one,
-        many-to-many, self-referential, joined-table inheritance, and multi-hop
-        relationships, alongside relationship attribute support in
-        :class:`~advanced_alchemy.filters.CollectionFilter` and
-        :class:`~advanced_alchemy.filters.NotInCollectionFilter`, ``"relationship"``
-        nodes (with ``allowed_relationships`` and ``max_relationship_depth`` guards)
-        in :class:`~advanced_alchemy.filters.MultiFilter`,
-        :class:`~sqlalchemy.orm.attributes.InstrumentedAttribute` field support in
-        :class:`~advanced_alchemy.filters.SearchFilter` and
-        :class:`~advanced_alchemy.filters.NotInSearchFilter`, and a suffix pattern
-        fix for ``operators_map["iendswith"]``.
 
     .. change:: per-dialect optimal upsert_many (MERGE / ON CONFLICT / INSERT OR UPDATE)
         :type: feature

@@ -16,10 +16,10 @@ Declare ``dependencies = create_service_dependencies(...)`` on a Litestar ``Cont
 
 .. code-block:: python
 
-    from typing import Annotated
     from uuid import UUID
     from litestar import Controller, get
-    from litestar.params import Dependency
+    from litestar.di import NamedDependency
+    from litestar.params import SkipValidation
     from sqlalchemy.orm import Mapped
     from advanced_alchemy.extensions.litestar import base, filters, providers, repository, service
 
@@ -56,7 +56,7 @@ Declare ``dependencies = create_service_dependencies(...)`` on a Litestar ``Cont
         async def list_products(
             self,
             products_service: ProductService,
-            filters: Annotated[list[filters.FilterTypes], Dependency(skip_validation=True)],
+            filters: NamedDependency[SkipValidation[list[filters.FilterTypes]]],
         ) -> list[ProductModel]:
             results, _ = await products_service.get_many_and_count(*filters)
             return list(results)
@@ -115,6 +115,36 @@ Instead of maintaining separate schema classes for simple tables, ``SQLAlchemyDT
                     exclude={"id", "created_at", "updated_at", "full_name", "initials"},
                     partial=True,
                 )
+
+    .. tab-item:: Nested Relationships
+
+        .. code-block:: python
+
+            from sqlalchemy import ForeignKey
+            from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+
+            class Publisher(base.UUIDAuditBase):
+                __tablename__ = "litestar_dto_publisher"
+                name: Mapped[str]
+                books: Mapped[list["Book"]] = relationship(back_populates="publisher")
+
+
+            class Book(base.UUIDAuditBase):
+                __tablename__ = "litestar_dto_book"
+                title: Mapped[str]
+                internal_notes: Mapped[str]
+                publisher_id: Mapped[UUID] = mapped_column(ForeignKey("litestar_dto_publisher.id"))
+                publisher: Mapped[Publisher] = relationship(back_populates="books")
+
+
+            class PublisherReadDTO(SQLAlchemyDTO[Publisher]):
+                config = SQLAlchemyDTOConfig(
+                    max_nested_depth=1,
+                    exclude={"created_at", "updated_at", "books.0.internal_notes", "books.0.publisher"},
+                )
+
+Use ``max_nested_depth`` to control how many relationship levels ``SQLAlchemyDTO`` serializes, and dotted paths such as ``"books.0.internal_notes"`` to filter fields on related items while always excluding back-reference cycles.
 
 Related Guides
 --------------

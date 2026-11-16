@@ -93,6 +93,24 @@ Suppose one blog post can have several topics, and one topic belongs to many pos
             lazy="selectin",
         )
 
+Linking Existing Related Objects
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To attach existing many-to-many records without inserting duplicate rows, query the existing ``BlogTopic`` instances on the active session and assign them to the relationship instead of passing reconstructed transient copies:
+
+.. code-block:: python
+
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+
+    async def create_post_with_topics(db_session: AsyncSession, topic_slugs: list[str]) -> TaggedBlogPost:
+        existing_topics = (await db_session.scalars(select(BlogTopic).where(BlogTopic.slug.in_(topic_slugs)))).all()
+        post = TaggedBlogPost(title="Linking Existing Tags", topics=list(existing_topics))
+        db_session.add(post)
+        await db_session.commit()
+        return post
+
 .. _using_unique_mixin:
 
 Preventing Duplicate Rows

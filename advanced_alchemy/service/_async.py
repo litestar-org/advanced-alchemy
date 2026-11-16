@@ -112,7 +112,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
     uniquify: ClassVar[bool] = False
     """Optionally apply the ``unique()`` method to results before returning."""
     count_with_window_function: ClassVar[bool] = True
-    """Use an analytical window function to count results.  This allows the count to be performed in a single query."""
+    """Use an analytical window function to count results in a single query. Defaults to ``True`` in 1.x (planned to change to ``False`` in v2.0); set ``False`` for two-query pagination on large sorted tables."""
     schema_dump_config: ClassVar[SchemaDumpConfig] = SchemaDumpConfig()
     """Default dump behavior when schema-like input is converted into a model."""
     _model_type: ClassVar[Optional[type[Any]]] = None
@@ -157,7 +157,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
-            count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
+            count_with_window_function: When false, list and count will use two queries instead of an analytical window function. Defaults to ``True`` in 1.x (planned to change to ``False`` in v2.0).
             **repo_kwargs: passed as keyword args to repo instantiation.
         """
         load = load if load is not None else self.loader_options
@@ -601,7 +601,7 @@ class SQLAlchemyAsyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLA
             *filters: Types for specific filtering operations.
             statement: To facilitate customization of the underlying select query.
             auto_expunge: Remove object from session before returning.
-            count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
+            count_with_window_function: When false, list and count will use two queries instead of an analytical window function. Defaults to ``True`` in 1.x (planned to change to ``False`` in v2.0).
             order_by: Set default order options for queries.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
