@@ -2,6 +2,11 @@
 API Reference
 =============
 
+.. toctree::
+    :hidden:
+
+    filterset
+
 .. py:module:: advanced_alchemy
 
 Complete class, function, and module reference for Advanced Alchemy. Browse any module in the left sidebar or select a section below.
@@ -67,6 +72,12 @@ Repositories, Services & Scaling
       :link-type: doc
 
       Pagination, date range, collection, search, and ordering filters plus cross-dialect :doc:`bulk upserts <operations>`.
+
+    .. grid-item-card:: :octicon:`filter` FilterSet
+      :link: filterset
+      :link-type: doc
+
+      Reusable typed query definitions, custom filters, and inferred relationship loading.
 
     .. grid-item-card:: :octicon:`git-branch` Replica Routing
       :link: routing

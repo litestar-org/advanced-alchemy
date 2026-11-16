@@ -36,16 +36,33 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
         worker_id: Worker ID to ensure unique class names across parallel test workers
     """
     # Create unique suffix for class names to avoid registry conflicts
-    from advanced_alchemy import base
+    from sqlalchemy.ext.asyncio import AsyncAttrs
+    from sqlalchemy.orm import DeclarativeBase
+
+    from advanced_alchemy import base, mixins
     from advanced_alchemy.types import EncryptedString, EncryptedText
 
+    isolated_registry = base.create_registry()
+
+    class _IsolatedBase(DeclarativeBase):
+        __abstract__ = True
+        registry = isolated_registry
+        metadata = isolated_registry.metadata
+
     if base_type == "uuid":
-        # Use the patched UUID base classes - all should use the same registry
-        # So we'll use the same UUIDAuditBase for all models to ensure same registry
-        BaseClass = base.UUIDAuditBase
-        SimpleBaseClass = base.UUIDAuditBase  # Changed from UUIDBase
-        SecretBaseClass = base.UUIDAuditBase  # Changed from UUIDv7Base
-        FetchedValueBaseClass = base.UUIDAuditBase  # Changed from UUIDv6Base
+
+        class BaseClass(
+            mixins.UUIDPrimaryKey,
+            base.CommonTableAttributes,
+            mixins.AuditColumns,
+            _IsolatedBase,
+            AsyncAttrs,
+        ):
+            __abstract__ = True
+
+        SimpleBaseClass = BaseClass
+        SecretBaseClass = BaseClass
+        FetchedValueBaseClass = BaseClass
 
         # Define UUID models using patched bases with unique class names
 
@@ -176,11 +193,19 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
             is_active: Mapped[bool] = mapped_column(default=True)
 
     else:  # bigint
-        # Use the patched BigInt base classes - all should use the same registry
-        BaseClass = base.BigIntAuditBase  # type: ignore[assignment]
-        SimpleBaseClass = base.BigIntAuditBase  # type: ignore[assignment]
-        SecretBaseClass = base.BigIntAuditBase  # type: ignore[assignment]
-        FetchedValueBaseClass = base.BigIntAuditBase  # type: ignore[assignment]
+
+        class BaseClass(  # type: ignore[no-redef]
+            mixins.BigIntPrimaryKey,
+            base.CommonTableAttributes,
+            mixins.AuditColumns,
+            _IsolatedBase,
+            AsyncAttrs,
+        ):
+            __abstract__ = True
+
+        SimpleBaseClass = BaseClass  # type: ignore[assignment]
+        SecretBaseClass = BaseClass  # type: ignore[assignment]
+        FetchedValueBaseClass = BaseClass  # type: ignore[assignment]
 
         # Define BigInt models using patched bases with unique class names
         class BigIntAuthor(BaseClass):  # type: ignore[valid-type,misc]
@@ -594,6 +619,10 @@ def bigint_models_dba(request: "FixtureRequest") -> dict[str, type]:
 @pytest.fixture(scope="session")
 def uuid_schema_sync(engine: Engine, uuid_models_dba: dict[str, type], request: "FixtureRequest") -> None:
     """Ensure UUID schema exists for sync engine."""
+    if engine.dialect.name.startswith("spanner"):
+        pytest.skip(
+            "Generic repository schema uses UNIQUE constraints unsupported by Spanner; use Spanner-specific models"
+        )
     if getattr(engine.dialect, "name", "") != "mock":
         worker_id = get_worker_id(request)
         schema_key = f"uuid_sync_{engine.dialect.name}_{worker_id}"

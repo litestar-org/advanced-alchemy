@@ -962,7 +962,16 @@ class FilterableRepository(
         Returns:
             StatementTypeT: The filtered SQL statement.
         """
-        for filter_ in filters:
+        from advanced_alchemy.filterset import FilterSet
+
+        filtersets: list[FilterSet[Any]] = [
+            cast("Any", filter_) for filter_ in filters if isinstance(filter_, FilterSet)
+        ]
+        if any(filterset.model_type is not self.model_type for filterset in filtersets):
+            msg = "FilterSet model does not match the repository model"
+            raise ValueError(msg)
+        expanded = _expand_filtersets(filters)
+        for filter_ in expanded:
             if isinstance(filter_, (PaginationFilter,)):
                 if apply_pagination:
                     statement = filter_.append_to_statement(statement, self.model_type)
@@ -972,6 +981,18 @@ class FilterableRepository(
                 statement = cast("StatementTypeT", statement.where(filter_))
             else:
                 statement = filter_.append_to_statement(statement, self.model_type)
+        if isinstance(statement, Select) and filtersets:
+            statement = cast(
+                "StatementTypeT",
+                _filterset_loader_options(
+                    statement,
+                    filtersets,
+                    self._dialect,
+                    paginated=any(isinstance(f, PaginationFilter) for f in expanded)
+                    or getattr(statement, "_limit_clause", None) is not None
+                    or getattr(statement, "_offset_clause", None) is not None,
+                ),
+            )
         return statement
 
     def _filter_select_by_kwargs(
@@ -1184,6 +1205,20 @@ def _normalize_cache_key_value(value: Any) -> Any:
     return {"__repr__": repr(value)}  # pyright: ignore[reportUnknownArgumentType]
 
 
+def _contains_column_element(value: Any) -> bool:
+    """Return True if a filter or nested container embeds a raw SQLAlchemy expression."""
+    if isinstance(value, ColumnElement):
+        return True
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):  # pyright: ignore[reportUnknownArgumentType]
+        return any(_contains_column_element(getattr(value, field.name)) for field in dataclasses.fields(value))
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return any(_contains_column_element(item) for item in cast("Iterable[Any]", value))
+    if isinstance(value, dict):
+        value_map = cast("dict[object, object]", value)
+        return any(_contains_column_element(item) for item in value_map.values())
+    return False
+
+
 def _canonicalize_cache_key_value(value: Any) -> Any:
     """Convert dict-like objects into a stable, ordered representation."""
     if isinstance(value, Mapping):
@@ -1195,6 +1230,79 @@ def _canonicalize_cache_key_value(value: Any) -> Any:
         value_list = cast("list[Any]", value)  # type: ignore[redundant-cast]
         return [_canonicalize_cache_key_value(v) for v in value_list]
     return value
+
+
+def _expand_filtersets(
+    filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+) -> list[Union[StatementFilter, ColumnElement[bool]]]:
+    from advanced_alchemy.filterset import FilterSet
+
+    expanded: list[Union[StatementFilter, ColumnElement[bool]]] = []
+    for filter_ in filters:
+        if isinstance(filter_, FilterSet):
+            expanded.extend(filter_.to_statement_filters())
+        else:
+            expanded.append(filter_)
+    return expanded
+
+
+def _loader_path(option: Any) -> tuple[Any, ...]:
+    path = getattr(getattr(option, "path", None), "path", ())
+    return tuple(cast("Any", part) for part in path if isinstance(part, RelationshipProperty))
+
+
+def _filterset_loader_options(
+    statement: Select[Any], filtersets: Sequence[Any], dialect: Any, *, paginated: bool
+) -> Select[Any]:
+    """Merge inferred loaders without replacing caller strategies or criteria.
+
+    SQLAlchemy stores chained strategies in Load.context. Clone inferred options and
+    retain only unclaimed strategy paths, so explicit parents can keep their strategy
+    while inferred descendants are still eagerly loaded.
+    """
+    entity_result = False
+    for description in statement.column_descriptions:
+        entity = inspect(description.get("expr"), raiseerr=False)
+        if entity is not None and hasattr(entity, "mapper"):
+            entity_result = True
+            break
+    if not entity_result:
+        return statement
+    explicit_paths: set[tuple[Any, ...]] = set()
+    wildcard_paths: set[tuple[Any, ...]] = set()
+    for option in getattr(statement, "_with_options", ()):
+        for entry in getattr(option, "context", (option,)):
+            if getattr(entry, "strategy", None):
+                path = _loader_path(entry)
+                raw_path = getattr(getattr(entry, "path", None), "path", getattr(entry, "path", ()))
+                if any("relationship:" in str(part) for part in raw_path):
+                    wildcard_paths.add(path)
+                elif path:
+                    explicit_paths.add(path)
+    options: list[ExecutableOption] = []
+    claimed: set[tuple[Any, ...]] = set()
+    subquery_loading = False
+    for filterset in filtersets:
+        for option in filterset.inferred_load(dialect):
+            # Retain inferred descendants under explicit parent loading strategies.
+            contexts: list[Any] = []
+            for entry in getattr(option, "context", ()):
+                path = _loader_path(entry)
+                blocked = any(len(path) > len(prefix) and path[: len(prefix)] == prefix for prefix in wildcard_paths)
+                if not blocked and path not in explicit_paths and path not in claimed:
+                    contexts.append(entry)
+                    claimed.add(path)
+                    subquery_loading |= ("lazy", "subquery") in (getattr(entry, "strategy", ()) or ())
+            if contexts:
+                clone = option._generate()  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+                clone.context = tuple(contexts)
+                options.append(clone)
+    missing_mssql_order = getattr(dialect, "name", dialect) == "mssql" and not getattr(
+        statement, "_order_by_clauses", ()
+    )
+    if paginated and (subquery_loading or missing_mssql_order):
+        statement = statement.order_by(*inspect(filtersets[0].model_type).primary_key)
+    return statement.options(*options)
 
 
 def _build_cache_key(  # pyright: ignore[reportUnusedFunction]
@@ -1215,9 +1323,13 @@ def _build_cache_key(  # pyright: ignore[reportUnusedFunction]
     Returns None if the query specification includes non-cacheable filter
     expressions (e.g., raw SQLAlchemy boolean expressions).
     """
+    from advanced_alchemy.filterset import FilterSet
+
+    if any(isinstance(filter_, FilterSet) and filter_.load for filter_ in filters):
+        return None
     normalized_filters: list[dict[str, Any]] = []
-    for filter_ in filters:
-        if isinstance(filter_, ColumnElement):
+    for filter_ in _expand_filtersets(filters):
+        if _contains_column_element(filter_):
             return None
         normalized_filters.append({"type": filter_.__class__.__name__, "data": _normalize_cache_key_value(filter_)})
 

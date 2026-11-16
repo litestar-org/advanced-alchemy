@@ -4,13 +4,14 @@ import contextlib
 import datetime
 import re
 from collections import abc, defaultdict
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Collection, Iterable, Mapping
 from inspect import isclass, signature
 from typing import TYPE_CHECKING, Any, Generic, List, Literal, Optional, Union, cast, overload
 
 from sqlalchemy import BinaryExpression, BooleanClauseList, Column, ColumnElement, inspect, or_
 from sqlalchemy.exc import NoInspectionAvailable
-from sqlalchemy.orm import InstrumentedAttribute, RelationshipProperty, Session, object_mapper
+from sqlalchemy.orm import InstrumentedAttribute, RelationshipProperty, Session, class_mapper, object_mapper
+from sqlalchemy.orm.exc import UnmappedClassError
 from sqlalchemy.sql import operators as sql_op
 from sqlalchemy.sql.elements import (
     BindParameter,
@@ -42,9 +43,11 @@ from advanced_alchemy.filters import (
     NullFilter,
     OnBeforeAfter,
     OrderBy,
+    RelationshipFilter,
     SearchFilter,
     StatementFilter,
 )
+from advanced_alchemy.operations import validate_identifier
 from advanced_alchemy.repository._util import (
     allows_explicit_none_update,
     column_has_defaults,
@@ -277,18 +280,23 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
             ref: Target model instance to set on data relationships
         """
         ref_mapper = object_mapper(ref)
-        for relationship in object_mapper(data).relationships:
+        data_mapper = object_mapper(data)
+        for relationship in data_mapper.relationships:
             local = next(iter(relationship.local_columns))
             remote = next(iter(relationship.remote_side))
             if not local.key or not remote.key:
                 msg = f"Cannot update relationship {relationship} for model {ref_mapper.class_}"
                 raise AdvancedAlchemyError(msg)
+            local_attr = data_mapper.get_property_by_column(local).key
+            remote_attr = (
+                relationship.mapper.get_property_by_column(remote).key if relationship.secondary is None else remote.key
+            )
             value = getattr(data, relationship.key)
             if not value and relationship.mapper.class_ is ref_mapper.class_:
                 if relationship.uselist:
                     for elem in value:
-                        if local_value := getattr(data, local.key):
-                            setattr(elem, remote.key, local_value)
+                        if local_value := getattr(data, local_attr):
+                            setattr(elem, remote_attr, local_value)
                 else:
                     setattr(data, relationship.key, ref)
 
@@ -306,16 +314,22 @@ class SQLAlchemyInMemoryStore(InMemoryStore[ModelT]):
                 if not local.key or not remote.key:
                     msg = f"Cannot update relationship {relationship} for model {ref_mapper.class_}"
                     raise AdvancedAlchemyError(msg)
+                local_attr = ref_mapper.get_property_by_column(local).key
+                remote_attr = (
+                    relationship.mapper.get_property_by_column(remote).key
+                    if relationship.secondary is None
+                    else remote.key
+                )
                 if relationship.uselist:
                     for elem in value:
-                        if local_value := getattr(data, local.key):
-                            setattr(elem, remote.key, local_value)
+                        if local_value := getattr(data, local_attr):
+                            setattr(elem, remote_attr, local_value)
                         self._update_relationship(elem, data)
                     if isinstance(value, list):
                         setattr(data, relationship.key, type(value)(set(value)))  # pyright: ignore[reportUnknownArgumentType]
                 else:
-                    if remote_value := getattr(value, remote.key):
-                        setattr(data, local.key, remote_value)
+                    if remote_value := getattr(value, remote_attr):
+                        setattr(data, local_attr, remote_value)
                     self._update_relationship(value, data)
 
     def _set_defaults(self, data: ModelT) -> None:
@@ -387,11 +401,14 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
             new_attrs = {}
 
         for column in obj_mapper.columns:
-            if column.key not in new_attrs or not column.foreign_keys:
+            if not column.foreign_keys:
+                continue
+            attr_name = obj_mapper.get_property_by_column(column).key
+            if attr_name not in new_attrs:
                 continue
             remote_mapper = mappers[next(iter(column.foreign_keys))._table_key()]  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
             try:
-                obj = self.store(remote_mapper.class_).get(new_attrs.get(column.key))
+                obj = self.store(remote_mapper.class_).get(new_attrs.get(attr_name))
             except KeyError:
                 continue
 
@@ -401,6 +418,118 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
 
 class InMemoryFilterEvaluator:
     """Synchronous filter, ordering, pagination, and SQLAlchemy AST evaluator for in-memory repositories."""
+
+    @staticmethod
+    def resolve_attr_value(item: Any, field_name: str) -> Any:
+        """Resolve scalar or dotted to-one attribute value on ``item``."""
+        current = item
+        for part in field_name.split("."):
+            if current is None:
+                return None
+            current = getattr(current, part)
+        return current
+
+    @staticmethod
+    def _relationship_collection_filter(
+        result: List[ModelT],
+        field_str: str,
+        values: Collection[Any],
+        *,
+        negate: bool,
+    ) -> Optional[RelationshipFilter]:
+        """Convert relationship ``CollectionFilter``/``NotInCollectionFilter`` to a ``RelationshipFilter``."""
+        if not result:
+            return None
+        info = inspect(type(result[0]), raiseerr=False)
+        if info is None or not hasattr(info, "mapper"):
+            return None
+        rel_prop = info.mapper.relationships.get(field_str)
+        if rel_prop is None:
+            return None
+        pk_cols = rel_prop.mapper.primary_key
+        if len(pk_cols) != 1 or not pk_cols[0].key:
+            msg = (
+                f"Relationship collection filtering on '{field_str}' requires a single-column primary key "
+                f"on related model {rel_prop.mapper.class_.__name__}"
+            )
+            raise ValueError(msg)
+        return RelationshipFilter(
+            relationship=field_str,
+            filters=[
+                CollectionFilter(field_name=rel_prop.mapper.get_property_by_column(pk_cols[0]).key, values=values)
+            ],
+            negate=negate,
+        )
+
+    @classmethod
+    def filter_by_relationship(cls, result: List[ModelT], filter_: RelationshipFilter) -> List[ModelT]:
+        """Evaluate :class:`~advanced_alchemy.filters.RelationshipFilter` across loaded ORM attributes."""
+        raw_hops = filter_._normalize_hops()  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        hops: list[str] = []
+        for hop in raw_hops:
+            if isinstance(hop, str):
+                validate_identifier(hop, "relationship")
+                hops.append(hop)
+            else:
+                hops.append(hop.key)
+        hop_tuple = tuple(hops)
+        matched: List[ModelT] = []
+        for item in result:
+            cls._validate_relationship_hops(type(item), raw_hops, hop_tuple)
+            has_match = cls._matches_relationship_hops(item, hop_tuple, filter_.filters)
+            if (not has_match) if filter_.negate else has_match:
+                matched.append(item)
+        return matched
+
+    @staticmethod
+    def _validate_relationship_hops(
+        model_cls: type[Any],
+        raw_hops: tuple[Any, ...],
+        hop_names: tuple[str, ...],
+    ) -> None:
+        """Validate relationship ownership and existence when ``model_cls`` is SQLAlchemy-mapped."""
+        try:
+            current_cls: Any = class_mapper(model_cls).class_
+        except UnmappedClassError:
+            return
+        for raw_hop, hop_name in zip(raw_hops, hop_names):
+            mapper: Any = class_mapper(current_cls)
+            if isinstance(raw_hop, InstrumentedAttribute):
+                owner_cls = raw_hop.parent.class_
+                owner_matches = issubclass(mapper.class_, owner_cls) or issubclass(owner_cls, mapper.class_)
+                if not owner_matches:
+                    msg = f"Relationship '{hop_name}' does not belong to model {mapper.class_.__name__}"
+                    raise ValueError(msg)
+            rel_prop = mapper.relationships.get(hop_name)
+            if rel_prop is None:
+                msg = f"Relationship '{hop_name}' not found on model {mapper.class_.__name__}"
+                raise ValueError(msg)
+            current_cls = rel_prop.mapper.class_
+
+    @classmethod
+    def _matches_relationship_hops(
+        cls,
+        instance: Any,
+        hops: tuple[str, ...],
+        leaf_filters: Any,
+    ) -> bool:
+        """Recursively traverse loaded relationship hops and evaluate ``leaf_filters``."""
+        if not hops:
+            return cls.matches_all(instance, leaf_filters)
+        head, *tail = hops
+        related: Any = getattr(instance, head, None)
+        if related is None:
+            return False
+        if isinstance(related, Collection) and not isinstance(related, (str, bytes, Mapping)):
+            candidates: list[Any] = [candidate for candidate in cast("Iterable[Any]", related) if candidate is not None]
+        else:
+            candidates = [related]
+        return any(cls._matches_relationship_hops(candidate, tuple(tail), leaf_filters) for candidate in candidates)
+
+    @classmethod
+    def matches_all(cls, instance: Any, filters: Any) -> bool:
+        """Return whether a single object satisfies all predicates in ``filters``."""
+        return bool(cls.apply_filters([instance], *filters, apply_pagination=False))
 
     @staticmethod
     def extract_field_name(field: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]") -> str:
@@ -430,7 +559,10 @@ class InMemoryFilterEvaluator:
         if not values:
             return []
         field_str = cls.extract_field_name(field_name)
-        return [item for item in result if getattr(item, field_str) in values]
+        relationship_filter = cls._relationship_collection_filter(result, field_str, values, negate=False)
+        if relationship_filter is not None:
+            return cls.filter_by_relationship(result, relationship_filter)
+        return [item for item in result if cls.resolve_attr_value(item, field_str) in values]
 
     @classmethod
     def filter_not_in_collection(
@@ -443,7 +575,14 @@ class InMemoryFilterEvaluator:
         if not values:
             return result
         field_str = cls.extract_field_name(field_name)
-        return [item for item in result if (val := getattr(item, field_str, None)) is not None and val not in values]
+        relationship_filter = cls._relationship_collection_filter(result, field_str, values, negate=True)
+        if relationship_filter is not None:
+            return cls.filter_by_relationship(result, relationship_filter)
+        return [
+            item
+            for item in result
+            if (val := cls.resolve_attr_value(item, field_str)) is not None and val not in values
+        ]
 
     @classmethod
     def filter_on_datetime_field(
@@ -456,10 +595,12 @@ class InMemoryFilterEvaluator:
         on_or_after: Optional[datetime.datetime] = None,
     ) -> List[ModelT]:
         """Filter items by conjunctive (`AND`) datetime range bounds."""
+        if before is None and after is None and on_or_before is None and on_or_after is None:
+            return result
         field_str = cls.extract_field_name(field_name)
         result_: List[ModelT] = []
         for item in result:
-            attr: Optional[datetime.datetime] = getattr(item, field_str, None)
+            attr: Optional[datetime.datetime] = cls.resolve_attr_value(item, field_str)
             if attr is None:
                 continue
             if before is not None and attr >= before:
@@ -489,7 +630,7 @@ class InMemoryFilterEvaluator:
             item
             for item in result
             if any(
-                isinstance(attr_val := getattr(item, field, None), str) and bool(pattern.match(attr_val))
+                isinstance(attr_val := cls.resolve_attr_value(item, field), str) and bool(pattern.match(attr_val))
                 for field in fields
             )
         ]
@@ -508,14 +649,14 @@ class InMemoryFilterEvaluator:
             return []
         pattern = cls._build_search_regex(value, ignore_case=ignore_case, escape_wildcards=escape_wildcards)
         fields = {field_name} if isinstance(field_name, str) else field_name
-        present_fields = [field for field in fields if hasattr(type(result[0]), field)]
+        present_fields = [field for field in fields if hasattr(type(result[0]), field.split(".")[0])]
         if not present_fields:
             return result
         return [
             item
             for item in result
             if all(
-                isinstance(attr_val := getattr(item, field, None), str) and not pattern.match(attr_val)
+                isinstance(attr_val := cls.resolve_attr_value(item, field), str) and not pattern.match(attr_val)
                 for field in present_fields
             )
         ]
@@ -531,7 +672,7 @@ class InMemoryFilterEvaluator:
         target = filter_.value
         matched: List[ModelT] = []
         for item in result:
-            val = getattr(item, field_str, None)
+            val = cls.resolve_attr_value(item, field_str)
             if cls._eval_comparison_op(val, op_name, target):
                 matched.append(item)
         return matched
@@ -542,19 +683,19 @@ class InMemoryFilterEvaluator:
         if filter_.value is None:
             return result
         field_str = cls.extract_field_name(filter_.field_name)
-        return [item for item in result if getattr(item, field_str, None) == filter_.value]
+        return [item for item in result if cls.resolve_attr_value(item, field_str) == filter_.value]
 
     @classmethod
     def filter_null(cls, result: List[ModelT], filter_: NullFilter) -> List[ModelT]:
         """Evaluate a `NullFilter` (`IS NULL`) against `result`."""
         field_str = cls.extract_field_name(filter_.field_name)
-        return [item for item in result if getattr(item, field_str, None) is None]
+        return [item for item in result if cls.resolve_attr_value(item, field_str) is None]
 
     @classmethod
     def filter_not_null(cls, result: List[ModelT], filter_: NotNullFilter) -> List[ModelT]:
         """Evaluate a `NotNullFilter` (`IS NOT NULL`) against `result`."""
         field_str = cls.extract_field_name(filter_.field_name)
-        return [item for item in result if getattr(item, field_str, None) is not None]
+        return [item for item in result if cls.resolve_attr_value(item, field_str) is not None]
 
     @classmethod
     def filter_group(cls, result: List[ModelT], filter_: FilterGroup) -> List[ModelT]:
@@ -578,24 +719,8 @@ class InMemoryFilterEvaluator:
     def filter_multi(cls, result: List[ModelT], filter_: MultiFilter) -> List[ModelT]:
         """Evaluate a `MultiFilter` dictionary tree against `result`."""
         current = result
-        for filter_type, conditions in filter_.filters.items():
-            operator = cast(
-                "Optional[Callable[..., ColumnElement[bool]]]",
-                filter_._logical_map.get(filter_type),  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
-            )
-            if not operator or not isinstance(conditions, list):
-                continue
-            valid_filters: List[StatementFilter] = []
-            for cond in conditions:  # pyright: ignore[reportUnknownVariableType]
-                if not isinstance(cond, dict):
-                    continue
-                cond_dict = cast("dict[str, Any]", cond)
-                filter_instance = filter_._create_filter(cond_dict)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
-                if filter_instance is not None:
-                    valid_filters.append(filter_instance)
-            if valid_filters:
-                group = FilterGroup(logical_operator=operator, filters=valid_filters)
-                current = cls.filter_group(current, group)
+        for group in filter_._build_root_groups():  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+            current = cls.filter_group(current, group)
         return current
 
     @classmethod
@@ -643,7 +768,8 @@ class InMemoryFilterEvaluator:
                 return None if inner is None else not bool(inner)
             if expr.operator is sql_op.is_true:
                 return False if inner is None else bool(inner)
-            return inner
+            msg = "Unary expressions are not supported in mock repositories (in-memory filtering)"
+            raise RepositoryError(msg)
         if isinstance(expr, InstrumentedAttribute):
             return getattr(item, expr.key, None)
         if isinstance(expr, Column):
@@ -669,10 +795,10 @@ class InMemoryFilterEvaluator:
     ) -> List[ModelT]:
         """Sort `result` by `field_name` with optional `nulls` placement (`first` or `last`)."""
         attribute = cls.extract_field_name(field_name)
-        missing = [item for item in result if getattr(item, attribute, None) is None]
+        missing = [item for item in result if cls.resolve_attr_value(item, attribute) is None]
         present = sorted(
-            (item for item in result if getattr(item, attribute, None) is not None),
-            key=lambda item: getattr(item, attribute),
+            (item for item in result if cls.resolve_attr_value(item, attribute) is not None),
+            key=lambda item: cls.resolve_attr_value(item, attribute),
             reverse=sort_desc,
         )
         if nulls == "first":
@@ -691,7 +817,9 @@ class InMemoryFilterEvaluator:
         """Apply `StatementFilter` instances and SQLAlchemy boolean expressions to `result`."""
         order_filters: List[OrderBy] = []
         pagination_filters: List[LimitOffset] = []
-        for filter_ in filters:
+        from advanced_alchemy.repository._util import _expand_filtersets  # pyright: ignore[reportPrivateUsage]
+
+        for filter_ in _expand_filtersets(filters):
             if isinstance(filter_, LimitOffset):
                 if apply_pagination:
                     pagination_filters.append(filter_)
@@ -712,7 +840,9 @@ class InMemoryFilterEvaluator:
         *filters: Union[StatementFilter, ColumnElement[bool]],
     ) -> List[ModelT]:
         """Apply only `LimitOffset` pagination filters from `filters` to `result`."""
-        for filter_ in filters:
+        from advanced_alchemy.repository._util import _expand_filtersets  # pyright: ignore[reportPrivateUsage]
+
+        for filter_ in _expand_filtersets(filters):
             if isinstance(filter_, LimitOffset):
                 result = cls.apply_limit_offset_pagination(result, filter_.limit, filter_.offset)
         return result
@@ -768,7 +898,7 @@ class InMemoryFilterEvaluator:
         if isinstance(filter_, NotInSearchFilter):
             return cls.filter_by_not_like(
                 result,
-                filter_.field_name,
+                {cls.extract_field_name(field) for field in filter_.normalized_field_names},
                 value=filter_.value,
                 ignore_case=bool(filter_.ignore_case),
                 escape_wildcards=filter_.escape_wildcards,
@@ -776,7 +906,7 @@ class InMemoryFilterEvaluator:
         if isinstance(filter_, SearchFilter):
             return cls.filter_by_like(
                 result,
-                filter_.field_name,
+                {cls.extract_field_name(field) for field in filter_.normalized_field_names},
                 value=filter_.value,
                 ignore_case=bool(filter_.ignore_case),
                 escape_wildcards=filter_.escape_wildcards,
@@ -791,6 +921,8 @@ class InMemoryFilterEvaluator:
             return cls.filter_not_null(result, filter_)
         if isinstance(filter_, FilterGroup):
             return cls.filter_group(result, filter_)
+        if isinstance(filter_, RelationshipFilter):
+            return cls.filter_by_relationship(result, filter_)
         if isinstance(filter_, MultiFilter):
             return cls.filter_multi(result, filter_)
         if isinstance(filter_, (ExistsFilter, NotExistsFilter)):

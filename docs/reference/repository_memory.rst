@@ -4,6 +4,11 @@ Memory Repositories
 
 .. py:module:: advanced_alchemy.repository.memory
 
+Mock repositories evaluate basic column predicates against loaded model values.
+Boolean and null literals in comparisons retain SQL filtering semantics, including
+``is_(True)``, ``is_not(False)``, and ``is_(None)``. SQL function expressions require
+a database-backed repository.
+
 Async Memory Repositories
 -------------------------
 

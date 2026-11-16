@@ -4,6 +4,8 @@ Filters
 
 .. py:module:: advanced_alchemy.filters
 
+See :doc:`filterset` for reusable class-based filter definitions.
+
 Base & Pagination Filters
 -------------------------
 
@@ -110,6 +112,15 @@ Composite Filters, Type Aliases & Helpers
     :no-members:
     :no-inherited-members:
     :show-inheritance:
+
+.. autoclass:: advanced_alchemy.filters.RelationshipFilter
+    :no-members:
+    :no-inherited-members:
+    :show-inheritance:
+
+Relationship filter fields accept SQL expressions such as
+``ComparisonFilter(func.lower(Tag.name), "eq", "python")``. Expressions are
+bound to the related model alias, including self-referential relationship paths.
 
 .. autoclass:: advanced_alchemy.filters.MultiFilter
     :no-members:
