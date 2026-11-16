@@ -719,24 +719,8 @@ class InMemoryFilterEvaluator:
     def filter_multi(cls, result: List[ModelT], filter_: MultiFilter) -> List[ModelT]:
         """Evaluate a `MultiFilter` dictionary tree against `result`."""
         current = result
-        for filter_type, conditions in filter_.filters.items():
-            operator = cast(
-                "Optional[Callable[..., ColumnElement[bool]]]",
-                filter_._logical_map.get(filter_type),  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
-            )
-            if not operator or not isinstance(conditions, list):
-                continue
-            valid_filters: List[StatementFilter] = []
-            for cond in conditions:  # pyright: ignore[reportUnknownVariableType]
-                if not isinstance(cond, dict):
-                    continue
-                cond_dict = cast("dict[str, Any]", cond)
-                filter_instance = filter_._create_filter(cond_dict)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
-                if filter_instance is not None:
-                    valid_filters.append(filter_instance)
-            if valid_filters:
-                group = FilterGroup(logical_operator=operator, filters=valid_filters)
-                current = cls.filter_group(current, group)
+        for group in filter_._build_root_groups():  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+            current = cls.filter_group(current, group)
         return current
 
     @classmethod

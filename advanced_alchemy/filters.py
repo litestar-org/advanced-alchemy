@@ -1458,6 +1458,12 @@ class MultiFilter(StatementFilter):
     """Optional allowlist of relationship names or dotted paths permitted in ``relationship`` nodes."""
     max_relationship_depth: Optional[int] = 3
     """Maximum total relationship nesting depth permitted in ``relationship`` nodes. ``None`` disables the limit."""
+    allowed_fields: "Optional[AbstractSet[str]]" = None
+    """Optional allowlist of field names or dotted relationship paths permitted in filter nodes."""
+    max_depth: Optional[int] = 10
+    """Maximum nesting depth permitted across logical groups and relationship filters. ``None`` disables the limit."""
+    strict: bool = False
+    """Raise ``ValueError`` or ``TypeError`` on malformed logical operators, conditions, or unknown filter types."""
 
     _filter_map: ClassVar[FilterMap] = {
         "before_after": BeforeAfter,
@@ -1484,6 +1490,48 @@ class MultiFilter(StatementFilter):
         "or_": or_,
     }
 
+    def _build_root_groups(self) -> list[FilterGroup]:
+        """Parse and validate top-level logical groups into ``FilterGroup`` instances."""
+        groups: list[FilterGroup] = []
+        for filter_type, conditions in self.filters.items():
+            operator = self._logical_map.get(filter_type)
+            if operator is None:
+                if self.strict:
+                    msg = f"Unsupported logical operator '{filter_type}'."
+                    raise ValueError(msg)
+                continue
+            if not isinstance(conditions, list):
+                if self.strict:
+                    msg = f"Conditions for logical operator '{filter_type}' must be a list."
+                    raise TypeError(msg)
+                continue
+
+            valid_filters: list[StatementFilter] = []
+            typed_conditions: list[object] = conditions  # pyright: ignore[reportUnknownVariableType]
+            for cond in typed_conditions:
+                if not isinstance(cond, dict):
+                    if self.strict:
+                        msg = "Filter condition must be a dictionary."
+                        raise TypeError(msg)
+                    continue
+                filter_instance = self._create_filter(
+                    cast("dict[str, Any]", cond),
+                    _tree_depth=1,
+                    _rel_depth=0,
+                    _rel_prefix=(),
+                )
+                if filter_instance is not None:
+                    valid_filters.append(filter_instance)
+
+            if valid_filters:
+                groups.append(
+                    FilterGroup(
+                        logical_operator=operator,  # type: ignore[arg-type]
+                        filters=valid_filters,
+                    )
+                )
+        return groups
+
     def append_to_statement(
         self,
         statement: StatementTypeT,
@@ -1498,24 +1546,87 @@ class MultiFilter(StatementFilter):
         Returns:
             StatementTypeT: Modified statement with all filters applied
         """
-        for filter_type, conditions in self.filters.items():
-            operator = self._logical_map.get(filter_type)
-            if operator and isinstance(conditions, list):
-                valid_filters: list[StatementFilter] = []
-                for cond in conditions:  # pyright: ignore
-                    filter_instance = self._create_filter(cond)  # pyright: ignore
-                    if filter_instance is not None:
-                        valid_filters.append(filter_instance)
-
-                if valid_filters:
-                    filter_group = FilterGroup(
-                        logical_operator=operator,  # type: ignore
-                        filters=valid_filters,
-                    )
-                    statement = filter_group.append_to_statement(statement, model)
+        for filter_group in self._build_root_groups():
+            statement = filter_group.append_to_statement(statement, model)
         return statement
 
-    def _create_filter(self, condition: dict[str, Any], *, _depth: int = 0) -> Optional[StatementFilter]:
+    def _validate_filter_fields(
+        self,
+        filter_type: str,
+        filter_instance: StatementFilter,
+        rel_prefix: tuple[str, ...],
+    ) -> None:
+        """Validate instantiated filter fields against ``allowed_fields``."""
+        if self.allowed_fields is None:
+            return
+
+        if filter_type in {"exists", "not_exists", "filter_group"}:
+            msg = f"Filter type '{filter_type}' is not permitted when allowed_fields is set."
+            raise ValueError(msg)
+
+        if filter_type == "limit_offset":
+            return
+
+        field_name = getattr(filter_instance, "field_name", None)
+        if isinstance(field_name, str):
+            full_path = ".".join((*rel_prefix, field_name))
+            if not field_name or full_path not in self.allowed_fields:
+                msg = f"Field '{full_path}' is not permitted by allowed_fields."
+                raise ValueError(msg)
+            return
+
+        if isinstance(filter_instance, (SearchFilter, NotInSearchFilter)) and isinstance(
+            field_name, (list, tuple, set, frozenset)
+        ):
+            field_names = cast("Collection[Any]", field_name)
+            if not field_names:
+                msg = "Search filter 'field_name' cannot be empty when allowed_fields is set."
+                raise ValueError(msg)
+            for candidate in field_names:
+                if not isinstance(candidate, str) or not candidate:
+                    msg = f"Field expression {candidate!r} is not permitted when allowed_fields is set."
+                    raise ValueError(msg)
+                full_path = ".".join((*rel_prefix, candidate))
+                if full_path not in self.allowed_fields:
+                    msg = f"Field '{full_path}' is not permitted by allowed_fields."
+                    raise ValueError(msg)
+            return
+
+        msg = f"Field expression {field_name!r} is not permitted when allowed_fields is set."
+        raise ValueError(msg)
+
+    def _instantiate_leaf_filter(
+        self,
+        filter_type: str,
+        condition: dict[str, Any],
+        rel_prefix: tuple[str, ...],
+    ) -> Optional[StatementFilter]:
+        filter_class = self._filter_map.get(filter_type)
+        if filter_class is None:
+            if self.strict:
+                msg = f"Unsupported filter type '{filter_type}'."
+                raise ValueError(msg)
+            return None
+
+        try:
+            filter_args = {k: v for k, v in condition.items() if k != "type"}
+            filter_instance = cast("StatementFilter", filter_class(**filter_args))  # type: ignore
+        except Exception:
+            if self.strict:
+                raise
+            return None
+
+        self._validate_filter_fields(filter_type, filter_instance, rel_prefix)
+        return filter_instance
+
+    def _create_filter(
+        self,
+        condition: dict[str, Any],
+        *,
+        _tree_depth: int = 1,
+        _rel_depth: int = 0,
+        _rel_prefix: tuple[str, ...] = (),
+    ) -> Optional[StatementFilter]:
         """Create a filter instance from a condition dictionary.
 
         Args:
@@ -1524,47 +1635,100 @@ class MultiFilter(StatementFilter):
         Returns:
             Optional[StatementFilter]: Filter instance if successfully created, None otherwise
         """
-        nested_group = self._create_nested_filter_group(condition, _depth=_depth)
-        if nested_group is not None:
+        if self.max_depth is not None and _tree_depth > self.max_depth:
+            msg = f"Filter nesting depth {_tree_depth} exceeds maximum allowed depth {self.max_depth}."
+            raise ValueError(msg)
+
+        nested_group = self._create_nested_filter_group(
+            condition,
+            _tree_depth=_tree_depth,
+            _rel_depth=_rel_depth,
+            _rel_prefix=_rel_prefix,
+        )
+        if nested_group is not None or (self._logical_map.keys() & condition.keys()):
             return nested_group
 
         filter_type = condition.get("type")
         if not isinstance(filter_type, str):
+            if self.strict:
+                msg = "Filter condition requires a string 'type' field."
+                raise ValueError(msg)
             return None
 
         if filter_type == "relationship":
-            return self._create_relationship_filter(condition, _depth=_depth)
+            return self._create_relationship_filter(
+                condition,
+                _tree_depth=_tree_depth,
+                _rel_depth=_rel_depth,
+                _rel_prefix=_rel_prefix,
+            )
 
-        filter_class = self._filter_map.get(filter_type)
-        if filter_class is not None:
-            try:
-                filter_args = {k: v for k, v in condition.items() if k != "type"}
-                return filter_class(**filter_args)  # type: ignore
-            except Exception:  # noqa: BLE001
-                return None
-        return None
+        return self._instantiate_leaf_filter(filter_type, condition, _rel_prefix)
 
-    def _create_nested_filter_group(self, condition: dict[str, Any], *, _depth: int = 0) -> Optional[FilterGroup]:
+    def _create_nested_filter_group(
+        self,
+        condition: dict[str, Any],
+        *,
+        _tree_depth: int = 1,
+        _rel_depth: int = 0,
+        _rel_prefix: tuple[str, ...] = (),
+    ) -> Optional[FilterGroup]:
         logical_keys = set(self._logical_map.keys())
         intersect = logical_keys.intersection(condition.keys())
+        if not intersect:
+            return None
+
+        if self.strict and len(intersect) > 1:
+            msg = "Filter group condition cannot specify multiple logical operators."
+            raise ValueError(msg)
+
+        if self.strict and not set(condition.keys()).issubset(logical_keys):
+            msg = "Filter group condition cannot mix logical operators with extra keys."
+            raise ValueError(msg)
+
         for key in intersect:
             operator = self._logical_map.get(key)
             nested_conditions = condition.get(key)
-            if operator and isinstance(nested_conditions, list):
+            if not isinstance(nested_conditions, list):
+                if self.strict:
+                    msg = f"Conditions for logical operator '{key}' must be a list."
+                    raise TypeError(msg)
+                continue
+
+            next_tree_depth = _tree_depth + 1
+            if self.max_depth is not None and next_tree_depth > self.max_depth:
+                msg = f"Filter nesting depth {next_tree_depth} exceeds maximum allowed depth {self.max_depth}."
+                raise ValueError(msg)
+
+            if operator:
                 nested_filters: list[StatementFilter] = []
                 typed_conditions: list[object] = nested_conditions  # pyright: ignore[reportUnknownVariableType]
                 for cond in typed_conditions:
-                    if isinstance(cond, dict):
-                        filter_instance = self._create_filter(cast("dict[str, Any]", cond), _depth=_depth)
-                        if filter_instance is not None:
-                            nested_filters.append(filter_instance)
+                    if not isinstance(cond, dict):
+                        if self.strict:
+                            msg = "Filter condition must be a dictionary."
+                            raise TypeError(msg)
+                        continue
+                    filter_instance = self._create_filter(
+                        cast("dict[str, Any]", cond),
+                        _tree_depth=next_tree_depth,
+                        _rel_depth=_rel_depth,
+                        _rel_prefix=_rel_prefix,
+                    )
+                    if filter_instance is not None:
+                        nested_filters.append(filter_instance)
 
                 if nested_filters:
                     return FilterGroup(logical_operator=operator, filters=nested_filters)  # type: ignore[arg-type]
         return None
 
     def _create_relationship_filter(
-        self, condition: dict[str, Any], *, _depth: int = 0
+        self,
+        condition: dict[str, Any],
+        *,
+        _tree_depth: int = 1,
+        _rel_depth: int = 0,
+        _rel_prefix: tuple[str, ...] = (),
     ) -> Optional[RelationshipFilter]:
         relationship = condition.get("relationship")
         nested_conditions = condition.get("filters", [])
@@ -1587,25 +1751,43 @@ class MultiFilter(StatementFilter):
         for hop in hops:
             validate_identifier(hop, "relationship")
 
-        next_depth = _depth + len(hops)
-        if self.max_relationship_depth is not None and next_depth > self.max_relationship_depth:
-            msg = f"Relationship filter depth {next_depth} exceeds maximum allowed depth {self.max_relationship_depth}."
+        next_rel_depth = _rel_depth + len(hops)
+        if self.max_relationship_depth is not None and next_rel_depth > self.max_relationship_depth:
+            msg = f"Relationship filter depth {next_rel_depth} exceeds maximum allowed depth {self.max_relationship_depth}."
             raise ValueError(msg)
 
+        next_tree_depth = _tree_depth + len(hops)
+        if self.max_depth is not None and next_tree_depth > self.max_depth:
+            msg = f"Filter nesting depth {next_tree_depth} exceeds maximum allowed depth {self.max_depth}."
+            raise ValueError(msg)
+
+        next_rel_prefix = (*_rel_prefix, *hops)
         if self.allowed_relationships is not None:
             dotted_path = ".".join(hops)
-            if dotted_path not in self.allowed_relationships and not all(
-                hop in self.allowed_relationships for hop in hops
+            prefixed_dotted_path = ".".join(next_rel_prefix)
+            if (
+                prefixed_dotted_path not in self.allowed_relationships
+                and dotted_path not in self.allowed_relationships
+                and not all(hop in self.allowed_relationships for hop in hops)
             ):
-                msg = f"Relationship '{dotted_path}' is not permitted by allowed_relationships."
+                msg = f"Relationship '{prefixed_dotted_path}' is not permitted by allowed_relationships."
                 raise ValueError(msg)
 
         nested_filters: list[StatementFilter] = []
         for nested in cast("Sequence[Any]", nested_conditions):
-            if isinstance(nested, dict):
-                nested_filter = self._create_filter(cast("dict[str, Any]", nested), _depth=next_depth)
-                if nested_filter is not None:
-                    nested_filters.append(nested_filter)
+            if not isinstance(nested, dict):
+                if self.strict:
+                    msg = "Relationship filter condition must be a dictionary."
+                    raise TypeError(msg)
+                continue
+            nested_filter = self._create_filter(
+                cast("dict[str, Any]", nested),
+                _tree_depth=next_tree_depth,
+                _rel_depth=next_rel_depth,
+                _rel_prefix=next_rel_prefix,
+            )
+            if nested_filter is not None:
+                nested_filters.append(nested_filter)
 
         rel_arg: RelationshipPath = hops[0] if len(hops) == 1 else hops
         return RelationshipFilter(

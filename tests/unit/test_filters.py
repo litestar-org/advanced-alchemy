@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 import pytest
 from sqlalchemy import Column, ColumnElement, ForeignKey, Integer, String, Table, create_engine, func, select
@@ -20,6 +20,7 @@ from advanced_alchemy.filters import (
     SearchFilter,
 )
 from advanced_alchemy.repository._util import _build_cache_key
+from advanced_alchemy.repository.memory.base import InMemoryFilterEvaluator
 
 
 class FilterUnitBase(DeclarativeBase):
@@ -483,3 +484,279 @@ def test_order_by_dotted_relationship_rejects_invalid_paths(
     """Ensure collection or malformed relationship paths fail early in OrderBy."""
     with pytest.raises(ValueError, match=match):
         OrderBy(field_name=field_name, sort_order="asc").append_to_statement(select(model_cls), model_cls)
+
+
+@pytest.mark.parametrize(
+    ("allowed_fields", "filters"),
+    [
+        (
+            {"title"},
+            {
+                "and_": [
+                    {"type": "collection", "field_name": "title", "values": ["Ada Post"]},
+                    {"type": "limit_offset", "limit": 10, "offset": 0},
+                ]
+            },
+        ),
+        (
+            {"title", "author.name"},
+            {
+                "and_": [
+                    {"type": "search", "field_name": ["title", "author.name"], "value": "Ada"},
+                    {"type": "order_by", "field_name": "author.name", "sort_order": "asc"},
+                    {
+                        "type": "relationship",
+                        "relationship": "author",
+                        "filters": [{"type": "collection", "field_name": "name", "values": ["Ada"]}],
+                    },
+                ]
+            },
+        ),
+        (
+            {"author.posts.tags.name"},
+            {
+                "and_": [
+                    {
+                        "type": "relationship",
+                        "relationship": ["author", "posts", "tags"],
+                        "filters": [{"type": "not_in_search", "field_name": {"name"}, "value": "draft"}],
+                    }
+                ]
+            },
+        ),
+    ],
+)
+def test_multi_filter_allowed_fields_permits_allowlisted_paths(
+    allowed_fields: set[str],
+    filters: dict[str, object],
+) -> None:
+    """Ensure MultiFilter accepts root, dotted, multi-field search, and pagination nodes on allowlisted fields."""
+    multi = MultiFilter(filters=filters, allowed_fields=allowed_fields)
+    groups = multi._build_root_groups()
+    assert len(groups) == 1
+    stmt = multi.append_to_statement(select(UnitPost), UnitPost)
+    compiled = str(stmt.compile(dialect=sqlite.dialect()))
+    assert "FROM filter_unit_post" in compiled
+
+
+@pytest.mark.parametrize(
+    ("allowed_fields", "filters", "match"),
+    [
+        (
+            {"title"},
+            {"and_": [{"type": "collection", "field_name": "author_id", "values": [1]}]},
+            "not permitted by allowed_fields",
+        ),
+        (
+            {"title"},
+            {
+                "and_": [
+                    {
+                        "type": "relationship",
+                        "relationship": "author",
+                        "filters": [{"type": "collection", "field_name": "title", "values": ["x"]}],
+                    }
+                ]
+            },
+            "author.title",
+        ),
+        (
+            {"title"},
+            {"and_": [{"type": "search", "field_name": ["title", "author_id"], "value": "x"}]},
+            "author_id",
+        ),
+        (
+            {"title"},
+            {"and_": [{"type": "not_in_search", "field_name": {"title", "author_id"}, "value": "x"}]},
+            "author_id",
+        ),
+        (
+            {"title"},
+            {"and_": [{"type": "search", "field_name": [], "value": "x"}]},
+            "cannot be empty",
+        ),
+        (
+            {"title"},
+            {"and_": [{"type": "exists", "values": [UnitPost.id == 1]}]},
+            "not permitted when allowed_fields is set",
+        ),
+        (
+            {"title"},
+            {"and_": [{"type": "not_exists", "values": [UnitPost.id == 1]}]},
+            "not permitted when allowed_fields is set",
+        ),
+        (
+            {"title"},
+            {"and_": [{"type": "filter_group", "logical_operator": None, "filters": []}]},
+            "not permitted when allowed_fields is set",
+        ),
+        (
+            {"title"},
+            {"and_": [{"type": "collection", "field_name": UnitPost.title, "values": ["Ada"]}]},
+            "not permitted when allowed_fields is set",
+        ),
+        (
+            {"title"},
+            {"and_": [{"type": "search", "field_name": [UnitPost.title], "value": "Ada"}]},
+            "not permitted when allowed_fields is set",
+        ),
+    ],
+)
+def test_multi_filter_allowed_fields_rejects_disallowed_or_raw_nodes(
+    allowed_fields: set[str],
+    filters: dict[str, object],
+    match: str,
+) -> None:
+    """Ensure MultiFilter rejects unallowed fields, subquery filters, and raw expressions."""
+    multi = MultiFilter(filters=filters, allowed_fields=allowed_fields, strict=True)
+    with pytest.raises(ValueError, match=match):
+        multi.append_to_statement(select(UnitPost), UnitPost)
+
+
+def _nested_logical_tree(depth: int) -> dict[str, object]:
+    """Build a logical ``and_`` chain nested ``depth`` levels deep."""
+    tree: dict[str, object] = {"and_": [{"type": "collection", "field_name": "title", "values": ["Ada Post"]}]}
+    for _ in range(depth - 1):
+        tree = {"and_": [tree]}
+    return tree
+
+
+@pytest.mark.parametrize(
+    ("depth", "max_depth", "should_raise"),
+    [
+        (2, 2, False),
+        (3, 2, True),
+        (10, 10, False),
+        (11, 10, True),
+        (12, None, False),
+    ],
+)
+def test_multi_filter_max_depth_logical_groups(
+    depth: int,
+    max_depth: Optional[int],
+    should_raise: bool,
+) -> None:
+    """Ensure MultiFilter enforces max_depth across nested logical groups and allows disabling with None."""
+    multi = MultiFilter(filters=_nested_logical_tree(depth), max_depth=max_depth)
+    if should_raise:
+        with pytest.raises(ValueError, match="exceeds maximum allowed depth"):
+            multi.append_to_statement(select(UnitPost), UnitPost)
+    else:
+        stmt = multi.append_to_statement(select(UnitPost), UnitPost)
+        assert "FROM filter_unit_post" in str(stmt.compile(dialect=sqlite.dialect()))
+
+
+def test_multi_filter_max_depth_counts_empty_groups_and_relationship_hops() -> None:
+    """Ensure empty nested groups and multi-hop relationship filters cannot bypass max_depth."""
+    deep_empty = MultiFilter(filters={"and_": [{"and_": [{"and_": []}]}]}, max_depth=2)
+    with pytest.raises(ValueError, match="exceeds maximum allowed depth"):
+        deep_empty.append_to_statement(select(UnitPost), UnitPost)
+
+    deep_rel = MultiFilter(
+        filters={
+            "and_": [
+                {
+                    "type": "relationship",
+                    "relationship": ["author", "posts"],
+                    "filters": [{"type": "collection", "field_name": "title", "values": ["x"]}],
+                }
+            ]
+        },
+        max_depth=2,
+    )
+    with pytest.raises(ValueError, match="exceeds maximum allowed depth"):
+        deep_rel.append_to_statement(select(UnitPost), UnitPost)
+
+
+@pytest.mark.parametrize(
+    ("filters", "expected_exc", "match"),
+    [
+        ({"xor_": []}, ValueError, "Unsupported logical operator"),
+        ({"and_": "not_a_list"}, TypeError, "must be a list"),
+        ({"and_": ["bad"]}, TypeError, "must be a dictionary"),
+        ({"and_": [{}]}, ValueError, "requires a string 'type' field"),
+        ({"and_": [{"type": "unknown", "field_name": "title"}]}, ValueError, "Unsupported filter type"),
+        ({"and_": [{"type": "collection", "unexpected": 1}]}, TypeError, "unexpected"),
+        ({"and_": [{"and_": [], "or_": []}]}, ValueError, "multiple logical operators"),
+        ({"and_": [{"and_": [], "extra": 1}]}, ValueError, "mix logical operators"),
+    ],
+)
+def test_multi_filter_strict_vs_permissive_mode(
+    filters: dict[str, object],
+    expected_exc: type[Exception],
+    match: str,
+) -> None:
+    """Ensure strict=True raises on malformed input while strict=False skips it silently."""
+    permissive = MultiFilter(filters=filters, strict=False)
+    assert permissive._build_root_groups() == []
+
+    strict_filter = MultiFilter(filters=filters, strict=True)
+    with pytest.raises(expected_exc, match=match):
+        strict_filter._build_root_groups()
+
+
+@pytest.mark.parametrize(
+    ("filter_kwargs", "expected_exc", "match"),
+    [
+        (
+            {
+                "filters": {"and_": [{"type": "collection", "field_name": "author_id", "values": [1]}]},
+                "allowed_fields": {"title"},
+            },
+            ValueError,
+            "not permitted by allowed_fields",
+        ),
+        (
+            {
+                "filters": _nested_logical_tree(3),
+                "max_depth": 2,
+            },
+            ValueError,
+            "exceeds maximum allowed depth",
+        ),
+        (
+            {
+                "filters": {"bad_op": []},
+                "strict": True,
+            },
+            ValueError,
+            "Unsupported logical operator",
+        ),
+    ],
+)
+def test_multi_filter_in_memory_parity_validation(
+    filter_kwargs: dict[str, Any],
+    expected_exc: type[Exception],
+    match: str,
+) -> None:
+    """Ensure InMemoryFilterEvaluator.filter_multi enforces the same MultiFilter validation rules."""
+    multi = MultiFilter(**filter_kwargs)
+    with pytest.raises(expected_exc, match=match):
+        InMemoryFilterEvaluator.filter_multi([], multi)
+
+
+def test_multi_filter_in_memory_applies_validated_filters() -> None:
+    """Ensure InMemoryFilterEvaluator.filter_multi evaluates validated MultiFilter trees cleanly."""
+    author_ada = UnitAuthor(id=1, name="Ada")
+    author_zed = UnitAuthor(id=2, name="Zed")
+    posts = [
+        UnitPost(id=1, title="Ada Post", author_id=1, author=author_ada, tags=[]),
+        UnitPost(id=2, title="Zed Post", author_id=2, author=author_zed, tags=[]),
+    ]
+    multi = MultiFilter(
+        filters={
+            "and_": [
+                {"type": "collection", "field_name": "title", "values": ["Ada Post", "Zed Post"]},
+                {
+                    "type": "relationship",
+                    "relationship": "author",
+                    "filters": [{"type": "collection", "field_name": "name", "values": ["Ada"]}],
+                },
+            ]
+        },
+        allowed_relationships={"author"},
+        allowed_fields={"title", "author.name"},
+        strict=True,
+    )
+    matched = InMemoryFilterEvaluator.filter_multi(posts, multi)
+    assert [p.title for p in matched] == ["Ada Post"]
