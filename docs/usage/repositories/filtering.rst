@@ -174,8 +174,9 @@ Declare ``filter_fields`` and ``sort_fields`` in ``FilterConfig`` so Litestar an
         },
         "sort_fields": {"title", "published_at"},
         "pagination_type": "limit_offset",
+        "pagination_max_size": 100,
     }
 
-Frontend grids such as TanStack Table, AG Grid, and MUI Data Grid map column filters directly to ``?titleContains=sql&publishedAtIsNull=false&tagsSlugIn=python&orderBy=-published_at&orderBy=title&currentPage=2&pageSize=25``.
+Frontend grids such as TanStack Table, AG Grid, and MUI Data Grid map column filters directly to ``?titleContains=sql&publishedAtIsNull=false&tagsSlugIn=python&orderBy=-published_at&orderBy=title&currentPage=2&pageSize=25``. Set ``pagination_max_size`` (default ``None``) to cap ``pageSize``/``page_size`` via OpenAPI ``maximum`` and framework validation (400 in Litestar, 422 in FastAPI); when ``pagination_size`` is omitted, the default page size is clamped to ``pagination_max_size`` (and setting ``pagination_size`` above ``pagination_max_size`` raises ``ImproperConfigurationError``).
 
 See :doc:`filtersets` for reusable class-based filters and automatic relationship loading.

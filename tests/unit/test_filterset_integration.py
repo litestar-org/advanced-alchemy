@@ -331,3 +331,71 @@ def test_mssql_default_pagination_has_primary_key_order(values: dict[str, Any]) 
     statement = _filterset_loader_options(statement, [filters], mssql_dialect, paginated=True)
     compiled = str(statement.compile(dialect=mssql_dialect))
     assert "ROW_NUMBER() OVER (ORDER BY filterset_customer.id)" in compiled
+
+
+def _extract_numeric_bounds(schema: dict[str, Any]) -> tuple[Any, Any]:
+    if "minimum" in schema or "maximum" in schema:
+        return schema.get("minimum"), schema.get("maximum")
+    for key in ("anyOf", "oneOf"):
+        for variant in schema.get(key, []):
+            if "minimum" in variant or "maximum" in variant:
+                return variant.get("minimum"), variant.get("maximum")
+    return None, None
+
+
+def test_filterset_pagination_max_size_litestar_and_fastapi() -> None:
+    from fastapi import Depends, FastAPI
+    from fastapi.testclient import TestClient as FastAPITestClient
+    from litestar import Litestar, get
+    from litestar.di import NamedDependency
+    from litestar.openapi.config import OpenAPIConfig
+    from litestar.params import SkipValidation
+    from litestar.testing import TestClient as LitestarTestClient
+
+    from advanced_alchemy.extensions.fastapi.providers import provide_filters
+    from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
+
+    class CappedCustomers(FilterSet[Customer]):
+        filter_fields = {"name": {"eq"}}
+        config = {"pagination_type": "limit_offset", "pagination_max_size": 5}
+
+    fastapi_dep = provide_filters(CappedCustomers)
+    fastapi_app = FastAPI()
+
+    @fastapi_app.get("/")
+    def fastapi_endpoint(filters: Annotated[list[FilterSet[Customer]], Depends(fastapi_dep)]) -> dict[str, int]:
+        limit = next(f.limit for f in filters[0].to_statement_filters() if isinstance(f, LimitOffset))
+        return {"limit": limit}
+
+    with FastAPITestClient(fastapi_app) as client:
+        assert client.get("/", params={"pageSize": "5"}).json() == {"limit": 5}
+        assert client.get("/").json() == {"limit": 5}
+        assert client.get("/", params={"pageSize": "6"}).status_code == 422
+        assert client.get("/", params={"pageSize": "0"}).status_code == 422
+        assert client.get("/", params={"currentPage": "0"}).status_code == 422
+        params = {p["name"]: p["schema"] for p in client.get("/openapi.json").json()["paths"]["/"]["get"]["parameters"]}
+        assert _extract_numeric_bounds(params["pageSize"]) == (1, 5)
+        assert _extract_numeric_bounds(params["currentPage"]) == (1, None)
+
+    @get("/", sync_to_thread=False)
+    def litestar_endpoint(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> dict[str, int]:
+        limit = next(f.limit for f in filters[0].to_statement_filters() if isinstance(f, LimitOffset))  # type: ignore[union-attr]
+        return {"limit": limit}
+
+    litestar_app = Litestar(
+        [litestar_endpoint],
+        dependencies=create_filter_dependencies(CappedCustomers),
+        openapi_config=OpenAPIConfig(title="Test", version="1.0.0", path="/schema"),
+    )
+    with LitestarTestClient(litestar_app) as litestar_client:
+        assert litestar_client.get("/", params={"pageSize": "5"}).json() == {"limit": 5}
+        assert litestar_client.get("/").json() == {"limit": 5}
+        assert litestar_client.get("/", params={"pageSize": "6"}).status_code == 400
+        assert litestar_client.get("/", params={"pageSize": "0"}).status_code == 400
+        assert litestar_client.get("/", params={"currentPage": "0"}).status_code == 400
+        params = {
+            p["name"]: p["schema"]
+            for p in litestar_client.get("/schema/openapi.json").json()["paths"]["/"]["get"]["parameters"]
+        }
+        assert _extract_numeric_bounds(params["pageSize"]) == (1, 5)
+        assert _extract_numeric_bounds(params["currentPage"]) == (1, None)

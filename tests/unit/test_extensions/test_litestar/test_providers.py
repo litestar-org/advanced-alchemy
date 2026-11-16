@@ -1934,3 +1934,41 @@ def test_litestar_field_e2e_async_sqlite_prototype() -> None:
                 {"title": "SQLAlchemy Basics", "views": 150, "status": "draft"},
             ],
         }
+
+
+def test_litestar_pagination_max_size_validation_and_openapi() -> None:
+    from advanced_alchemy.exceptions import ImproperConfigurationError
+
+    deps = create_filter_dependencies(
+        {"pagination_type": "limit_offset", "pagination_max_size": 15},
+        DependencyDefaults(default_pagination_size=25),
+    )
+
+    @get("/items", sync_to_thread=False)
+    def list_items(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> dict[str, int]:
+        limit_offset = next(f for f in filters if isinstance(f, LimitOffset))
+        return {"limit": limit_offset.limit, "offset": limit_offset.offset}
+
+    app = Litestar(
+        route_handlers=[list_items],
+        dependencies=deps,
+        signature_namespace=signature_namespace_values,
+        openapi_config=OpenAPIConfig(title="Test", version="1.0.0", path="/schema"),
+    )
+    with TestClient(app) as client:
+        assert client.get("/items").json() == {"limit": 15, "offset": 0}
+        assert client.get("/items", params={"pageSize": "15"}).json() == {"limit": 15, "offset": 0}
+        assert client.get("/items", params={"pageSize": "16"}).status_code == 400
+        params = {
+            param["name"]: param["schema"]
+            for param in client.get("/schema/openapi.json").json()["paths"]["/items"]["get"]["parameters"]
+        }
+        assert params["pageSize"]["minimum"] == 1
+        assert params["pageSize"]["maximum"] == 15
+
+    with pytest.raises(ImproperConfigurationError, match="cannot exceed"):
+        create_filter_dependencies(
+            {"pagination_type": "limit_offset", "pagination_size": 30, "pagination_max_size": 15}
+        )
+    with pytest.raises(ImproperConfigurationError, match="pagination_max_size"):
+        create_filter_dependencies({"pagination_type": "limit_offset", "pagination_max_size": 0})

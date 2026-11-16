@@ -33,6 +33,7 @@ from advanced_alchemy.utils.dependencies import (
     normalize_sort_field,
     normalize_sort_fields,
     resolve_filter_fields,
+    resolve_pagination_bounds,
 )
 
 if TYPE_CHECKING:
@@ -186,6 +187,7 @@ class FilterSet(StatementFilter, Generic[ModelT]):
         """Return query parameter metadata shared by framework adapters."""
         model = cls._model()
         config = cls.filter_config()
+        resolve_pagination_bounds(config)
         fields = config.get("filter_fields", ())
         entries = fields.items() if isinstance(fields, Mapping) else ((f, None) for f in fields)
         specs: list[FilterFieldSpec] = []
@@ -293,8 +295,9 @@ class FilterSet(StatementFilter, Generic[ModelT]):
             result.append(FilterGroup(logical_operator=or_, filters=branches))
         result.extend(self._ordering_filters(config))
         if config.get("pagination_type") == "limit_offset":
+            default_size, max_size = resolve_pagination_bounds(config)
             page = self._value("page", default=1)
-            size = self._value("pageSize", "page_size", default=config.get("pagination_size", 20))
+            size = self._value("pageSize", "page_size", default=default_size)
             if (
                 not isinstance(page, int)
                 or isinstance(page, bool)
@@ -304,6 +307,9 @@ class FilterSet(StatementFilter, Generic[ModelT]):
                 or size < 1
             ):
                 msg = "Pagination page and page size must be positive integers"
+                raise ValueError(msg)
+            if max_size is not None and size > max_size:
+                msg = f"Pagination page size {size} exceeds maximum allowed size {max_size}"
                 raise ValueError(msg)
             result.append(LimitOffset(limit=size, offset=(page - 1) * size))
         return result

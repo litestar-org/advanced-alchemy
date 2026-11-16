@@ -56,6 +56,7 @@ __all__ = (
     "normalize_sort_fields",
     "resolve_filter_aliases",
     "resolve_filter_fields",
+    "resolve_pagination_bounds",
 )
 
 HashableValue = Union[str, int, float, bool, None]
@@ -157,6 +158,8 @@ class FilterConfig(TypedDict):
     """Pagination mode to enable."""
     pagination_size: NotRequired[int]
     """Default pagination size."""
+    pagination_max_size: NotRequired[Optional[int]]
+    """Maximum allowed pagination size. ``None`` leaves page size unbounded."""
     search: NotRequired[Union[str, set[str], list[str]]]
     """Fields to enable search on."""
     search_ignore_case: NotRequired[bool]
@@ -360,6 +363,36 @@ def normalize_sort_field(sort_field: SortField) -> str:
     if isinstance(sort_field, list):
         return sort_field[0]
     return min(sort_field)
+
+
+def resolve_pagination_bounds(
+    config: FilterConfig,
+    *,
+    default_size: int = 20,
+) -> tuple[int, Optional[int]]:
+    """Validate and resolve default and maximum pagination sizes from ``config``."""
+    raw_max_size: Any = config.get("pagination_max_size")
+    max_size: Optional[int]
+    if raw_max_size is None:
+        max_size = None
+    else:
+        if not isinstance(raw_max_size, int) or isinstance(raw_max_size, bool) or raw_max_size < 1:
+            msg = f"pagination_max_size must be a positive integer, got {raw_max_size!r}"
+            raise ImproperConfigurationError(msg)
+        max_size = raw_max_size
+
+    raw_default_size: Any = config.get("pagination_size")
+    if raw_default_size is not None:
+        if not isinstance(raw_default_size, int) or isinstance(raw_default_size, bool) or raw_default_size < 1:
+            msg = f"pagination_size must be a positive integer, got {raw_default_size!r}"
+            raise ImproperConfigurationError(msg)
+        if max_size is not None and raw_default_size > max_size:
+            msg = f"pagination_size ({raw_default_size}) cannot exceed pagination_max_size ({max_size})"
+            raise ImproperConfigurationError(msg)
+        return raw_default_size, max_size
+
+    effective_default = min(default_size, max_size) if max_size is not None else default_size
+    return effective_default, max_size
 
 
 class FilterFieldSpec:
