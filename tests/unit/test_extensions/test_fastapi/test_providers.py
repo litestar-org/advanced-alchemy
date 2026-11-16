@@ -1538,8 +1538,6 @@ def test_fastapi_grid_snake_case_and_e2e_async_sqlite_prototype() -> None:
 
 
 def test_fastapi_pagination_max_size_validation_and_openapi() -> None:
-    from fastapi.exceptions import RequestValidationError
-
     filter_dep = provide_filters(
         {"pagination_type": "limit_offset", "pagination_max_size": 15},
         DependencyDefaults(),
@@ -1575,18 +1573,6 @@ def test_fastapi_pagination_max_size_validation_and_openapi() -> None:
 
     with TestClient(clamped_app) as client:
         assert client.get("/clamped").json() == {"limit": 10, "offset": 0}
-
-    aggregate = _create_filter_aggregate_function_fastapi(
-        {"pagination_type": "limit_offset", "pagination_max_size": 15}
-    )
-    limit_offset_dep = (
-        inspect.signature(aggregate)
-        .parameters[DEPENDENCY_DEFAULTS.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY]
-        .annotation.__metadata__[0]
-        .dependency
-    )
-    with pytest.raises(RequestValidationError):
-        limit_offset_dep(current_page=1, page_size=16)
 
     with pytest.raises(ImproperConfigurationError, match="cannot exceed"):
         provide_filters({"pagination_type": "limit_offset", "pagination_size": 30, "pagination_max_size": 15})

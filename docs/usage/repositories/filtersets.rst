@@ -73,7 +73,9 @@ explicitly. FilterSet construction takes typed Python values. Framework provider
 validate and convert HTTP query values. Pydantic remains optional. Set
 ``pagination_max_size`` (default ``None``) in ``config`` or on the class to cap
 ``pageSize``/``page_size``; oversized values raise ``ValueError`` when instantiating
-a FilterSet and HTTP 400/422 through Litestar or FastAPI.
+a FilterSet and HTTP 400/422 through Litestar or FastAPI. When ``pagination_size``
+is omitted, the default page size is clamped to ``pagination_max_size``, and
+``pagination_size > pagination_max_size`` raises ``ImproperConfigurationError``.
 
 Field parameters use double underscores to separate relationship names, the field,
 and the operator: ``?tags__slug__eq=sqlalchemy&title__contains=python``. A deeper

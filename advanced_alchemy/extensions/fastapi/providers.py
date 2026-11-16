@@ -430,15 +430,14 @@ def _create_filterset_dependency(
         alias = f"{prefix.rstrip('_')}_{spec.param_name}" if prefix else spec.param_name
         entries.append((spec.param_name, filter_parameter_type(spec), Query(alias=alias)))
     if config.get("pagination_type"):
-        page_size_query = (
-            Query(alias=aliases.get("page_size", "pageSize"), ge=1, le=max_pagination_size)
-            if max_pagination_size is not None
-            else Query(alias=aliases.get("page_size", "pageSize"), ge=1)
-        )
         entries.extend(
             [
                 ("page", Optional[int], Query(alias=aliases.get("current_page", "currentPage"), ge=1)),
-                ("pageSize", Optional[int], page_size_query),
+                (
+                    "pageSize",
+                    Optional[int],
+                    Query(alias=aliases.get("page_size", "pageSize"), ge=1, le=max_pagination_size),
+                ),
             ]
         )
     if config.get("sort_fields") or config.get("sort_field"):
@@ -701,21 +700,6 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
         config, default_size=dep_defaults.DEFAULT_PAGINATION_SIZE
     )
     if config.get("pagination_type") == "limit_offset":
-        page_size_alias = alias_for("page_size")
-        page_size_query = (
-            Query(
-                ge=1,
-                le=max_pagination_size,
-                alias=page_size_alias,
-                description="Number of items per page.",
-            )
-            if max_pagination_size is not None
-            else Query(
-                ge=1,
-                alias=page_size_alias,
-                description="Number of items per page.",
-            )
-        )
 
         def provide_limit_offset_pagination(
             current_page: Annotated[
@@ -726,13 +710,16 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     description="Page number for pagination.",
                 ),
             ] = 1,
-            page_size: Annotated[int, page_size_query] = default_pagination_size,
+            page_size: Annotated[
+                int,
+                Query(
+                    ge=1,
+                    le=max_pagination_size,
+                    alias=alias_for("page_size"),
+                    description="Number of items per page.",
+                ),
+            ] = default_pagination_size,
         ) -> LimitOffset:
-            if max_pagination_size is not None and page_size > max_pagination_size:
-                msg = f"Pagination page size {page_size} exceeds maximum allowed size {max_pagination_size}"
-                raise RequestValidationError(
-                    errors=[{"loc": ["query", page_size_alias], "msg": msg, "type": "less_than_equal"}]
-                )
             return LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
 
         param_name = dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY

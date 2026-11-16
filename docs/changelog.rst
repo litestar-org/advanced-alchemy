@@ -5,6 +5,21 @@
 
 .. changelog:: 1.13.0
 
+    .. change:: add optional pagination_max_size cap to FilterConfig and FilterSet
+        :type: feature
+        :pr: 850
+        :issue: 849
+
+        Adds an optional ``pagination_max_size`` key (defaulting to ``None``) to
+        ``FilterConfig`` and ``FilterSet`` to enforce an upper bound on
+        ``pageSize`` / ``page_size`` via OpenAPI ``maximum`` and framework
+        validation (400 in Litestar, 422 in FastAPI, and ``ValueError`` on
+        direct ``FilterSet`` instantiation). Also validates ``pagination_size``
+        as a positive integer when building dependencies, clamps omitted
+        defaults to ``pagination_max_size``, and raises
+        ``ImproperConfigurationError`` when ``pagination_size`` exceeds
+        ``pagination_max_size``.
+
     .. change:: declare reusable FilterSets with inferred relationship loading
         :type: feature
         :pr: 639 845

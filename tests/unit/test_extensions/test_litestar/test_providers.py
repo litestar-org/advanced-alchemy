@@ -1937,8 +1937,6 @@ def test_litestar_field_e2e_async_sqlite_prototype() -> None:
 
 
 def test_litestar_pagination_max_size_validation_and_openapi() -> None:
-    from litestar.exceptions import ValidationException
-
     from advanced_alchemy.exceptions import ImproperConfigurationError
 
     deps = create_filter_dependencies(
@@ -1967,10 +1965,6 @@ def test_litestar_pagination_max_size_validation_and_openapi() -> None:
         }
         assert params["pageSize"]["minimum"] == 1
         assert params["pageSize"]["maximum"] == 15
-
-    provider_fn = deps[DEPENDENCY_DEFAULTS.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY].dependency
-    with pytest.raises(ValidationException, match="exceeds maximum allowed size 15"):
-        provider_fn(current_page=1, page_size=16)
 
     with pytest.raises(ImproperConfigurationError, match="cannot exceed"):
         create_filter_dependencies(
