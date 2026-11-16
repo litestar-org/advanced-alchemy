@@ -110,6 +110,7 @@ Advanced Alchemy gives your tables ready-made IDs and timestamps, provides ready
     Starlette <usage/frameworks/starlette>
     Flask <usage/frameworks/flask>
     Sanic <usage/frameworks/sanic>
+    Google ADK <usage/adk/index>
 
 .. toctree::
     :titlesonly:
@@ -130,6 +131,7 @@ Advanced Alchemy gives your tables ready-made IDs and timestamps, provides ready
     Replica Routing <reference/routing>
     Caching <reference/cache>
     Framework Extensions <reference/extensions/index>
+    ADK Compatibility Matrix <reference/adk-compatibility-matrix>
     Alembic <reference/alembic/index>
     CLI Commands <reference/cli>
     Exceptions <reference/exceptions>

@@ -10,6 +10,8 @@ from sqlalchemy.types import TypeDecorator
 
 __all__ = ("DateTimeUTC",)
 
+_MAX_MYSQL_DATETIME_FSP = 6
+
 
 class DateTimeUTC(TypeDecorator[dt.datetime]):
     """Timezone Aware DateTime.
@@ -53,7 +55,15 @@ class DateTimeUTC(TypeDecorator[dt.datetime]):
         if fsp is not None and precision is not None and fsp != precision:
             msg = "Cannot specify both 'fsp' and 'precision' with different values"
             raise ValueError(msg)
-        self.fsp = fsp if fsp is not None else precision
+        resolved_fsp = fsp if fsp is not None else precision
+        if resolved_fsp is not None and (
+            not isinstance(resolved_fsp, int)  # pyright: ignore[reportUnnecessaryIsInstance]
+            or isinstance(resolved_fsp, bool)
+            or not 0 <= resolved_fsp <= _MAX_MYSQL_DATETIME_FSP
+        ):
+            msg = "fsp must be an integer between 0 and 6"
+            raise ValueError(msg)
+        self.fsp = resolved_fsp
         self.timezone = timezone
         super().__init__(*args, **kwargs)
 

@@ -17,3 +17,4 @@ Framework API References
     starlette/index
     flask/index
     sanic/index
+    adk

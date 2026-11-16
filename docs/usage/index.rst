@@ -43,7 +43,7 @@ Advanced Alchemy organizes that work into three clear steps so your route handle
       :link: frameworks/index
       :link-type: doc
 
-      Connect your services to Litestar, FastAPI, Starlette, Flask, or Sanic with automatic session management.
+      Connect your services to Litestar, FastAPI, Starlette, Flask, Sanic, or :doc:`Google ADK <adk/index>` with automatic session management.
 
 Scaling and Day-Two Tools
 -------------------------
@@ -54,3 +54,4 @@ Once your core tables and routes are running, you can turn on operational featur
 * :doc:`Caching <caching>` — Cache frequent lookups in Redis or memory and clear stale entries automatically on commit.
 * :doc:`CLI & Migrations <cli>` — Generate and apply Alembic schema migrations from the terminal.
 * :doc:`Database Seeding <database_seeding>` — Load starter data from JSON or CSV files.
+* :doc:`Google ADK <adk/index>` — Persist agent sessions, artifacts, and searchable memory with Advanced Alchemy models.
