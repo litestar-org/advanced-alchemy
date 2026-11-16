@@ -79,9 +79,12 @@ LITESTAR_REQUIRED_XREFS: tuple[tuple[str, str], ...] = (
     ("py:class", "advanced_alchemy.config.common.SessionT"),
     ("py:class", "advanced_alchemy.filters.FilterTypes"),
     ("py:data", "advanced_alchemy.filters.FilterTypes"),
+    ("py:class", "advanced_alchemy.filters.RelationshipFilter"),
+    ("py:class", "advanced_alchemy.filterset.FilterSet"),
     ("py:function", "advanced_alchemy._listeners.touch_updated_timestamp"),
     ("py:function", "advanced_alchemy.base.touch_updated_timestamp"),
     ("std:doc", "reference/filters"),
+    ("std:doc", "reference/filterset"),
 )
 
 _HEADING_CODE_PATTERN = re.compile(r"<h([234])\b[^>]*>(?:(?!</h\1>).)*?<code\b[^>]*>.*?</h\1>", re.DOTALL)
@@ -101,6 +104,7 @@ class DocsBudgetConfig(msgspec.Struct, frozen=True, gc=False):
         "advanced_alchemy.repository.memory",
         "advanced_alchemy.service",
         "advanced_alchemy.filters",
+        "advanced_alchemy.filterset",
         "advanced_alchemy.operations",
         "advanced_alchemy.exceptions",
         "advanced_alchemy.types",

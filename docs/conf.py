@@ -193,7 +193,7 @@ mermaid.initialize({
 html_theme = "shibuya"
 html_title = "Advanced Alchemy"
 html_short_title = "AA"
-llms_txt_base_url = "https://docs.advanced-alchemy.litestar.dev/latest/"
+llms_txt_base_url = "https://advanced-alchemy.litestar.dev/latest/"
 
 pygments_style = "default"
 
@@ -235,7 +235,7 @@ html_theme_options = {
     "globaltoc_expand_depth": 2,
     "light_logo": "_static/logo.svg",
     "dark_logo": "_static/logo.svg",
-    "og_image_url": "https://docs.advanced-alchemy.litestar.dev/latest/_static/og-social-dark.png",
+    "og_image_url": "https://advanced-alchemy.litestar.dev/latest/_static/og-social-dark.png",
     "nav_links": [
         {
             "title": "Learn",

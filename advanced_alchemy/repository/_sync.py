@@ -549,7 +549,10 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
     This is useful for certain SQLAlchemy uses cases such as applying ``contains_eager`` to a query containing a one-to-many relationship
     """
     count_with_window_function: bool = True
-    """Use an analytical window function to count results.  This allows the count to be performed in a single query.
+    """Use an analytical window function to count results in a single query.
+
+    Defaults to ``True`` in 1.x (planned to change to ``False`` in v2.0). Set ``False`` for
+    two-query pagination on large sorted tables or random/UUID primary keys.
     """
     _cache_manager: Optional["CacheManager"] = None
     """Cache manager instance for repository-level caching. Set via ``cache_manager`` kwarg or retrieved from ``session.info``."""
@@ -591,7 +594,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
             error_messages: A set of custom error messages to use for operations
             wrap_exceptions: Wrap SQLAlchemy exceptions in a ``RepositoryError``.  When set to ``False``, the original exception will be raised.
             uniquify: Optionally apply the ``unique()`` method to results before returning.
-            count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
+            count_with_window_function: When false, list and count will use two queries instead of an analytical window function. Defaults to ``True`` in 1.x (planned to change to ``False`` in v2.0).
             cache_manager: Optional cache manager for repository-level caching. If not provided, retrieved from ``session.info``.
             bind_group: Optional default routing group to use for all operations. Can be overridden per-method.
             **kwargs: Additional arguments.
@@ -2423,7 +2426,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
             *filters: Types for specific filtering operations.
             statement: To facilitate customization of the underlying select query.
             auto_expunge: Remove object from session before returning.
-            count_with_window_function: When false, list and count will use two queries instead of an analytical window function.
+            count_with_window_function: When false, list and count will use two queries instead of an analytical window function. Defaults to ``True`` in 1.x (planned to change to ``False`` in v2.0).
             order_by: Set default order options for queries.
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
@@ -3659,7 +3662,7 @@ class SQLAlchemySyncQueryRepository:
 
         Args:
             statement: To facilitate customization of the underlying select query.
-            count_with_window_function: Use an analytical window function when true, or two queries when false.
+            count_with_window_function: Use an analytical window function when true, or two queries when false. Defaults to ``True`` in 1.x (planned to change to ``False`` in v2.0).
             bind_group: The bind group to use for the operation.
             **kwargs: Instance attribute value filters.
 

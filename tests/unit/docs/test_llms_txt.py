@@ -28,7 +28,7 @@ def test_llms_structs_instantiation() -> None:
         docname="usage/services",
         title="Services",
         summary="Service layer overview.",
-        url="https://docs.advanced-alchemy.litestar.dev/latest/usage/services.html",
+        url="https://advanced-alchemy.litestar.dev/latest/usage/services.html",
         section="Usage Guides",
         markdown="# Services\n\nService layer overview.",
     )
@@ -82,7 +82,7 @@ def test_doctree_link_and_admonition_rendering() -> None:
     config = LlmsConfig(
         site_title="Advanced Alchemy",
         site_tagline="Companion",
-        base_url="https://docs.advanced-alchemy.litestar.dev/latest/",
+        base_url="https://advanced-alchemy.litestar.dev/latest/",
     )
     generator = SphinxLlmsGenerator(config)
     doc = new_document("test")
@@ -97,10 +97,7 @@ def test_doctree_link_and_admonition_rendering() -> None:
     doc += warning_node
 
     rendered = generator.render_doctree(doc)
-    assert (
-        "[Repository Guide](https://docs.advanced-alchemy.litestar.dev/latest/usage/repositories/basics.html)"
-        in rendered
-    )
+    assert "[Repository Guide](https://advanced-alchemy.litestar.dev/latest/usage/repositories/basics.html)" in rendered
     assert "> **Warning**: Detach cached instances before lazy loading." in rendered
 
 
@@ -136,7 +133,7 @@ def test_standalone_cli_generates_llms_files_without_json_chunks(tmp_path: Path)
     (docs_dir / "conf.py").write_text(
         'project = "Advanced Alchemy"\n'
         'extensions = ["tools.sphinx_ext.llms_txt"]\n'
-        'llms_txt_base_url = "https://docs.advanced-alchemy.litestar.dev/latest/"\n',
+        'llms_txt_base_url = "https://advanced-alchemy.litestar.dev/latest/"\n',
         encoding="utf-8",
     )
     (docs_dir / "index.rst").write_text(
@@ -161,7 +158,7 @@ def test_standalone_cli_generates_llms_files_without_json_chunks(tmp_path: Path)
     index_text = llms_txt.read_text(encoding="utf-8")
     full_text = llms_full_txt.read_text(encoding="utf-8")
     assert "# Advanced Alchemy" in index_text
-    assert "[Getting Started](https://docs.advanced-alchemy.litestar.dev/latest/getting-started.html)" in index_text
+    assert "[Getting Started](https://advanced-alchemy.litestar.dev/latest/getting-started.html)" in index_text
     assert "uv add advanced-alchemy" in full_text
     assert not list(output_dir.rglob("manifest.json"))
     assert not list(output_dir.rglob("chunks"))

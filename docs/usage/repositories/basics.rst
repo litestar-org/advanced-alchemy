@@ -2,7 +2,7 @@
 Repository Basics
 =================
 
-Think of a **Repository** as a dedicated helper for one database table. Instead of writing raw SQLAlchemy ``select()`` and ``session.add()`` calls throughout your app, you point a repository at your ``Post`` model once and call clear methods like ``repo.add(post)``, ``repo.get(post_id)``, or ``repo.get_many()``.
+Think of a **Repository** as a dedicated helper for one database table. The Repository Pattern separates SQLAlchemy queries and persistence logic from your HTTP routes and business rules behind a uniform collection-like interface (``add``, ``get``, ``get_many``, ``update``, ``delete``), keeping query logic reusable and straightforward to test—including against mock repositories. Instead of repeating raw ``select()`` and ``session.add()`` calls everywhere, you bind a repository to your ``Post`` model once and call its methods directly.
 
 Choosing a Repository Class
 ---------------------------

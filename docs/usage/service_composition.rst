@@ -144,10 +144,9 @@ Pass a ``ServiceGroup`` subclass to :func:`~advanced_alchemy.extensions.litestar
 
 .. code-block:: python
 
-    from typing import Annotated
-
     from litestar import Controller, get
-    from litestar.params import Dependency
+    from litestar.di import NamedDependency
+    from litestar.params import SkipValidation
     from advanced_alchemy.extensions.litestar.providers import FilterConfig, create_service_dependencies
     from advanced_alchemy.filters import FilterTypes
 
@@ -164,8 +163,8 @@ Pass a ``ServiceGroup`` subclass to :func:`~advanced_alchemy.extensions.litestar
         async def search(
             self,
             auth: AuthServices,
-            roles_filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
-            users_filters: Annotated[list[FilterTypes], Dependency(skip_validation=True)],
+            roles_filters: NamedDependency[SkipValidation[list[FilterTypes]]],
+            users_filters: NamedDependency[SkipValidation[list[FilterTypes]]],
         ) -> dict[str, int]:
             return {
                 "roles": await auth.roles.count(*roles_filters),

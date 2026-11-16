@@ -7,7 +7,7 @@ When you build an app with SQLAlchemy from scratch, you end up writing the same 
 Advanced Alchemy handles that repetitive plumbing while keeping plain SQLAlchemy 2.0 front and center:
 
 * **Models** come with ready-made IDs, ``created_at`` / ``updated_at`` timestamps, and portable column types.
-* **Repositories** give every model ``add``, ``get``, ``list_and_count``, ``upsert``, and ``delete`` methods out of the box.
+* **Repositories** give every model ``add``, ``get``, ``get_many_and_count``, ``upsert``, and ``delete`` methods out of the box.
 * **Services** connect your repositories to Pydantic, Msgspec, or dataclass API schemas.
 * **Framework plugins** manage database engines and per-request sessions automatically.
 
@@ -79,7 +79,7 @@ Imagine you are building a small blog. Define a ``BlogPost`` table using ``UUIDA
         await repo.add(BlogPost(title="Hello Advanced Alchemy", published=True))
         await db_session.commit()
 
-        posts, total = await repo.list_and_count(published=True)
+        posts, total = await repo.get_many_and_count(published=True)
         assert total == 1
         assert posts[0].title == "Hello Advanced Alchemy"
 

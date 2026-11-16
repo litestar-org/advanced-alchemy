@@ -2,7 +2,7 @@
 Services
 ========
 
-A **Repository** speaks in database tables (``BlogPost`` rows), while a **Service** speaks in your API's input and output shapes (``BlogPostCreate``, ``BlogPostResponse``) and gives you one clean home for business rules—such as creating missing tags or generating URL slugs before saving.
+A :doc:`Repository </usage/repositories/basics>` speaks in database tables (``BlogPost`` rows), while a **Service** speaks in your API's input and output shapes (``BlogPostCreate``, ``BlogPostResponse``). Use a repository directly for simple table persistence and queries; add a service on top when you want automatic schema conversion (``to_model`` / ``to_schema``), transaction commits, validation hooks, or multi-step business rules—such as creating missing tags or generating URL slugs before saving.
 
 Setting Up a Service
 --------------------
