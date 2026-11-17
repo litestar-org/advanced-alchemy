@@ -1106,16 +1106,17 @@ def test_get_type_adapter_guards_failfast_for_models_and_lists(monkeypatch: pyte
         name: str
         count: int
 
+    invalid_items = [{"name": "bad", "count": "bad"}, {"name": "bad2", "count": "bad2"}]
+
+    with pytest.raises(ValidationError) as exc_info:
+        get_type_adapter(list[ItemModel]).validate_python(invalid_items)
+    assert exc_info.value.error_count() == 2
+
     monkeypatch.setattr(serialization, "PYDANTIC_USE_FAILFAST", True)
-    serialization._build_type_adapter.cache_clear()
-    try:
-        model_adapter = get_type_adapter(ItemModel)
-        list_adapter = get_type_adapter(list[ItemModel])
-        sequence_adapter = get_type_adapter(Sequence[ItemModel])
-        assert model_adapter.validate_python({"name": "a", "count": 1}) == ItemModel(name="a", count=1)
-        assert sequence_adapter.validate_python([{"name": "a", "count": 1}]) == [ItemModel(name="a", count=1)]
-        with pytest.raises(ValidationError) as exc_info:
-            list_adapter.validate_python([{"name": "bad", "count": "bad"}, {"name": "bad2", "count": "bad2"}])
-        assert exc_info.value.error_count() == 1
-    finally:
-        serialization._build_type_adapter.cache_clear()
+    model_adapter = get_type_adapter(ItemModel)
+    sequence_adapter = get_type_adapter(Sequence[ItemModel])
+    assert model_adapter.validate_python({"name": "a", "count": 1}) == ItemModel(name="a", count=1)
+    assert sequence_adapter.validate_python([{"name": "a", "count": 1}]) == [ItemModel(name="a", count=1)]
+    with pytest.raises(ValidationError) as exc_info:
+        get_type_adapter(list[ItemModel]).validate_python(invalid_items)
+    assert exc_info.value.error_count() == 1

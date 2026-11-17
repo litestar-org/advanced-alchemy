@@ -527,6 +527,7 @@ module = [
   "argon2",
   "argon2.*",
   "pgvector.*",
+  "pytest_databases.embedded.*",
 ]
 
 [[tool.mypy.overrides]]

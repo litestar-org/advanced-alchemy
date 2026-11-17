@@ -177,7 +177,12 @@ TypeEncodersMap = Mapping[type, Callable[[Any], Any]]
 
 T = TypeVar("T")
 
-PYDANTIC_USE_FAILFAST = False  # leave permanently disabled for now
+PYDANTIC_USE_FAILFAST = False
+"""Stop Pydantic collection validation at the first invalid item.
+
+Applies to adapters built by :func:`get_type_adapter` for ``list``, ``tuple``, ``set``,
+``frozenset``, ``dict``, and ``deque`` types. Other types are validated in full.
+"""
 
 FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
 """Type variable for filter types."""
@@ -289,8 +294,8 @@ _FAILFAST_COLLECTION_ORIGINS: tuple[Any, ...] = (list, tuple, set, frozenset, di
 
 
 @lru_cache(typed=True)
-def _build_type_adapter(f: Any) -> "TypeAdapterProtocol[Any]":
-    if PYDANTIC_USE_FAILFAST and get_origin(f) in _FAILFAST_COLLECTION_ORIGINS:
+def _build_type_adapter(f: Any, fail_fast: bool) -> "TypeAdapterProtocol[Any]":
+    if fail_fast and get_origin(f) in _FAILFAST_COLLECTION_ORIGINS:
         return TypeAdapter(cast("Any", Annotated[f, FailFast()]))
     return TypeAdapter(f)
 
@@ -305,7 +310,7 @@ def get_type_adapter(f: Any) -> "TypeAdapterProtocol[Any]": ...
 
 def get_type_adapter(f: Any) -> "TypeAdapterProtocol[Any]":
     """Caches and returns a pydantic type adapter."""
-    return _build_type_adapter(f)
+    return _build_type_adapter(f, PYDANTIC_USE_FAILFAST)
 
 
 @lru_cache(maxsize=128, typed=True)
