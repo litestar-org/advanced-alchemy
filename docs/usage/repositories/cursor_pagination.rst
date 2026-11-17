@@ -143,7 +143,7 @@ Framework dependencies always sign their tokens and raise :class:`~advanced_alch
         pagination_cursor_secret="load-from-settings",
     )
 
-``pagination_cursor_ttl`` and ``pagination_cursor_encrypted`` are set the same way, and the FastAPI configuration takes the same options. Each option resolves from the ``FilterConfig`` or ``FilterSet`` first, then the SQLAlchemy configuration. The secret then falls back to the ``ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET`` and ``SECRET_KEY`` environment variables. An application with several configurations must give them the same values. Use the same secret in every worker process so a token issued by one is accepted by another.
+``pagination_cursor_ttl`` and ``pagination_cursor_encrypted`` are set the same way, and the FastAPI configuration takes the same options. Each option resolves from the ``FilterConfig`` or ``FilterSet`` first, then the SQLAlchemy configuration. The secret then falls back to the ``ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET`` and ``SECRET_KEY`` environment variables. An application with several configurations must give them the same values. Tokens are signed with a key derived from the secret, never the secret itself, so an application secret shared through ``SECRET_KEY`` keeps its other uses separate. Use the same secret in every worker process so a token issued by one is accepted by another.
 
 Invalid tokens and sort fields return 400 in Litestar and 422 in FastAPI. :class:`~advanced_alchemy.filters.FilterSet` classes accept the same configuration and a ``cursor`` value. See :doc:`/usage/frameworks/litestar` and :doc:`/usage/frameworks/fastapi` for complete applications.
 

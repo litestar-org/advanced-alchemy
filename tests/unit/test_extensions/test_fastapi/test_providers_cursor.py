@@ -1,5 +1,7 @@
 """Cursor pagination through FastAPI filter dependencies."""
 
+import hashlib
+import hmac
 from collections.abc import Iterator
 from typing import Annotated, Any, Optional
 
@@ -187,6 +189,11 @@ def test_filterset_cursor_parameter(db: Session) -> None:
     assert bad.status_code == 422
 
 
+def token_key(secret: str) -> bytes:
+    """Key the dependencies derive from a configured secret."""
+    return hmac.new(secret.encode(), b"advanced-alchemy-cursor-key-v1", hashlib.sha256).digest()
+
+
 def extension_client(db: Session, config: Any, **config_options: Any) -> TestClient:
     app = FastAPI()
     AdvancedAlchemy(SQLAlchemySyncConfig(connection_string="sqlite://", **config_options), app=app)
@@ -211,9 +218,10 @@ def test_config_secret_signs_tokens_for_every_filter_dependency(
         following = client.get("/gadgets", params={"cursor": token})
 
     assert following.status_code == 200
-    assert CursorFilter(keys, limit, token, "config-secret").cursor == token
-    with pytest.raises(InvalidCursorError, match="signature"):
-        CursorFilter(keys, limit, token, "environment-secret")
+    assert CursorFilter(keys, limit, token, token_key("config-secret")).cursor == token
+    for other in (token_key("environment-secret"), b"config-secret"):
+        with pytest.raises(InvalidCursorError, match="signature"):
+            CursorFilter(keys, limit, token, other)
 
 
 @pytest.mark.parametrize("config", [CONFIG, Gadgets])
@@ -228,7 +236,7 @@ def test_cursor_pagination_without_a_secret_is_a_configuration_error(
 
 def test_token_values_that_do_not_fit_the_columns_return_422(db: Session) -> None:
     token = encode_cursor(
-        ["not-a-price", 1], order_fingerprint([("price", "desc", None)]), secret=b"environment-secret"
+        ["not-a-price", 1], order_fingerprint([("price", "desc", None)]), secret=token_key("environment-secret")
     )
 
     with extension_client(db, CONFIG) as client:
