@@ -7,5 +7,6 @@ See: https://stackoverflow.com/questions/53060607/python-3-6-5-multiple-bases-ha
 class SlotsBase:
     __slots__ = (
         "_config",
+        "_cursor_defaults",
         "_type_dto_map",
     )

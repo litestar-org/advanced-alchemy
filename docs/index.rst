@@ -123,8 +123,10 @@ Advanced Alchemy provides declarative bases with primary keys and audit timestam
     Repositories <reference/repository>
     Memory Repositories <reference/repository_memory>
     Services <reference/service>
+    Schema Conversion & Pagination <reference/service_conversion>
     Service Composition <reference/service_composition>
     Filters <reference/filters>
+    Cursor Pagination <reference/cursor_pagination>
     Bulk Operations <reference/operations>
     Custom Types <reference/types>
     Replica Routing <reference/routing>

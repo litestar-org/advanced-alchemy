@@ -5,6 +5,31 @@
 
 .. changelog:: 1.13.0
 
+    .. change:: add cursor (keyset) pagination
+        :type: feature
+        :pr: 852
+        :issue: 564
+
+        :class:`~advanced_alchemy.filters.CursorFilter` pages by the ordering keys of
+        the last row a client saw, with the primary key appended as a tiebreaker,
+        explicit NULL placement, and a ``limit + 1`` fetch that detects the last page.
+        ``to_schema`` returns a :class:`~advanced_alchemy.service.CursorPagination`
+        with ``next_cursor``, ``previous_cursor``, ``has_next``, and ``has_previous``
+        when ``filters`` hold a ``CursorFilter``, and ``pagination_type="cursor"``
+        types the result; calls without a ``CursorFilter`` keep returning
+        ``OffsetPagination``. Tokens are bound
+        to their ordering and can be signed, expire, or be encrypted.
+        ``FilterConfig`` and ``FilterSet`` accept ``pagination_type="cursor"``, and
+        the Litestar and FastAPI providers expose ``cursor``, ``pageSize``,
+        ``orderBy``, and ``sortOrder`` with the existing sort allowlist and
+        ``pagination_max_size``. Provider tokens are always signed: set
+        ``pagination_cursor_secret`` once on the SQLAlchemy configuration, per
+        filter configuration, or through the
+        ``ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET`` or ``SECRET_KEY`` environment
+        variables. SQL and in-memory repositories reject conflicting
+        pagination filters and count the full filtered set. With contributions
+        from `Pavel Kirilin <https://github.com/s3rius>`_.
+
     .. change:: add optional pagination_max_size cap to FilterConfig and FilterSet
         :type: feature
         :pr: 850
@@ -41,7 +66,7 @@
         ``EXISTS`` / ``NOT EXISTS`` filtering across one-to-many, many-to-one,
         many-to-many, self-referential, joined-table inheritance, and multi-hop
         relationships, alongside relationship attribute support in
-        :class:`~advanced_alchemy.filters.CollectionFilter` and
+        :class:`~advanced_alchemy.filters.InCollectionFilter` and
         :class:`~advanced_alchemy.filters.NotInCollectionFilter`, ``"relationship"``
         nodes (with ``allowed_relationships``, ``max_relationship_depth``,
         ``allowed_fields``, ``max_depth``, and ``strict`` validation guards)
@@ -124,6 +149,17 @@
         after subcommands), ``ALCHEMY_CONFIG``, and ``pyproject.toml``, supporting
         colon/dotted targets and sync/async factory callables, alongside
         ``--validate-config`` and ``show-config``.
+
+    .. change:: add expired-entry cleanup to the Litestar SQLAlchemy store
+        :type: feature
+        :pr: 788
+        :issue: 787
+
+        Adds ``SQLAlchemyStore.delete_expired()`` for periodic cleanup with both
+        synchronous and asynchronous SQLAlchemy configurations. Cleanup removes
+        expired rows in the store's exact namespace while preserving live entries,
+        entries without an expiration time, and entries in other namespaces.
+        The session guide documents how to call it on a recurring schedule.
 
     .. change:: add BcryptHasher password hashing backend
         :type: feature
@@ -213,6 +249,19 @@
         ``updated_at_before``/``updated_at_after`` parameter names in Litestar
         and FastAPI filter providers while keeping public query aliases intact.
 
+    .. change:: align filter class names on the ``*Filter`` convention
+        :type: misc
+
+        :class:`~advanced_alchemy.filters.LimitOffsetFilter`,
+        :class:`~advanced_alchemy.filters.OrderByFilter`,
+        :class:`~advanced_alchemy.filters.BeforeAfterFilter`,
+        :class:`~advanced_alchemy.filters.OnBeforeAfterFilter`, and
+        :class:`~advanced_alchemy.filters.InCollectionFilter` are the class
+        names, matching every other filter and SQLSpec. ``LimitOffset``,
+        ``OrderBy``, ``BeforeAfter``, ``OnBeforeAfter``, and ``CollectionFilter``
+        still import and type-check as the same classes, emit a
+        ``DeprecationWarning`` when accessed, and are removed in 2.0.
+
     .. change:: update documentation pipeline, canonical URLs, and usage guides
         :type: misc
         :pr: 782 838 841 847
@@ -288,7 +337,7 @@
         ``SQLAlchemyAsyncMockRepository`` and ``SQLAlchemySyncMockRepository`` support
         ``NotInCollectionFilter``, ``NotInSearchFilter``, ``ComparisonFilter``,
         ``ExistsFilter``, ``NotExistsFilter``, ``MultiFilter``, ``between()``, and
-        ``is_(None)``. ``LimitOffset`` slices ``offset:offset + limit``, ``BeforeAfter``
+        ``is_(None)``. ``LimitOffsetFilter`` slices ``offset:offset + limit``, ``BeforeAfterFilter``
         applies both bounds, and ``get_many_and_count`` returns the count before
         pagination. Unsupported SQL expressions now raise ``RepositoryError`` instead of
         returning unfiltered rows, so tests that relied on the previous results may
@@ -418,17 +467,6 @@
 
 .. changelog:: 1.11.0
     :date: 2026-05-30
-
-    .. change:: add expired-entry cleanup to the Litestar SQLAlchemy store
-        :type: feature
-        :pr: 788
-        :issue: 787
-
-        Adds ``SQLAlchemyStore.delete_expired()`` for periodic cleanup with both
-        synchronous and asynchronous SQLAlchemy configurations. Cleanup removes
-        expired rows in the store's exact namespace while preserving live entries,
-        entries without an expiration time, and entries in other namespaces.
-        The session guide documents how to call it on a recurring schedule.
 
     .. change:: harden crypto column types and add TOTP and one-time-code storage
         :type: feature

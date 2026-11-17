@@ -69,6 +69,11 @@ Repository & Integrity Exceptions
     :no-inherited-members:
     :show-inheritance:
 
+.. autoexception:: advanced_alchemy.exceptions.InvalidCursorError
+    :no-members:
+    :no-inherited-members:
+    :show-inheritance:
+
 Exception Translation & Error Templates
 ---------------------------------------
 

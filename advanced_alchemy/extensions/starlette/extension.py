@@ -14,6 +14,7 @@ from starlette.requests import Request
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.starlette.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
+from advanced_alchemy.utils.dependencies import CursorDefaults, resolve_cursor_defaults
 
 if TYPE_CHECKING:
     from sqlalchemy import Engine
@@ -41,6 +42,7 @@ class AdvancedAlchemy:
         app: Optional["Starlette"] = None,
     ) -> None:
         self._config = config if isinstance(config, Sequence) else [config]
+        self._cursor_defaults = resolve_cursor_defaults(self._config)
         self._mapped_configs: dict[str, Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]] = self.map_configs()
         self._app = cast("Optional[Starlette]", None)
 
@@ -52,6 +54,11 @@ class AdvancedAlchemy:
         """Current Advanced Alchemy configuration."""
 
         return self._config
+
+    @property
+    def cursor_defaults(self) -> CursorDefaults:
+        """Cursor token options the configurations set for the application's filter dependencies."""
+        return self._cursor_defaults
 
     def init_app(self, app: "Starlette") -> None:
         """Initializes the Starlette application with SQLAlchemy engine and sessionmaker.

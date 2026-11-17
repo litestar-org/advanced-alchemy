@@ -17,22 +17,22 @@ except ImportError:  # pragma: no cover
 
 from advanced_alchemy.base import BigIntBase, CommonTableAttributes, UUIDAuditBase, create_registry
 from advanced_alchemy.filters import (
-    BeforeAfter,
+    BeforeAfterFilter,
     BooleanFilter,
     ChoicesFilter,
-    CollectionFilter,
     ComparisonFilter,
     ExistsFilter,
     FilterGroup,
-    LimitOffset,
+    InCollectionFilter,
+    LimitOffsetFilter,
     MultiFilter,
     NotExistsFilter,
     NotInCollectionFilter,
     NotInSearchFilter,
     NotNullFilter,
     NullFilter,
-    OnBeforeAfter,
-    OrderBy,
+    OnBeforeAfterFilter,
+    OrderByFilter,
     RelationshipFilter,
     SearchFilter,
     and_,
@@ -230,7 +230,7 @@ def test_before_after_filter(session: Session, movie_model_sync: type[Declarativ
         session.commit()
     setup_movie_data(session, Movie)
 
-    before_after_filter = BeforeAfter(
+    before_after_filter = BeforeAfterFilter(
         field_name="release_date", before=datetime(1999, 3, 31, tzinfo=timezone.utc), after=None
     )
     statement = before_after_filter.append_to_statement(select(Movie), Movie)
@@ -251,7 +251,7 @@ def test_on_before_after_filter(session: Session, movie_model_sync: type[Declara
         session.commit()
     setup_movie_data(session, Movie)
 
-    on_before_after_filter = OnBeforeAfter(
+    on_before_after_filter = OnBeforeAfterFilter(
         field_name="release_date", on_or_before=None, on_or_after=datetime(1999, 3, 31, tzinfo=timezone.utc)
     )
     statement = on_before_after_filter.append_to_statement(select(Movie), Movie)
@@ -271,7 +271,7 @@ def test_collection_filter(session: Session, movie_model_sync: type[DeclarativeB
         session.execute(Movie.__table__.delete())
         session.commit()
     setup_movie_data(session, Movie)
-    collection_filter = CollectionFilter(field_name="title", values=["The Matrix", "Shawshank Redemption"])
+    collection_filter = InCollectionFilter(field_name="title", values=["The Matrix", "Shawshank Redemption"])
     statement = collection_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert len(results) == 2
@@ -491,7 +491,7 @@ def test_limit_offset_filter(session: Session, movie_model_sync: type[Declarativ
         session.execute(Movie.__table__.delete())
         session.commit()
     setup_movie_data(session, Movie)
-    limit_offset_filter = LimitOffset(limit=2, offset=1)
+    limit_offset_filter = LimitOffsetFilter(limit=2, offset=1)
     # Add ORDER BY for MSSQL compatibility (required when using OFFSET)
     statement = select(Movie).order_by(Movie.id)
     statement = limit_offset_filter.append_to_statement(statement, Movie)
@@ -511,18 +511,18 @@ def test_order_by_filter(session: Session, movie_model_sync: type[DeclarativeBas
         session.execute(Movie.__table__.delete())
         session.commit()
     setup_movie_data(session, Movie)
-    order_by_filter = OrderBy(field_name="release_date", sort_order="asc")
+    order_by_filter = OrderByFilter(field_name="release_date", sort_order="asc")
     statement = order_by_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert results[0].title == "Shawshank Redemption"
-    order_by_filter = OrderBy(field_name="release_date", sort_order="desc")
+    order_by_filter = OrderByFilter(field_name="release_date", sort_order="desc")
     statement = order_by_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert results[0].title == "The Hangover"
 
 
 def test_order_by_with_func_random(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
-    """Test OrderBy filter with func.random() expression."""
+    """Test OrderByFilter filter with func.random() expression."""
     Movie = movie_model_sync
 
     # Skip mock engines
@@ -541,7 +541,7 @@ def test_order_by_with_func_random(session: Session, movie_model_sync: type[Decl
     setup_movie_data(session, Movie)
 
     # Test func.random() - should not raise type error
-    order_by_filter = OrderBy(field_name=func.random())
+    order_by_filter = OrderByFilter(field_name=func.random())
     statement = order_by_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     # Should return all movies, order is random
@@ -549,7 +549,7 @@ def test_order_by_with_func_random(session: Session, movie_model_sync: type[Decl
 
 
 def test_order_by_with_func_lower(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
-    """Test OrderBy filter with func.lower() for case-insensitive sorting."""
+    """Test OrderByFilter filter with func.lower() for case-insensitive sorting."""
     Movie = movie_model_sync
 
     # Skip mock engines
@@ -563,7 +563,7 @@ def test_order_by_with_func_lower(session: Session, movie_model_sync: type[Decla
     setup_movie_data(session, Movie)
 
     # Test func.lower() for case-insensitive alphabetical sorting
-    order_by_filter = OrderBy(field_name=func.lower(Movie.title), sort_order="asc")
+    order_by_filter = OrderByFilter(field_name=func.lower(Movie.title), sort_order="asc")
     statement = order_by_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     # Should be sorted alphabetically: Shawshank, The Hangover, The Matrix
@@ -573,7 +573,7 @@ def test_order_by_with_func_lower(session: Session, movie_model_sync: type[Decla
 
 
 def test_order_by_with_instrumented_attribute(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:
-    """Test OrderBy filter with InstrumentedAttribute (Model.field)."""
+    """Test OrderByFilter filter with InstrumentedAttribute (Model.field)."""
     Movie = movie_model_sync
 
     # Skip mock engines
@@ -587,7 +587,7 @@ def test_order_by_with_instrumented_attribute(session: Session, movie_model_sync
     setup_movie_data(session, Movie)
 
     # Test with InstrumentedAttribute (backward compatibility)
-    order_by_filter = OrderBy(field_name=Movie.release_date, sort_order="asc")
+    order_by_filter = OrderByFilter(field_name=Movie.release_date, sort_order="asc")
     statement = order_by_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert results[0].title == "Shawshank Redemption"
@@ -609,11 +609,11 @@ def test_order_by_nulls_placement(session: Session, movie_model_sync: type[Decla
     setup_movie_data(session, Movie)
 
     for sort_order in ("asc", "desc"):
-        nulls_last_filter = OrderBy(field_name="director", sort_order=sort_order, nulls="last")
+        nulls_last_filter = OrderByFilter(field_name="director", sort_order=sort_order, nulls="last")
         results = session.execute(nulls_last_filter.append_to_statement(select(Movie), Movie)).scalars().all()
         assert results[-1].director is None, f"{sort_order} with nulls='last' must end with the NULL row"
 
-        nulls_first_filter = OrderBy(field_name="director", sort_order=sort_order, nulls="first")
+        nulls_first_filter = OrderByFilter(field_name="director", sort_order=sort_order, nulls="first")
         results = session.execute(nulls_first_filter.append_to_statement(select(Movie), Movie)).scalars().all()
         assert results[0].director is None, f"{sort_order} with nulls='first' must start with the NULL row"
 
@@ -668,7 +668,7 @@ NULLS_EMULATED = pytest.mark.parametrize("dialect", NULLS_EMULATED_DIALECTS)
 
 
 def _compile_order_by_nulls(dialect: Any, **kwargs: Any) -> str:
-    statement = OrderBy(field_name="director", **kwargs).append_to_statement(select(OrderByMovie), OrderByMovie)
+    statement = OrderByFilter(field_name="director", **kwargs).append_to_statement(select(OrderByMovie), OrderByMovie)
     return str(statement.compile(dialect=dialect))
 
 
@@ -730,7 +730,7 @@ def test_the_default_is_untouched(dialect: Any) -> None:
 def test_nulls_placement_with_paginated_eager_loading(
     order_by_session: Session, sort_order: Literal["asc", "desc"], nulls: Literal["first", "last"]
 ) -> None:
-    statement = OrderBy("director", sort_order, nulls).append_to_statement(
+    statement = OrderByFilter("director", sort_order, nulls).append_to_statement(
         select(OrderByMovie).options(joinedload(OrderByMovie.credits)).limit(2).offset(1), OrderByMovie
     )
     movies = order_by_session.scalars(statement).unique().all()
@@ -745,7 +745,7 @@ def test_nulls_placement_with_paginated_eager_loading(
 @pytest.mark.unit
 def test_emulated_null_ordering_expands_labels_inside_case(dialect: Any) -> None:
     director = func.lower(OrderByMovie.director).label("normalized_director")
-    statement = OrderBy(director, nulls="last").append_to_statement(select(director), OrderByMovie)
+    statement = OrderByFilter(director, nulls="last").append_to_statement(select(director), OrderByMovie)
 
     compiled = str(statement.compile(dialect=dialect))
 
@@ -757,7 +757,7 @@ def test_emulated_null_ordering_expands_labels_inside_case(dialect: Any) -> None
 @NULLS_EMULATED
 @pytest.mark.unit
 def test_emulated_eager_loading_adapts_the_ordering_column(dialect: Any) -> None:
-    statement = OrderBy("director", nulls="last").append_to_statement(
+    statement = OrderByFilter("director", nulls="last").append_to_statement(
         select(OrderByMovie).options(joinedload(OrderByMovie.credits)).limit(2), OrderByMovie
     )
     compiled = str(statement.compile(dialect=dialect))
@@ -773,7 +773,7 @@ def test_nulls_placement_reuses_distinct_compiled_statements(order_by_session: S
         for field in ("director", "id"):
             for sort_order in ("asc", "desc"):
                 for nulls in ("first", "last"):
-                    statement = OrderBy(field, sort_order, nulls).append_to_statement(
+                    statement = OrderByFilter(field, sort_order, nulls).append_to_statement(
                         select(OrderByMovie.id), OrderByMovie
                     )
                     result = order_by_session.scalars(statement, execution_options={"compiled_cache": cache}).all()
@@ -933,7 +933,9 @@ def test_filter_group_logical_operators(session: Session, movie_model_sync: type
         session.commit()
     setup_movie_data(session, Movie)
     # Test AND operator
-    before_2000 = BeforeAfter(field_name="release_date", before=datetime(2000, 1, 1, tzinfo=timezone.utc), after=None)
+    before_2000 = BeforeAfterFilter(
+        field_name="release_date", before=datetime(2000, 1, 1, tzinfo=timezone.utc), after=None
+    )
     has_the_in_title = SearchFilter(field_name="title", value="The", ignore_case=True)
 
     # Should match only "The Matrix" (before 2000 AND has "The" in title)
@@ -1272,21 +1274,21 @@ def test_multi_filter_all_filter_types(session: Session, movie_model_sync: type[
     multi_filter = MultiFilter(
         filters={
             "or_": [
-                # BeforeAfter filter
+                # BeforeAfterFilter filter
                 {
                     "type": "before_after",
                     "field_name": "release_date",
                     "before": datetime(2000, 1, 1, tzinfo=timezone.utc),
                     "after": None,
                 },
-                # OnBeforeAfter filter
+                # OnBeforeAfterFilter filter
                 {
                     "type": "on_before_after",
                     "field_name": "release_date",
                     "on_or_before": datetime(2009, 6, 1, tzinfo=timezone.utc),
                     "on_or_after": None,
                 },
-                # CollectionFilter
+                # InCollectionFilter
                 {
                     "type": "collection",
                     "field_name": "title",
@@ -1455,9 +1457,9 @@ def test_collection_filter_prefer_any(session: Session, movie_model_sync: type[D
         session.execute(Movie.__table__.delete())
         session.commit()
     setup_movie_data(session, Movie)
-    """Test CollectionFilter with prefer_any parameter."""
+    """Test InCollectionFilter with prefer_any parameter."""
     # Test with prefer_any=False (default, using IN)
-    collection_filter: CollectionFilter[str] = CollectionFilter(
+    collection_filter: InCollectionFilter[str] = InCollectionFilter(
         field_name="title", values=["The Matrix", "Shawshank Redemption"]
     )
     statement = collection_filter.append_to_statement(select(Movie), Movie)
@@ -1469,20 +1471,20 @@ def test_collection_filter_prefer_any(session: Session, movie_model_sync: type[D
     # Only PostgreSQL properly supports the ANY operator with array parameters
     dialect_name = getattr(session.bind.dialect, "name", "")
     if dialect_name in ("postgresql", "psycopg", "asyncpg", "cockroachdb"):
-        collection_filter = CollectionFilter[str](field_name="title", values=["The Matrix", "Shawshank Redemption"])
+        collection_filter = InCollectionFilter[str](field_name="title", values=["The Matrix", "Shawshank Redemption"])
         statement = collection_filter.append_to_statement(select(Movie), Movie, prefer_any=True)
         results = session.execute(statement).scalars().all()
         assert len(results) == 2
         assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
     # Test with empty collection
-    collection_filter = CollectionFilter[str](field_name="title", values=[])
+    collection_filter = InCollectionFilter[str](field_name="title", values=[])
     statement = collection_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert len(results) == 0
 
     # Test with None values
-    collection_filter = CollectionFilter[str](field_name="title", values=None)
+    collection_filter = InCollectionFilter[str](field_name="title", values=None)
     statement = collection_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert len(results) == 3  # Should return all movies
@@ -1600,10 +1602,10 @@ def test_null_filter_combined_with_other_filters(session: Session, movie_model_s
         session.commit()
     setup_movie_data(session, Movie)
 
-    # Test NullFilter combined with CollectionFilter
+    # Test NullFilter combined with InCollectionFilter
     # Find movies with a director AND genre is Action or Drama
     not_null_filter = NotNullFilter("director")
-    collection_filter = CollectionFilter("genre", ["Action", "Drama"])
+    collection_filter = InCollectionFilter("genre", ["Action", "Drama"])
 
     statement = select(Movie)
     statement = not_null_filter.append_to_statement(statement, Movie)
@@ -1881,18 +1883,18 @@ def test_relationship_filter_many_to_many_sync(
 
     pos_stmt = RelationshipFilter(
         relationship="tags",
-        filters=[CollectionFilter(field_name="name", values=["python"])],
+        filters=[InCollectionFilter(field_name="name", values=["python"])],
     ).append_to_statement(select(item_model), item_model)
     assert {i.name for i in session.execute(pos_stmt).scalars().all()} == {"item-1", "item-2"}
 
     neg_stmt = RelationshipFilter(
         relationship="tags",
-        filters=[CollectionFilter(field_name="name", values=["python"])],
+        filters=[InCollectionFilter(field_name="name", values=["python"])],
         negate=True,
     ).append_to_statement(select(item_model), item_model)
     assert {i.name for i in session.execute(neg_stmt).scalars().all()} == {"item-3"}
 
-    col_stmt = CollectionFilter(field_name="tags", values=[tag_python.id]).append_to_statement(
+    col_stmt = InCollectionFilter(field_name="tags", values=[tag_python.id]).append_to_statement(
         select(item_model),
         item_model,
     )
@@ -1962,7 +1964,7 @@ async def test_relationship_filter_many_to_many_async(
 
     stmt = RelationshipFilter(
         relationship="tags",
-        filters=[CollectionFilter(field_name="name", values=["python"])],
+        filters=[InCollectionFilter(field_name="name", values=["python"])],
     ).append_to_statement(select(item_model), item_model)
     items = (await async_session.execute(stmt)).scalars().all()
     assert {i.name for i in items} == {"item-1", "item-2"}
@@ -2018,10 +2020,14 @@ def test_order_by_dotted_relationship_sync(
     session.add_all([ada, zed, book_1, book_2])
     session.flush()
 
-    asc_stmt = OrderBy(field_name="author.name", sort_order="asc").append_to_statement(select(book_model), book_model)
+    asc_stmt = OrderByFilter(field_name="author.name", sort_order="asc").append_to_statement(
+        select(book_model), book_model
+    )
     assert [b.title for b in session.execute(asc_stmt).scalars().all()] == ["Book Two", "Book One"]
 
-    desc_stmt = OrderBy(field_name="author.name", sort_order="desc").append_to_statement(select(book_model), book_model)
+    desc_stmt = OrderByFilter(field_name="author.name", sort_order="desc").append_to_statement(
+        select(book_model), book_model
+    )
     assert [b.title for b in session.execute(desc_stmt).scalars().all()] == ["Book One", "Book Two"]
 
 
@@ -2042,6 +2048,8 @@ async def test_order_by_dotted_relationship_async(
     async_session.add_all([ada, zed, book_1, book_2])
     await async_session.flush()
 
-    asc_stmt = OrderBy(field_name="author.name", sort_order="asc").append_to_statement(select(book_model), book_model)
+    asc_stmt = OrderByFilter(field_name="author.name", sort_order="asc").append_to_statement(
+        select(book_model), book_model
+    )
     asc_books = (await async_session.execute(asc_stmt)).scalars().all()
     assert [b.title for b in asc_books] == ["Async Book Two", "Async Book One"]

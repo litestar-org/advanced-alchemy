@@ -119,7 +119,7 @@ Attach ``AdvancedAlchemy`` to your ``Starlette`` app and retrieve the current re
             async def list_authors(request: Request) -> Response:
                 page = int(request.query_params.get("currentPage", 1))
                 size = int(request.query_params.get("pageSize", 10))
-                limit_offset = filters.LimitOffset(limit=size, offset=size * (page - 1))
+                limit_offset = filters.LimitOffsetFilter(limit=size, offset=size * (page - 1))
 
                 authors_service = AuthorService(session=alchemy.get_async_session(request))
                 results, total = await authors_service.get_many_and_count(limit_offset)

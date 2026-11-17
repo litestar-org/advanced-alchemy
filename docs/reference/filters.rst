@@ -4,7 +4,7 @@ Filters
 
 .. py:module:: advanced_alchemy.filters
 
-See :doc:`filterset` for reusable class-based filter definitions.
+See :doc:`filterset` for reusable class-based filter definitions and :doc:`cursor_pagination` for keyset pagination.
 
 Base & Pagination Filters
 -------------------------
@@ -19,12 +19,12 @@ Base & Pagination Filters
     :no-inherited-members:
     :show-inheritance:
 
-.. autoclass:: advanced_alchemy.filters.LimitOffset
+.. autoclass:: advanced_alchemy.filters.LimitOffsetFilter
     :no-members:
     :no-inherited-members:
     :show-inheritance:
 
-.. autoclass:: advanced_alchemy.filters.OrderBy
+.. autoclass:: advanced_alchemy.filters.OrderByFilter
     :no-members:
     :no-inherited-members:
     :show-inheritance:
@@ -32,12 +32,12 @@ Base & Pagination Filters
 Date, Time & Nullability Filters
 --------------------------------
 
-.. autoclass:: advanced_alchemy.filters.BeforeAfter
+.. autoclass:: advanced_alchemy.filters.BeforeAfterFilter
     :no-members:
     :no-inherited-members:
     :show-inheritance:
 
-.. autoclass:: advanced_alchemy.filters.OnBeforeAfter
+.. autoclass:: advanced_alchemy.filters.OnBeforeAfterFilter
     :no-members:
     :no-inherited-members:
     :show-inheritance:
@@ -60,7 +60,7 @@ Date, Time & Nullability Filters
 Collection, Search & Comparison Filters
 ---------------------------------------
 
-.. autoclass:: advanced_alchemy.filters.CollectionFilter
+.. autoclass:: advanced_alchemy.filters.InCollectionFilter
     :no-members:
     :no-inherited-members:
     :show-inheritance:

@@ -28,21 +28,22 @@ from typing_extensions import TypeVar
 from advanced_alchemy.exceptions import AdvancedAlchemyError, IntegrityError, RepositoryError
 from advanced_alchemy.filters import (
     VALID_OPERATORS,
-    BeforeAfter,
+    BeforeAfterFilter,
     BooleanFilter,
-    CollectionFilter,
     ComparisonFilter,
+    CursorFilter,
     ExistsFilter,
     FilterGroup,
-    LimitOffset,
+    InCollectionFilter,
+    LimitOffsetFilter,
     MultiFilter,
     NotExistsFilter,
     NotInCollectionFilter,
     NotInSearchFilter,
     NotNullFilter,
     NullFilter,
-    OnBeforeAfter,
-    OrderBy,
+    OnBeforeAfterFilter,
+    OrderByFilter,
     RelationshipFilter,
     SearchFilter,
     StatementFilter,
@@ -445,7 +446,7 @@ class InMemoryFilterEvaluator:
         *,
         negate: bool,
     ) -> Optional[RelationshipFilter]:
-        """Convert relationship ``CollectionFilter``/``NotInCollectionFilter`` to a ``RelationshipFilter``."""
+        """Convert relationship ``InCollectionFilter``/``NotInCollectionFilter`` to a ``RelationshipFilter``."""
         if not result:
             return None
         info = inspect(type(result[0]), raiseerr=False)
@@ -464,7 +465,7 @@ class InMemoryFilterEvaluator:
         return RelationshipFilter(
             relationship=field_str,
             filters=[
-                CollectionFilter(field_name=rel_prop.mapper.get_property_by_column(pk_cols[0]).key, values=values)
+                InCollectionFilter(field_name=rel_prop.mapper.get_property_by_column(pk_cols[0]).key, values=values)
             ],
             negate=negate,
         )
@@ -821,17 +822,25 @@ class InMemoryFilterEvaluator:
         result: List[ModelT],
         *filters: Union[StatementFilter, ColumnElement[bool]],
         apply_pagination: bool = True,
+        model: Optional[type[Any]] = None,
     ) -> List[ModelT]:
         """Apply `StatementFilter` instances and SQLAlchemy boolean expressions to `result`."""
-        order_filters: List[OrderBy] = []
-        pagination_filters: List[LimitOffset] = []
-        from advanced_alchemy.repository._util import _expand_filtersets  # pyright: ignore[reportPrivateUsage]
+        order_filters: List[OrderByFilter] = []
+        pagination_filters: List[LimitOffsetFilter] = []
+        cursor_filter: Optional[CursorFilter] = None
+        from advanced_alchemy.repository._util import (
+            _expand_filtersets,  # pyright: ignore[reportPrivateUsage]
+            order_cursor_filter_last,
+        )
 
-        for filter_ in _expand_filtersets(filters):
-            if isinstance(filter_, LimitOffset):
+        for filter_ in order_cursor_filter_last(_expand_filtersets(filters)):
+            if isinstance(filter_, CursorFilter):
+                if apply_pagination:
+                    cursor_filter = filter_
+            elif isinstance(filter_, LimitOffsetFilter):
                 if apply_pagination:
                     pagination_filters.append(filter_)
-            elif isinstance(filter_, OrderBy):
+            elif isinstance(filter_, OrderByFilter):
                 order_filters.append(filter_)
             else:
                 result = cls._apply_statement_filter(result, filter_)
@@ -839,6 +848,8 @@ class InMemoryFilterEvaluator:
             result = cls._apply_statement_filter(result, order_filter)
         for pag in pagination_filters:
             result = cls.apply_limit_offset_pagination(result, pag.limit, pag.offset)
+        if cursor_filter is not None:
+            result = cls._apply_cursor_pagination(result, cursor_filter, model)
         return result
 
     @classmethod
@@ -846,13 +857,16 @@ class InMemoryFilterEvaluator:
         cls,
         result: List[ModelT],
         *filters: Union[StatementFilter, ColumnElement[bool]],
+        model: Optional[type[Any]] = None,
     ) -> List[ModelT]:
-        """Apply only `LimitOffset` pagination filters from `filters` to `result`."""
+        """Apply only pagination filters from `filters` to `result`."""
         from advanced_alchemy.repository._util import _expand_filtersets  # pyright: ignore[reportPrivateUsage]
 
         for filter_ in _expand_filtersets(filters):
-            if isinstance(filter_, LimitOffset):
+            if isinstance(filter_, LimitOffsetFilter):
                 result = cls.apply_limit_offset_pagination(result, filter_.limit, filter_.offset)
+            elif isinstance(filter_, CursorFilter):
+                result = cls._apply_cursor_pagination(result, filter_, model)
         return result
 
     @staticmethod
@@ -866,20 +880,29 @@ class InMemoryFilterEvaluator:
         except AttributeError as error:
             raise RepositoryError from error
 
+    @staticmethod
+    def _apply_cursor_pagination(
+        result: List[ModelT], cursor_filter: CursorFilter, model: Optional[type[Any]]
+    ) -> List[ModelT]:
+        resolved_model = model if model is not None else (type(result[0]) if result else None)
+        if resolved_model is None:
+            return result
+        return cursor_filter.paginate_items(result, resolved_model)
+
     @classmethod
     def _apply_statement_filter(
         cls,
         result: List[ModelT],
         filter_: Union[StatementFilter, ColumnElement[bool]],
     ) -> List[ModelT]:
-        if isinstance(filter_, BeforeAfter):
+        if isinstance(filter_, BeforeAfterFilter):
             return cls.filter_on_datetime_field(
                 result,
                 field_name=filter_.field_name,
                 before=filter_.before,
                 after=filter_.after,
             )
-        if isinstance(filter_, OnBeforeAfter):
+        if isinstance(filter_, OnBeforeAfterFilter):
             return cls.filter_on_datetime_field(
                 result,
                 field_name=filter_.field_name,
@@ -891,12 +914,12 @@ class InMemoryFilterEvaluator:
             if values is None:
                 return result
             return cls.filter_not_in_collection(result, filter_.field_name, values)  # pyright: ignore[reportUnknownArgumentType]
-        if isinstance(filter_, CollectionFilter):
+        if isinstance(filter_, InCollectionFilter):
             in_values: Optional[abc.Collection[Any]] = filter_.values  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
             if in_values is None:
                 return result
             return cls.filter_in_collection(result, filter_.field_name, in_values)  # pyright: ignore[reportUnknownArgumentType]
-        if isinstance(filter_, OrderBy):
+        if isinstance(filter_, OrderByFilter):
             return cls.order_by(
                 result,
                 filter_.field_name,

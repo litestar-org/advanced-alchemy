@@ -8,8 +8,7 @@ from sqlalchemy import ForeignKey, create_engine, event, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, raiseload, relationship, selectinload
 
-from advanced_alchemy.filters import FilterTypes, LimitOffset, StatementFilter
-from advanced_alchemy.filterset import FilterSet
+from advanced_alchemy.filters import FilterSet, FilterTypes, LimitOffsetFilter, StatementFilter
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 from advanced_alchemy.repository.memory import SQLAlchemySyncMockRepository
 
@@ -160,7 +159,7 @@ def test_fastapi_filterset_dependency_parses_dunder_and_openapi() -> None:
         return {
             "count": len(filters),
             "type": type(filters[0]).__name__,
-            "pagination": next(f.limit for f in filters[0].to_statement_filters() if isinstance(f, LimitOffset)),
+            "pagination": next(f.limit for f in filters[0].to_statement_filters() if isinstance(f, LimitOffsetFilter)),
         }
 
     with TestClient(app) as client:
@@ -251,7 +250,7 @@ def test_mssql_composite_paging_keeps_user_order_first() -> None:
     for filter_ in filters.to_statement_filters():
         assert isinstance(filter_, StatementFilter)
         statement = filter_.append_to_statement(statement, CompositeRoot)
-    statement = LimitOffset(limit=2, offset=1).append_to_statement(statement, CompositeRoot)
+    statement = LimitOffsetFilter(limit=2, offset=1).append_to_statement(statement, CompositeRoot)
     mssql_dialect = cast("Any", dialect)()
     statement = _filterset_loader_options(statement, [filters], mssql_dialect, paginated=True)
     compiled = str(statement.compile(dialect=mssql_dialect))
@@ -364,7 +363,7 @@ def test_filterset_pagination_max_size_litestar_and_fastapi() -> None:
 
     @fastapi_app.get("/")
     def fastapi_endpoint(filters: Annotated[list[FilterSet[Customer]], Depends(fastapi_dep)]) -> dict[str, int]:
-        limit = next(f.limit for f in filters[0].to_statement_filters() if isinstance(f, LimitOffset))
+        limit = next(f.limit for f in filters[0].to_statement_filters() if isinstance(f, LimitOffsetFilter))
         return {"limit": limit}
 
     with FastAPITestClient(fastapi_app) as client:
@@ -379,7 +378,7 @@ def test_filterset_pagination_max_size_litestar_and_fastapi() -> None:
 
     @get("/", sync_to_thread=False)
     def litestar_endpoint(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> dict[str, int]:
-        limit = next(f.limit for f in filters[0].to_statement_filters() if isinstance(f, LimitOffset))  # type: ignore[union-attr]
+        limit = next(f.limit for f in filters[0].to_statement_filters() if isinstance(f, LimitOffsetFilter))  # type: ignore[union-attr]
         return {"limit": limit}
 
     litestar_app = Litestar(

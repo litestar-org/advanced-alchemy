@@ -173,7 +173,7 @@ Mix ``FlaskServiceMixin`` into your service class to serialize paginated ``msgsp
 
     @service_app.route("/authors", methods=["GET"])
     def list_authors() -> Response:
-        limit_offset = filters.LimitOffset(
+        limit_offset = filters.LimitOffsetFilter(
             limit=request.args.get("pageSize", 10, type=int),
             offset=request.args.get("pageSize", 10, type=int) * (request.args.get("currentPage", 1, type=int) - 1),
         )

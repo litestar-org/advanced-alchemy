@@ -72,7 +72,7 @@ async def provide_author_details_service(
 def provide_limit_offset_pagination(
     current_page: int = 1,
     page_size: int = 10,
-) -> filters.LimitOffset:
+) -> filters.LimitOffsetFilter:
     """Add offset/limit pagination.
 
     Return type consumed by `Repository.apply_limit_offset_pagination()`.
@@ -84,7 +84,7 @@ def provide_limit_offset_pagination(
     page_size : int
         OFFSET to apply to select.
     """
-    return filters.LimitOffset(page_size, page_size * (current_page - 1))
+    return filters.LimitOffsetFilter(page_size, page_size * (current_page - 1))
 
 
 # #######################

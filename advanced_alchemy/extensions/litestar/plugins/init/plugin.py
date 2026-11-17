@@ -13,27 +13,38 @@ from advanced_alchemy.exceptions import ImproperConfigurationError, RepositoryEr
 from advanced_alchemy.extensions.litestar.exception_handler import exception_to_http_response
 from advanced_alchemy.extensions.litestar.plugins import _slots_base
 from advanced_alchemy.filters import (
-    BeforeAfter,
-    CollectionFilter,
+    BeforeAfterFilter,
     ComparisonFilter,
+    CursorFilter,
+    CursorKey,
     ExistsFilter,
     FilterGroup,
     FilterMap,
     FilterTypes,
     InAnyFilter,
-    LimitOffset,
+    InCollectionFilter,
+    LimitOffsetFilter,
     LogicalOperatorMap,
     MultiFilter,
     NotExistsFilter,
     NotInCollectionFilter,
     NotInSearchFilter,
-    OnBeforeAfter,
-    OrderBy,
+    OnBeforeAfterFilter,
+    OrderByFilter,
     SearchFilter,
     StatementFilter,
     StatementTypeT,
 )
-from advanced_alchemy.service import ModelDictListT, ModelDictT, ModelDTOT, ModelOrRowMappingT, ModelT, OffsetPagination
+from advanced_alchemy.service import (
+    CursorPagination,
+    ModelDictListT,
+    ModelDictT,
+    ModelDTOT,
+    ModelOrRowMappingT,
+    ModelT,
+    OffsetPagination,
+)
+from advanced_alchemy.utils.dependencies import CursorDefaults, resolve_cursor_defaults
 
 if TYPE_CHECKING:
     from click import Group
@@ -46,16 +57,24 @@ __all__ = ("SQLAlchemyInitPlugin",)
 
 
 signature_namespace_values: dict[str, Any] = {
-    "BeforeAfter": BeforeAfter,
-    "OnBeforeAfter": OnBeforeAfter,
-    "CollectionFilter": CollectionFilter,
-    "LimitOffset": LimitOffset,
-    "OrderBy": OrderBy,
+    "BeforeAfterFilter": BeforeAfterFilter,
+    "BeforeAfter": BeforeAfterFilter,
+    "OnBeforeAfterFilter": OnBeforeAfterFilter,
+    "OnBeforeAfter": OnBeforeAfterFilter,
+    "InCollectionFilter": InCollectionFilter,
+    "CollectionFilter": InCollectionFilter,
+    "LimitOffsetFilter": LimitOffsetFilter,
+    "LimitOffset": LimitOffsetFilter,
+    "OrderByFilter": OrderByFilter,
+    "OrderBy": OrderByFilter,
     "SearchFilter": SearchFilter,
     "NotInCollectionFilter": NotInCollectionFilter,
     "NotInSearchFilter": NotInSearchFilter,
     "FilterTypes": FilterTypes,
     "OffsetPagination": OffsetPagination,
+    "CursorFilter": CursorFilter,
+    "CursorKey": CursorKey,
+    "CursorPagination": CursorPagination,
     "ExistsFilter": ExistsFilter,
     "DTOData": DTOData,
     "NamedDependency": NamedDependency,
@@ -99,10 +118,16 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPlugin, _slots_base.SlotsBase)
             config: configure DB connection and hook handlers and dependencies.
         """
         self._config = config
+        self._cursor_defaults = resolve_cursor_defaults(self.config)
 
     @property
     def config(self) -> "Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]":
         return self._config if isinstance(self._config, Sequence) else [self._config]
+
+    @property
+    def cursor_defaults(self) -> CursorDefaults:
+        """Cursor token options the configurations set for the application's filter dependencies."""
+        return self._cursor_defaults
 
     def on_cli_init(self, cli: "Group") -> None:
         from advanced_alchemy.extensions.litestar.cli import database_group

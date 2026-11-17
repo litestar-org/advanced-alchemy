@@ -19,7 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from advanced_alchemy.base import UUIDAuditBase, UUIDBase
 from advanced_alchemy.config import AsyncSessionConfig
 from advanced_alchemy.extensions.litestar.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
-from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.filters import LimitOffsetFilter
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
 
@@ -78,7 +78,7 @@ async def provide_author_details_repo(db_session: NamedDependency[AsyncSession])
 def provide_limit_offset_pagination(
     current_page: Annotated[int, QueryParameter(ge=1, name="currentPage")] = 1,
     page_size: Annotated[int, QueryParameter(name="pageSize", ge=1)] = 10,
-) -> LimitOffset:
+) -> LimitOffsetFilter:
     """Add offset/limit pagination.
 
     Return type consumed by `Repository.apply_limit_offset_pagination()`.
@@ -90,7 +90,7 @@ def provide_limit_offset_pagination(
     page_size : int
         OFFSET to apply to select.
     """
-    return LimitOffset(page_size, page_size * (current_page - 1))
+    return LimitOffsetFilter(page_size, page_size * (current_page - 1))
 
 
 class AuthorController(Controller):
@@ -102,7 +102,7 @@ class AuthorController(Controller):
     async def list_authors(
         self,
         authors_repo: NamedDependency[AuthorRepository],
-        limit_offset: NamedDependency[LimitOffset],
+        limit_offset: NamedDependency[LimitOffsetFilter],
     ) -> OffsetPagination[Author]:
         """List authors."""
         results, total = await authors_repo.get_many_and_count(limit_offset)

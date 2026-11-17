@@ -10,12 +10,12 @@ from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, with_loader_criteria
 
 from advanced_alchemy.filters import (
-    CollectionFilter,
     ComparisonFilter,
+    InCollectionFilter,
     MultiFilter,
     NotInCollectionFilter,
     NotInSearchFilter,
-    OrderBy,
+    OrderByFilter,
     RelationshipFilter,
     SearchFilter,
 )
@@ -191,13 +191,13 @@ def test_comparison_filter_iendswith(unit_session: Session) -> None:
 
 
 def test_collection_and_not_in_collection_relationship_parity(unit_session: Session) -> None:
-    """CollectionFilter and NotInCollectionFilter handle relationships symmetrically."""
+    """InCollectionFilter and NotInCollectionFilter handle relationships symmetrically."""
     tag_py = unit_session.scalars(select(UnitTag).where(UnitTag.name == "python")).one()
 
-    in_stmt = CollectionFilter(UnitPost.tags, [tag_py.id]).append_to_statement(select(UnitPost), UnitPost)
+    in_stmt = InCollectionFilter(UnitPost.tags, [tag_py.id]).append_to_statement(select(UnitPost), UnitPost)
     assert [row.title for row in unit_session.scalars(in_stmt).all()] == ["Notes on Engine"]
 
-    empty_stmt = CollectionFilter(UnitPost.tags, []).append_to_statement(select(UnitPost), UnitPost)
+    empty_stmt = InCollectionFilter(UnitPost.tags, []).append_to_statement(select(UnitPost), UnitPost)
     assert unit_session.scalars(empty_stmt).all() == []
 
     not_in_stmt = NotInCollectionFilter(UnitPost.tags, [tag_py.id]).append_to_statement(select(UnitPost), UnitPost)
@@ -210,8 +210,8 @@ def test_collection_and_not_in_collection_relationship_parity(unit_session: Sess
     assert len(unit_session.scalars(empty_not_in_stmt).all()) == 3
 
 
-@pytest.mark.parametrize("filter_cls", [CollectionFilter, NotInCollectionFilter])
-def test_collection_filter_relationship_composite_pk_raises(filter_cls: type[CollectionFilter[int]]) -> None:
+@pytest.mark.parametrize("filter_cls", [InCollectionFilter, NotInCollectionFilter])
+def test_collection_filter_relationship_composite_pk_raises(filter_cls: type[InCollectionFilter[int]]) -> None:
     """Relationship targets with composite primary keys raise ValueError."""
     with pytest.raises(ValueError, match="composite primary keys"):
         filter_cls(field_name="items", values=[1]).append_to_statement(
@@ -407,8 +407,8 @@ def test_order_by_dotted_relationship_compiles_correlated_subquery(
     nulls: Optional[Literal["first", "last"]],
     expected_tokens: tuple[str, ...],
 ) -> None:
-    """Verify dotted relationship paths compile to correlated scalar subqueries in OrderBy."""
-    stmt = OrderBy(field_name=field_name, sort_order=sort_order, nulls=nulls).append_to_statement(
+    """Verify dotted relationship paths compile to correlated scalar subqueries in OrderByFilter."""
+    stmt = OrderByFilter(field_name=field_name, sort_order=sort_order, nulls=nulls).append_to_statement(
         select(model_cls), model_cls
     )
     sql = str(stmt.compile(dialect=sqlite.dialect()))
@@ -418,7 +418,7 @@ def test_order_by_dotted_relationship_compiles_correlated_subquery(
 
 
 def test_order_by_dotted_relationship_executes_sqlite() -> None:
-    """Execute OrderBy across to-one and multi-hop self-referential paths on SQLite."""
+    """Execute OrderByFilter across to-one and multi-hop self-referential paths on SQLite."""
     engine = create_engine("sqlite:///:memory:")
     FilterUnitBase.metadata.create_all(engine)
 
@@ -435,7 +435,9 @@ def test_order_by_dotted_relationship_executes_sqlite() -> None:
 
         asc_posts = (
             session.execute(
-                OrderBy(field_name="author.name", sort_order="asc").append_to_statement(select(UnitPost), UnitPost)
+                OrderByFilter(field_name="author.name", sort_order="asc").append_to_statement(
+                    select(UnitPost), UnitPost
+                )
             )
             .scalars()
             .all()
@@ -444,7 +446,9 @@ def test_order_by_dotted_relationship_executes_sqlite() -> None:
 
         desc_posts = (
             session.execute(
-                OrderBy(field_name="author.name", sort_order="desc").append_to_statement(select(UnitPost), UnitPost)
+                OrderByFilter(field_name="author.name", sort_order="desc").append_to_statement(
+                    select(UnitPost), UnitPost
+                )
             )
             .scalars()
             .all()
@@ -453,8 +457,8 @@ def test_order_by_dotted_relationship_executes_sqlite() -> None:
 
         multi_hop = (
             session.execute(
-                OrderBy(field_name="name", sort_order="asc").append_to_statement(
-                    OrderBy(field_name="parent.parent.name", sort_order="asc", nulls="first").append_to_statement(
+                OrderByFilter(field_name="name", sort_order="asc").append_to_statement(
+                    OrderByFilter(field_name="parent.parent.name", sort_order="asc", nulls="first").append_to_statement(
                         select(UnitCategory), UnitCategory
                     ),
                     UnitCategory,
@@ -481,9 +485,9 @@ def test_order_by_dotted_relationship_rejects_invalid_paths(
     field_name: str,
     match: str,
 ) -> None:
-    """Ensure collection or malformed relationship paths fail early in OrderBy."""
+    """Ensure collection or malformed relationship paths fail early in OrderByFilter."""
     with pytest.raises(ValueError, match=match):
-        OrderBy(field_name=field_name, sort_order="asc").append_to_statement(select(model_cls), model_cls)
+        OrderByFilter(field_name=field_name, sort_order="asc").append_to_statement(select(model_cls), model_cls)
 
 
 @pytest.mark.parametrize(

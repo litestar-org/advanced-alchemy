@@ -118,7 +118,7 @@ Setup and Route Handlers
             async def list_authors(request: Request, db_session: AsyncSession) -> HTTPResponse:
                 page = int(request.args.get("currentPage", 1))
                 size = int(request.args.get("pageSize", 10))
-                limit_offset = filters.LimitOffset(limit=size, offset=size * (page - 1))
+                limit_offset = filters.LimitOffsetFilter(limit=size, offset=size * (page - 1))
 
                 authors_service = AuthorService(session=db_session)
                 results, total = await authors_service.get_many_and_count(limit_offset)

@@ -47,7 +47,7 @@ maintainers = [
 name = "advanced_alchemy"
 readme = "docs/PYPI_README.md"
 requires-python = ">=3.9"
-version = "1.12.0"
+version = "1.13.0b1"
 
 [project.urls]
 Changelog = "https://advanced-alchemy.litestar.dev/latest/changelog"
@@ -232,7 +232,7 @@ sqlite = [{ include-group = "aiosqlite" }]
 allow_dirty = true
 commit = false
 commit_args = "--no-verify"
-current_version = "1.12.0"
+current_version = "1.13.0b1"
 ignore_missing_files = false
 ignore_missing_version = false
 message = "chore(release): bump to v{new_version}"
@@ -256,11 +256,6 @@ values = ["a", "b", "rc", "stable"]
 
 [tool.bumpversion.parts.pre_n]
 first_value = "1"
-
-[[tool.bumpversion.files]]
-filename = "pyproject.toml"
-replace = 'version = "{new_version}"'
-search = 'version = "{current_version}"'
 
 [tool.uv]
 # NOTE: mysql-connector-python 9.6.0 (released 2026-01-21) removed Python 3.12+ wheels.

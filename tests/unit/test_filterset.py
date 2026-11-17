@@ -8,8 +8,7 @@ from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
-from advanced_alchemy.filters import ComparisonFilter, LimitOffset, RelationshipFilter
-from advanced_alchemy.filterset import FilterSet
+from advanced_alchemy.filters import ComparisonFilter, FilterSet, LimitOffsetFilter, RelationshipFilter
 
 
 class Base(DeclarativeBase):
@@ -109,7 +108,7 @@ def test_explicit_pagination_and_sort() -> None:
         config = {"pagination_type": "limit_offset", "pagination_size": 10}
 
     filters = Paged(page=2, orderBy="-name").to_statement_filters()
-    page = next(f for f in filters if isinstance(f, LimitOffset))
+    page = next(f for f in filters if isinstance(f, LimitOffsetFilter))
     assert (page.offset, page.limit) == (10, 10)
     with pytest.raises(ValueError, match="sort"):
         Paged(orderBy="orders__price").to_statement_filters()
@@ -295,13 +294,15 @@ def test_pagination_max_size_config_and_class_attr() -> None:
     class OverriddenToUnbounded(CappedViaAttr):
         pagination_max_size = None
 
-    default_limit = next(f.limit for f in CappedViaConfig().to_statement_filters() if isinstance(f, LimitOffset))
+    default_limit = next(f.limit for f in CappedViaConfig().to_statement_filters() if isinstance(f, LimitOffsetFilter))
     assert default_limit == 10
 
-    at_limit = next(f.limit for f in CappedViaConfig(pageSize=10).to_statement_filters() if isinstance(f, LimitOffset))
+    at_limit = next(
+        f.limit for f in CappedViaConfig(pageSize=10).to_statement_filters() if isinstance(f, LimitOffsetFilter)
+    )
     assert at_limit == 10
 
-    attr_default = next(f.limit for f in CappedViaAttr().to_statement_filters() if isinstance(f, LimitOffset))
+    attr_default = next(f.limit for f in CappedViaAttr().to_statement_filters() if isinstance(f, LimitOffsetFilter))
     assert attr_default == 5
 
     with pytest.raises(ValueError, match="exceeds maximum allowed size 10"):
@@ -311,7 +312,7 @@ def test_pagination_max_size_config_and_class_attr() -> None:
         CappedViaAttr(page_size=11)
 
     unbounded_limit = next(
-        f.limit for f in OverriddenToUnbounded(pageSize=100).to_statement_filters() if isinstance(f, LimitOffset)
+        f.limit for f in OverriddenToUnbounded(pageSize=100).to_statement_filters() if isinstance(f, LimitOffsetFilter)
     )
     assert unbounded_limit == 100
 

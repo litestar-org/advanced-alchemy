@@ -35,10 +35,13 @@ from sqlalchemy.sql.elements import Label
 from typing_extensions import TypeAlias
 
 from advanced_alchemy.base import ModelProtocol
-from advanced_alchemy.exceptions import ErrorMessages, NotFoundError
+from advanced_alchemy.exceptions import ErrorMessages, ImproperConfigurationError, NotFoundError
 from advanced_alchemy.exceptions import wrap_sqlalchemy_exception as _wrap_sqlalchemy_exception
 from advanced_alchemy.filters import (
+    CursorFilter,
     InAnyFilter,
+    LimitOffsetFilter,
+    OrderByFilter,
     PaginationFilter,
     StatementFilter,
     StatementTypeT,
@@ -961,7 +964,7 @@ class FilterableRepository(
         Returns:
             StatementTypeT: The filtered SQL statement.
         """
-        from advanced_alchemy.filterset import FilterSet
+        from advanced_alchemy.filters import FilterSet
 
         filtersets: list[FilterSet[Any]] = [
             cast("Any", filter_) for filter_ in filters if isinstance(filter_, FilterSet)
@@ -969,7 +972,7 @@ class FilterableRepository(
         if any(filterset.model_type is not self.model_type for filterset in filtersets):
             msg = "FilterSet model does not match the repository model"
             raise ValueError(msg)
-        expanded = _expand_filtersets(filters)
+        expanded = order_cursor_filter_last(_expand_filtersets(filters))
         for filter_ in expanded:
             if isinstance(filter_, (PaginationFilter,)):
                 if apply_pagination:
@@ -1067,6 +1070,40 @@ class FilterableRepository(
         if isinstance(statement, Select):
             statement = cast("StatementTypeT", statement.order_by(field.desc() if is_desc else field.asc()))
         return statement
+
+
+def has_cursor_filter(filters: Sequence[Union[StatementFilter, ColumnElement[bool]]]) -> bool:
+    """Return whether ``filters``, including FilterSet contents, contain a :class:`CursorFilter`."""
+    return any(isinstance(filter_, CursorFilter) for filter_ in _expand_filtersets(filters))
+
+
+def order_cursor_filter_last(
+    filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
+) -> list[Union[StatementFilter, ColumnElement[bool]]]:
+    """Validate cursor pagination and move the :class:`CursorFilter` after every other filter.
+
+    The cursor filter owns ordering and limits, so it cannot be combined with
+    :class:`OrderByFilter`, :class:`LimitOffsetFilter`, or another cursor filter.
+
+    Args:
+        filters: Expanded filters.
+
+    Returns:
+        The filters with any cursor filter last.
+
+    Raises:
+        ImproperConfigurationError: Pagination filters conflict.
+    """
+    cursors = [filter_ for filter_ in filters if isinstance(filter_, CursorFilter)]
+    if not cursors:
+        return list(filters)
+    if len(cursors) > 1:
+        msg = "Only one CursorFilter can be applied to a query"
+        raise ImproperConfigurationError(msg)
+    if any(isinstance(filter_, (OrderByFilter, LimitOffsetFilter)) for filter_ in filters):
+        msg = "CursorFilter owns ordering and limits; remove OrderByFilter and LimitOffsetFilter from the query"
+        raise ImproperConfigurationError(msg)
+    return [*(filter_ for filter_ in filters if not isinstance(filter_, CursorFilter)), cursors[0]]
 
 
 def _hydrate_model_dict(model: type[ModelT], kwargs: Mapping[str, Any], *, partial: bool = False) -> ModelT:
@@ -1234,7 +1271,7 @@ def _canonicalize_cache_key_value(value: Any) -> Any:
 def _expand_filtersets(
     filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
 ) -> list[Union[StatementFilter, ColumnElement[bool]]]:
-    from advanced_alchemy.filterset import FilterSet
+    from advanced_alchemy.filters import FilterSet
 
     expanded: list[Union[StatementFilter, ColumnElement[bool]]] = []
     for filter_ in filters:
@@ -1322,7 +1359,7 @@ def _build_cache_key(  # pyright: ignore[reportUnusedFunction]
     Returns None if the query specification includes non-cacheable filter
     expressions (e.g., raw SQLAlchemy boolean expressions).
     """
-    from advanced_alchemy.filterset import FilterSet
+    from advanced_alchemy.filters import FilterSet
 
     if any(isinstance(filter_, FilterSet) and filter_.load for filter_ in filters):
         return None

@@ -22,6 +22,7 @@ def warn_deprecation(
     alternative: Optional[str] = None,
     info: Optional[str] = None,
     pending: bool = False,
+    stacklevel: int = 2,
 ) -> None:
     """Warn about a call to a (soon to be) deprecated function.
 
@@ -33,6 +34,7 @@ def warn_deprecation(
         info: Additional information
         pending: Use :class:`PendingDeprecationWarning` instead of :class:`DeprecationWarning`
         kind: Type of the deprecated thing
+        stacklevel: Frames between the warning and the code it is attributed to; ``2`` is the caller of this function
     """
     parts = []
 
@@ -63,7 +65,7 @@ def warn_deprecation(
     text = ". ".join(parts)  # pyright: ignore[reportUnknownArgumentType]
     warning_class = PendingDeprecationWarning if pending else DeprecationWarning
 
-    warn(text, warning_class, stacklevel=2)
+    warn(text, warning_class, stacklevel=stacklevel)
 
 
 def deprecated(

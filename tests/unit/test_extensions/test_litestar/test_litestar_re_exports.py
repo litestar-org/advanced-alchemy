@@ -76,7 +76,7 @@ def test_litestar_direct_from_imports() -> None:
     """Verify direct symbol imports from Litestar extension submodules."""
     from advanced_alchemy.extensions.litestar.base import UUIDAuditBase, UUIDBase
     from advanced_alchemy.extensions.litestar.exceptions import NotFoundError, RepositoryError
-    from advanced_alchemy.extensions.litestar.filters import FilterTypes, LimitOffset
+    from advanced_alchemy.extensions.litestar.filters import FilterTypes, LimitOffsetFilter
     from advanced_alchemy.extensions.litestar.mixins import AuditColumns, SlugKey
     from advanced_alchemy.extensions.litestar.operations import OnConflictUpsert
     from advanced_alchemy.extensions.litestar.repository import (
@@ -95,7 +95,7 @@ def test_litestar_direct_from_imports() -> None:
     assert NotFoundError is not None
     assert RepositoryError is not None
     assert FilterTypes is not None
-    assert LimitOffset is not None
+    assert LimitOffsetFilter is not None
     assert AuditColumns is not None
     assert SlugKey is not None
     assert OnConflictUpsert is not None

@@ -72,6 +72,7 @@ from advanced_alchemy.repository._util import (
     get_abstract_loader_options,
     get_instrumented_attr,
     get_primary_key_info,
+    has_cursor_filter,
     pk_values_present,
     snapshot_and_detach_relationships,
     was_attribute_set,
@@ -2445,7 +2446,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         """
         count_with_window_function = (
             count_with_window_function if count_with_window_function is not None else self.count_with_window_function
-        )
+        ) and not has_cursor_filter(filters)
         should_uniquify = self._get_uniquify(uniquify)
         resolved_error_messages = self._get_error_messages(
             error_messages=error_messages,
@@ -2692,11 +2693,18 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             if order_by is None:
                 order_by = self.order_by if self.order_by is not None else []
             statement = self._apply_order_by(statement=statement, order_by=order_by)
+            count_source = (
+                self._filter_select_by_kwargs(
+                    self._apply_filters(*filters, statement=statement, apply_pagination=False), kwargs
+                )
+                if has_cursor_filter(filters)
+                else None
+            )
             statement = self._apply_filters(*filters, statement=statement)
             statement = self._filter_select_by_kwargs(statement, kwargs)
             count_result = await self.session.execute(
                 self._get_count_stmt(
-                    statement,
+                    count_source if count_source is not None else statement,
                     loader_options=loader_options,
                     execution_options=execution_options,
                 ),

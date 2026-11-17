@@ -1,8 +1,8 @@
 """SQLAlchemy statement filter constructs for repositories and services.
 
-Provides :class:`StatementFilter` implementations for pagination (:class:`LimitOffset`),
-ordering (:class:`OrderBy`), datetime ranges (:class:`BeforeAfter`, :class:`OnBeforeAfter`),
-collection membership (:class:`CollectionFilter`, :class:`NotInCollectionFilter`, :class:`ChoicesFilter`),
+Provides :class:`StatementFilter` implementations for pagination (:class:`LimitOffsetFilter`),
+ordering (:class:`OrderByFilter`), datetime ranges (:class:`BeforeAfterFilter`, :class:`OnBeforeAfterFilter`),
+collection membership (:class:`InCollectionFilter`, :class:`NotInCollectionFilter`, :class:`ChoicesFilter`),
 nullability (:class:`NullFilter`, :class:`NotNullFilter`), boolean and comparison checks
 (:class:`BooleanFilter`, :class:`ComparisonFilter`), substring search (:class:`SearchFilter`,
 :class:`NotInSearchFilter`), correlated subqueries (:class:`ExistsFilter`, :class:`NotExistsFilter`,
@@ -12,7 +12,7 @@ nullability (:class:`NullFilter`, :class:`NotNullFilter`), boolean and compariso
 
 import datetime as dt
 import logging
-from abc import ABC, abstractmethod
+from abc import ABC
 from collections.abc import Collection, Iterable, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
@@ -33,59 +33,71 @@ from sqlalchemy import (
     BinaryExpression,
     ColumnElement,
     Date,
-    Delete,
-    Integer,
     Select,
-    Update,
     and_,
     any_,
-    case,
     exists,
     false,
     inspect,
-    literal_column,
     not_,
     or_,
     select,
     text,
     true,
 )
-from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import InstrumentedAttribute, aliased
 from sqlalchemy.sql import operators as op
-from sqlalchemy.sql.dml import ReturningDelete, ReturningUpdate
-from sqlalchemy.sql.elements import UnaryExpression
 from typing_extensions import TypeAlias, TypedDict, TypeVar
 
-from advanced_alchemy.base import ModelProtocol
+from advanced_alchemy.filters._base import (
+    FilterFieldName,
+    InstrumentedField,
+    ModelT,
+    StatementFilter,
+    StatementFilterT,
+    StatementTypeT,
+    ordering_term,
+)
+from advanced_alchemy.filters._cursor import register_cursor_type
+from advanced_alchemy.filters._pagination import (
+    CursorFilter,
+    CursorKey,
+    CursorKeys,
+    LimitOffsetFilter,
+    PaginationFilter,
+    normalize_cursor_keys,
+)
 from advanced_alchemy.operations import validate_identifier
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import RelationshipProperty
 
-    FilterFieldName: TypeAlias = Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]
-    InstrumentedField: TypeAlias = Union[ColumnElement[Any], InstrumentedAttribute[Any]]
     RelationshipHop: TypeAlias = Union[str, InstrumentedAttribute[Any]]
     RelationshipPath: TypeAlias = Union[RelationshipHop, Sequence[RelationshipHop]]
 else:
-    FilterFieldName: TypeAlias = Any
-    InstrumentedField: TypeAlias = Any
     RelationshipHop: TypeAlias = Any
     RelationshipPath: TypeAlias = Any
 
 __all__ = (
     "LIKE_ESCAPE_CHAR",
     "BeforeAfter",
+    "BeforeAfterFilter",
     "BooleanFilter",
     "ChoicesFilter",
     "CollectionFilter",
     "ComparisonFilter",
+    "CursorFilter",
+    "CursorKey",
+    "CursorKeys",
     "ExistsFilter",
     "FilterGroup",
     "FilterMap",
+    "FilterSet",
     "FilterTypes",
     "InAnyFilter",
+    "InCollectionFilter",
     "LimitOffset",
+    "LimitOffsetFilter",
     "LogicalOperatorMap",
     "MultiFilter",
     "NotExistsFilter",
@@ -94,7 +106,9 @@ __all__ = (
     "NotNullFilter",
     "NullFilter",
     "OnBeforeAfter",
+    "OnBeforeAfterFilter",
     "OrderBy",
+    "OrderByFilter",
     "PaginationFilter",
     "RelationshipFilter",
     "SearchFilter",
@@ -102,17 +116,11 @@ __all__ = (
     "StatementFilterT",
     "StatementTypeT",
     "escape_like_value",
+    "normalize_cursor_keys",
+    "register_cursor_type",
 )
 
 T = TypeVar("T")
-ModelT = TypeVar("ModelT", bound=ModelProtocol)
-StatementFilterT = TypeVar("StatementFilterT", bound="StatementFilter")
-StatementTypeT = TypeVar(
-    "StatementTypeT",
-    bound=Union[
-        ReturningDelete[tuple[Any]], ReturningUpdate[tuple[Any]], Select[tuple[Any]], Select[Any], Update, Delete
-    ],
-)
 
 logger = logging.getLogger("advanced_alchemy")
 
@@ -120,25 +128,25 @@ logger = logging.getLogger("advanced_alchemy")
 class FilterMap(TypedDict):
     """Mapping of filter type keys to their corresponding filter classes."""
 
-    before_after: "type[BeforeAfter]"
+    before_after: "type[BeforeAfterFilter]"
     """Exclusive datetime range filter class."""
-    on_before_after: "type[OnBeforeAfter]"
+    on_before_after: "type[OnBeforeAfterFilter]"
     """Inclusive datetime range filter class."""
     boolean: "type[BooleanFilter]"
     """Boolean equality filter class."""
     choices: "type[ChoicesFilter[Any]]"
     """Fixed-choice membership filter class."""
-    collection: "type[CollectionFilter[Any]]"
+    collection: "type[InCollectionFilter[Any]]"
     """Collection ``IN`` / ``ANY`` membership filter class."""
     not_in_collection: "type[NotInCollectionFilter[Any]]"
     """Collection ``NOT IN`` / ``!= ANY`` exclusion filter class."""
-    limit_offset: "type[LimitOffset]"
+    limit_offset: "type[LimitOffsetFilter]"
     """Limit and offset pagination filter class."""
     null: "type[NullFilter]"
     """``IS NULL`` filter class."""
     not_null: "type[NotNullFilter]"
     """``IS NOT NULL`` filter class."""
-    order_by: "type[OrderBy]"
+    order_by: "type[OrderByFilter]"
     """Column ordering filter class."""
     search: "type[SearchFilter]"
     """Substring ``LIKE`` / ``ILIKE`` filter class."""
@@ -165,73 +173,8 @@ class LogicalOperatorMap(TypedDict):
     """SQLAlchemy ``or_`` disjunction callable."""
 
 
-class StatementFilter(ABC):
-    """Abstract base class for SQLAlchemy statement filters.
-
-    This class defines the interface for all filter types in the system. Each filter
-    implementation must provide a method to append its filtering logic to an existing
-    SQLAlchemy statement.
-    """
-
-    @abstractmethod
-    def append_to_statement(
-        self, statement: StatementTypeT, model: type[ModelT], *args: Any, **kwargs: Any
-    ) -> StatementTypeT:
-        """Append filter conditions to a SQLAlchemy statement.
-
-        Args:
-            statement: The SQLAlchemy statement to modify
-            model: The SQLAlchemy model class
-            *args: Additional positional arguments
-            **kwargs: Additional keyword arguments
-
-        Returns:
-            StatementTypeT: Modified SQLAlchemy statement with filter conditions applied
-
-        Raises:
-            NotImplementedError: If the concrete class doesn't implement this method
-
-        Note:
-            This method must be implemented by all concrete filter classes.
-
-        See Also:
-            :meth:`sqlalchemy.sql.expression.Select.where`: SQLAlchemy where clause
-        """
-        return statement
-
-    @staticmethod
-    def _get_instrumented_attr(model: Any, key: FilterFieldName) -> InstrumentedField:
-        """Get SQLAlchemy instrumented attribute from model or aliased entity.
-
-        Args:
-            model: SQLAlchemy model class, aliased class, or instance.
-            key: Attribute name or instrumented attribute.
-
-        Returns:
-            InstrumentedField: SQLAlchemy attribute or column expression bound to ``model``.
-
-        See Also:
-            :class:`sqlalchemy.orm.attributes.InstrumentedAttribute`: SQLAlchemy attribute
-        """
-        if isinstance(key, str):
-            return cast("InstrumentedAttribute[Any]", getattr(model, key))
-        if not isinstance(model, type):
-            model_inspector = inspect(model, raiseerr=False)
-            if model_inspector is not None and model_inspector.is_aliased_class:
-                if isinstance(key, InstrumentedAttribute) and issubclass(
-                    model_inspector.mapper.class_, key.parent.class_
-                ):
-                    return cast("InstrumentedField", getattr(model, key.key))
-                if isinstance(key, ColumnElement):
-                    return cast(
-                        "InstrumentedField",
-                        model_inspector._adapter.traverse(key),  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
-                    )
-        return key
-
-
 @dataclass
-class BeforeAfter(StatementFilter):
+class BeforeAfterFilter(StatementFilter):
     """DateTime range filter with exclusive bounds.
 
     This filter creates date/time range conditions using < and > operators,
@@ -240,7 +183,7 @@ class BeforeAfter(StatementFilter):
     If either `before` or `after` is None, that boundary condition is not applied.
 
     See Also:
-        :class:`OnBeforeAfter`: Inclusive datetime range filtering
+        :class:`OnBeforeAfterFilter`: Inclusive datetime range filtering
     """
 
     field_name: FilterFieldName
@@ -269,7 +212,7 @@ class BeforeAfter(StatementFilter):
 
 
 @dataclass
-class OnBeforeAfter(StatementFilter):
+class OnBeforeAfterFilter(StatementFilter):
     """DateTime range filter with inclusive bounds.
 
     This filter creates date/time range conditions using <= and >= operators,
@@ -279,7 +222,7 @@ class OnBeforeAfter(StatementFilter):
     is not applied.
 
     See Also:
-        :class:`BeforeAfter`: Exclusive datetime range filtering
+        :class:`BeforeAfterFilter`: Exclusive datetime range filtering
     """
 
     field_name: FilterFieldName
@@ -344,14 +287,14 @@ class InAnyFilter(StatementFilter, ABC):
         relationship_attr = cast("InstrumentedAttribute[Any]", field)
         rel_filter = RelationshipFilter(
             relationship=relationship_attr,
-            filters=(CollectionFilter(field_name=pk_attr_key, values=values),),
+            filters=(InCollectionFilter(field_name=pk_attr_key, values=values),),
             negate=negate,
         )
         return rel_filter.append_to_statement(statement, model)
 
 
 @dataclass
-class CollectionFilter(InAnyFilter, Generic[T]):
+class InCollectionFilter(InAnyFilter, Generic[T]):
     """Data required to construct a WHERE ... IN (...) clause.
 
     This filter restricts records based on a field's presence in a collection of values.
@@ -399,7 +342,7 @@ class CollectionFilter(InAnyFilter, Generic[T]):
 
 
 @dataclass
-class ChoicesFilter(CollectionFilter[T]):
+class ChoicesFilter(InCollectionFilter[T]):
     """Filter records whose field matches one of a fixed set of choices."""
 
 
@@ -490,18 +433,18 @@ class NullFilter(StatementFilter):
 
             from advanced_alchemy.filters import (
                 NullFilter,
-                CollectionFilter,
+                InCollectionFilter,
             )
 
             filters = [
                 NullFilter("email_verified_at"),
-                CollectionFilter("role", ["admin", "moderator"]),
+                InCollectionFilter("role", ["admin", "moderator"]),
             ]
             results = await repo.get_many(*filters)
 
     See Also:
         - :class:`NotNullFilter`: Filter for NOT NULL values
-        - :class:`CollectionFilter`: Filter by collection membership
+        - :class:`InCollectionFilter`: Filter by collection membership
         - :meth:`sqlalchemy.sql.expression.ColumnOperators.is_`: IS NULL operator
     """
 
@@ -541,18 +484,18 @@ class NotNullFilter(StatementFilter):
 
             from advanced_alchemy.filters import (
                 NotNullFilter,
-                CollectionFilter,
+                InCollectionFilter,
             )
 
             filters = [
                 NotNullFilter("email_verified_at"),
-                CollectionFilter("role", ["admin", "moderator"]),
+                InCollectionFilter("role", ["admin", "moderator"]),
             ]
             results = await repo.get_many(*filters)
 
     See Also:
         - :class:`NullFilter`: Filter for NULL values
-        - :class:`CollectionFilter`: Filter by collection membership
+        - :class:`InCollectionFilter`: Filter by collection membership
         - :meth:`sqlalchemy.sql.expression.ColumnOperators.is_not`: IS NOT NULL operator
     """
 
@@ -573,58 +516,8 @@ class NotNullFilter(StatementFilter):
         return cast("StatementTypeT", statement.where(field.is_not(None)))
 
 
-class PaginationFilter(StatementFilter, ABC):
-    """Abstract base class for pagination filters.
-
-    Subclasses should implement pagination logic, such as limit/offset or
-    cursor-based pagination.
-    """
-
-
 @dataclass
-class LimitOffset(PaginationFilter):
-    """Limit and offset pagination filter.
-
-    Implements traditional pagination using SQL LIMIT and OFFSET clauses.
-    Only applies to SELECT statements; other statement types are returned unmodified.
-
-    Note:
-        This filter only modifies SELECT statements. For other statement types
-        (UPDATE, DELETE), the statement is returned unchanged.
-
-    See Also:
-        - :meth:`sqlalchemy.sql.expression.Select.limit`: SQLAlchemy LIMIT clause
-        - :meth:`sqlalchemy.sql.expression.Select.offset`: SQLAlchemy OFFSET clause
-    """
-
-    limit: int
-    """Maximum number of rows to return."""
-    offset: int
-    """Number of rows to skip before returning results."""
-
-    def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
-        """Apply LIMIT/OFFSET pagination to the statement.
-
-        Args:
-            statement: The SQLAlchemy statement to modify
-            model: The SQLAlchemy model class
-
-        Returns:
-            StatementTypeT: Modified statement with limit and offset applied
-
-        Note:
-            Only modifies SELECT statements. Other statement types are returned as-is.
-
-        See Also:
-            :class:`sqlalchemy.sql.expression.Select`: SQLAlchemy SELECT statement
-        """
-        if isinstance(statement, Select):
-            statement = cast("StatementTypeT", statement.limit(self.limit).offset(self.offset))
-        return statement
-
-
-@dataclass
-class OrderBy(StatementFilter):
+class OrderByFilter(StatementFilter):
     """Order by a specific field.
 
     Appends an ORDER BY clause to SELECT statements, sorting records by the
@@ -684,11 +577,7 @@ class OrderBy(StatementFilter):
                 field: InstrumentedField = self._get_relationship_order_expr(model, self.field_name)
             else:
                 field = self._get_instrumented_attr(model, self.field_name)
-            ordering: ColumnElement[Any] = field.desc() if self.sort_order == "desc" else field.asc()
-            if self.nulls is not None:
-                ordering = _NullsPlacement(
-                    ordering, modifier=op.nulls_first_op if self.nulls == "first" else op.nulls_last_op
-                )
+            ordering = ordering_term(field, descending=self.sort_order == "desc", nulls=self.nulls)
             statement = cast("StatementTypeT", statement.order_by(ordering))
         return statement
 
@@ -710,7 +599,7 @@ class OrderBy(StatementFilter):
             msg = f"Relationship {hops[0]!r} not found on model {parent_info.mapper.class_.__name__}"
             raise ValueError(msg)
         if first_rel.uselist:
-            msg = f"OrderBy only supports single-valued (to-one) relationship paths; {hops[0]!r} is a collection."
+            msg = f"OrderByFilter only supports single-valued (to-one) relationship paths; {hops[0]!r} is a collection."
             raise ValueError(msg)
 
         first_alias = aliased(first_rel.mapper.class_, flat=True)
@@ -735,7 +624,7 @@ class OrderBy(StatementFilter):
                 msg = f"Relationship {hop!r} not found on model {current_mapper.class_.__name__}"
                 raise ValueError(msg)
             if next_rel.uselist:
-                msg = f"OrderBy only supports single-valued (to-one) relationship paths; {hop!r} is a collection."
+                msg = f"OrderByFilter only supports single-valued (to-one) relationship paths; {hop!r} is a collection."
                 raise ValueError(msg)
             next_alias = aliased(next_rel.mapper.class_, flat=True)
             next_info = inspect(next_alias)
@@ -1457,16 +1346,16 @@ class MultiFilter(StatementFilter):
     """Raise ``ValueError`` or ``TypeError`` on malformed logical operators, conditions, or unknown filter types."""
 
     _filter_map: ClassVar[FilterMap] = {
-        "before_after": BeforeAfter,
-        "on_before_after": OnBeforeAfter,
+        "before_after": BeforeAfterFilter,
+        "on_before_after": OnBeforeAfterFilter,
         "boolean": BooleanFilter,
         "choices": ChoicesFilter,
-        "collection": CollectionFilter,
+        "collection": InCollectionFilter,
         "not_in_collection": NotInCollectionFilter,
-        "limit_offset": LimitOffset,
+        "limit_offset": LimitOffsetFilter,
         "null": NullFilter,
         "not_null": NotNullFilter,
-        "order_by": OrderBy,
+        "order_by": OrderByFilter,
         "search": SearchFilter,
         "not_in_search": NotInSearchFilter,
         "filter_group": FilterGroup,
@@ -1789,15 +1678,15 @@ class MultiFilter(StatementFilter):
 
 
 FilterTypes: TypeAlias = Union[
-    BeforeAfter,
-    OnBeforeAfter,
+    BeforeAfterFilter,
+    OnBeforeAfterFilter,
     BooleanFilter,
     ChoicesFilter[Any],
-    CollectionFilter[Any],
-    LimitOffset,
+    InCollectionFilter[Any],
+    LimitOffsetFilter,
     NullFilter,
     NotNullFilter,
-    OrderBy,
+    OrderByFilter,
     SearchFilter,
     NotInCollectionFilter[Any],
     NotInSearchFilter,
@@ -1807,45 +1696,49 @@ FilterTypes: TypeAlias = Union[
     RelationshipFilter,
     MultiFilter,
     FilterGroup,
+    CursorFilter,
 ]
 """Aggregate type alias of the types supported for collection filtering."""
 
 
-class _NullsPlacement(UnaryExpression[Any]):
-    """An ORDER BY term that pins where NULLs sort.
+_DEPRECATED_FILTER_NAMES = {
+    "BeforeAfter": "BeforeAfterFilter",
+    "CollectionFilter": "InCollectionFilter",
+    "LimitOffset": "LimitOffsetFilter",
+    "OnBeforeAfter": "OnBeforeAfterFilter",
+    "OrderBy": "OrderByFilter",
+}
 
-    MySQL, MariaDB and SQL Server have no ``NULLS FIRST``/``NULLS LAST`` syntax. Those backends
-    sort NULL as the lowest value, so ascending-first and descending-last are already native
-    and compile to the plain ordering term; the other two placements are emulated with a leading
-    nullity key. Every other backend gets the native clause, which an index on the column can
-    still satisfy.
+if TYPE_CHECKING:
+    from advanced_alchemy.filters._filterset import FilterSet
 
-    UnaryExpression preserves ordering traversal for ORM eager loading and includes
-    the column, direction and NULL placement in SQL compilation cache keys.
-    """
+    BeforeAfter = BeforeAfterFilter
+    CollectionFilter = InCollectionFilter
+    LimitOffset = LimitOffsetFilter
+    OnBeforeAfter = OnBeforeAfterFilter
+    OrderBy = OrderByFilter
+else:
 
-    inherit_cache = True
+    def __getattr__(name: str) -> Any:
+        """Resolve ``FilterSet`` lazily and deprecated filter names to their ``*Filter`` replacements."""
+        if name == "FilterSet":
+            from advanced_alchemy.filters._filterset import FilterSet
 
+            globals()["FilterSet"] = FilterSet
+            return FilterSet
+        new_name = _DEPRECATED_FILTER_NAMES.get(name)
+        if new_name is None:
+            msg = f"module {__name__!r} has no attribute {name!r}"
+            raise AttributeError(msg)
 
-@compiles(_NullsPlacement, "mysql")
-@compiles(_NullsPlacement, "mariadb")
-@compiles(_NullsPlacement, "mssql")
-def _compile_nulls_placement_emulated(  # pyright: ignore[reportUnusedFunction]
-    element: _NullsPlacement, compiler: Any, **kw: Any
-) -> str:
-    """Compile emulated NULLS placement for MySQL, MariaDB, and SQL Server.
+        from advanced_alchemy.utils.deprecation import warn_deprecation
 
-    Uses literal integer columns instead of bound parameters because parameter placeholders inside
-    ``ORDER BY`` are ambiguous on these dialects, and disables label rendering inside ``CASE``
-    because SQL Server rejects ``SELECT`` aliases inside ``CASE`` expressions.
-    """
-    ordering = cast("UnaryExpression[Any]", element.element)
-    nulls_go_last = element.modifier is op.nulls_last_op
-    if nulls_go_last is (ordering.modifier is op.desc_op):
-        return cast("str", compiler.process(ordering, **kw))
-    key = case(
-        (ordering.element.is_(None), literal_column("1" if nulls_go_last else "0", Integer)),
-        else_=literal_column("0" if nulls_go_last else "1", Integer),
-    )
-    key_kw = {**kw, "render_label_as_label": None}
-    return f"{compiler.process(key, **key_kw)}, {compiler.process(ordering, **kw)}"
+        warn_deprecation(
+            version="1.13.0",
+            removal_in="2.0.0",
+            deprecated_name=f"{__name__}.{name}",
+            kind="import",
+            alternative=f"{__name__}.{new_name}",
+            stacklevel=3,
+        )
+        return globals()[new_name]

@@ -192,3 +192,5 @@ Related Guides
 * :doc:`/usage/frameworks/litestar`: Inject services into Litestar controllers and route handlers.
 * :doc:`/usage/frameworks/fastapi`: Inject services into FastAPI routes with ``Depends``.
 * :doc:`/reference/service`: Full service API reference.
+* :doc:`/reference/service_conversion`: ``to_schema``, ``OffsetPagination``, and schema helper reference.
+* :doc:`/usage/repositories/cursor_pagination`: ``to_schema(..., pagination_type="cursor")`` and cursor pages.
