@@ -8,10 +8,16 @@ import pytest
 from sqlalchemy import ForeignKey, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
 
+from advanced_alchemy.config import SQLAlchemySyncConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError
 from advanced_alchemy.filters import CursorFilter, CursorKey, FilterSet, LimitOffsetFilter, OrderByFilter
 from advanced_alchemy.repository import SQLAlchemySyncRepository
-from advanced_alchemy.utils.dependencies import FilterConfig, resolve_cursor_settings, resolve_filter_aliases
+from advanced_alchemy.utils.dependencies import (
+    FilterConfig,
+    resolve_cursor_defaults,
+    resolve_cursor_settings,
+    resolve_filter_aliases,
+)
 
 
 class ConfigBase(DeclarativeBase):
@@ -83,7 +89,7 @@ def test_settings_resolve_defaults_and_allowlist() -> None:
     assert settings.default_order == "desc"
     assert settings.nulls == "first"
     assert settings.secret is None
-    assert settings.encrypted is False
+    assert settings.encrypted is None
 
 
 def test_build_maps_default_ordering_to_cursor_keys() -> None:
@@ -149,7 +155,6 @@ def test_build_carries_secret_ttl_and_encryption() -> None:
         ({"sort_fields": ["team.name"]}, "relationship sort paths"),
         ({"sort_field": "team.name"}, "relationship sort paths"),
         ({"pagination_cursor_secret": ""}, "must not be empty"),
-        ({"pagination_cursor_encrypted": True}, "requires pagination_cursor_secret"),
         ({"pagination_cursor_ttl": 0}, "positive finite duration"),
         ({"pagination_cursor_ttl": "60"}, "positive finite duration"),
     ],
@@ -157,6 +162,101 @@ def test_build_carries_secret_ttl_and_encryption() -> None:
 def test_invalid_cursor_configuration_is_rejected(config: dict[str, Any], match: str) -> None:
     with pytest.raises(ImproperConfigurationError, match=match):
         resolve_cursor_settings({"pagination_type": "cursor", **config}, Player)  # type: ignore[typeddict-item]
+
+
+@pytest.fixture
+def no_environment_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET", raising=False)
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+
+
+@pytest.mark.usefixtures("no_environment_secret")
+def test_token_options_prefer_the_filter_configuration_then_application_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    defaults = resolve_cursor_defaults(
+        [
+            SQLAlchemySyncConfig(connection_string="sqlite://"),
+            SQLAlchemySyncConfig(
+                connection_string="sqlite://",
+                pagination_cursor_secret="app-secret",
+                pagination_cursor_ttl=60,
+                pagination_cursor_encrypted=True,
+            ),
+        ]
+    )
+    unset = resolve_cursor_settings(BASE)
+    configured = resolve_cursor_settings(
+        {
+            **BASE,
+            "pagination_cursor_secret": "route-secret",
+            "pagination_cursor_ttl": 5,
+            "pagination_cursor_encrypted": False,
+        }
+    )
+
+    assert unset.token_options() == (None, None, False)
+    assert unset.token_options(defaults) == (b"app-secret", 60, True)
+    assert configured.token_options(defaults) == (b"route-secret", 5, False)
+
+    monkeypatch.setenv("SECRET_KEY", "fallback-secret")
+    assert unset.token_options() == (b"fallback-secret", None, False)
+    monkeypatch.setenv("ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET", "environment-secret")
+    assert unset.token_options() == (b"environment-secret", None, False)
+    assert unset.token_options(defaults)[0] == b"app-secret"
+
+
+@pytest.mark.usefixtures("no_environment_secret")
+@pytest.mark.parametrize("config", [{}, {"pagination_cursor_encrypted": True}])
+def test_token_options_without_a_secret_are_rejected_when_one_is_needed(config: dict[str, Any]) -> None:
+    settings = resolve_cursor_settings({**BASE, **config})  # type: ignore[typeddict-item]
+
+    with pytest.raises(ImproperConfigurationError, match="ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET"):
+        settings.token_options(require_secret=not config)
+
+
+@pytest.mark.parametrize(
+    ("options", "match"),
+    [
+        ([{"pagination_cursor_secret": ""}], "must not be empty"),
+        ([{"pagination_cursor_ttl": 0}], "positive finite duration"),
+        (
+            [{"pagination_cursor_secret": "one"}, {"pagination_cursor_secret": "two"}],
+            "different pagination_cursor_secret",
+        ),
+        ([{"pagination_cursor_ttl": 60}, {"pagination_cursor_ttl": 30}], "different pagination_cursor_ttl"),
+    ],
+)
+def test_invalid_application_defaults_are_rejected(options: list[dict[str, Any]], match: str) -> None:
+    configs = [SQLAlchemySyncConfig(connection_string="sqlite://", **option) for option in options]
+
+    with pytest.raises(ImproperConfigurationError, match=match):
+        resolve_cursor_defaults(configs)
+
+
+def test_configurations_that_agree_share_application_defaults() -> None:
+    configs = [
+        SQLAlchemySyncConfig(
+            connection_string="sqlite://", pagination_cursor_secret="shared", pagination_cursor_ttl=60
+        ),
+        SQLAlchemySyncConfig(
+            connection_string="sqlite://",
+            pagination_cursor_secret=b"shared",
+            pagination_cursor_ttl=dt.timedelta(minutes=1),
+        ),
+    ]
+
+    defaults = resolve_cursor_defaults(configs)
+
+    assert (defaults.secret, defaults.encrypted) == (b"shared", None)
+
+
+def test_filterset_cursor_options_are_validated_with_its_parameters() -> None:
+    class Misconfigured(FilterSet[Player]):
+        config = {"pagination_type": "cursor", "pagination_cursor_ttl": 0}
+
+    with pytest.raises(ImproperConfigurationError, match="positive finite duration"):
+        Misconfigured.parameter_specs()
 
 
 @pytest.mark.parametrize(

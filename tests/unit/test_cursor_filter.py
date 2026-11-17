@@ -10,10 +10,21 @@ from collections.abc import Iterator, Sequence
 from typing import Any, Optional
 
 import pytest
-from sqlalchemy import DateTime, Delete, ForeignKey, Integer, String, create_engine, delete, select
+from sqlalchemy import (
+    DateTime,
+    Delete,
+    ForeignKey,
+    Integer,
+    String,
+    TypeDecorator,
+    create_engine,
+    delete,
+    func,
+    select,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects import postgresql, sqlite
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, column_property, mapped_column, relationship
 
 from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError
 from advanced_alchemy.filters import CursorFilter, CursorKey, OrderByFilter, normalize_cursor_keys
@@ -65,6 +76,47 @@ class Renamed(Base):
     amount: Mapped[int] = mapped_column("amount_col", Integer)
 
 
+class Level(enum.Enum):
+    LOW = 1
+    HIGH = 2
+
+
+class LevelType(TypeDecorator[Level]):
+    impl = Integer
+    cache_ok = True
+
+    @property
+    def python_type(self) -> type[Level]:
+        return Level
+
+    def process_bind_param(self, value: Optional[Level], dialect: Any) -> Optional[int]:
+        return None if value is None else value.value
+
+    def process_result_value(self, value: Optional[int], dialect: Any) -> Optional[Level]:
+        return None if value is None else Level(value)
+
+
+class UntypedLevelType(TypeDecorator[Level]):
+    impl = Integer
+    cache_ok = True
+
+    def process_bind_param(self, value: Optional[Level], dialect: Any) -> Optional[int]:
+        return None if value is None else value.value
+
+    def process_result_value(self, value: Optional[int], dialect: Any) -> Optional[Level]:
+        return None if value is None else Level(value)
+
+
+class Job(Base):
+    __tablename__ = "cursor_job"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    level: Mapped[Level] = mapped_column(LevelType())
+    untyped_level: Mapped[Level] = mapped_column(UntypedLevelType())
+    weight: Mapped[int] = mapped_column(Integer)
+    half: Mapped[Optional[int]] = column_property(func.nullif(weight, 0))
+
+
 BASE_TIME = dt.datetime(2026, 1, 1, 12, 0, 0)
 PG_DIALECT = postgresql.dialect()  # type: ignore[no-untyped-call,unused-ignore]
 
@@ -88,6 +140,8 @@ def session() -> Iterator[Session]:
         )
         db.add_all(CompositeItem(tenant=t, seq=s, label=f"{(t * s) % 4}") for t in range(1, 5) for s in range(1, 8))
         db.add_all(Renamed(ident=i, amount=i % 6) for i in range(1, 24))
+        levels = list(Level)
+        db.add_all(Job(id=i, level=levels[i % 2], untyped_level=levels[i % 2], weight=i % 3) for i in range(1, 10))
         db.commit()
         yield db
 
@@ -389,6 +443,8 @@ def _forged_token(keys: Any, values: list[list[Any]]) -> str:
         ("score", [["n", None], ["i", 1]]),
         ("color", [["e", "PURPLE"], ["i", 1]]),
         ("name", [["e", "RED"], ["i", 1]]),
+        ("score", [["i", 2**100], ["i", 1]]),
+        ("score", [["i", 1], ["i", -(2**70)]]),
     ],
 )
 def test_values_that_do_not_fit_the_columns_are_rejected(keys: Any, values: list[list[Any]]) -> None:
@@ -404,9 +460,46 @@ def test_keys_that_are_not_column_attributes_are_rejected(key: str) -> None:
         CursorFilter(key, 5).append_to_statement(select(Item), Item)
 
 
-def test_build_page_needs_a_model() -> None:
+def test_token_with_an_unhashable_direction_is_rejected() -> None:
+    payload = {"v": 1, "d": [], "o": order_fingerprint([("name", "asc", None)]), "k": []}
+    token = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+
+    with pytest.raises(InvalidCursorError, match="malformed"):
+        CursorFilter("name", 5, token)
+
+
+def test_build_page_infers_the_model_from_mapped_rows(session: Session) -> None:
+    rows = list(session.scalars(select(Item).order_by(Item.score, Item.id).limit(4)))
+
+    page = CursorFilter("score", 3).build_page(rows)
+
+    assert (len(page.items), page.has_next, page.next_cursor is not None) == (3, True, True)
+    assert CursorFilter("score", 3).build_page([]).items == []
+
+
+def test_build_page_needs_a_model_for_unmapped_rows() -> None:
     with pytest.raises(ImproperConfigurationError, match="needs the model"):
-        CursorFilter("name", 5).build_page([])
+        CursorFilter("name", 5).build_page([{"name": "a", "id": 1}])
+
+
+def test_enum_type_decorator_keys_page_past_the_first_page(session: Session) -> None:
+    pages = walk_forward(session, Job, "level", 2)
+
+    assert sorted(job.id for job in flatten(pages)) == list(range(1, 10))
+
+
+def test_enum_key_without_a_known_enum_class_fails_when_tokens_are_issued(session: Session) -> None:
+    cursor_filter = CursorFilter("untyped_level", 2)
+    rows = list(session.scalars(cursor_filter.append_to_statement(select(Job), Job)))
+
+    with pytest.raises(ImproperConfigurationError, match="python_type"):
+        cursor_filter.build_page(rows)
+
+
+def test_nullable_expression_keys_page_past_null_rows(session: Session) -> None:
+    pages = walk_forward(session, Job, "half", 2)
+
+    assert sorted(job.id for job in flatten(pages)) == list(range(1, 10))
 
 
 def test_build_page_rejects_rows_missing_a_key(session: Session) -> None:

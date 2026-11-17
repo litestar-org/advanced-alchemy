@@ -12,7 +12,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from typing_extensions import assert_type
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
-from advanced_alchemy.filters import CursorFilter, LimitOffsetFilter, StatementFilter
+from advanced_alchemy.filters import CursorFilter, FilterSet, LimitOffsetFilter, StatementFilter
 from advanced_alchemy.service import (
     CursorPagination,
     OffsetPagination,
@@ -172,14 +172,52 @@ def test_empty_cursor_page(session: Session) -> None:
     assert (page.items, page.has_next, page.has_previous, page.next_cursor) == ([], False, False, None)
 
 
-@pytest.mark.parametrize("pagination_type", [None, "limit_offset"])
-def test_cursor_filter_without_cursor_pagination_type_is_rejected(
-    session: Session, pagination_type: Optional[str]
-) -> None:
+def test_cursor_filter_is_detected_without_pagination_type(session: Session) -> None:
+    rows, cursor_filter = first_page(session)
+    service = NoteService(session=session)
+
+    detected: Any = service.to_schema(rows, filters=[cursor_filter], schema_type=NoteStruct)
+    explicit = service.to_schema(rows, filters=[cursor_filter], schema_type=NoteStruct, pagination_type="cursor")
+
+    assert isinstance(detected, CursorPagination)
+    assert detected == explicit
+    assert len(detected.items) == cursor_filter.limit
+
+
+def test_cursor_filter_inside_filterset_is_detected(session: Session) -> None:
+    class NoteFilters(FilterSet[Note]):
+        config = {"pagination_type": "cursor", "pagination_size": 2, "sort_field": "priority"}
+
+    filterset = NoteFilters()
+    service = NoteService(session=session)
+    rows = service.get_many(filterset)
+
+    detected: Any = service.to_schema(rows, filters=[filterset], schema_type=NoteStruct)
+    explicit = service.to_schema(rows, filters=[filterset], schema_type=NoteStruct, pagination_type="cursor")
+
+    assert isinstance(detected, CursorPagination)
+    assert detected == explicit
+    assert (len(detected.items), detected.has_next) == (2, True)
+
+
+def test_limit_offset_filter_inside_filterset_sets_offset(session: Session) -> None:
+    class NoteFilters(FilterSet[Note]):
+        config = {"pagination_type": "limit_offset", "pagination_size": 2}
+
+    filterset = NoteFilters(page=2)
+    service = NoteService(session=session)
+    rows, total = service.get_many_and_count(filterset)
+
+    page = service.to_schema(rows, total, filters=[filterset])
+
+    assert (page.limit, page.offset) == (2, 2)
+
+
+def test_cursor_filter_with_limit_offset_pagination_type_is_rejected(session: Session) -> None:
     rows, cursor_filter = first_page(session)
 
-    with pytest.raises(ImproperConfigurationError, match='pagination_type="cursor"'):
-        NoteService(session=session).to_schema(rows, filters=[cursor_filter], pagination_type=pagination_type)  # type: ignore[call-overload]
+    with pytest.raises(ImproperConfigurationError, match="contain a CursorFilter"):
+        NoteService(session=session).to_schema(rows, filters=[cursor_filter], pagination_type="limit_offset")
 
 
 def test_cursor_pagination_type_without_cursor_filter_is_rejected(session: Session) -> None:

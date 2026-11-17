@@ -73,56 +73,6 @@ class DecodedCursor:
         self.backward = backward
 
 
-def _float(value: str) -> float:
-    result = float(value)
-    if not math.isfinite(result):
-        msg = "Non-finite cursor float"
-        raise ValueError(msg)
-    return result
-
-
-def _decimal(value: str) -> Decimal:
-    result = Decimal(value)
-    if not result.is_finite() or abs(result.adjusted()) > _DECIMAL_MAX_EXPONENT:
-        msg = "Out-of-range cursor decimal"
-        raise ValueError(msg)
-    return result
-
-
-def _timedelta(value: str) -> dt.timedelta:
-    days, seconds, microseconds = (int(part) for part in value.split(":"))
-    if abs(days) > _TIMEDELTA_MAX_DAYS:
-        msg = "Out-of-range cursor timedelta"
-        raise ValueError(msg)
-    return dt.timedelta(days=days, seconds=seconds, microseconds=microseconds)
-
-
-_ENCODERS: "dict[type, tuple[str, Callable[[Any], str]]]" = {
-    float: ("f", repr),
-    str: ("s", str),
-    bytes: ("y", lambda value: base64.b64encode(value).decode("ascii")),
-    Decimal: ("d", str),
-    UUID: ("u", str),
-    dt.datetime: ("dt", lambda value: value.isoformat()),
-    dt.date: ("da", lambda value: value.isoformat()),
-    dt.time: ("t", lambda value: value.isoformat()),
-    dt.timedelta: ("td", lambda value: f"{value.days}:{value.seconds}:{value.microseconds}"),
-}
-
-_DECODERS: "dict[str, Callable[[str], Any]]" = {
-    "f": _float,
-    "s": str,
-    "y": lambda value: base64.b64decode(value, validate=True),
-    "d": _decimal,
-    "u": UUID,
-    "dt": dt.datetime.fromisoformat,
-    "da": dt.date.fromisoformat,
-    "t": dt.time.fromisoformat,
-    "td": _timedelta,
-    "e": CursorEnumName,
-}
-
-
 def normalize_cursor_ttl(ttl: TTLType) -> Optional[float]:
     """Validate a cursor lifetime and return it in seconds.
 
@@ -313,7 +263,7 @@ def decode_cursor(
     if (
         type(payload.get("v")) is not int
         or payload["v"] != 1
-        or payload.get("d") not in {"f", "b"}
+        or payload.get("d") not in ("f", "b")
         or not isinstance(payload.get("o"), str)
         or not isinstance(payload.get("k"), list)
     ):
@@ -353,39 +303,6 @@ def _encode_value(value: Any) -> "list[Any]":
     raise ImproperConfigurationError(msg)
 
 
-def _decode_value(entry: Any) -> Any:
-    if not isinstance(entry, list):
-        msg = "Invalid cursor entry"
-        raise TypeError(msg)
-    pair = cast("list[Any]", entry)  # type: ignore[redundant-cast]
-    if len(pair) != _ENTRY_LENGTH or not isinstance(pair[0], str):
-        msg = "Invalid cursor entry"
-        raise ValueError(msg)
-    tag: str = pair[0]
-    value: Any = pair[1]
-    if tag == "n" and value is None:
-        return None
-    if tag == "b" and type(value) is bool:
-        return value
-    if tag == "i" and type(value) is int and abs(value) < _INT_LIMIT:
-        return value
-    if tag in _DECODERS and isinstance(value, str):
-        return _DECODERS[tag](value)
-    msg = "Invalid cursor value"
-    raise ValueError(msg)
-
-
-def _b64(value: bytes) -> str:
-    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
-
-
-def _b64decode(value: str) -> bytes:
-    try:
-        return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
-    except (binascii.Error, ValueError) as exc:
-        raise InvalidCursorError(_MALFORMED) from exc
-
-
 def _derive_encryption_keys(secret: bytes) -> "tuple[bytes, bytes]":
     encryption_key = hmac.new(secret, _ENCRYPTION_KEY_INFO, hashlib.sha256).digest()
     mac_key = hmac.new(secret, _MAC_KEY_INFO, hashlib.sha256).digest()
@@ -402,26 +319,8 @@ def _apply_keystream(encryption_key: bytes, nonce: bytes, data: bytes) -> bytes:
     return bytes(output)
 
 
-def _decode_signed_parts(parts: "list[str]", *, secret: Optional[bytes], encrypted: bool) -> bytes:
-    if any(_B64_PART_PATTERN.fullmatch(part) is None for part in parts):
-        raise InvalidCursorError(_MALFORMED)
-    if encrypted:
-        msg = "Invalid pagination cursor: encryption required"
-        raise InvalidCursorError(msg)
-    body = parts[0]
-    has_signature = len(parts) == _SIGNED_PART_COUNT
-    if secret is None and has_signature:
-        msg = "Invalid pagination cursor: unexpected signature"
-        raise InvalidCursorError(msg)
-    if secret is not None:
-        if not has_signature:
-            msg = "Invalid pagination cursor: missing signature"
-            raise InvalidCursorError(msg)
-        expected = _b64(hmac.new(secret, body.encode("ascii"), hashlib.sha256).digest())
-        if not hmac.compare_digest(expected.encode("ascii"), parts[1].encode("ascii")):
-            msg = "Invalid pagination cursor: signature mismatch"
-            raise InvalidCursorError(msg)
-    return _b64decode(body)
+def _b64(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
 def _decode_encrypted_parts(parts: "list[str]", *, secret: Optional[bytes], encrypted: bool) -> bytes:
@@ -448,16 +347,33 @@ def _decode_encrypted_parts(parts: "list[str]", *, secret: Optional[bytes], encr
     return _apply_keystream(encryption_key, sealed[:_NONCE_LENGTH], sealed[_NONCE_LENGTH:])
 
 
-def _parse_timestamp_claim(raw_value: Any) -> float:
-    if type(raw_value) is bool or not isinstance(raw_value, (int, float)):
+def _decode_signed_parts(parts: "list[str]", *, secret: Optional[bytes], encrypted: bool) -> bytes:
+    if any(_B64_PART_PATTERN.fullmatch(part) is None for part in parts):
         raise InvalidCursorError(_MALFORMED)
+    if encrypted:
+        msg = "Invalid pagination cursor: encryption required"
+        raise InvalidCursorError(msg)
+    body = parts[0]
+    has_signature = len(parts) == _SIGNED_PART_COUNT
+    if secret is None and has_signature:
+        msg = "Invalid pagination cursor: unexpected signature"
+        raise InvalidCursorError(msg)
+    if secret is not None:
+        if not has_signature:
+            msg = "Invalid pagination cursor: missing signature"
+            raise InvalidCursorError(msg)
+        expected = _b64(hmac.new(secret, body.encode("ascii"), hashlib.sha256).digest())
+        if not hmac.compare_digest(expected.encode("ascii"), parts[1].encode("ascii")):
+            msg = "Invalid pagination cursor: signature mismatch"
+            raise InvalidCursorError(msg)
+    return _b64decode(body)
+
+
+def _b64decode(value: str) -> bytes:
     try:
-        numeric_value = float(raw_value)
-    except OverflowError as exc:
+        return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+    except (binascii.Error, ValueError) as exc:
         raise InvalidCursorError(_MALFORMED) from exc
-    if not math.isfinite(numeric_value):
-        raise InvalidCursorError(_MALFORMED)
-    return numeric_value
 
 
 def _validate_payload_timestamps(payload: "dict[str, Any]", ttl_seconds: Optional[float]) -> None:
@@ -470,3 +386,87 @@ def _validate_payload_timestamps(payload: "dict[str, Any]", ttl_seconds: Optiona
     if expired:
         msg = "Invalid pagination cursor: expired"
         raise InvalidCursorError(msg)
+
+
+def _parse_timestamp_claim(raw_value: Any) -> float:
+    if type(raw_value) is bool or not isinstance(raw_value, (int, float)):
+        raise InvalidCursorError(_MALFORMED)
+    try:
+        numeric_value = float(raw_value)
+    except OverflowError as exc:
+        raise InvalidCursorError(_MALFORMED) from exc
+    if not math.isfinite(numeric_value):
+        raise InvalidCursorError(_MALFORMED)
+    return numeric_value
+
+
+def _decode_value(entry: Any) -> Any:
+    if not isinstance(entry, list):
+        msg = "Invalid cursor entry"
+        raise TypeError(msg)
+    pair = cast("list[Any]", entry)  # type: ignore[redundant-cast]
+    if len(pair) != _ENTRY_LENGTH or not isinstance(pair[0], str):
+        msg = "Invalid cursor entry"
+        raise ValueError(msg)
+    tag: str = pair[0]
+    value: Any = pair[1]
+    if tag == "n" and value is None:
+        return None
+    if tag == "b" and type(value) is bool:
+        return value
+    if tag == "i" and type(value) is int and abs(value) < _INT_LIMIT:
+        return value
+    if tag in _DECODERS and isinstance(value, str):
+        return _DECODERS[tag](value)
+    msg = "Invalid cursor value"
+    raise ValueError(msg)
+
+
+def _float(value: str) -> float:
+    result = float(value)
+    if not math.isfinite(result):
+        msg = "Non-finite cursor float"
+        raise ValueError(msg)
+    return result
+
+
+def _decimal(value: str) -> Decimal:
+    result = Decimal(value)
+    if not result.is_finite() or abs(result.adjusted()) > _DECIMAL_MAX_EXPONENT:
+        msg = "Out-of-range cursor decimal"
+        raise ValueError(msg)
+    return result
+
+
+def _timedelta(value: str) -> dt.timedelta:
+    days, seconds, microseconds = (int(part) for part in value.split(":"))
+    if abs(days) > _TIMEDELTA_MAX_DAYS:
+        msg = "Out-of-range cursor timedelta"
+        raise ValueError(msg)
+    return dt.timedelta(days=days, seconds=seconds, microseconds=microseconds)
+
+
+_ENCODERS: "dict[type, tuple[str, Callable[[Any], str]]]" = {
+    float: ("f", repr),
+    str: ("s", str),
+    bytes: ("y", lambda value: base64.b64encode(value).decode("ascii")),
+    Decimal: ("d", str),
+    UUID: ("u", str),
+    dt.datetime: ("dt", lambda value: value.isoformat()),
+    dt.date: ("da", lambda value: value.isoformat()),
+    dt.time: ("t", lambda value: value.isoformat()),
+    dt.timedelta: ("td", lambda value: f"{value.days}:{value.seconds}:{value.microseconds}"),
+}
+
+_DECODERS: "dict[str, Callable[[str], Any]]" = {
+    "f": _float,
+    "s": str,
+    "y": lambda value: base64.b64decode(value, validate=True),
+    "d": _decimal,
+    "u": UUID,
+    "dt": dt.datetime.fromisoformat,
+    "da": dt.date.fromisoformat,
+    "t": dt.time.fromisoformat,
+    "td": _timedelta,
+    "e": CursorEnumName,
+}

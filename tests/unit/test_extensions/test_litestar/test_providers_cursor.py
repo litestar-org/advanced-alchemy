@@ -14,6 +14,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from sqlalchemy.pool import StaticPool
 
 from advanced_alchemy.exceptions import InvalidCursorError, RepositoryError
+from advanced_alchemy.extensions.litestar import SQLAlchemyPlugin, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.exception_handler import exception_to_http_response
 from advanced_alchemy.extensions.litestar.plugins.init.plugin import signature_namespace_values
 from advanced_alchemy.extensions.litestar.providers import DependencyDefaults, create_filter_dependencies
@@ -71,6 +72,12 @@ def db() -> Iterator[Session]:
         session.commit()
         yield session
     engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def cursor_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.setenv("ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET", "environment-secret")
 
 
 def make_client(db: Session, config: Any) -> TestClient[Any]:
@@ -206,13 +213,14 @@ def test_filterset_cursor_parameters(db: Session) -> None:
     @get("/", sync_to_thread=False, dependencies=create_filter_dependencies(Widgets))
     def endpoint(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> CursorPagination[WidgetOut]:
         rows = WidgetRepository(session=db).get_many(*filters)
-        cursor_filter = next(f for f in filters[0].to_statement_filters() if isinstance(f, CursorFilter))
-        page = cursor_filter.build_page(rows, model=Widget)
-        return ResultConverter().to_schema(list(page.items), filters=[], schema_type=WidgetOut)  # type: ignore[return-value]
+        return ResultConverter().to_schema(rows, filters=filters, schema_type=WidgetOut, pagination_type="cursor")
 
     with TestClient(Litestar([endpoint])) as client:
         schema = client.get("/schema/openapi.json").json()
+        page = client.get("/").json()
         assert client.get("/", params={"cursor": "bad!"}).status_code == 400
+
+    assert (len(page["items"]), page["has_next"]) == (4, True)
 
     parameters = {p["name"] for p in schema["paths"]["/"]["get"]["parameters"]}
     assert {"cursor", "pageSize", "orderBy"} <= parameters
@@ -248,3 +256,51 @@ def test_prefixed_defaults_keep_custom_cursor_key() -> None:
 
     assert scoped.CURSOR_FILTER_DEPENDENCY_KEY == "orders_page_token"
     assert default_scoped.CURSOR_FILTER_DEPENDENCY_KEY == "orders_cursor_filter"
+
+
+def plugin_client(db: Session, config: Any, **config_options: Any) -> TestClient[Any]:
+    @get("/widgets", sync_to_thread=False, dependencies=create_filter_dependencies(config))
+    def list_widgets(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> CursorPagination[WidgetOut]:
+        rows = WidgetRepository(session=db).get_many(*filters)
+        return ResultConverter().to_schema(rows, filters=filters, schema_type=WidgetOut, pagination_type="cursor")
+
+    plugin = SQLAlchemyPlugin(SQLAlchemySyncConfig(connection_string="sqlite://", **config_options))
+    return TestClient(Litestar([list_widgets], plugins=[plugin], debug=True))
+
+
+@pytest.mark.parametrize(("config", "keys", "limit"), [(CONFIG, [("stock", "desc")], 5), (Widgets, [], 4)])
+def test_config_secret_signs_tokens_for_every_filter_dependency(
+    db: Session, monkeypatch: pytest.MonkeyPatch, config: Any, keys: Any, limit: int
+) -> None:
+    monkeypatch.delenv("ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET")
+
+    with plugin_client(db, config, pagination_cursor_secret="config-secret") as client:
+        token = client.get("/widgets").json()["next_cursor"]
+        following = client.get("/widgets", params={"cursor": token})
+
+    assert following.status_code == 200
+    assert CursorFilter(keys, limit, token, "config-secret").cursor == token
+    with pytest.raises(InvalidCursorError, match="signature"):
+        CursorFilter(keys, limit, token, "environment-secret")
+
+
+def test_filter_configuration_secret_overrides_the_config_secret(db: Session) -> None:
+    config: FilterConfig = {**CONFIG, "pagination_cursor_secret": "route-secret"}
+
+    with plugin_client(db, config, pagination_cursor_secret="config-secret") as client:
+        token = client.get("/widgets").json()["next_cursor"]
+
+    assert CursorFilter([("stock", "desc")], 5, token, "route-secret").cursor == token
+
+
+@pytest.mark.parametrize("config", [CONFIG, Widgets])
+def test_cursor_pagination_without_a_secret_is_a_configuration_error(
+    db: Session, monkeypatch: pytest.MonkeyPatch, config: Any
+) -> None:
+    monkeypatch.delenv("ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET")
+
+    with plugin_client(db, config) as client:
+        response = client.get("/widgets")
+
+    assert response.status_code == 500
+    assert "Cursor pagination requires a secret" in response.text

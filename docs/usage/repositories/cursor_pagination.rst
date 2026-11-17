@@ -58,7 +58,7 @@ The filter fetches ``limit + 1`` rows to learn whether another page exists; ``bu
         rows = await service.get_many(cursor_filter)
         return service.to_schema(rows, filters=[cursor_filter], pagination_type="cursor")
 
-``pagination_type="cursor"`` makes type checkers infer ``CursorPagination[...]``. Passing a ``CursorFilter`` without it raises :class:`~advanced_alchemy.exceptions.ImproperConfigurationError`, so a cursor page is never returned where an ``OffsetPagination`` is declared.
+``to_schema`` returns a ``CursorPagination`` whenever ``filters`` hold a ``CursorFilter``, directly or inside a :class:`~advanced_alchemy.filters.FilterSet`. Type checkers cannot see which filters a list holds, so pass ``pagination_type="cursor"`` for them to infer ``CursorPagination[...]``; without it the call is typed as ``OffsetPagination[...]``. ``pagination_type="limit_offset"`` with a ``CursorFilter`` raises :class:`~advanced_alchemy.exceptions.ImproperConfigurationError`.
 
 The response serializes as:
 
@@ -93,6 +93,8 @@ The filter owns ordering and limits. It replaces the repository's default ``orde
 
     Index the keys in the same order and directions, ending with the primary key, for example ``(score DESC, id DESC)``. The keyset predicate and ``ORDER BY`` then read one contiguous index range per page.
 
+    A nullable key needs more care. PostgreSQL uses the index only when it declares the same NULL placement, for example ``(rating DESC NULLS LAST, id DESC)``. MySQL, MariaDB, and SQL Server sort NULLs first ascending and last descending; any other placement is ordered by an extra ``CASE`` expression that no index serves. On those databases, choose the native placement or a non-nullable key.
+
 Counting
 --------
 
@@ -101,7 +103,7 @@ Cursor pages do not need a total. ``get_many`` runs one query. ``get_many_and_co
 Signed, Expiring, and Encrypted Tokens
 --------------------------------------
 
-Tokens are URL-safe and record the ordering they were issued for; a token reused with a different ordering is rejected. Without a secret, a token is readable base64 holding the key values of the page's edge rows, and clients can edit it. Pass ``secret`` to sign tokens, ``ttl`` to expire them, and ``encrypted=True`` to hide the values:
+Tokens are URL-safe and record the ordering they were issued for; a token reused with a different ordering is rejected. Without a secret, a token is readable base64 holding the key values of the page's edge rows, and clients can edit it, including its expiry. Pass ``secret`` to sign tokens, ``ttl`` to expire them, and ``encrypted=True`` to hide the values:
 
 .. code-block:: python
 
@@ -128,12 +130,24 @@ Set ``pagination_type="cursor"`` in :class:`~advanced_alchemy.utils.dependencies
         "sort_field": "created_at",
         "sort_fields": ["created_at", "score"],
         "sort_nulls": "last",
-        "pagination_cursor_secret": "load-from-settings",
     }
+
+Framework dependencies always sign their tokens and raise :class:`~advanced_alchemy.exceptions.ImproperConfigurationError` on a cursor request when no secret is configured. Set the secret once on the SQLAlchemy configuration; every filter dependency and :class:`~advanced_alchemy.filters.FilterSet` of the application uses it:
+
+.. code-block:: python
+
+    from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig
+
+    config = SQLAlchemyAsyncConfig(
+        connection_string="postgresql+asyncpg://app@localhost/app",
+        pagination_cursor_secret="load-from-settings",
+    )
+
+``pagination_cursor_ttl`` and ``pagination_cursor_encrypted`` are set the same way, and the FastAPI configuration takes the same options. Each option resolves from the ``FilterConfig`` or ``FilterSet`` first, then the SQLAlchemy configuration. The secret then falls back to the ``ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET`` and ``SECRET_KEY`` environment variables. An application with several configurations must give them the same values. Use the same secret in every worker process so a token issued by one is accepted by another.
 
 Invalid tokens and sort fields return 400 in Litestar and 422 in FastAPI. :class:`~advanced_alchemy.filters.FilterSet` classes accept the same configuration and a ``cursor`` value. See :doc:`/usage/frameworks/litestar` and :doc:`/usage/frameworks/fastapi` for complete applications.
 
 Custom Value Types
 ------------------
 
-Tokens encode ``None``, booleans, numbers, ``Decimal``, strings, bytes, ``UUID``, dates and times, ``timedelta``, and enum members. Register any other key type once at start-up with :func:`~advanced_alchemy.filters.register_cursor_type`.
+Tokens encode ``None``, booleans, numbers, ``Decimal``, strings, bytes, ``UUID``, dates and times, ``timedelta``, and enum members. An enum key needs a column type that names its enum class: :class:`sqlalchemy.types.Enum`, or a ``TypeDecorator`` whose ``python_type`` returns the class. Register any other key type once at start-up with :func:`~advanced_alchemy.filters.register_cursor_type`.

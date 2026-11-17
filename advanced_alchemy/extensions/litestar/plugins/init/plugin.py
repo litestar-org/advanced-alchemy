@@ -44,6 +44,7 @@ from advanced_alchemy.service import (
     ModelT,
     OffsetPagination,
 )
+from advanced_alchemy.utils.dependencies import CursorDefaults, resolve_cursor_defaults
 
 if TYPE_CHECKING:
     from click import Group
@@ -117,10 +118,16 @@ class SQLAlchemyInitPlugin(InitPluginProtocol, CLIPlugin, _slots_base.SlotsBase)
             config: configure DB connection and hook handlers and dependencies.
         """
         self._config = config
+        self._cursor_defaults = resolve_cursor_defaults(self.config)
 
     @property
     def config(self) -> "Sequence[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]":
         return self._config if isinstance(self._config, Sequence) else [self._config]
+
+    @property
+    def cursor_defaults(self) -> CursorDefaults:
+        """Cursor token options the configurations set for the application's filter dependencies."""
+        return self._cursor_defaults
 
     def on_cli_init(self, cli: "Group") -> None:
         from advanced_alchemy.extensions.litestar.cli import database_group

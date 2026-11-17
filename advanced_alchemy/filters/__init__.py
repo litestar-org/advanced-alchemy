@@ -19,6 +19,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
+from enum import Enum
 from operator import attrgetter
 from typing import (
     TYPE_CHECKING,
@@ -73,8 +74,6 @@ from advanced_alchemy.filters._cursor import (
 from advanced_alchemy.operations import validate_identifier
 
 if TYPE_CHECKING:
-    from enum import Enum
-
     from sqlalchemy.orm import RelationshipProperty
 
     from advanced_alchemy.service.pagination import CursorPagination
@@ -142,6 +141,14 @@ StatementTypeT = TypeVar(
 )
 
 logger = logging.getLogger("advanced_alchemy")
+
+
+_SortOrder: TypeAlias = Literal["asc", "desc"]
+_NullsOrder: TypeAlias = Optional[Literal["first", "last"]]
+_KeysetTerm: TypeAlias = Union[bool, "ColumnElement[bool]"]
+
+_CURSOR_KEY_PAIR_LENGTH = 2
+_INT64_LIMIT = 2**63
 
 
 class FilterMap(TypedDict):
@@ -650,19 +657,6 @@ class LimitOffsetFilter(PaginationFilter):
         return statement
 
 
-def _ordering_term(column: Any, *, descending: bool, nulls: Optional[Literal["first", "last"]]) -> "ColumnElement[Any]":
-    """Build an ORDER BY term with an optional cross-dialect NULL placement."""
-    ordering: ColumnElement[Any] = column.desc() if descending else column.asc()
-    if nulls is not None:
-        ordering = _NullsPlacement(ordering, modifier=op.nulls_first_op if nulls == "first" else op.nulls_last_op)
-    return ordering
-
-
-_SortOrder: TypeAlias = Literal["asc", "desc"]
-_NullsOrder: TypeAlias = Optional[Literal["first", "last"]]
-_KeysetTerm: TypeAlias = Union[bool, "ColumnElement[bool]"]
-
-
 @dataclass(frozen=True, eq=False)
 class CursorKey:
     """One ordering key for :class:`CursorFilter`.
@@ -694,14 +688,6 @@ class CursorKey:
             msg = "nulls must be 'first', 'last', or None"
             raise ValueError(msg)
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, CursorKey):
-            return NotImplemented
-        return self.identity == other.identity
-
-    def __hash__(self) -> int:
-        return hash(self.identity)
-
     @property
     def identity(self) -> "tuple[str, _SortOrder, _NullsOrder]":
         """Name, direction, and NULL placement; keys with the same identity order rows identically."""
@@ -718,6 +704,14 @@ class CursorKey:
             raise ValueError(msg)
         return key
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, CursorKey):
+            return NotImplemented
+        return self.identity == other.identity
+
+    def __hash__(self) -> int:
+        return hash(self.identity)
+
 
 CursorKeys: TypeAlias = Union[
     str,
@@ -729,8 +723,6 @@ CursorKeys: TypeAlias = Union[
 
 Sequence items may also be ``(name, "asc" | "desc")`` pairs. Bare names sort ascending.
 """
-
-_CURSOR_KEY_PAIR_LENGTH = 2
 
 
 def normalize_cursor_keys(keys: CursorKeys) -> "tuple[CursorKey, ...]":
@@ -768,45 +760,6 @@ def normalize_cursor_keys(keys: CursorKeys) -> "tuple[CursorKey, ...]":
         msg = "Cursor keys must be unique"
         raise ValueError(msg)
     return tuple(normalized)
-
-
-@dataclass(frozen=True)
-class _ResolvedKey:
-    column: Any
-    attr_key: str
-    sort_order: _SortOrder
-    nulls: _NullsOrder
-    nullable: bool
-    enum_class: "Optional[type[Enum]]"
-    python_type: Optional[type[Any]]
-
-
-def _fold_and(left: _KeysetTerm, right: _KeysetTerm) -> _KeysetTerm:
-    if left is False or right is False:
-        return False
-    if left is True:
-        return right
-    if right is True:
-        return left
-    return and_(left, right)
-
-
-def _fold_or(left: _KeysetTerm, right: _KeysetTerm) -> _KeysetTerm:
-    if left is True or right is True:
-        return True
-    if left is False:
-        return right
-    if right is False:
-        return left
-    return or_(left, right)
-
-
-def _column_python_type(column_type: Any) -> Optional[type[Any]]:
-    try:
-        python_type = column_type.python_type
-    except (AttributeError, NotImplementedError):
-        return None
-    return python_type if isinstance(python_type, type) else None
 
 
 @dataclass(init=False, repr=False, eq=False)
@@ -890,55 +843,6 @@ class CursorFilter(PaginationFilter):
         """Whether this page is fetched backward from ``cursor``."""
         return self._backward
 
-    def __repr__(self) -> str:
-        return f"CursorFilter(keys={self.keys!r}, limit={self.limit!r}, cursor={self.cursor!r})"
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, CursorFilter):
-            return NotImplemented
-        return (self.keys, self.limit, self.cursor, self._secret, self.ttl, self.encrypted) == (
-            other.keys,
-            other.limit,
-            other.cursor,
-            other._secret,
-            other.ttl,
-            other.encrypted,
-        )
-
-    def __hash__(self) -> int:
-        return hash((self.keys, self.limit, self.cursor))
-
-    def __reduce__(self) -> "tuple[Any, ...]":
-        return (
-            _rebuild_cursor_filter,
-            (self.keys, self.limit, self.cursor, self._secret, self.ttl, self.encrypted),
-        )
-
-    def _resolve(self, model: Any) -> "tuple[_ResolvedKey, ...]":
-        return _resolve_cursor_keys(model, tuple(key.identity for key in self.keys))
-
-    def _coerce_values(self, resolved: "tuple[_ResolvedKey, ...]") -> "tuple[Any, ...]":
-        values: tuple[Any, ...] = self._values or ()
-        if len(values) != len(resolved):
-            msg = "Invalid pagination cursor: ordering mismatch"
-            raise InvalidCursorError(msg)
-        coerced: list[Any] = []
-        for key, value in zip(resolved, values):
-            if value is None:
-                if not key.nullable:
-                    msg = "Invalid pagination cursor: ordering mismatch"
-                    raise InvalidCursorError(msg)
-            elif isinstance(value, CursorEnumName):
-                if key.enum_class is None or value not in key.enum_class.__members__:
-                    msg = "Invalid pagination cursor: value does not match the ordering column"
-                    raise InvalidCursorError(msg)
-                value = key.enum_class[value]
-            elif not _value_matches_type(value, key.python_type):
-                msg = "Invalid pagination cursor: value does not match the ordering column"
-                raise InvalidCursorError(msg)
-            coerced.append(value)
-        return tuple(coerced)
-
     def append_to_statement(self, statement: StatementTypeT, model: type[ModelT]) -> StatementTypeT:
         """Apply keyset ordering, the keyset predicate, and the ``limit + 1`` fetch.
 
@@ -973,31 +877,6 @@ class CursorFilter(PaginationFilter):
             elif predicate is not True:
                 select_stmt = select_stmt.where(predicate)
         return cast("StatementTypeT", select_stmt)
-
-    @staticmethod
-    def _keyset_predicate(
-        effective: "list[tuple[_ResolvedKey, bool, _NullsOrder]]", values: "tuple[Any, ...]"
-    ) -> _KeysetTerm:
-        """Build ``aoe(k1) AND (after(k1) OR (aoe(k2) AND (after(k2) OR ...)))`` for the effective order."""
-        parts: list[tuple[_KeysetTerm, _KeysetTerm]] = []
-        for (key, ascending, nulls), value in zip(effective, values):
-            column = key.column
-            after: _KeysetTerm
-            at_or_after: _KeysetTerm
-            if value is None:
-                after = column.is_not(None) if nulls == "first" else False
-                at_or_after = True if nulls == "first" else column.is_(None)
-            else:
-                after = column > value if ascending else column < value
-                at_or_after = column >= value if ascending else column <= value
-                if nulls == "last":
-                    after = _fold_or(after, column.is_(None))
-                    at_or_after = _fold_or(at_or_after, column.is_(None))
-            parts.append((after, at_or_after))
-        predicate = parts[-1][0]
-        for after, at_or_after in reversed(parts[:-1]):
-            predicate = _fold_and(at_or_after, _fold_or(after, predicate))
-        return predicate
 
     def paginate_items(self, items: "Sequence[Any]", model: Any) -> "list[Any]":
         """Apply this page's ordering, keyset bound, and ``limit + 1`` fetch to in-memory rows.
@@ -1059,6 +938,17 @@ class CursorFilter(PaginationFilter):
 
         bound = model if model is not None else self._bound_model
         if bound is None:
+            if not rows:
+                return CursorPagination(
+                    items=[],
+                    limit=self.limit,
+                    next_cursor=None,
+                    previous_cursor=None,
+                    has_next=False,
+                    has_previous=False,
+                )
+            bound = _row_model(rows[0])
+        if bound is None:
             msg = "CursorFilter.build_page() needs the model; apply the filter to a statement or pass model="
             raise ImproperConfigurationError(msg)
         resolved = self._resolve(bound)
@@ -1070,9 +960,8 @@ class CursorFilter(PaginationFilter):
         has_previous = bool(items) and (has_more if self._backward else self.cursor is not None)
 
         def token(row: Any, *, backward: bool) -> str:
-            values = [_row_value(row, key.attr_key) for key in resolved]
             return encode_cursor(
-                values,
+                _token_values(row, resolved),
                 self._fingerprint,
                 backward=backward,
                 secret=self._secret,
@@ -1089,77 +978,81 @@ class CursorFilter(PaginationFilter):
             has_previous=has_previous,
         )
 
+    def _resolve(self, model: Any) -> "tuple[_ResolvedKey, ...]":
+        return _resolve_cursor_keys(model, tuple(key.identity for key in self.keys))
 
-@functools.lru_cache(maxsize=512)
-def _cursor_fingerprint(identities: "tuple[tuple[str, _SortOrder, _NullsOrder], ...]") -> str:
-    return order_fingerprint(identities)
+    def _coerce_values(self, resolved: "tuple[_ResolvedKey, ...]") -> "tuple[Any, ...]":
+        values: tuple[Any, ...] = self._values or ()
+        if len(values) != len(resolved):
+            msg = "Invalid pagination cursor: ordering mismatch"
+            raise InvalidCursorError(msg)
+        coerced: list[Any] = []
+        for key, value in zip(resolved, values):
+            if value is None:
+                if not key.nullable:
+                    msg = "Invalid pagination cursor: ordering mismatch"
+                    raise InvalidCursorError(msg)
+            elif isinstance(value, CursorEnumName):
+                if key.enum_class is None or value not in key.enum_class.__members__:
+                    msg = "Invalid pagination cursor: value does not match the ordering column"
+                    raise InvalidCursorError(msg)
+                value = key.enum_class[value]
+            elif not _value_matches_type(value, key.python_type) or (
+                key.integer and isinstance(value, int) and not -_INT64_LIMIT <= value < _INT64_LIMIT
+            ):
+                msg = "Invalid pagination cursor: value does not match the ordering column"
+                raise InvalidCursorError(msg)
+            coerced.append(value)
+        return tuple(coerced)
 
+    @staticmethod
+    def _keyset_predicate(
+        effective: "list[tuple[_ResolvedKey, bool, _NullsOrder]]", values: "tuple[Any, ...]"
+    ) -> _KeysetTerm:
+        """Build ``aoe(k1) AND (after(k1) OR (aoe(k2) AND (after(k2) OR ...)))`` for the effective order."""
+        parts: list[tuple[_KeysetTerm, _KeysetTerm]] = []
+        for (key, ascending, nulls), value in zip(effective, values):
+            column = key.column
+            after: _KeysetTerm
+            at_or_after: _KeysetTerm
+            if value is None:
+                after = column.is_not(None) if nulls == "first" else False
+                at_or_after = True if nulls == "first" else column.is_(None)
+            else:
+                after = column > value if ascending else column < value
+                at_or_after = column >= value if ascending else column <= value
+                if nulls == "last":
+                    after = _fold_or(after, column.is_(None))
+                    at_or_after = _fold_or(at_or_after, column.is_(None))
+            parts.append((after, at_or_after))
+        predicate = parts[-1][0]
+        for after, at_or_after in reversed(parts[:-1]):
+            predicate = _fold_and(at_or_after, _fold_or(after, predicate))
+        return predicate
 
-@functools.lru_cache(maxsize=512)
-def _resolve_cursor_keys(
-    model: Any, identities: "tuple[tuple[str, _SortOrder, _NullsOrder], ...]"
-) -> "tuple[_ResolvedKey, ...]":
-    """Resolve declared keys plus the primary-key tiebreaker once per model and ordering."""
-    mapper = inspect(model).mapper
-    resolved: list[_ResolvedKey] = []
-    for name, sort_order, nulls in identities:
-        prop = mapper.column_attrs.get(name)
-        if prop is None:
-            msg = f"Cursor key {name!r} is not a column attribute of {mapper.class_.__name__}"
-            raise ImproperConfigurationError(msg)
-        resolved.append(_resolved_key(model, prop, sort_order, nulls))
-    declared = {key.attr_key for key in resolved}
-    tiebreak_order: _SortOrder = identities[-1][1] if identities else "asc"
-    for pk_column in mapper.primary_key:
-        prop = mapper.get_property_by_column(pk_column)
-        if prop.key not in declared:
-            resolved.append(_resolved_key(model, prop, tiebreak_order, None))
-    return tuple(resolved)
+    def __repr__(self) -> str:
+        return f"CursorFilter(keys={self.keys!r}, limit={self.limit!r}, cursor={self.cursor!r})"
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, CursorFilter):
+            return NotImplemented
+        return (self.keys, self.limit, self.cursor, self._secret, self.ttl, self.encrypted) == (
+            other.keys,
+            other.limit,
+            other.cursor,
+            other._secret,
+            other.ttl,
+            other.encrypted,
+        )
 
-def _resolved_key(model: Any, prop: Any, sort_order: _SortOrder, nulls: _NullsOrder) -> _ResolvedKey:
-    column_obj = prop.columns[0]
-    nullable = bool(getattr(column_obj, "nullable", False))
-    column_type = getattr(column_obj, "type", None)
-    return _ResolvedKey(
-        column=getattr(model, prop.key),
-        attr_key=prop.key,
-        sort_order=sort_order,
-        nulls=(nulls or "last") if nullable else None,
-        nullable=nullable,
-        enum_class=getattr(column_type, "enum_class", None),
-        python_type=_column_python_type(column_type),
-    )
+    def __hash__(self) -> int:
+        return hash((self.keys, self.limit, self.cursor))
 
-
-def _value_matches_type(value: Any, python_type: Optional[type[Any]]) -> bool:
-    if python_type is None or isinstance(value, python_type):
-        return True
-    numeric = (int, float, Decimal)
-    return python_type in numeric and isinstance(value, numeric) and not isinstance(value, bool)
-
-
-def _row_value(row: object, key: str) -> Any:
-    source: object = row
-    mapping: Optional[Mapping[str, Any]] = (
-        cast("Mapping[str, Any]", row) if isinstance(row, Mapping) else getattr(row, "_mapping", None)
-    )
-    try:
-        return mapping[key] if mapping is not None else getattr(source, key)
-    except (KeyError, AttributeError) as exc:
-        msg = f"Row has no cursor key {key!r}; select every ordering column"
-        raise ImproperConfigurationError(msg) from exc
-
-
-def _rebuild_cursor_filter(
-    keys: "tuple[CursorKey, ...]",
-    limit: int,
-    cursor: Optional[str],
-    secret: Optional[bytes],
-    ttl: Union[float, timedelta, None],
-    encrypted: bool,
-) -> CursorFilter:
-    return CursorFilter(keys, limit, cursor, secret, ttl=ttl, encrypted=encrypted)
+    def __reduce__(self) -> "tuple[Any, ...]":
+        return (
+            _rebuild_cursor_filter,
+            (self.keys, self.limit, self.cursor, self._secret, self.ttl, self.encrypted),
+        )
 
 
 @dataclass
@@ -2347,6 +2240,147 @@ FilterTypes: TypeAlias = Union[
 """Aggregate type alias of the types supported for collection filtering."""
 
 
+@dataclass(frozen=True)
+class _ResolvedKey:
+    column: Any
+    attr_key: str
+    sort_order: _SortOrder
+    nulls: _NullsOrder
+    nullable: bool
+    enum_class: "Optional[type[Enum]]"
+    python_type: Optional[type[Any]]
+    integer: bool
+
+
+@functools.lru_cache(maxsize=512)
+def _cursor_fingerprint(identities: "tuple[tuple[str, _SortOrder, _NullsOrder], ...]") -> str:
+    return order_fingerprint(identities)
+
+
+@functools.lru_cache(maxsize=512)
+def _resolve_cursor_keys(
+    model: Any, identities: "tuple[tuple[str, _SortOrder, _NullsOrder], ...]"
+) -> "tuple[_ResolvedKey, ...]":
+    """Resolve declared keys plus the primary-key tiebreaker once per model and ordering."""
+    mapper = inspect(model).mapper
+    resolved: list[_ResolvedKey] = []
+    for name, sort_order, nulls in identities:
+        prop = mapper.column_attrs.get(name)
+        if prop is None:
+            msg = f"Cursor key {name!r} is not a column attribute of {mapper.class_.__name__}"
+            raise ImproperConfigurationError(msg)
+        resolved.append(_resolved_key(model, prop, sort_order, nulls))
+    declared = {key.attr_key for key in resolved}
+    tiebreak_order: _SortOrder = identities[-1][1] if identities else "asc"
+    for pk_column in mapper.primary_key:
+        prop = mapper.get_property_by_column(pk_column)
+        if prop.key not in declared:
+            resolved.append(_resolved_key(model, prop, tiebreak_order, None))
+    return tuple(resolved)
+
+
+def _resolved_key(model: Any, prop: Any, sort_order: _SortOrder, nulls: _NullsOrder) -> _ResolvedKey:
+    column_obj = prop.columns[0]
+    nullable = bool(getattr(column_obj, "nullable", True))
+    column_type = getattr(column_obj, "type", None)
+    python_type = _column_python_type(column_type)
+    enum_class = getattr(column_type, "enum_class", None)
+    if enum_class is None and python_type is not None and issubclass(python_type, Enum):
+        enum_class = python_type
+    return _ResolvedKey(
+        column=getattr(model, prop.key),
+        attr_key=prop.key,
+        sort_order=sort_order,
+        nulls=(nulls or "last") if nullable else None,
+        nullable=nullable,
+        enum_class=enum_class,
+        python_type=python_type,
+        integer=isinstance(getattr(column_type, "impl_instance", column_type), Integer),
+    )
+
+
+def _column_python_type(column_type: Any) -> Optional[type[Any]]:
+    try:
+        python_type = column_type.python_type
+    except (AttributeError, NotImplementedError):
+        return None
+    return python_type if isinstance(python_type, type) else None
+
+
+def _value_matches_type(value: Any, python_type: Optional[type[Any]]) -> bool:
+    if python_type is None or isinstance(value, python_type):
+        return True
+    numeric = (int, float, Decimal)
+    return python_type in numeric and isinstance(value, numeric) and not isinstance(value, bool)
+
+
+def _fold_and(left: _KeysetTerm, right: _KeysetTerm) -> _KeysetTerm:
+    if left is False or right is False:
+        return False
+    if left is True:
+        return right
+    if right is True:
+        return left
+    return and_(left, right)
+
+
+def _fold_or(left: _KeysetTerm, right: _KeysetTerm) -> _KeysetTerm:
+    if left is True or right is True:
+        return True
+    if left is False:
+        return right
+    if right is False:
+        return left
+    return or_(left, right)
+
+
+def _row_model(row: object) -> Optional[type[Any]]:
+    return type(row) if inspect(type(row), raiseerr=False) is not None else None
+
+
+def _token_values(row: object, resolved: "tuple[_ResolvedKey, ...]") -> "list[Any]":
+    values = [_row_value(row, key.attr_key) for key in resolved]
+    for key, value in zip(resolved, values):
+        if isinstance(value, Enum) and key.enum_class is None:
+            msg = (
+                f"Cursor key {key.attr_key!r} holds Enum values but its column type does not name the Enum class; "
+                "define python_type on the column type to return it"
+            )
+            raise ImproperConfigurationError(msg)
+    return values
+
+
+def _row_value(row: object, key: str) -> Any:
+    source: object = row
+    mapping: Optional[Mapping[str, Any]] = (
+        cast("Mapping[str, Any]", row) if isinstance(row, Mapping) else getattr(row, "_mapping", None)
+    )
+    try:
+        return mapping[key] if mapping is not None else getattr(source, key)
+    except (KeyError, AttributeError) as exc:
+        msg = f"Row has no cursor key {key!r}; select every ordering column"
+        raise ImproperConfigurationError(msg) from exc
+
+
+def _rebuild_cursor_filter(
+    keys: "tuple[CursorKey, ...]",
+    limit: int,
+    cursor: Optional[str],
+    secret: Optional[bytes],
+    ttl: Union[float, timedelta, None],
+    encrypted: bool,
+) -> CursorFilter:
+    return CursorFilter(keys, limit, cursor, secret, ttl=ttl, encrypted=encrypted)
+
+
+def _ordering_term(column: Any, *, descending: bool, nulls: Optional[Literal["first", "last"]]) -> "ColumnElement[Any]":
+    """Build an ORDER BY term with an optional cross-dialect NULL placement."""
+    ordering: ColumnElement[Any] = column.desc() if descending else column.asc()
+    if nulls is not None:
+        ordering = _NullsPlacement(ordering, modifier=op.nulls_first_op if nulls == "first" else op.nulls_last_op)
+    return ordering
+
+
 class _NullsPlacement(UnaryExpression[Any]):
     """An ORDER BY term that pins where NULLs sort.
 
@@ -2425,5 +2459,6 @@ else:
             deprecated_name=f"{__name__}.{name}",
             kind="import",
             alternative=f"{__name__}.{new_name}",
+            stacklevel=3,
         )
         return globals()[new_name]

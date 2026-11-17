@@ -1,5 +1,6 @@
 """FastAPI cursor pagination with Advanced Alchemy filter dependencies."""
 
+import os
 import tempfile
 from http import HTTPStatus
 from pathlib import Path
@@ -77,6 +78,7 @@ def create_app(db_path: Path) -> FastAPI:
             session_config=AsyncSessionConfig(expire_on_commit=False),
             create_all=True,
             commit_mode="autocommit",
+            pagination_cursor_secret=os.environ.get("CURSOR_SECRET", "development-only-secret"),
         ),
         app=app,
     )

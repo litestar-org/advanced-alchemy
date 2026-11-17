@@ -5,11 +5,12 @@ These primitives are framework-agnostic and reused by framework
 """
 
 import datetime as dt
+import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Literal, NamedTuple, Optional, Union, cast
+from typing import Any, Final, Literal, NamedTuple, Optional, Union, cast
 from uuid import UUID
 
 from sqlalchemy import inspect
@@ -37,7 +38,9 @@ from advanced_alchemy.utils.singleton import SingletonMeta
 from advanced_alchemy.utils.text import camelize
 
 __all__ = (
+    "CURSOR_SECRET_ENV_VARS",
     "ChoiceField",
+    "CursorDefaults",
     "CursorSettings",
     "DependencyCache",
     "FieldNameType",
@@ -57,6 +60,7 @@ __all__ = (
     "normalize_field_name_types",
     "normalize_sort_field",
     "normalize_sort_fields",
+    "resolve_cursor_defaults",
     "resolve_cursor_settings",
     "resolve_filter_aliases",
     "resolve_filter_fields",
@@ -82,6 +86,8 @@ FilterOperator: TypeAlias = Literal[
 ]
 FilterFieldsSpec: TypeAlias = Union[AbstractSet[str], Sequence[str], Mapping[str, AbstractSet[FilterOperator]]]
 FIELD_TUPLE_LENGTH = 2
+CURSOR_SECRET_ENV_VARS: Final = ("ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET", "SECRET_KEY")
+"""Environment variables read, in order, for a cursor secret no configuration provides."""
 _FILTER_OPERATOR_ORDER: tuple[FilterOperator, ...] = (
     "eq",
     "ne",
@@ -376,6 +382,56 @@ def normalize_sort_field(sort_field: SortField) -> str:
 
 
 @dataclass(frozen=True)
+class CursorDefaults:
+    """Application-wide cursor token options, used where a filter configuration sets none."""
+
+    secret: Optional[bytes] = None
+    """Signing or encryption key."""
+    ttl: Union[float, dt.timedelta, None] = None
+    """Token lifetime."""
+    encrypted: Optional[bool] = None
+    """Whether tokens are encrypted."""
+
+
+def resolve_cursor_defaults(configs: Iterable[Any]) -> CursorDefaults:
+    """Resolve application-wide cursor token options from an application's SQLAlchemy configurations.
+
+    Args:
+        configs: Configurations carrying ``pagination_cursor_secret``, ``pagination_cursor_ttl``,
+            and ``pagination_cursor_encrypted``.
+
+    Returns:
+        The options the configurations set.
+
+    Raises:
+        ImproperConfigurationError: A secret is empty, a TTL is not a positive finite duration,
+            or two configurations set different values for one option.
+    """
+    secrets: set[bytes] = set()
+    ttls: dict[float, Union[float, dt.timedelta]] = {}
+    encrypted: set[bool] = set()
+    for config in configs:
+        secret = _cursor_secret_bytes(getattr(config, "pagination_cursor_secret", None))
+        if secret is not None:
+            secrets.add(secret)
+        ttl = _validated_cursor_ttl(getattr(config, "pagination_cursor_ttl", None))
+        if ttl is not None:
+            ttls[ttl.total_seconds() if isinstance(ttl, dt.timedelta) else float(ttl)] = ttl
+        flag = getattr(config, "pagination_cursor_encrypted", None)
+        if flag is not None:
+            encrypted.add(bool(flag))
+    for name, values in (("secret", secrets), ("ttl", ttls), ("encrypted", encrypted)):
+        if len(values) > 1:
+            msg = f"SQLAlchemy configurations of one application set different pagination_cursor_{name} values"
+            raise ImproperConfigurationError(msg)
+    return CursorDefaults(
+        secret=next(iter(secrets), None),
+        ttl=next(iter(ttls.values()), None),
+        encrypted=next(iter(encrypted), None),
+    )
+
+
+@dataclass(frozen=True)
 class CursorSettings:
     """Cursor pagination settings resolved from :class:`FilterConfig` once, when dependencies are built."""
 
@@ -388,11 +444,48 @@ class CursorSettings:
     nulls: Optional[Literal["first", "last"]]
     """NULL placement applied to every ordering key."""
     secret: Optional[bytes]
-    """Signing or encryption key."""
+    """Signing or encryption key set by the filter configuration."""
     ttl: Union[float, dt.timedelta, None]
-    """Token lifetime."""
-    encrypted: bool
-    """Whether tokens are encrypted."""
+    """Token lifetime set by the filter configuration."""
+    encrypted: Optional[bool]
+    """Whether tokens are encrypted, when the filter configuration says."""
+
+    def token_options(
+        self, defaults: Optional[CursorDefaults] = None, *, require_secret: bool = False
+    ) -> tuple[Optional[bytes], Union[float, dt.timedelta, None], bool]:
+        """Resolve the secret, lifetime, and encryption flag for issued and accepted tokens.
+
+        Each option comes from the filter configuration, then ``defaults``. The secret then
+        falls back to the :data:`CURSOR_SECRET_ENV_VARS` environment variables.
+
+        Args:
+            defaults: Application-wide options.
+            require_secret: Refuse to issue or accept unsigned tokens.
+
+        Returns:
+            The secret, lifetime, and encryption flag.
+
+        Raises:
+            ImproperConfigurationError: No secret is configured and one is required or encryption is enabled.
+        """
+        secret = self.secret
+        if secret is None and defaults is not None:
+            secret = defaults.secret
+        if secret is None:
+            secret = _env_cursor_secret()
+        ttl = self.ttl
+        if ttl is None and defaults is not None:
+            ttl = defaults.ttl
+        encrypted = self.encrypted
+        if encrypted is None:
+            encrypted = bool(defaults is not None and defaults.encrypted)
+        if secret is None and (require_secret or encrypted):
+            msg = (
+                "Cursor pagination requires a secret; set pagination_cursor_secret on the SQLAlchemy configuration or "
+                f"the filter configuration, or the {CURSOR_SECRET_ENV_VARS[0]} environment variable"
+            )
+            raise ImproperConfigurationError(msg)
+        return secret, ttl, encrypted
 
     def build(
         self,
@@ -401,6 +494,8 @@ class CursorSettings:
         page_size: int,
         order_by: Union[str, Sequence[str], None] = None,
         sort_order: Optional[SortOrder] = None,
+        defaults: Optional[CursorDefaults] = None,
+        require_secret: bool = False,
     ) -> CursorFilter:
         """Build the cursor filter for one request.
 
@@ -409,6 +504,8 @@ class CursorSettings:
             page_size: Validated page size.
             order_by: Requested ordering tokens; ``-name`` sorts descending.
             sort_order: Direction for a single unprefixed ``order_by`` token.
+            defaults: Application-wide token options.
+            require_secret: Refuse to issue or accept unsigned tokens.
 
         Returns:
             The request's cursor filter.
@@ -416,6 +513,7 @@ class CursorSettings:
         Raises:
             ValueError: The ordering is not allowed or the token is invalid
                 (:class:`~advanced_alchemy.exceptions.InvalidCursorError`).
+            ImproperConfigurationError: A secret is required and none is configured.
         """
         tokens = [order_by] if isinstance(order_by, str) else order_by
         ordering = build_order_by_filters(
@@ -427,7 +525,8 @@ class CursorSettings:
             nulls=self.nulls,
         )
         keys = [CursorKey(item.field_name, item.sort_order, item.nulls) for item in ordering]
-        return CursorFilter(keys, page_size, cursor, self.secret, ttl=self.ttl, encrypted=self.encrypted)
+        secret, ttl, encrypted = self.token_options(defaults, require_secret=require_secret)
+        return CursorFilter(keys, page_size, cursor, secret, ttl=ttl, encrypted=encrypted)
 
 
 def resolve_cursor_settings(config: FilterConfig, model: Optional[type[Any]] = None) -> CursorSettings:
@@ -443,8 +542,6 @@ def resolve_cursor_settings(config: FilterConfig, model: Optional[type[Any]] = N
     Raises:
         ImproperConfigurationError: A sort path crosses a relationship, or the secret or TTL is invalid.
     """
-    from advanced_alchemy.filters._cursor import normalize_cursor_ttl
-
     allowed: set[str] = set()
     if sort_fields := config.get("sort_fields"):
         allowed.update(normalize_sort_fields(sort_fields, model))
@@ -454,30 +551,41 @@ def resolve_cursor_settings(config: FilterConfig, model: Optional[type[Any]] = N
     if dotted := sorted(name for name in allowed if "." in name):
         msg = f"Cursor pagination orders by columns of the model; relationship sort paths are not supported: {dotted}"
         raise ImproperConfigurationError(msg)
-    raw_secret = config.get("pagination_cursor_secret")
-    secret = raw_secret.encode("utf-8") if isinstance(raw_secret, str) else raw_secret
-    if secret == b"":
-        msg = "pagination_cursor_secret must not be empty"
-        raise ImproperConfigurationError(msg)
-    encrypted = bool(config.get("pagination_cursor_encrypted", False))
-    if encrypted and not secret:
-        msg = "pagination_cursor_encrypted requires pagination_cursor_secret"
-        raise ImproperConfigurationError(msg)
-    ttl = config.get("pagination_cursor_ttl")
-    try:
-        normalize_cursor_ttl(ttl)
-    except (TypeError, ValueError) as exc:
-        msg = f"pagination_cursor_ttl must be a positive finite duration, got {ttl!r}"
-        raise ImproperConfigurationError(msg) from exc
     return CursorSettings(
         allowed_fields=frozenset(allowed),
         default_field=normalize_sort_field(sort_field) if sort_field else None,
         default_order=config.get("sort_order", "desc"),
         nulls=config.get("sort_nulls"),
-        secret=secret,
-        ttl=ttl,
-        encrypted=encrypted,
+        secret=_cursor_secret_bytes(config.get("pagination_cursor_secret")),
+        ttl=_validated_cursor_ttl(config.get("pagination_cursor_ttl")),
+        encrypted=config.get("pagination_cursor_encrypted"),
     )
+
+
+def _cursor_secret_bytes(secret: Union[str, bytes, None]) -> Optional[bytes]:
+    encoded = secret.encode("utf-8") if isinstance(secret, str) else secret
+    if encoded == b"":
+        msg = "pagination_cursor_secret must not be empty"
+        raise ImproperConfigurationError(msg)
+    return encoded
+
+
+def _env_cursor_secret() -> Optional[bytes]:
+    for name in CURSOR_SECRET_ENV_VARS:
+        if value := os.environ.get(name):
+            return value.encode("utf-8")
+    return None
+
+
+def _validated_cursor_ttl(ttl: Union[float, dt.timedelta, None]) -> Union[float, dt.timedelta, None]:
+    from advanced_alchemy.filters._cursor import normalize_cursor_ttl
+
+    try:
+        normalize_cursor_ttl(ttl)
+    except (TypeError, ValueError) as exc:
+        msg = f"pagination_cursor_ttl must be a positive finite duration, got {ttl!r}"
+        raise ImproperConfigurationError(msg) from exc
+    return ttl
 
 
 def resolve_pagination_bounds(

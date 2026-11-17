@@ -60,6 +60,7 @@ from advanced_alchemy.service import (
 )
 from advanced_alchemy.utils.dependencies import (
     ChoiceField,
+    CursorDefaults,
     CursorSettings,
     DependencyCache,
     FieldNameType,
@@ -460,10 +461,16 @@ def _create_filterset_dependency(
         annotated = cast("Any", Annotated)[annotation, query_param]
         annotations[name] = annotated
         parameters.append(inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, annotation=annotated, default=None))
+    annotations["request"] = Request
+    parameters.append(inspect.Parameter("request", inspect.Parameter.KEYWORD_ONLY, annotation=Request))
 
-    def provide_filterset(**kwargs: Any) -> list[FilterSet[Any]]:
+    def provide_filterset(*, request: Request, **kwargs: Any) -> list[FilterSet[Any]]:
         try:
-            instance = filterset_type(**{key: value for key, value in kwargs.items() if value is not None})
+            instance = filterset_type(
+                cursor_defaults=_cursor_defaults(request),
+                require_cursor_secret=True,
+                **{key: value for key, value in kwargs.items() if value is not None},
+            )
             return [instance]  # noqa: TRY300
         except (ValueError, TypeError) as exc:
             raise RequestValidationError(errors=[{"loc": ["query"], "msg": str(exc), "type": "value_error"}]) from exc
@@ -611,10 +618,21 @@ def _create_cursor_filter_provider(
     size_query = Query(ge=1, le=max_size, alias=size_alias, description="Number of items per page.")
 
     def build(
-        cursor: Optional[str], page_size: int, order_by: Union[str, list[str], None], sort_order: Optional[SortOrder]
+        request: Request,
+        cursor: Optional[str],
+        page_size: int,
+        order_by: Union[str, list[str], None],
+        sort_order: Optional[SortOrder],
     ) -> CursorFilter:
         try:
-            return settings.build(cursor=cursor, page_size=page_size, order_by=order_by, sort_order=sort_order)
+            return settings.build(
+                cursor=cursor,
+                page_size=page_size,
+                order_by=order_by,
+                sort_order=sort_order,
+                defaults=_cursor_defaults(request),
+                require_secret=True,
+            )
         except InvalidCursorError as exc:
             raise RequestValidationError(
                 errors=[{"loc": ["query", cursor_alias], "msg": str(exc), "type": "value_error"}]
@@ -626,10 +644,11 @@ def _create_cursor_filter_provider(
             ) from exc
 
     def provide_cursor_pagination(
+        request: Request,
         cursor: Annotated[Optional[str], cursor_query] = None,
         page_size: Annotated[int, size_query] = default_size,
     ) -> CursorFilter:
-        return build(cursor, page_size, None, None)
+        return build(request, cursor, page_size, None, None)
 
     if not settings.allowed_fields:
         return provide_cursor_pagination
@@ -641,22 +660,30 @@ def _create_cursor_filter_provider(
     sort_order_query = Query(alias=alias_for("sort_order"), description="Sort order ('asc' or 'desc').")
 
     def provide_cursor_pagination_ordered(
+        request: Request,
         cursor: Annotated[Optional[str], cursor_query] = None,
         page_size: Annotated[int, size_query] = default_size,
         order_by: Annotated[Optional[str], order_query] = None,
         sort_order: Annotated[Optional[SortOrder], sort_order_query] = None,
     ) -> CursorFilter:
-        return build(cursor, page_size, order_by, sort_order)
+        return build(request, cursor, page_size, order_by, sort_order)
 
     def provide_cursor_pagination_multi_ordered(
+        request: Request,
         cursor: Annotated[Optional[str], cursor_query] = None,
         page_size: Annotated[int, size_query] = default_size,
         order_by: Annotated[Optional[list[str]], order_query] = None,
         sort_order: Annotated[Optional[SortOrder], sort_order_query] = None,
     ) -> CursorFilter:
-        return build(cursor, page_size, order_by, sort_order)
+        return build(request, cursor, page_size, order_by, sort_order)
 
     return provide_cursor_pagination_multi_ordered if repeatable_order else provide_cursor_pagination_ordered
+
+
+def _cursor_defaults(request: Request) -> Optional[CursorDefaults]:
+    """Return the cursor token options of the application's Advanced Alchemy extension, if one is registered."""
+    extension = getattr(request.app.state, "advanced_alchemy", None)
+    return extension.cursor_defaults if extension is not None else None
 
 
 def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915

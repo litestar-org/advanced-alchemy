@@ -69,10 +69,18 @@ Dependency & Filter Helpers
 .. autofunction:: advanced_alchemy.utils.dependencies.resolve_filter_aliases
 
 .. autoclass:: advanced_alchemy.utils.dependencies.CursorSettings
-    :members: build
+    :members: build, token_options
     :no-inherited-members:
 
 .. autofunction:: advanced_alchemy.utils.dependencies.resolve_cursor_settings
+
+.. autoclass:: advanced_alchemy.utils.dependencies.CursorDefaults
+    :no-members:
+    :no-inherited-members:
+
+.. autofunction:: advanced_alchemy.utils.dependencies.resolve_cursor_defaults
+
+.. autodata:: advanced_alchemy.utils.dependencies.CURSOR_SECRET_ENV_VARS
 
 .. autofunction:: advanced_alchemy.utils.dependencies.normalize_field_name_types
 

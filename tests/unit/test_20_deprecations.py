@@ -362,10 +362,11 @@ DEPRECATED_FILTER_NAMES = [
 def test_deprecated_filter_name_warns_and_resolves_to_replacement(old_name: str, new_name: str) -> None:
     from advanced_alchemy import filters
 
-    with pytest.warns(DeprecationWarning, match=rf"filters\.{old_name}'.*2\.0\.0.*filters\.{new_name}"):
+    with pytest.warns(DeprecationWarning, match=rf"filters\.{old_name}'.*2\.0\.0.*filters\.{new_name}") as caught:
         old_class = getattr(filters, old_name)
 
     assert old_class is getattr(filters, new_name)
+    assert {warning.filename for warning in caught} == {__file__}
 
 
 @pytest.mark.parametrize(("old_name", "new_name"), DEPRECATED_FILTER_NAMES)

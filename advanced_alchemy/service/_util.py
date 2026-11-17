@@ -121,10 +121,16 @@ def find_filter(
     Returns:
         The match filter instance or None
     """
-    return next(
-        (cast("Optional[FilterTypeT]", filter_) for filter_ in filters if isinstance(filter_, filter_type)),
-        None,
-    )
+    from advanced_alchemy.filters import FilterSet
+
+    for filter_ in filters:
+        if isinstance(filter_, filter_type):
+            return filter_
+        if isinstance(filter_, FilterSet):
+            nested = find_filter(filter_type, filter_.to_statement_filters())
+            if nested is not None:
+                return nested
+    return None
 
 
 def resolve_item_ids(
@@ -161,40 +167,6 @@ class ResultConverter:
     Returns:
         The converted schema object.
     """
-
-    def _to_cursor_page(
-        self,
-        data: Any,
-        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter]]",
-        schema_type: "Optional[type[ModelDTOT]]",
-        pagination_type: 'Optional[Literal["limit_offset", "cursor"]]',
-    ) -> "Optional[CursorPagination[Any]]":
-        """Build a cursor page when ``pagination_type`` is ``"cursor"``; reject mismatched pagination."""
-        cursor_filter = find_filter(CursorFilter, filters)
-        if pagination_type != "cursor":
-            if cursor_filter is not None and isinstance(data, Sequence):
-                msg = 'filters contain a CursorFilter; pass pagination_type="cursor" to build a CursorPagination'
-                raise ImproperConfigurationError(msg)
-            return None
-        if cursor_filter is None:
-            msg = 'pagination_type="cursor" requires a CursorFilter in filters'
-            raise ImproperConfigurationError(msg)
-        if not isinstance(data, Sequence):
-            msg = 'pagination_type="cursor" requires a sequence of rows'
-            raise ImproperConfigurationError(msg)
-        rows = cast("Sequence[Any]", data)  # type: ignore[redundant-cast]
-        page = cursor_filter.build_page(rows, model=getattr(self, "model_type", None))
-        items: Sequence[Any] = (
-            page.items if schema_type is None else self.to_schema(list(page.items), schema_type=schema_type).items
-        )
-        return CursorPagination(
-            items=items,
-            limit=page.limit,
-            next_cursor=page.next_cursor,
-            previous_cursor=page.previous_cursor,
-            has_next=page.has_next,
-            has_previous=page.has_previous,
-        )
 
     @overload
     def to_schema(
@@ -356,9 +328,11 @@ class ResultConverter:
             total: The total number of rows in the data.
             filters: :class:`~advanced_alchemy.filters.StatementFilter` | :class:`~sqlalchemy.sql.expression.ColumnElement` collection of route filters.
             schema_type: :class:`~advanced_alchemy.utils.serialization.ModelDTOT` Optional schema type to convert the data to
-            pagination_type: ``"cursor"`` returns a :class:`~advanced_alchemy.service.pagination.CursorPagination`
-                built from the :class:`~advanced_alchemy.filters.CursorFilter` in ``filters``; ``total`` is ignored.
-                ``"limit_offset"`` or omitted returns an :class:`~advanced_alchemy.service.pagination.OffsetPagination`.
+            pagination_type: Pagination container to build. Omitted, a :class:`~advanced_alchemy.filters.CursorFilter`
+                in ``filters`` returns a :class:`~advanced_alchemy.service.pagination.CursorPagination` and anything
+                else an :class:`~advanced_alchemy.service.pagination.OffsetPagination`. ``"cursor"`` and
+                ``"limit_offset"`` require that container and give type checkers its exact type; ``total`` is
+                ignored for cursor pages.
 
         Raises:
             AdvancedAlchemyError: If `schema_type` is not a valid Pydantic, Msgspec, or attrs schema and all libraries are not installed.
@@ -432,6 +406,41 @@ class ResultConverter:
 
         msg = "`schema_type` should be a valid Pydantic, Msgspec, or attrs schema"
         raise AdvancedAlchemyError(msg)
+
+    def _to_cursor_page(
+        self,
+        data: Any,
+        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter]]",
+        schema_type: "Optional[type[ModelDTOT]]",
+        pagination_type: 'Optional[Literal["limit_offset", "cursor"]]',
+    ) -> "Optional[CursorPagination[Any]]":
+        """Build a cursor page when ``filters`` hold a :class:`CursorFilter`; reject mismatched pagination."""
+        cursor_filter = find_filter(CursorFilter, filters)
+        if pagination_type == "cursor":
+            if cursor_filter is None:
+                msg = 'pagination_type="cursor" requires a CursorFilter in filters'
+                raise ImproperConfigurationError(msg)
+            if not isinstance(data, Sequence):
+                msg = 'pagination_type="cursor" requires a sequence of rows'
+                raise ImproperConfigurationError(msg)
+        elif cursor_filter is None or not isinstance(data, Sequence):
+            return None
+        elif pagination_type == "limit_offset":
+            msg = 'filters contain a CursorFilter; pagination_type="limit_offset" cannot page its rows'
+            raise ImproperConfigurationError(msg)
+        rows = cast("Sequence[Any]", data)  # type: ignore[redundant-cast]
+        page = cursor_filter.build_page(rows, model=getattr(self, "model_type", None))
+        items: Sequence[Any] = (
+            page.items if schema_type is None else self.to_schema(list(page.items), schema_type=schema_type).items
+        )
+        return CursorPagination(
+            items=items,
+            limit=page.limit,
+            next_cursor=page.next_cursor,
+            previous_cursor=page.previous_cursor,
+            has_next=page.has_next,
+            has_previous=page.has_previous,
+        )
 
 
 def _default_msgspec_deserializer(

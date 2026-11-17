@@ -11,9 +11,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from sqlalchemy.pool import StaticPool
 
+from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError
+from advanced_alchemy.extensions.fastapi import AdvancedAlchemy, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.fastapi.providers import provide_filters
 from advanced_alchemy.extensions.litestar.providers import create_filter_dependencies
-from advanced_alchemy.filters import FilterSet, FilterTypes
+from advanced_alchemy.filters import CursorFilter, FilterSet, FilterTypes
+from advanced_alchemy.filters._cursor import encode_cursor, order_fingerprint
 from advanced_alchemy.repository import SQLAlchemySyncRepository
 from advanced_alchemy.service import CursorPagination, ResultConverter
 from advanced_alchemy.utils.dependencies import FilterConfig
@@ -64,6 +67,12 @@ def db() -> Iterator[Session]:
         session.commit()
         yield session
     engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def cursor_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.setenv("ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET", "environment-secret")
 
 
 def make_client(db: Session, config: Any) -> TestClient:
@@ -176,3 +185,54 @@ def test_filterset_cursor_parameter(db: Session) -> None:
     assert "currentPage" not in params
     assert ok.json() == {"rows": 4}
     assert bad.status_code == 422
+
+
+def extension_client(db: Session, config: Any, **config_options: Any) -> TestClient:
+    app = FastAPI()
+    AdvancedAlchemy(SQLAlchemySyncConfig(connection_string="sqlite://", **config_options), app=app)
+    dependency = provide_filters(config)
+
+    @app.get("/gadgets")
+    def list_gadgets(filters: Annotated[list[FilterTypes], Depends(dependency)]) -> CursorPagination[GadgetOut]:
+        rows = GadgetRepository(session=db).get_many(*filters)
+        return ResultConverter().to_schema(rows, filters=filters, schema_type=GadgetOut, pagination_type="cursor")
+
+    return TestClient(app)
+
+
+@pytest.mark.parametrize(("config", "keys", "limit"), [(CONFIG, [("price", "desc")], 4), (Gadgets, [], 3)])
+def test_config_secret_signs_tokens_for_every_filter_dependency(
+    db: Session, monkeypatch: pytest.MonkeyPatch, config: Any, keys: Any, limit: int
+) -> None:
+    monkeypatch.delenv("ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET")
+
+    with extension_client(db, config, pagination_cursor_secret="config-secret") as client:
+        token = client.get("/gadgets").json()["next_cursor"]
+        following = client.get("/gadgets", params={"cursor": token})
+
+    assert following.status_code == 200
+    assert CursorFilter(keys, limit, token, "config-secret").cursor == token
+    with pytest.raises(InvalidCursorError, match="signature"):
+        CursorFilter(keys, limit, token, "environment-secret")
+
+
+@pytest.mark.parametrize("config", [CONFIG, Gadgets])
+def test_cursor_pagination_without_a_secret_is_a_configuration_error(
+    db: Session, monkeypatch: pytest.MonkeyPatch, config: Any
+) -> None:
+    monkeypatch.delenv("ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET")
+
+    with extension_client(db, config) as client, pytest.raises(ImproperConfigurationError, match="requires a secret"):
+        client.get("/gadgets")
+
+
+def test_token_values_that_do_not_fit_the_columns_return_422(db: Session) -> None:
+    token = encode_cursor(
+        ["not-a-price", 1], order_fingerprint([("price", "desc", None)]), secret=b"environment-secret"
+    )
+
+    with extension_client(db, CONFIG) as client:
+        response = client.get("/gadgets", params={"cursor": token})
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["query", "cursor"]

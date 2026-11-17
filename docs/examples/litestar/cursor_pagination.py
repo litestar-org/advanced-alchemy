@@ -85,7 +85,6 @@ class ArticleController(Controller):
             "sort_field": "views",
             "sort_order": "desc",
             "sort_fields": ["views", "title"],
-            "pagination_cursor_secret": os.environ.get("CURSOR_SECRET", "development-only-secret"),
         },
     )
 
@@ -124,6 +123,7 @@ def create_app() -> Litestar:
                 config=SQLAlchemyAsyncConfig(
                     connection_string="sqlite+aiosqlite:///:memory:",
                     create_all=True,
+                    pagination_cursor_secret=os.environ.get("CURSOR_SECRET", "development-only-secret"),
                 ),
             ),
         ],

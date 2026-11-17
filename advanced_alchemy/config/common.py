@@ -11,6 +11,8 @@ from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.utils.dataclass import Empty, simple_asdict
 
 if TYPE_CHECKING:
+    from datetime import timedelta
+
     from sqlalchemy import Connection, Engine, MetaData
     from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker
     from sqlalchemy.orm import Mapper, Query, Session, sessionmaker
@@ -208,6 +210,20 @@ class GenericSQLAlchemyConfig(Generic[EngineT, SessionT, SessionMakerT]):
     Takes precedence over :attr:`cache_config`. Useful when sharing a single cache manager across
     multiple configs.
     """
+    pagination_cursor_secret: "Union[str, bytes, None]" = None
+    """Key that signs cursor pagination tokens issued by Litestar and FastAPI filter dependencies.
+
+    Applies to every filter dependency of the application that sets no secret of its own. When unset, the
+    ``ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET`` and ``SECRET_KEY`` environment variables are used.
+    Configurations of one application must agree on the value.
+
+    .. seealso::
+        :doc:`/usage/repositories/cursor_pagination`
+    """
+    pagination_cursor_ttl: "Union[float, timedelta, None]" = None
+    """Lifetime of cursor pagination tokens in seconds or as a ``timedelta``. ``None`` issues tokens that do not expire."""
+    pagination_cursor_encrypted: "Optional[bool]" = None
+    """Encrypt cursor pagination tokens so clients cannot read the key values."""
     _SESSION_SCOPE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))
     """Internal counter for ensuring unique identification of session scope keys in the class."""
     _ENGINE_APP_STATE_KEY_REGISTRY: "ClassVar[set[str]]" = field(init=False, default=cast("set[str]", set()))

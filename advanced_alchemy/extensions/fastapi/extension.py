@@ -7,6 +7,9 @@ from typing import (
     overload,
 )
 
+from fastapi.responses import JSONResponse
+
+from advanced_alchemy.exceptions import InvalidCursorError
 from advanced_alchemy.extensions.fastapi.cli import register_database_commands
 from advanced_alchemy.extensions.fastapi.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.starlette import AdvancedAlchemy as StarletteAdvancedAlchemy
@@ -22,6 +25,8 @@ if TYPE_CHECKING:
 
     from fastapi import FastAPI
     from sqlalchemy import Select
+    from starlette.applications import Starlette
+    from starlette.requests import Request
 
     from advanced_alchemy import filters
     from advanced_alchemy.extensions.fastapi.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
@@ -83,6 +88,15 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         app: "Optional[FastAPI]" = None,
     ) -> None:
         super().__init__(config, app)
+
+    def init_app(self, app: "Starlette") -> None:
+        """Initialize the application and report invalid pagination cursors as validation errors.
+
+        Args:
+            app: The FastAPI application instance.
+        """
+        super().init_app(app)
+        app.add_exception_handler(InvalidCursorError, _invalid_cursor_response)
 
     @overload
     def provide_service(
@@ -189,3 +203,10 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
             dep_defaults = DEPENDENCY_DEFAULTS
 
         return _provide_filters(config, dep_defaults=dep_defaults)
+
+
+def _invalid_cursor_response(_: "Request", exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={"detail": [{"loc": ["query", "cursor"], "msg": str(exc), "type": "value_error"}]},
+    )

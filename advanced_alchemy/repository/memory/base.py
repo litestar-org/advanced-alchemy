@@ -870,15 +870,6 @@ class InMemoryFilterEvaluator:
         return result
 
     @staticmethod
-    def _apply_cursor_pagination(
-        result: List[ModelT], cursor_filter: CursorFilter, model: Optional[type[Any]]
-    ) -> List[ModelT]:
-        resolved_model = model if model is not None else (type(result[0]) if result else None)
-        if resolved_model is None:
-            return result
-        return cursor_filter.paginate_items(result, resolved_model)
-
-    @staticmethod
     def filter_by_kwargs(
         result: Iterable[ModelT],
         kwargs: dict[str, Any],
@@ -888,6 +879,15 @@ class InMemoryFilterEvaluator:
             return [item for item in result if all(getattr(item, field) == value for field, value in kwargs.items())]
         except AttributeError as error:
             raise RepositoryError from error
+
+    @staticmethod
+    def _apply_cursor_pagination(
+        result: List[ModelT], cursor_filter: CursorFilter, model: Optional[type[Any]]
+    ) -> List[ModelT]:
+        resolved_model = model if model is not None else (type(result[0]) if result else None)
+        if resolved_model is None:
+            return result
+        return cursor_filter.paginate_items(result, resolved_model)
 
     @classmethod
     def _apply_statement_filter(

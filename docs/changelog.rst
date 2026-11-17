@@ -7,21 +7,26 @@
 
     .. change:: add cursor (keyset) pagination
         :type: feature
-        :pr: 795
+        :pr: 852
         :issue: 564
 
         :class:`~advanced_alchemy.filters.CursorFilter` pages by the ordering keys of
         the last row a client saw, with the primary key appended as a tiebreaker,
         explicit NULL placement, and a ``limit + 1`` fetch that detects the last page.
-        ``to_schema(..., pagination_type="cursor")`` returns a typed
-        :class:`~advanced_alchemy.service.CursorPagination` with ``next_cursor``,
-        ``previous_cursor``, ``has_next``, and ``has_previous``; existing
-        ``to_schema`` calls keep returning ``OffsetPagination``. Tokens are bound
+        ``to_schema`` returns a :class:`~advanced_alchemy.service.CursorPagination`
+        with ``next_cursor``, ``previous_cursor``, ``has_next``, and ``has_previous``
+        when ``filters`` hold a ``CursorFilter``, and ``pagination_type="cursor"``
+        types the result; calls without a ``CursorFilter`` keep returning
+        ``OffsetPagination``. Tokens are bound
         to their ordering and can be signed, expire, or be encrypted.
         ``FilterConfig`` and ``FilterSet`` accept ``pagination_type="cursor"``, and
         the Litestar and FastAPI providers expose ``cursor``, ``pageSize``,
         ``orderBy``, and ``sortOrder`` with the existing sort allowlist and
-        ``pagination_max_size``. SQL and in-memory repositories reject conflicting
+        ``pagination_max_size``. Provider tokens are always signed: set
+        ``pagination_cursor_secret`` once on the SQLAlchemy configuration, per
+        filter configuration, or through the
+        ``ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET`` or ``SECRET_KEY`` environment
+        variables. SQL and in-memory repositories reject conflicting
         pagination filters and count the full filtered set. With contributions
         from `Pavel Kirilin <https://github.com/s3rius>`_.
 
