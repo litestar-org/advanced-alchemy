@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 
 from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.config import SQLAlchemySyncConfig, SyncSessionConfig
-from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.filters import LimitOffsetFilter
 from advanced_alchemy.repository import SQLAlchemySyncRepository
 from advanced_alchemy.utils.fixtures import open_fixture_sync
 
@@ -44,13 +44,13 @@ def run_script() -> None:
     with alchemy_config.get_session() as db_session:
         # 1) Load the JSON data into the US States table.
         repo = USStateRepository(session=db_session)
-        fixture = open_fixture_sync(here, USStateRepository.model_type.__tablename__)
+        fixture = open_fixture_sync(here, "us_state_lookup")
         objs = repo.add_many([USStateRepository.model_type(**raw_obj) for raw_obj in fixture])
         db_session.commit()
         pprint.pp(f"Created {len(objs)} new objects.")
 
         # 2) Select paginated data and total row count.
-        created_objs, total_objs = repo.get_many_and_count(LimitOffset(limit=10, offset=0))
+        created_objs, total_objs = repo.get_many_and_count(LimitOffsetFilter(limit=10, offset=0))
         pprint.pp(f"Selected {len(created_objs)} records out of a total of {total_objs}.")
 
         # 3) Let's remove the batch of records selected.

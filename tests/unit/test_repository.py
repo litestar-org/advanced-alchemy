@@ -61,21 +61,21 @@ from advanced_alchemy.exceptions import (
     wrap_sqlalchemy_exception,
 )
 from advanced_alchemy.filters import (
-    BeforeAfter,
+    BeforeAfterFilter,
     BooleanFilter,
-    CollectionFilter,
     ComparisonFilter,
     ExistsFilter,
     FilterGroup,
-    LimitOffset,
+    InCollectionFilter,
+    LimitOffsetFilter,
     MultiFilter,
     NotExistsFilter,
     NotInCollectionFilter,
     NotInSearchFilter,
     NotNullFilter,
     NullFilter,
-    OnBeforeAfter,
-    OrderBy,
+    OnBeforeAfterFilter,
+    OrderByFilter,
     RelationshipFilter,
     SearchFilter,
 )
@@ -1019,7 +1019,7 @@ async def test_sqlalchemy_repo_exists_with_filter(
     mock_repo_count: AnyMock,
 ) -> None:
     """Test expected method calls for exists operation. with filter argument"""
-    limit_filter = LimitOffset(limit=1, offset=0)
+    limit_filter = LimitOffsetFilter(limit=1, offset=0)
     mock_repo_count.return_value = 1
 
     exists = await maybe_async(mock_repo.exists(limit_filter, id="my-id"))
@@ -1052,9 +1052,9 @@ async def test_sqlalchemy_repo_list_with_pagination(
     """Test list operation with pagination."""
     statement = MagicMock()
     mock_repo_execute.return_value = MagicMock()
-    mocker.patch.object(LimitOffset, "append_to_statement", return_value=statement)
+    mocker.patch.object(LimitOffsetFilter, "append_to_statement", return_value=statement)
     mock_repo_execute.return_value = MagicMock()
-    await maybe_async(mock_repo.get_many(LimitOffset(2, 3)))
+    await maybe_async(mock_repo.get_many(LimitOffsetFilter(2, 3)))
     mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -1063,13 +1063,13 @@ async def test_sqlalchemy_repo_list_with_before_after_filter(
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
 ) -> None:
-    """Test list operation with BeforeAfter filter."""
+    """Test list operation with BeforeAfterFilter filter."""
     statement = MagicMock()
     mocker.patch.object(mock_repo.model_type.updated_at, "__lt__", return_value="lt")
     mocker.patch.object(mock_repo.model_type.updated_at, "__gt__", return_value="gt")
-    mocker.patch.object(BeforeAfter, "append_to_statement", return_value=statement)
+    mocker.patch.object(BeforeAfterFilter, "append_to_statement", return_value=statement)
     mock_repo_execute.return_value = MagicMock()
-    await maybe_async(mock_repo.get_many(BeforeAfter("updated_at", dt.datetime.max, dt.datetime.min)))
+    await maybe_async(mock_repo.get_many(BeforeAfterFilter("updated_at", dt.datetime.max, dt.datetime.min)))
     mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -1079,14 +1079,14 @@ async def test_sqlalchemy_repo_list_with_on_before_after_filter(
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
 ) -> None:
-    """Test list operation with BeforeAfter filter."""
+    """Test list operation with BeforeAfterFilter filter."""
     statement = MagicMock()
     mocker.patch.object(mock_repo.model_type.updated_at, "__le__", return_value="le")
     mocker.patch.object(mock_repo.model_type.updated_at, "__ge__", return_value="ge")
-    mocker.patch.object(OnBeforeAfter, "append_to_statement", return_value=statement)
+    mocker.patch.object(OnBeforeAfterFilter, "append_to_statement", return_value=statement)
 
     mock_repo_execute.return_value = MagicMock()
-    await maybe_async(mock_repo.get_many(OnBeforeAfter("updated_at", dt.datetime.max, dt.datetime.min)))
+    await maybe_async(mock_repo.get_many(OnBeforeAfterFilter("updated_at", dt.datetime.max, dt.datetime.min)))
     mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -1096,13 +1096,13 @@ async def test_sqlalchemy_repo_list_with_collection_filter(
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
 ) -> None:
-    """Test behavior of list operation given CollectionFilter."""
+    """Test behavior of list operation given InCollectionFilter."""
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
     mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
-    mocker.patch.object(CollectionFilter, "append_to_statement", return_value=mock_repo.statement)
+    mocker.patch.object(InCollectionFilter, "append_to_statement", return_value=mock_repo.statement)
     values = [1, 2, 3]
-    await maybe_async(mock_repo.get_many(CollectionFilter(field_name, values)))
+    await maybe_async(mock_repo.get_many(InCollectionFilter(field_name, values)))
     mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -1112,16 +1112,16 @@ async def test_sqlalchemy_repo_list_with_null_collection_filter(
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
 ) -> None:
-    """Test behavior of list operation given CollectionFilter."""
+    """Test behavior of list operation given InCollectionFilter."""
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
     mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
     monkeypatch.setattr(
-        CollectionFilter,
+        InCollectionFilter,
         "append_to_statement",
         MagicMock(return_value=mock_repo.statement),
     )
-    await maybe_async(mock_repo.get_many(CollectionFilter(field_name, None)))  # pyright: ignore[reportFunctionMemberAccess,reportUnknownArgumentType]
+    await maybe_async(mock_repo.get_many(InCollectionFilter(field_name, None)))  # pyright: ignore[reportFunctionMemberAccess,reportUnknownArgumentType]
     mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -1131,18 +1131,18 @@ async def test_sqlalchemy_repo_empty_list_with_collection_filter(
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
 ) -> None:
-    """Test behavior of list operation given CollectionFilter."""
+    """Test behavior of list operation given InCollectionFilter."""
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
     mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
     values: Collection[Any] = []
-    await maybe_async(mock_repo.get_many(CollectionFilter(field_name, values)))
+    await maybe_async(mock_repo.get_many(InCollectionFilter(field_name, values)))
     monkeypatch.setattr(
-        CollectionFilter,
+        InCollectionFilter,
         "append_to_statement",
         MagicMock(return_value=mock_repo.statement),
     )
-    await maybe_async(mock_repo.get_many(CollectionFilter(field_name, values)))
+    await maybe_async(mock_repo.get_many(InCollectionFilter(field_name, values)))
     mock_repo._execute.assert_called_with(mock_repo.statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -1152,7 +1152,7 @@ async def test_sqlalchemy_repo_list_with_not_in_collection_filter(
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
 ) -> None:
-    """Test behavior of list operation given CollectionFilter."""
+    """Test behavior of list operation given InCollectionFilter."""
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
     mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
@@ -1172,7 +1172,7 @@ async def test_sqlalchemy_repo_list_with_null_not_in_collection_filter(
     mock_repo_execute: AnyMock,
     mocker: MockerFixture,
 ) -> None:
-    """Test behavior of list operation given CollectionFilter."""
+    """Test behavior of list operation given InCollectionFilter."""
     field_name = "id"
     mock_repo_execute.return_value = MagicMock()
     mock_repo.statement.where.return_value = mock_repo.statement  # pyright: ignore[reportFunctionMemberAccess]
@@ -1255,7 +1255,7 @@ async def test_execute(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
 async def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
     """Ensures we don't filter on an empty collection."""
     statement = MagicMock()
-    filter = CollectionFilter(field_name="id", values=[])  # type:ignore[var-annotated]
+    filter = InCollectionFilter(field_name="id", values=[])  # type:ignore[var-annotated]
     statement = filter.append_to_statement(statement, MagicMock())  # type:ignore[assignment]
     mock_repo.statement.where.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
 
@@ -1280,11 +1280,11 @@ async def test_filter_on_datetime_field(
     statement = MagicMock()
     field_mock.__gt__ = field_mock.__lt__ = lambda self, other: True  # pyright: ignore[reportFunctionMemberAccess,reportUnknownLambdaType]
     monkeypatch.setattr(
-        BeforeAfter,
+        BeforeAfterFilter,
         "append_to_statement",
         MagicMock(return_value=mock_repo.statement),
     )
-    filter = BeforeAfter(field_name="updated_at", before=before, after=after)
+    filter = BeforeAfterFilter(field_name="updated_at", before=before, after=after)
     statement = filter.append_to_statement(statement, MagicMock(return_value=before or after))  # type:ignore[assignment]
     mock_repo.model_type.updated_at = field_mock
     mock_repo.statement.where.assert_not_called()  # pyright: ignore[reportFunctionMemberAccess]
@@ -1839,7 +1839,7 @@ def test_normalize_cache_key_value_handles_structures() -> None:
 
 def test_build_cache_key_stable_for_unordered_inputs() -> None:
     """Cache keys should remain stable for unordered inputs."""
-    filters = [CollectionFilter(field_name="id", values={2, 1})]
+    filters = [InCollectionFilter(field_name="id", values={2, 1})]
     key_a = _build_cache_key(
         model_name="CacheModel",
         version_token="v1",
@@ -1854,7 +1854,7 @@ def test_build_cache_key_stable_for_unordered_inputs() -> None:
         model_name="CacheModel",
         version_token="v1",
         method="get_many",
-        filters=[CollectionFilter(field_name="id", values={1, 2})],
+        filters=[InCollectionFilter(field_name="id", values={1, 2})],
         kwargs={"meta": {"a": 1, "b": 2}},
         order_by=[("name", False)],
         execution_options={"stream_results": True},
@@ -2836,7 +2836,7 @@ class NullableOrderModel(base.BigIntBase):
 @pytest.mark.parametrize("sort_order", ["asc", "desc"])
 @pytest.mark.parametrize("nulls", ["first", "last"])
 def test_mock_repository_order_by_honors_nulls_placement(sort_order: str, nulls: str) -> None:
-    """The in-memory repository applies `OrderBy.nulls` the same way the SQL backends do."""
+    """The in-memory repository applies `OrderByFilter.nulls` the same way the SQL backends do."""
 
     class Repo(SQLAlchemySyncMockRepository[NullableOrderModel]):
         model_type = NullableOrderModel
@@ -2850,7 +2850,7 @@ def test_mock_repository_order_by_honors_nulls_placement(sort_order: str, nulls:
         ]
     )
 
-    results = repo.list(OrderBy("director", sort_order, nulls))  # type: ignore[arg-type]
+    results = repo.list(OrderByFilter("director", sort_order, nulls))  # type: ignore[arg-type]
 
     expected = [3, 2] if sort_order == "asc" else [2, 3]
     expected = [1, *expected] if nulls == "first" else [*expected, 1]
@@ -2966,7 +2966,7 @@ def test_normalize_cache_key_value_dataclass_no_deepcopy(monkeypatch: MonkeyPatc
         raise AssertionError(msg)
 
     monkeypatch.setattr(copy, "deepcopy", fail_deepcopy)
-    filter_obj = CollectionFilter(field_name="id", values={3, 1, 2})
+    filter_obj = InCollectionFilter(field_name="id", values={3, 1, 2})
     normalized = _normalize_cache_key_value(filter_obj)
     assert normalized == {"field_name": "id", "values": [1, 2, 3]}
 
@@ -2985,7 +2985,7 @@ def test_get_error_messages_default_fast_path() -> None:
 
 
 def test_repository_apply_filters_passes_prefer_any(mocker: MockerFixture) -> None:
-    """Verify _apply_filters forwards prefer_any=self._prefer_any to CollectionFilter."""
+    """Verify _apply_filters forwards prefer_any=self._prefer_any to InCollectionFilter."""
 
     class PreferAnyRepo(SQLAlchemySyncRepository[UUIDModel]):
         model_type = UUIDModel
@@ -2994,7 +2994,7 @@ def test_repository_apply_filters_passes_prefer_any(mocker: MockerFixture) -> No
     mock_bind.dialect.name = "postgresql"
     repo = PreferAnyRepo(session=MagicMock(spec=Session, bind=mock_bind))
     assert repo._prefer_any is True
-    in_filter = CollectionFilter(field_name="id", values=[uuid4()])
+    in_filter = InCollectionFilter(field_name="id", values=[uuid4()])
     not_in_filter = NotInCollectionFilter(field_name="id", values=[uuid4()])
     spy_in = mocker.spy(in_filter, "append_to_statement")
     spy_not_in = mocker.spy(not_in_filter, "append_to_statement")
@@ -3169,7 +3169,7 @@ class InMemoryFilterTestModel(base.BigIntAuditBase):
 
 
 async def test_mock_repository_limit_offset_and_get_many_and_count_parity() -> None:
-    """MockRepository LimitOffset slices [offset : offset + limit] and get_many_and_count returns pre-pagination count."""
+    """MockRepository LimitOffsetFilter slices [offset : offset + limit] and get_many_and_count returns pre-pagination count."""
 
     class ItemRepo(SQLAlchemyAsyncMockRepository[InMemoryFilterTestModel]):
         pass
@@ -3192,12 +3192,12 @@ async def test_mock_repository_limit_offset_and_get_many_and_count_parity() -> N
     ]
     await repo.add_many(items)
 
-    page = await repo.get_many(OrderBy("id", "asc"), LimitOffset(limit=5, offset=5))
+    page = await repo.get_many(OrderByFilter("id", "asc"), LimitOffsetFilter(limit=5, offset=5))
     assert [item.id for item in page] == [6, 7, 8, 9, 10]
 
     even_page, even_total = await repo.get_many_and_count(
-        OrderBy("id", "asc"),
-        LimitOffset(limit=2, offset=1),
+        OrderByFilter("id", "asc"),
+        LimitOffsetFilter(limit=2, offset=1),
         category="even",
     )
     assert [item.id for item in even_page] == [4, 6]
@@ -3205,7 +3205,7 @@ async def test_mock_repository_limit_offset_and_get_many_and_count_parity() -> N
 
 
 async def test_mock_repository_datetime_and_extended_filters_parity() -> None:
-    """MockRepository evaluates conjunctive BeforeAfter, ComparisonFilter, BooleanFilter, Null/NotNull, FilterGroup, MultiFilter, ExistsFilter, and ColumnElement."""
+    """MockRepository evaluates conjunctive BeforeAfterFilter, ComparisonFilter, BooleanFilter, Null/NotNull, FilterGroup, MultiFilter, ExistsFilter, and ColumnElement."""
 
     class ItemRepo(SQLAlchemyAsyncMockRepository[InMemoryFilterTestModel]):
         pass
@@ -3249,7 +3249,7 @@ async def test_mock_repository_datetime_and_extended_filters_parity() -> None:
     )
 
     window_matches = await repo.get_many(
-        BeforeAfter(
+        BeforeAfterFilter(
             field_name="created_at",
             after=base_time + dt.timedelta(days=2),
             before=base_time + dt.timedelta(days=8),
@@ -3257,7 +3257,7 @@ async def test_mock_repository_datetime_and_extended_filters_parity() -> None:
     )
     assert [m.id for m in window_matches] == [2]
 
-    empty_in = await repo.get_many(CollectionFilter(field_name="id", values=[]))
+    empty_in = await repo.get_many(InCollectionFilter(field_name="id", values=[]))
     assert empty_in == []
 
     gt_matches = await repo.get_many(ComparisonFilter(field_name="score", operator="ge", value=20))
@@ -3677,7 +3677,7 @@ def test_mock_repository_sql_ast_and_edge_expressions() -> None:
         assert [
             i.id
             for i in repo.get_many(
-                OnBeforeAfter(
+                OnBeforeAfterFilter(
                     field_name="created_at",
                     on_or_after=base_time + dt.timedelta(days=2),
                     on_or_before=base_time + dt.timedelta(days=2),
@@ -3727,7 +3727,7 @@ async def test_async_mock_and_sync_cascade_delete_operations() -> None:
                 InMemoryFilterTestModel(id=4, name="Delta", slug="delta", score=40),
             ]
         )
-        assert await repo.count(LimitOffset(limit=1, offset=0)) == 4
+        assert await repo.count(LimitOffsetFilter(limit=1, offset=0)) == 4
         one = await repo.get_one(InMemoryFilterTestModel.slug == "beta")
         assert one.id == 2
 
@@ -3933,7 +3933,9 @@ def _build_parity_seed() -> list[ParityProbeModel]:
     ("filters", "ordered"),
     [
         pytest.param([~ParityProbeModel.active], False, id="negated-bool-column"),
-        pytest.param([OrderBy("grp", "asc"), OrderBy("score", "desc")], True, id="multi-orderby-precedence"),
+        pytest.param(
+            [OrderByFilter("grp", "asc"), OrderByFilter("score", "desc")], True, id="multi-orderby-precedence"
+        ),
         pytest.param([ParityProbeModel.score != 20], False, id="sql-ne-excludes-null"),
         pytest.param([ParityProbeModel.score.notin_([20])], False, id="sql-notin-excludes-null"),
         pytest.param(
@@ -4047,7 +4049,7 @@ async def test_mock_repository_async_and_sync_crud_lifecycle(mock_parity_repo: A
     assert await maybe_async(mock_parity_repo.check_health(mock_parity_repo.session)) is True
 
     page, total = await maybe_async(
-        mock_parity_repo.get_many_and_count(OrderBy("id", "asc"), LimitOffset(limit=2, offset=0))
+        mock_parity_repo.get_many_and_count(OrderByFilter("id", "asc"), LimitOffsetFilter(limit=2, offset=0))
     )
     assert [row.id for row in page] == [1, 2]
     assert total == 3
@@ -4240,12 +4242,12 @@ def _seed_mock_grid_entities() -> list[MockGridArticle]:
             2,
         ),
         (
-            [RelationshipFilter("tags", [CollectionFilter("name", ["python"])])],
+            [RelationshipFilter("tags", [InCollectionFilter("name", ["python"])])],
             [1, 3],
             2,
         ),
         (
-            [RelationshipFilter("tags", [CollectionFilter("name", ["python"])], negate=True)],
+            [RelationshipFilter("tags", [InCollectionFilter("name", ["python"])], negate=True)],
             [2, 4],
             2,
         ),
@@ -4255,7 +4257,7 @@ def _seed_mock_grid_entities() -> list[MockGridArticle]:
             2,
         ),
         (
-            [CollectionFilter("tags", [1])],
+            [InCollectionFilter("tags", [1])],
             [1, 3],
             2,
         ),
@@ -4269,21 +4271,21 @@ def _seed_mock_grid_entities() -> list[MockGridArticle]:
                 ComparisonFilter("views", "ge", 150),
                 ComparisonFilter("views", "le", 400),
                 NotNullFilter("published_at"),
-                OrderBy("views", "desc"),
-                OrderBy("title", "asc"),
-                LimitOffset(1, 1),
+                OrderByFilter("views", "desc"),
+                OrderByFilter("title", "asc"),
+                LimitOffsetFilter(1, 1),
             ],
             [1],
             2,
         ),
         (
-            [OrderBy("author.name", "asc", nulls="first"), OrderBy("id", "asc")],
+            [OrderByFilter("author.name", "asc", nulls="first"), OrderByFilter("id", "asc")],
             [4, 2, 3, 1],
             4,
         ),
         (
             [
-                BeforeAfter(
+                BeforeAfterFilter(
                     "published_at",
                     before=dt.datetime(2026, 3, 1, 0, 0),
                     after=dt.datetime(2026, 1, 1, 0, 0),
@@ -4309,7 +4311,7 @@ def _seed_mock_grid_entities() -> list[MockGridArticle]:
                         ]
                     }
                 ),
-                OrderBy("id", "asc"),
+                OrderByFilter("id", "asc"),
             ],
             [1, 4],
             2,
@@ -4359,11 +4361,11 @@ async def test_async_mock_repository_matches_sync_and_sqlite_grid_parity() -> No
             SearchFilter("title", "sql", ignore_case=True),
             ComparisonFilter("views", "ge", 200),
             ComparisonFilter("views", "le", 500),
-            CollectionFilter("status", ["draft"]),
+            InCollectionFilter("status", ["draft"]),
             RelationshipFilter("author", [ComparisonFilter("name", "ne", "Ghost")]),
-            OrderBy("author.name", "asc"),
-            OrderBy("views", "desc"),
-            LimitOffset(limit=1, offset=1),
+            OrderByFilter("author.name", "asc"),
+            OrderByFilter("views", "desc"),
+            LimitOffsetFilter(limit=1, offset=1),
         ]
         mock_items, mock_total = await mock_repo.get_many_and_count(*grid_filters)
         db_items, db_total = db_repo.get_many_and_count(*grid_filters)
@@ -4385,7 +4387,7 @@ async def test_async_mock_repository_matches_sync_and_sqlite_grid_parity() -> No
         assert [item.title for item in async_items] == ["Async Queues"]
 
         inclusive_items = await mock_repo.get_many(
-            OnBeforeAfter(
+            OnBeforeAfterFilter(
                 "published_at",
                 on_or_before=dt.datetime(2026, 1, 10, 12, 0),
                 on_or_after=dt.datetime(2026, 1, 10, 12, 0),
@@ -4393,11 +4395,11 @@ async def test_async_mock_repository_matches_sync_and_sqlite_grid_parity() -> No
         )
         assert [item.id for item in inclusive_items] == [1]
 
-        assert len(await mock_repo.get_many(BeforeAfter("published_at", before=None, after=None))) == 4
+        assert len(await mock_repo.get_many(BeforeAfterFilter("published_at", before=None, after=None))) == 4
         assert [
             item.id
             for item in await mock_repo.get_many(
-                OnBeforeAfter(
+                OnBeforeAfterFilter(
                     "published_at",
                     on_or_before=dt.datetime(2026, 2, 15, 8, 30),
                     on_or_after=dt.datetime(2026, 2, 15, 8, 30),
@@ -4407,7 +4409,7 @@ async def test_async_mock_repository_matches_sync_and_sqlite_grid_parity() -> No
         assert [
             item.id
             for item in await mock_repo.get_many(
-                BeforeAfter(
+                BeforeAfterFilter(
                     "published_at",
                     before=dt.datetime(2026, 2, 15, 8, 30),
                     after=dt.datetime(2026, 1, 10, 12, 0),
@@ -4430,7 +4432,7 @@ async def test_async_mock_repository_matches_sync_and_sqlite_grid_parity() -> No
             for item in await mock_repo.get_many(
                 ComparisonFilter("status", "in", ["draft", "published"]),
                 ComparisonFilter("status", "notin", ["published"]),
-                OrderBy("id", "asc"),
+                OrderByFilter("id", "asc"),
             )
         } == {1, 2, 4}
         assert {
@@ -4468,7 +4470,7 @@ async def test_async_mock_repository_matches_sync_and_sqlite_grid_parity() -> No
 
 @pytest.mark.parametrize("mode", ["sync", "async"])
 @pytest.mark.parametrize("seed_mode", ["relationship", "foreign_key"])
-@pytest.mark.parametrize("filter_type", [CollectionFilter, NotInCollectionFilter])
+@pytest.mark.parametrize("filter_type", [InCollectionFilter, NotInCollectionFilter])
 async def test_relationship_collection_renamed_primary_key_sqlite_parity(
     mode: str, seed_mode: str, filter_type: Any
 ) -> None:
@@ -4516,7 +4518,7 @@ async def test_relationship_collection_renamed_primary_key_sqlite_parity(
             session.flush()
             sql_repo = SQLAlchemySyncRepository(session=session, model_type=Parent)
             expected = sorted(item.id for item in sql_repo.get_many(filter_))
-            assert expected == ([1] if filter_type is CollectionFilter else [2, 3])
+            assert expected == ([1] if filter_type is InCollectionFilter else [2, 3])
             assert sorted(item.id for item in await maybe_async(repo.get_many(filter_))) == expected
     finally:
         repo.__database_clear__()

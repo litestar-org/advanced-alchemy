@@ -2,7 +2,7 @@
 Declarative Filters
 ===================
 
-Use :class:`~advanced_alchemy.filterset.FilterSet` to group allowed query fields,
+Use :class:`~advanced_alchemy.filters.FilterSet` to group allowed query fields,
 sorting and relationship loading for one mapped model.
 
 Example Setup
@@ -43,13 +43,13 @@ Example Setup
 Reusable FilterSets
 -------------------
 
-Use :class:`~advanced_alchemy.filterset.FilterSet` to keep allowed query fields,
+Use :class:`~advanced_alchemy.filters.FilterSet` to keep allowed query fields,
 search, sorting, and pagination together. Pass an instance directly to a repository
 or service read method:
 
 .. code-block:: python
 
-    from advanced_alchemy.filterset import FilterSet
+    from advanced_alchemy.filters import FilterSet
 
 
     class PostFilters(FilterSet[FilterSetPost]):
@@ -76,6 +76,8 @@ validate and convert HTTP query values. Pydantic remains optional. Set
 a FilterSet and HTTP 400/422 through Litestar or FastAPI. When ``pagination_size``
 is omitted, the default page size is clamped to ``pagination_max_size``, and
 ``pagination_size > pagination_max_size`` raises ``ImproperConfigurationError``.
+Set ``"pagination_type": "cursor"`` to accept a ``cursor`` value instead of ``page``;
+see :doc:`cursor_pagination`.
 
 Field parameters use double underscores to separate relationship names, the field,
 and the operator: ``?tags__slug__eq=sqlalchemy&title__contains=python``. A deeper

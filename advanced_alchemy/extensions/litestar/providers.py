@@ -33,17 +33,18 @@ from advanced_alchemy.config import SQLAlchemyAsyncConfig as BaseAsyncConfig
 from advanced_alchemy.config import SQLAlchemySyncConfig as BaseSyncConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.filters import (
-    BeforeAfter,
+    BeforeAfterFilter,
     BooleanFilter,
     ChoicesFilter,
-    CollectionFilter,
+    CursorFilter,
+    FilterSet,
     FilterTypes,
-    LimitOffset,
+    InCollectionFilter,
+    LimitOffsetFilter,
     NotInCollectionFilter,
-    OrderBy,
+    OrderByFilter,
     SearchFilter,
 )
-from advanced_alchemy.filterset import FilterSet
 from advanced_alchemy.service import (
     Empty,
     EmptyType,
@@ -55,6 +56,7 @@ from advanced_alchemy.service import (
 )
 from advanced_alchemy.utils.dependencies import (
     ChoiceField,
+    CursorSettings,
     DependencyCache,
     FieldNameType,
     FilterConfig,
@@ -70,6 +72,7 @@ from advanced_alchemy.utils.dependencies import (
     normalize_field_name_types,
     normalize_sort_field,
     normalize_sort_fields,
+    resolve_cursor_settings,
     resolve_filter_aliases,
     resolve_filter_fields,
     resolve_pagination_bounds,
@@ -131,6 +134,8 @@ class DependencyDefaults:
     """Key for the order by dependency."""
     SEARCH_FILTER_DEPENDENCY_KEY: str = "search_filter"
     """Key for the search filter dependency."""
+    CURSOR_FILTER_DEPENDENCY_KEY: str = "cursor_filter"
+    """Key for the cursor pagination dependency."""
     DEFAULT_PAGINATION_SIZE: int = 20
     """Default pagination size."""
     prefix: Optional[str] = None
@@ -147,6 +152,7 @@ class DependencyDefaults:
         search_filter_key: Optional[str] = None,
         default_pagination_size: Optional[int] = None,
         prefix: Optional[str] = None,
+        cursor_filter_key: Optional[str] = None,
     ) -> None:
         if prefix is not None:
             self.prefix = prefix
@@ -163,6 +169,7 @@ class DependencyDefaults:
             ("UPDATED_FILTER_DEPENDENCY_KEY", updated_filter_key),
             ("ORDER_BY_FILTER_DEPENDENCY_KEY", order_by_filter_key),
             ("SEARCH_FILTER_DEPENDENCY_KEY", search_filter_key),
+            ("CURSOR_FILTER_DEPENDENCY_KEY", cursor_filter_key),
         ):
             if explicit_key is not None or has_prefix:
                 base = explicit_key if explicit_key is not None else cast("str", getattr(cls, attr))
@@ -226,6 +233,10 @@ def _with_dep_defaults_prefix(
         return DependencyDefaults(prefix=prefix)
     cls = type(dep_defaults)
     old_prefix = f"{dep_defaults.prefix.rstrip('_')}_" if dep_defaults.prefix else ""
+    cursor_key = dep_defaults.CURSOR_FILTER_DEPENDENCY_KEY.removeprefix(old_prefix)
+    extra: dict[str, Any] = (
+        {} if cursor_key == DependencyDefaults.CURSOR_FILTER_DEPENDENCY_KEY else {"cursor_filter_key": cursor_key}
+    )
     return cls(
         filters_key=dep_defaults.FILTERS_DEPENDENCY_KEY.removeprefix(old_prefix),
         created_filter_key=dep_defaults.CREATED_FILTER_DEPENDENCY_KEY.removeprefix(old_prefix),
@@ -236,6 +247,7 @@ def _with_dep_defaults_prefix(
         search_filter_key=dep_defaults.SEARCH_FILTER_DEPENDENCY_KEY.removeprefix(old_prefix),
         default_pagination_size=dep_defaults.DEFAULT_PAGINATION_SIZE,
         prefix=prefix,
+        **extra,
     )
 
 
@@ -547,10 +559,13 @@ def _create_filterset_dependency(
     for spec in filterset_type.parameter_specs():
         alias = f"{prefix.rstrip('_')}_{spec.param_name}" if prefix else spec.param_name
         entries.append((spec.param_name, filter_parameter_type(spec), QueryParameter(name=alias)))
-    if config.get("pagination_type"):
+    pagination_type = config.get("pagination_type")
+    if pagination_type:
         entries.extend(
             [
-                ("page", Optional[int], QueryParameter(name=aliases.get("current_page", "currentPage"), ge=1)),
+                ("cursor", Optional[str], QueryParameter(name=aliases.get("cursor", "cursor")))
+                if pagination_type == "cursor"
+                else ("page", Optional[int], QueryParameter(name=aliases.get("current_page", "currentPage"), ge=1)),
                 (
                     "pageSize",
                     Optional[int],
@@ -629,7 +644,7 @@ def _create_repeatable_order_by_filter_provider(
     sort_order_default: SortOrder = "desc",
     alias_for: Callable[[str], str] = camelize,
     nulls_default: Optional[Literal["first", "last"]] = None,
-) -> Callable[..., list[OrderBy]]:
+) -> Callable[..., list[OrderByFilter]]:
     allowed_display = ", ".join(sorted(allowed_fields))
 
     def provide_order_by(
@@ -648,7 +663,7 @@ def _create_repeatable_order_by_filter_provider(
                 name=alias_for("sort_order"),
             ),
         ] = None,
-    ) -> list[OrderBy]:
+    ) -> list[OrderByFilter]:
         try:
             return build_order_by_filters(
                 field_name,
@@ -669,7 +684,7 @@ def _create_order_by_filter_provider(
     sort_order_default: SortOrder = "desc",
     alias_for: Callable[[str], str] = camelize,
     nulls_default: Optional[Literal["first", "last"]] = None,
-) -> Callable[..., OrderBy]:
+) -> Callable[..., OrderByFilter]:
     sort_field_default = normalize_sort_field(sort_field)
 
     def provide_order_by(
@@ -687,10 +702,64 @@ def _create_order_by_filter_provider(
                 name=alias_for("sort_order"),
             ),
         ] = sort_order_default,
-    ) -> OrderBy:
-        return OrderBy(field_name=field_name, sort_order=sort_order or sort_order_default, nulls=nulls_default)  # type: ignore[arg-type]
+    ) -> OrderByFilter:
+        return OrderByFilter(field_name=field_name, sort_order=sort_order or sort_order_default, nulls=nulls_default)  # type: ignore[arg-type]
 
     return provide_order_by
+
+
+def _create_cursor_filter_provider(
+    settings: CursorSettings,
+    alias_for: Callable[[str], str],
+    default_size: int,
+    max_size: Optional[int],
+    *,
+    repeatable_order: bool,
+) -> Callable[..., CursorFilter]:
+    """Build the cursor pagination dependency; ordering parameters appear only when sorting is configured."""
+    cursor_param = QueryParameter(name=alias_for("cursor"), description="Token from a previous page's cursor.")
+    size_param = QueryParameter(name=alias_for("page_size"), ge=1, le=max_size)
+
+    def build(
+        cursor: Optional[str], page_size: int, order_by: Union[str, list[str], None], sort_order: Optional[SortOrder]
+    ) -> CursorFilter:
+        try:
+            return settings.build(cursor=cursor, page_size=page_size, order_by=order_by, sort_order=sort_order)
+        except ValueError as exc:
+            raise ValidationException(detail=str(exc)) from exc
+
+    def provide_cursor_pagination(
+        cursor: Annotated[StringOrNone, cursor_param] = None,
+        page_size: Annotated[int, size_param] = default_size,
+    ) -> CursorFilter:
+        return build(cursor, page_size, None, None)
+
+    if not settings.allowed_fields:
+        return provide_cursor_pagination
+
+    order_param = QueryParameter(
+        name=alias_for("order_by"),
+        description=f"Sort fields (prefix '-' for descending). Allowed: {', '.join(sorted(settings.allowed_fields))}",
+    )
+    sort_order_param = QueryParameter(name=alias_for("sort_order"), title="Sort order")
+
+    def provide_cursor_pagination_ordered(
+        cursor: Annotated[StringOrNone, cursor_param] = None,
+        page_size: Annotated[int, size_param] = default_size,
+        order_by: Annotated[StringOrNone, order_param] = None,
+        sort_order: Annotated[SortOrderOrNone, sort_order_param] = None,
+    ) -> CursorFilter:
+        return build(cursor, page_size, order_by, sort_order)
+
+    def provide_cursor_pagination_multi_ordered(
+        cursor: Annotated[StringOrNone, cursor_param] = None,
+        page_size: Annotated[int, size_param] = default_size,
+        order_by: Annotated[Optional[list[str]], order_param] = None,
+        sort_order: Annotated[SortOrderOrNone, sort_order_param] = None,
+    ) -> CursorFilter:
+        return build(cursor, page_size, order_by, sort_order)
+
+    return provide_cursor_pagination_multi_ordered if repeatable_order else provide_cursor_pagination_ordered
 
 
 def _create_statement_filters(  # noqa: C901, PLR0915
@@ -725,8 +794,8 @@ def _create_statement_filters(  # noqa: C901, PLR0915
 
         def provide_id_filter(  # pyright: ignore[reportUnknownParameterType]
             ids: Annotated[Optional[list[str]], QueryParameter(name=alias_for("ids"))] = None,
-        ) -> CollectionFilter:  # pyright: ignore[reportMissingTypeArgument]
-            return CollectionFilter(field_name=config.get("id_field", "id"), values=ids)
+        ) -> InCollectionFilter:  # pyright: ignore[reportMissingTypeArgument]
+            return InCollectionFilter(field_name=config.get("id_field", "id"), values=ids)
 
         filters[dep_defaults.ID_FILTER_DEPENDENCY_KEY] = Provide(provide_id_filter, sync_to_thread=False)  # pyright: ignore[reportUnknownArgumentType]
 
@@ -735,8 +804,8 @@ def _create_statement_filters(  # noqa: C901, PLR0915
         def provide_created_filter(
             created_at_before: Annotated[DTorNone, QueryParameter(name=alias_for("created_before"))] = None,
             created_at_after: Annotated[DTorNone, QueryParameter(name=alias_for("created_after"))] = None,
-        ) -> BeforeAfter:
-            return BeforeAfter("created_at", created_at_before, created_at_after)
+        ) -> BeforeAfterFilter:
+            return BeforeAfterFilter("created_at", created_at_before, created_at_after)
 
         filters[dep_defaults.CREATED_FILTER_DEPENDENCY_KEY] = Provide(provide_created_filter, sync_to_thread=False)
 
@@ -745,8 +814,8 @@ def _create_statement_filters(  # noqa: C901, PLR0915
         def provide_updated_filter(
             updated_at_before: Annotated[DTorNone, QueryParameter(name=alias_for("updated_before"))] = None,
             updated_at_after: Annotated[DTorNone, QueryParameter(name=alias_for("updated_after"))] = None,
-        ) -> BeforeAfter:
-            return BeforeAfter("updated_at", updated_at_before, updated_at_after)
+        ) -> BeforeAfterFilter:
+            return BeforeAfterFilter("updated_at", updated_at_before, updated_at_after)
 
         filters[dep_defaults.UPDATED_FILTER_DEPENDENCY_KEY] = Provide(provide_updated_filter, sync_to_thread=False)
 
@@ -765,11 +834,22 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                     le=max_pagination_size,
                 ),
             ] = default_pagination_size,
-        ) -> LimitOffset:
-            return LimitOffset(page_size, page_size * (current_page - 1))
+        ) -> LimitOffsetFilter:
+            return LimitOffsetFilter(page_size, page_size * (current_page - 1))
 
         filters[dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY] = Provide(
             provide_limit_offset_pagination, sync_to_thread=False
+        )
+    elif config.get("pagination_type") == "cursor":
+        filters[dep_defaults.CURSOR_FILTER_DEPENDENCY_KEY] = Provide(
+            _create_cursor_filter_provider(
+                resolve_cursor_settings(config, model),
+                alias_for,
+                default_pagination_size,
+                max_pagination_size,
+                repeatable_order=bool(config.get("sort_fields")),
+            ),
+            sync_to_thread=False,
         )
 
     if search_fields := config.get("search"):
@@ -800,7 +880,8 @@ def _create_statement_filters(  # noqa: C901, PLR0915
 
         filters[dep_defaults.SEARCH_FILTER_DEPENDENCY_KEY] = Provide(provide_search_filter, sync_to_thread=False)
 
-    if sort_fields_cfg := config.get("sort_fields"):
+    order_by_provided = config.get("pagination_type") != "cursor"
+    if order_by_provided and (sort_fields_cfg := config.get("sort_fields")):
         allowed_sort_fields = frozenset(normalize_sort_fields(sort_fields_cfg, model=model))
         raw_default_sort = config.get("sort_field")
         default_sort_field = normalize_sort_field(raw_default_sort) if raw_default_sort else None
@@ -817,7 +898,7 @@ def _create_statement_filters(  # noqa: C901, PLR0915
             ),
             sync_to_thread=False,
         )
-    elif sort_field := config.get("sort_field"):
+    elif order_by_provided and (sort_field := config.get("sort_field")):
         filters[dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY] = Provide(
             _create_order_by_filter_provider(
                 sort_field, config.get("sort_order", "desc"), alias_for, config.get("sort_nulls")
@@ -886,17 +967,17 @@ def _create_statement_filters(  # noqa: C901, PLR0915
 
             def create_in_filter_provider(  # pyright: ignore
                 field_name: FieldNameType = resolved_field_def,
-            ) -> Callable[..., Optional[CollectionFilter[Any]]]:
+            ) -> Callable[..., Optional[InCollectionFilter[Any]]]:
                 param_name = f"{field_name.name}_in"
-                filter_return_type: Any = cast("Any", Optional)[cast("Any", CollectionFilter)[field_name.type_hint]]
+                filter_return_type: Any = cast("Any", Optional)[cast("Any", InCollectionFilter)[field_name.type_hint]]
                 annotation: Any = cast("Any", Annotated)[
                     cast("Any", Optional)[cast("Any", list)[field_name.type_hint]],
                     QueryParameter(name=alias_for(param_name)),
                 ]
 
-                def provide_in_filter(**kwargs: Any) -> Optional[CollectionFilter[Any]]:
+                def provide_in_filter(**kwargs: Any) -> Optional[InCollectionFilter[Any]]:
                     values = kwargs.get(param_name)
-                    return CollectionFilter(field_name=field_name.name, values=values) if values else None
+                    return InCollectionFilter(field_name=field_name.name, values=values) if values else None
 
                 provide_in_filter.__name__ = f"provide_in_filter_{field_name.name}"
                 provide_in_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
@@ -1109,7 +1190,7 @@ def _aggregate_filters(keys: tuple[str, ...], **kwargs: Any) -> list[FilterTypes
             continue
         if isinstance(value, SearchFilter) and (value.field_name is None or value.value is None):  # pyright: ignore[reportUnnecessaryComparison]
             continue  # type: ignore[unreachable]
-        if isinstance(value, OrderBy) and value.field_name is None:
+        if isinstance(value, OrderByFilter) and value.field_name is None:
             continue  # type: ignore[unreachable]
         filters.append(value)
     return filters

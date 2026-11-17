@@ -15,9 +15,12 @@ from typing_extensions import TypeVar
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.filters import (
+    CursorFilter,
+    CursorKey,
     FilterGroup,
-    LimitOffset,
-    OrderBy,
+    LimitOffsetFilter,
+    OrderByFilter,
+    PaginationFilter,
     RelationshipFilter,
     SearchFilter,
     StatementFilter,
@@ -25,6 +28,7 @@ from advanced_alchemy.filters import (
 )
 from advanced_alchemy.repository._util import resolve_generic_type_args
 from advanced_alchemy.utils.dependencies import (
+    CursorSettings,
     FilterConfig,
     FilterFieldSpec,
     FilterFieldsSpec,
@@ -32,6 +36,7 @@ from advanced_alchemy.utils.dependencies import (
     build_order_by_filters,
     normalize_sort_field,
     normalize_sort_fields,
+    resolve_cursor_settings,
     resolve_filter_fields,
     resolve_pagination_bounds,
 )
@@ -44,6 +49,7 @@ __all__ = ("FilterSet",)
 ModelT = TypeVar("ModelT")
 _HOOK_PARAMETER_COUNT = 2
 _STANDARD_PARAMETERS = {
+    "cursor",
     "page",
     "pageSize",
     "page_size",
@@ -221,6 +227,11 @@ class FilterSet(StatementFilter, Generic[ModelT]):
             normalize_sort_fields([_resolved_path(model, path) for path in sort_fields], model)
         return tuple(specs)
 
+    @classmethod
+    @lru_cache(maxsize=128)
+    def _cursor_settings(cls) -> CursorSettings:
+        return resolve_cursor_settings(cls.filter_config(), cls._model())
+
     @staticmethod
     def _search_paths(config: FilterConfig) -> Collection[str]:
         paths = config.get("search", ())
@@ -293,26 +304,49 @@ class FilterSet(StatementFilter, Generic[ModelT]):
                 )
                 branches.append(RelationshipFilter(tuple(rels), [branch]) if rels else branch)
             result.append(FilterGroup(logical_operator=or_, filters=branches))
-        result.extend(self._ordering_filters(config))
-        if config.get("pagination_type") == "limit_offset":
-            default_size, max_size = resolve_pagination_bounds(config)
+        ordering = self._ordering_filters(config)
+        pagination_type = config.get("pagination_type")
+        if pagination_type == "cursor":
+            result.append(self._cursor_filter(ordering, config))
+        else:
+            result.extend(ordering)
+        if pagination_type == "limit_offset":
             page = self._value("page", default=1)
-            size = self._value("pageSize", "page_size", default=default_size)
-            if (
-                not isinstance(page, int)
-                or isinstance(page, bool)
-                or page < 1
-                or not isinstance(size, int)
-                or isinstance(size, bool)
-                or size < 1
-            ):
+            size = self._page_size(config)
+            if not isinstance(page, int) or isinstance(page, bool) or page < 1:
                 msg = "Pagination page and page size must be positive integers"
                 raise ValueError(msg)
-            if max_size is not None and size > max_size:
-                msg = f"Pagination page size {size} exceeds maximum allowed size {max_size}"
-                raise ValueError(msg)
-            result.append(LimitOffset(limit=size, offset=(page - 1) * size))
+            result.append(LimitOffsetFilter(limit=size, offset=(page - 1) * size))
         return result
+
+    def _page_size(self, config: FilterConfig) -> int:
+        default_size, max_size = resolve_pagination_bounds(config)
+        size = self._value("pageSize", "page_size", default=default_size)
+        if not isinstance(size, int) or isinstance(size, bool) or size < 1:
+            msg = "Pagination page and page size must be positive integers"
+            raise ValueError(msg)
+        if max_size is not None and size > max_size:
+            msg = f"Pagination page size {size} exceeds maximum allowed size {max_size}"
+            raise ValueError(msg)
+        return size
+
+    def _cursor_filter(self, ordering: list[StatementFilter], config: FilterConfig) -> CursorFilter:
+        """Build the cursor filter from the validated ordering, page size, and cursor values."""
+        settings = self._cursor_settings()
+        keys: list[CursorKey] = []
+        for order in cast("list[OrderByFilter]", ordering):
+            if isinstance(order.field_name, str) and "." in order.field_name:
+                msg = f"Cursor pagination cannot order by relationship path {order.field_name!r}"
+                raise ValueError(msg)
+            keys.append(CursorKey(order.field_name, order.sort_order, order.nulls))
+        return CursorFilter(
+            keys,
+            self._page_size(config),
+            self._value("cursor"),
+            settings.secret,
+            ttl=settings.ttl,
+            encrypted=settings.encrypted,
+        )
 
     def _ordering_filters(self, config: FilterConfig) -> list[StatementFilter]:
         result: list[StatementFilter] = []
@@ -369,7 +403,7 @@ class FilterSet(StatementFilter, Generic[ModelT]):
                 if rels:
                     paths.add(rels)
         for filter_ in self._filters:
-            if isinstance(filter_, OrderBy) and isinstance(filter_.field_name, str) and "." in filter_.field_name:
+            if isinstance(filter_, OrderByFilter) and isinstance(filter_.field_name, str) and "." in filter_.field_name:
                 paths.add(tuple(filter_.field_name.split(".")[:-1]))
         return tuple(sorted(paths))
 
@@ -442,7 +476,7 @@ class FilterSet(StatementFilter, Generic[ModelT]):
                     statement,
                     [self],
                     kwargs.get("dialect") or DefaultDialect(),
-                    paginated=any(isinstance(filter_, LimitOffset) for filter_ in self._filters)
+                    paginated=any(isinstance(filter_, PaginationFilter) for filter_ in self._filters)
                     or getattr(statement, "_limit_clause", None) is not None
                     or getattr(statement, "_offset_clause", None) is not None,
                 ),

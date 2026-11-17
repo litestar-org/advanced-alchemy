@@ -16,9 +16,9 @@ Example Setup
     from sqlalchemy.orm import Mapped, mapped_column, relationship
     from advanced_alchemy.base import BigIntAuditBase
     from advanced_alchemy.filters import (
-        CollectionFilter,
+        InCollectionFilter,
         ComparisonFilter,
-        LimitOffset,
+        LimitOffsetFilter,
         NotInCollectionFilter,
         NotNullFilter,
         NullFilter,
@@ -87,7 +87,7 @@ Built-In Filter Helpers
 
             async def get_selected_posts(db_session: AsyncSession, post_ids: list[int]) -> list[FilteringPost]:
                 repo = FilteringPostRepository(session=db_session)
-                return await repo.get_many(CollectionFilter(field_name="id", values=post_ids))
+                return await repo.get_many(InCollectionFilter(field_name="id", values=post_ids))
 
     .. tab-item:: Empty vs. Filled
 
@@ -106,20 +106,22 @@ Built-In Filter Helpers
 Paginating Results
 ------------------
 
-Combine ``LimitOffset`` with ``get_many_and_count`` for both page rows and total matching counts. By default (``count_with_window_function=True``), ``get_many_and_count`` runs a single query using an analytical ``COUNT(*) OVER()`` window function. Pass ``count_with_window_function=False`` (per call, or as a class default on your repository or service) to run two focused queries (an indexed page ``SELECT`` and a separate ``COUNT(*)``), avoiding extra sorting or scattered heap reads on large sorted tables or random/UUID primary keys (Cloud Spanner always uses the two-query path):
+Combine ``LimitOffsetFilter`` with ``get_many_and_count`` for both page rows and total matching counts. By default (``count_with_window_function=True``), ``get_many_and_count`` runs a single query using an analytical ``COUNT(*) OVER()`` window function. Pass ``count_with_window_function=False`` (per call, or as a class default on your repository or service) to run two focused queries (an indexed page ``SELECT`` and a separate ``COUNT(*)``), avoiding extra sorting or scattered heap reads on large sorted tables or random/UUID primary keys (Cloud Spanner always uses the two-query path):
 
 .. code-block:: python
 
     async def get_posts_page(db_session: AsyncSession, page: int = 1, page_size: int = 20) -> tuple[list[FilteringPost], int]:
         repo = FilteringPostRepository(session=db_session)
         return await repo.get_many_and_count(
-            LimitOffset(offset=(page - 1) * page_size, limit=page_size),
+            LimitOffsetFilter(offset=(page - 1) * page_size, limit=page_size),
             count_with_window_function=False,
         )
 
 .. warning::
 
     ``count_with_window_function`` currently defaults to ``True`` in 1.x and is planned to change to ``False`` in v2.0. Set ``count_with_window_function=False`` explicitly where two-query pagination performs better, or ``True`` to preserve single-query counting after upgrading.
+
+For deep pages, infinite scroll, or tables with frequent inserts, use :doc:`cursor_pagination` instead.
 
 Naming URL Query Parameters
 ---------------------------
@@ -140,7 +142,7 @@ Litestar and FastAPI filter dependencies use camelCase parameters by default (``
 Filtering Across Relationships
 ------------------------------
 
-Use :class:`~advanced_alchemy.filters.RelationshipFilter` to correlate related predicates inside ``EXISTS`` / ``NOT EXISTS``, or pass a relationship attribute to :class:`~advanced_alchemy.filters.CollectionFilter` and :class:`~advanced_alchemy.filters.NotInCollectionFilter`:
+Use :class:`~advanced_alchemy.filters.RelationshipFilter` to correlate related predicates inside ``EXISTS`` / ``NOT EXISTS``, or pass a relationship attribute to :class:`~advanced_alchemy.filters.InCollectionFilter` and :class:`~advanced_alchemy.filters.NotInCollectionFilter`:
 
 .. code-block:: python
 

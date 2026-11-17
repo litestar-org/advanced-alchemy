@@ -16,7 +16,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, rela
 
 from advanced_alchemy.extensions.litestar import SQLAlchemyPlugin, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.litestar.providers import create_service_dependencies
-from advanced_alchemy.filters import FilterTypes, LimitOffset, StatementFilter
+from advanced_alchemy.filters import FilterTypes, LimitOffsetFilter, StatementFilter
 from advanced_alchemy.repository.memory import SQLAlchemyAsyncMockRepository, SQLAlchemySyncMockRepository
 from advanced_alchemy.service import ServiceGroup, SQLAlchemyAsyncRepositoryService, SQLAlchemySyncRepositoryService
 from advanced_alchemy.utils.dependencies import (
@@ -55,7 +55,7 @@ def field_filters() -> Sequence[StatementFilter]:
     return [
         author_filter,
         *build_order_by_filters(["author.name", "-title"], None, allowed_fields={"author.name", "title"}),
-        LimitOffset(limit=1, offset=1),
+        LimitOffsetFilter(limit=1, offset=1),
     ]
 
 

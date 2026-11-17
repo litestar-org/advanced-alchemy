@@ -14,6 +14,7 @@ __all__ = (
     "ForeignKeyError",
     "ImproperConfigurationError",
     "IntegrityError",
+    "InvalidCursorError",
     "MissingDependencyError",
     "MultipleResultsFoundError",
     "NotFoundError",
@@ -303,6 +304,18 @@ class SerializationError(AdvancedAlchemyError):
 
 class RepositoryError(AdvancedAlchemyError):
     """Base repository exception type.
+
+    Args:
+        *args: Variable length argument list passed to parent class.
+        detail: Detailed error message.
+    """
+
+
+class InvalidCursorError(RepositoryError, ValueError):
+    """A pagination cursor is malformed, tampered with, expired, or bound to a different ordering.
+
+    Raised for client-supplied cursor tokens, so framework integrations report it as a
+    client error.
 
     Args:
         *args: Variable length argument list passed to parent class.

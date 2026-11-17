@@ -10,18 +10,18 @@ from decimal import Decimal
 from enum import Enum
 from functools import lru_cache, partial
 from pathlib import Path, PurePath
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast, get_args, get_origin, overload
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union, cast, get_args, get_origin, overload
 from uuid import UUID
 
-from advanced_alchemy.exceptions import AdvancedAlchemyError
-from advanced_alchemy.filters import LimitOffset, StatementFilter
+from advanced_alchemy.exceptions import AdvancedAlchemyError, ImproperConfigurationError
+from advanced_alchemy.filters import CursorFilter, LimitOffsetFilter, StatementFilter
 from advanced_alchemy.repository._util import (
     ModelRepositoryMixin,
     is_mapped_model_class,
     resolve_generic_type_args,
 )
 from advanced_alchemy.repository.typing import PrimaryKeyType
-from advanced_alchemy.service.pagination import OffsetPagination
+from advanced_alchemy.service.pagination import CursorPagination, OffsetPagination
 from advanced_alchemy.typing import (
     ATTRS_INSTALLED,
     CATTRS_INSTALLED,
@@ -162,6 +162,40 @@ class ResultConverter:
         The converted schema object.
     """
 
+    def _to_cursor_page(
+        self,
+        data: Any,
+        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter]]",
+        schema_type: "Optional[type[ModelDTOT]]",
+        pagination_type: 'Optional[Literal["limit_offset", "cursor"]]',
+    ) -> "Optional[CursorPagination[Any]]":
+        """Build a cursor page when ``pagination_type`` is ``"cursor"``; reject mismatched pagination."""
+        cursor_filter = find_filter(CursorFilter, filters)
+        if pagination_type != "cursor":
+            if cursor_filter is not None and isinstance(data, Sequence):
+                msg = 'filters contain a CursorFilter; pass pagination_type="cursor" to build a CursorPagination'
+                raise ImproperConfigurationError(msg)
+            return None
+        if cursor_filter is None:
+            msg = 'pagination_type="cursor" requires a CursorFilter in filters'
+            raise ImproperConfigurationError(msg)
+        if not isinstance(data, Sequence):
+            msg = 'pagination_type="cursor" requires a sequence of rows'
+            raise ImproperConfigurationError(msg)
+        rows = cast("Sequence[Any]", data)  # type: ignore[redundant-cast]
+        page = cursor_filter.build_page(rows, model=getattr(self, "model_type", None))
+        items: Sequence[Any] = (
+            page.items if schema_type is None else self.to_schema(list(page.items), schema_type=schema_type).items
+        )
+        return CursorPagination(
+            items=items,
+            limit=page.limit,
+            next_cursor=page.next_cursor,
+            previous_cursor=page.previous_cursor,
+            has_next=page.has_next,
+            has_previous=page.has_previous,
+        )
+
     @overload
     def to_schema(
         self,
@@ -259,6 +293,50 @@ class ResultConverter:
         schema_type: "type[ModelDTOT]",
     ) -> "OffsetPagination[ModelDTOT]": ...
 
+    @overload
+    def to_schema(
+        self,
+        data: "Sequence[ModelOrRowMappingT]",
+        total: "Optional[int]" = None,
+        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
+        *,
+        schema_type: None = None,
+        pagination_type: 'Literal["cursor"]',
+    ) -> "CursorPagination[ModelOrRowMappingT]": ...
+
+    @overload
+    def to_schema(
+        self,
+        data: "Union[Sequence[ModelProtocol], Sequence[RowMapping], Sequence[Row[Any]], Sequence[dict[str, Any]]]",
+        total: "Optional[int]" = None,
+        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
+        *,
+        schema_type: "type[ModelDTOT]",
+        pagination_type: 'Literal["cursor"]',
+    ) -> "CursorPagination[ModelDTOT]": ...
+
+    @overload
+    def to_schema(
+        self,
+        data: "Sequence[ModelOrRowMappingT]",
+        total: "Optional[int]" = None,
+        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
+        *,
+        schema_type: None = None,
+        pagination_type: 'Literal["limit_offset"]',
+    ) -> "OffsetPagination[ModelOrRowMappingT]": ...
+
+    @overload
+    def to_schema(
+        self,
+        data: "Union[Sequence[ModelProtocol], Sequence[RowMapping], Sequence[Row[Any]], Sequence[dict[str, Any]]]",
+        total: "Optional[int]" = None,
+        filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
+        *,
+        schema_type: "type[ModelDTOT]",
+        pagination_type: 'Literal["limit_offset"]',
+    ) -> "OffsetPagination[ModelDTOT]": ...
+
     def to_schema(
         self,
         data: "Union[ModelOrRowMappingT, Sequence[ModelOrRowMappingT], ModelProtocol, Sequence[ModelProtocol], RowMapping, Sequence[RowMapping], Row[Any], Sequence[Row[Any]], dict[str, Any], Sequence[dict[str, Any]]]",
@@ -266,7 +344,8 @@ class ResultConverter:
         filters: "Union[Sequence[Union[StatementFilter, ColumnElement[bool]]], Sequence[StatementFilter], None]" = None,
         *,
         schema_type: "Optional[type[ModelDTOT]]" = None,
-    ) -> "Union[ModelOrRowMappingT, OffsetPagination[ModelOrRowMappingT], ModelDTOT, OffsetPagination[ModelDTOT]]":
+        pagination_type: 'Optional[Literal["limit_offset", "cursor"]]' = None,
+    ) -> "Union[ModelOrRowMappingT, OffsetPagination[ModelOrRowMappingT], ModelDTOT, OffsetPagination[ModelDTOT], CursorPagination[ModelOrRowMappingT], CursorPagination[ModelDTOT], OffsetPagination[Row[Any]]]":
         """Convert the object to a response schema.
 
         When `schema_type` is None, the model is returned with no conversion.
@@ -277,15 +356,22 @@ class ResultConverter:
             total: The total number of rows in the data.
             filters: :class:`~advanced_alchemy.filters.StatementFilter` | :class:`~sqlalchemy.sql.expression.ColumnElement` collection of route filters.
             schema_type: :class:`~advanced_alchemy.utils.serialization.ModelDTOT` Optional schema type to convert the data to
+            pagination_type: ``"cursor"`` returns a :class:`~advanced_alchemy.service.pagination.CursorPagination`
+                built from the :class:`~advanced_alchemy.filters.CursorFilter` in ``filters``; ``total`` is ignored.
+                ``"limit_offset"`` or omitted returns an :class:`~advanced_alchemy.service.pagination.OffsetPagination`.
 
         Raises:
             AdvancedAlchemyError: If `schema_type` is not a valid Pydantic, Msgspec, or attrs schema and all libraries are not installed.
+            ImproperConfigurationError: If ``pagination_type`` does not match the pagination filter in ``filters``.
 
         Returns:
             :class:`~advanced_alchemy.base.ModelProtocol` | :class:`~sqlalchemy.engine.RowMapping` | :class:`~advanced_alchemy.service.pagination.OffsetPagination` | :class:`msgspec.Struct` | :class:`pydantic.BaseModel` | ``attrs`` class
         """
         if filters is None:
             filters = []
+        cursor_page = self._to_cursor_page(data, filters, schema_type, pagination_type)
+        if cursor_page is not None:
+            return cursor_page
         if schema_type is None:
             if not isinstance(data, Sequence):
                 return cast("ModelOrRowMappingT", data)  # type: ignore[unreachable,unused-ignore]
@@ -480,13 +566,13 @@ def _create_pagination(items: Any, filters: Any, total: "Optional[int]") -> "Off
 
     Args:
         items: Items to paginate.
-        filters: Filters to extract LimitOffset from.
+        filters: Filters to extract LimitOffsetFilter from.
         total: Total count or None.
 
     Returns:
         OffsetPagination instance.
     """
-    limit_offset = find_filter(LimitOffset, filters=filters) or LimitOffset(limit=len(items), offset=0)
+    limit_offset = find_filter(LimitOffsetFilter, filters=filters) or LimitOffsetFilter(limit=len(items), offset=0)
     return OffsetPagination(
         items=items,
         limit=limit_offset.limit,

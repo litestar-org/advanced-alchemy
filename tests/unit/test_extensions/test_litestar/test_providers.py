@@ -44,17 +44,17 @@ from advanced_alchemy.extensions.litestar.providers import (
     dep_cache,
 )
 from advanced_alchemy.filters import (
-    BeforeAfter,
+    BeforeAfterFilter,
     BooleanFilter,
     ChoicesFilter,
-    CollectionFilter,
     ComparisonFilter,
     FilterTypes,
-    LimitOffset,
+    InCollectionFilter,
+    LimitOffsetFilter,
     NotInCollectionFilter,
     NotNullFilter,
     NullFilter,
-    OrderBy,
+    OrderByFilter,
     RelationshipFilter,
     SearchFilter,
 )
@@ -386,7 +386,7 @@ def test_id_filter() -> None:
     # Test the provider function
     provider_func = deps["id_filter"].dependency
     f = provider_func(ids=["1", "2", "3"])
-    assert isinstance(f, CollectionFilter)
+    assert isinstance(f, InCollectionFilter)
     assert f.field_name == "id"
     assert f.values is not None  # type: ignore
     assert f.values == ["1", "2", "3"]  # type: ignore
@@ -405,7 +405,7 @@ def test_created_at_filter() -> None:
     before = datetime.now()
     later = datetime.now() + timedelta(days=1)
     f = provider_func(created_at_before=before, created_at_after=later)
-    assert isinstance(f, BeforeAfter)
+    assert isinstance(f, BeforeAfterFilter)
     assert f.field_name == "created_at"
     assert f.before == before
     assert f.after == later
@@ -422,7 +422,7 @@ def test_updated_at_filter() -> None:
     # Test the provider function
     provider_func = deps["updated_filter"].dependency
     f = provider_func(updated_at_before=datetime.now(), updated_at_after=datetime.now())
-    assert isinstance(f, BeforeAfter)
+    assert isinstance(f, BeforeAfterFilter)
     assert f.field_name == "updated_at"
 
 
@@ -481,7 +481,7 @@ def test_limit_offset_filter() -> None:
     provider_func = deps["limit_offset_filter"].dependency
 
     f = provider_func(current_page=2, page_size=5)
-    assert isinstance(f, LimitOffset)
+    assert isinstance(f, LimitOffsetFilter)
     assert f.limit == 5
     assert f.offset == 5
 
@@ -497,19 +497,19 @@ def test_order_by_filter() -> None:
     # Test the provider function
     provider_func = deps["order_by_filter"].dependency
     f = provider_func(field_name="name", sort_order="desc")
-    assert isinstance(f, OrderBy)
+    assert isinstance(f, OrderByFilter)
     assert f.field_name == "name"
     assert f.sort_order == "desc"
 
 
 def test_order_by_filter_applies_configured_nulls_placement() -> None:
-    """The `sort_nulls` config key pins NULL placement on every generated OrderBy."""
+    """The `sort_nulls` config key pins NULL placement on every generated OrderByFilter."""
     deps = _create_statement_filters({"sort_field": "name", "sort_nulls": "last"})
 
     provider_func = deps["order_by_filter"].dependency
     f = provider_func(field_name="name", sort_order="asc")
 
-    assert isinstance(f, OrderBy)
+    assert isinstance(f, OrderByFilter)
     assert f.nulls == "last"
     assert _create_statement_filters({"sort_field": "name"})["order_by_filter"].dependency().nulls is None
 
@@ -521,7 +521,7 @@ def test_order_by_filter_uses_scalar_default_from_list_sort_field() -> None:
     provider_func = deps["order_by_filter"].dependency
     f = provider_func()
 
-    assert isinstance(f, OrderBy)
+    assert isinstance(f, OrderByFilter)
     assert f.field_name == "name"
     f.append_to_statement(select(DITestModel), DITestModel)
 
@@ -533,7 +533,7 @@ def test_order_by_filter_uses_scalar_default_from_set_sort_field() -> None:
     provider_func = deps["order_by_filter"].dependency
     f = provider_func()
 
-    assert isinstance(f, OrderBy)
+    assert isinstance(f, OrderByFilter)
     assert f.field_name == "id"
     f.append_to_statement(select(DITestModel), DITestModel)
 
@@ -542,7 +542,7 @@ def test_individual_order_by_dependency_injection_skips_runtime_field_validation
     """Test individual Litestar filter dependencies can be injected directly."""
 
     @get("/", dependencies=create_filter_dependencies({"sort_field": "name"}))
-    async def handler(order_by_filter: NamedDependency[OrderBy]) -> dict[str, str]:
+    async def handler(order_by_filter: NamedDependency[OrderByFilter]) -> dict[str, str]:
         return {"field_name": cast(str, order_by_filter.field_name), "sort_order": order_by_filter.sort_order}
 
     with TestClient(Litestar([handler])) as client:
@@ -620,7 +620,7 @@ def test_in_filter() -> None:
     # Test the provider function
     provider_func = deps["tag_in_filter"].dependency
     f = provider_func(tag_in=["python", "litestar"])
-    assert isinstance(f, CollectionFilter)
+    assert isinstance(f, InCollectionFilter)
     assert f.field_name == "tag"
     assert f.values == ["python", "litestar"]
 
@@ -725,7 +725,7 @@ def test_litestar_in_filter_values_are_isolated() -> None:
     def handler(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> dict[str, list[str]]:
         response: dict[str, list[str]] = {}
         for filter_ in filters:
-            if isinstance(filter_, CollectionFilter):
+            if isinstance(filter_, InCollectionFilter):
                 field_name = str(filter_.field_name)
                 response[field_name] = list(filter_.values or [])
         return response
@@ -809,19 +809,21 @@ def test_custom_dependency_defaults_are_resolved_in_requests() -> None:
 
     @get("/default", dependencies=default_dependencies, sync_to_thread=False)
     def default_handler(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> list[int]:
-        return [filter_.limit for filter_ in filters if isinstance(filter_, LimitOffset)]
+        return [filter_.limit for filter_ in filters if isinstance(filter_, LimitOffsetFilter)]
 
     @get("/custom", dependencies=custom_dependencies, sync_to_thread=False)
     def custom_handler(custom_filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> dict[str, Any]:
         return {
             "types": [type(filter_).__name__ for filter_ in custom_filters],
-            "fields": [str(filter_.field_name) for filter_ in custom_filters if isinstance(filter_, BeforeAfter)],
+            "fields": [str(filter_.field_name) for filter_ in custom_filters if isinstance(filter_, BeforeAfterFilter)],
             "pages": [
-                [filter_.limit, filter_.offset] for filter_ in custom_filters if isinstance(filter_, LimitOffset)
+                [filter_.limit, filter_.offset] for filter_ in custom_filters if isinstance(filter_, LimitOffsetFilter)
             ],
-            "ids": [list(filter_.values or []) for filter_ in custom_filters if isinstance(filter_, CollectionFilter)],
+            "ids": [
+                list(filter_.values or []) for filter_ in custom_filters if isinstance(filter_, InCollectionFilter)
+            ],
             "search": [filter_.value for filter_ in custom_filters if isinstance(filter_, SearchFilter)],
-            "sort": [filter_.field_name for filter_ in custom_filters if isinstance(filter_, OrderBy)],
+            "sort": [filter_.field_name for filter_ in custom_filters if isinstance(filter_, OrderByFilter)],
         }
 
     with TestClient(Litestar([default_handler, custom_handler])) as client:
@@ -831,7 +833,14 @@ def test_custom_dependency_defaults_are_resolved_in_requests() -> None:
         response = client.get("/custom", params={"ids": "42", "searchString": "needle", "currentPage": 2})
         assert response.status_code == 200
         assert response.json() == {
-            "types": ["CollectionFilter", "BeforeAfter", "LimitOffset", "BeforeAfter", "SearchFilter", "OrderBy"],
+            "types": [
+                "InCollectionFilter",
+                "BeforeAfterFilter",
+                "LimitOffsetFilter",
+                "BeforeAfterFilter",
+                "SearchFilter",
+                "OrderByFilter",
+            ],
             "fields": ["created_at", "updated_at"],
             "pages": [[100, 100]],
             "ids": [["42"]],
@@ -858,13 +867,13 @@ def test_custom_dependency_defaults() -> None:
     assert "filters" in deps
     ids_func = deps["ids"].dependency
     f = ids_func(ids=["1", "2", "3"])
-    assert isinstance(f, CollectionFilter)  # type: ignore
+    assert isinstance(f, InCollectionFilter)  # type: ignore
     assert f.field_name == "custom_id"
     assert f.values is not None  # type: ignore
     assert f.values == ["1", "2", "3"]  # type: ignore
     page_func = deps["page"].dependency
-    f: LimitOffset = page_func(current_page=2, page_size=5)  # type: ignore
-    assert isinstance(f, LimitOffset)
+    f: LimitOffsetFilter = page_func(current_page=2, page_size=5)  # type: ignore
+    assert isinstance(f, LimitOffsetFilter)
     assert f.limit == 5
     assert f.offset == 5
 
@@ -879,7 +888,7 @@ def test_id_filter_aggregation() -> None:
     assert "id_filter" in sig.parameters
 
     # Simulate calling with filter
-    mock_filter = MagicMock(spec=CollectionFilter)
+    mock_filter = MagicMock(spec=InCollectionFilter)
     result = aggregate_func(id_filter=mock_filter)
 
     assert isinstance(result, list)
@@ -895,7 +904,7 @@ def test_created_at_filter_aggregation() -> None:
     assert "created_filter" in sig.parameters
 
     # Simulate calling with filter
-    mock_filter = MagicMock(spec=BeforeAfter)
+    mock_filter = MagicMock(spec=BeforeAfterFilter)
     result = aggregate_func(created_filter=mock_filter)
 
     assert isinstance(result, list)
@@ -911,7 +920,7 @@ def test_updated_at_filter_aggregation() -> None:
     assert "updated_filter" in sig.parameters
 
     # Simulate calling with filter
-    mock_filter = MagicMock(spec=BeforeAfter)
+    mock_filter = MagicMock(spec=BeforeAfterFilter)
     result = aggregate_func(updated_filter=mock_filter)
 
     assert isinstance(result, list)
@@ -951,7 +960,7 @@ def test_limit_offset_filter_aggregation() -> None:
     assert "limit_offset_filter" in sig.parameters
 
     # Simulate calling with filter
-    mock_filter = MagicMock(spec=LimitOffset)
+    mock_filter = MagicMock(spec=LimitOffsetFilter)
     result = aggregate_func(limit_offset_filter=mock_filter)
 
     assert isinstance(result, list)
@@ -967,7 +976,7 @@ def test_order_by_filter_aggregation() -> None:
     assert "order_by_filter" in sig.parameters
 
     # Mock order_by filter with valid field_name
-    mock_filter = MagicMock(spec=OrderBy)
+    mock_filter = MagicMock(spec=OrderByFilter)
     mock_filter.field_name = "name"
 
     result = aggregate_func(order_by_filter=mock_filter)
@@ -1010,7 +1019,7 @@ def test_in_filter_aggregation() -> None:
     assert "tag_in_filter" in sig.parameters
 
     # Simulate calling with filter
-    mock_filter = MagicMock(spec=CollectionFilter)
+    mock_filter = MagicMock(spec=InCollectionFilter)
     result = aggregate_func(tag_in_filter=mock_filter)
 
     assert isinstance(result, list)
@@ -1087,17 +1096,17 @@ def test_multiple_filters_aggregation() -> None:
     assert "state_choices_filter" in sig.parameters
 
     # Simulate calling with multiple filters
-    mock_id_filter = MagicMock(spec=CollectionFilter)
-    mock_created_filter = MagicMock(spec=BeforeAfter)
-    mock_updated_filter = MagicMock(spec=BeforeAfter)
+    mock_id_filter = MagicMock(spec=InCollectionFilter)
+    mock_created_filter = MagicMock(spec=BeforeAfterFilter)
+    mock_updated_filter = MagicMock(spec=BeforeAfterFilter)
     mock_search_filter = MagicMock(spec=SearchFilter)
     mock_search_filter.field_name = "name"
     mock_search_filter.value = "test"
-    mock_limit_offset = MagicMock(spec=LimitOffset)
-    mock_order_by_filter = MagicMock(spec=OrderBy)
+    mock_limit_offset = MagicMock(spec=LimitOffsetFilter)
+    mock_order_by_filter = MagicMock(spec=OrderByFilter)
     mock_order_by_filter.field_name = "name"
     mock_not_in_filter = MagicMock(spec=NotInCollectionFilter)
-    mock_in_filter = MagicMock(spec=CollectionFilter)
+    mock_in_filter = MagicMock(spec=InCollectionFilter)
     mock_boolean_filter = MagicMock(spec=BooleanFilter)
     mock_choices_filter = MagicMock(spec=ChoicesFilter)
 
@@ -1283,10 +1292,10 @@ def test_custom_query_aliases_match_requests_and_openapi() -> None:
         )
         assert response.status_code == 200, response.text
         data = response.json()
-        assert data["LimitOffset"] == {"limit": 7, "offset": 14}
+        assert data["LimitOffsetFilter"] == {"limit": 7, "offset": 14}
         assert data["SearchFilter"]["value"] == "needle"
-        assert data["OrderBy"]["field_name"] == "other_field"
-        assert data["CollectionFilter"]["values"] == ["abc"]
+        assert data["OrderByFilter"]["field_name"] == "other_field"
+        assert data["InCollectionFilter"]["values"] == ["abc"]
         assert data["BooleanFilter"]["value"] is False
         schema = client.get("/schema/openapi.json").json()
     names = {item["name"] for item in schema["paths"]["/aliased"]["get"]["parameters"]}
@@ -1419,9 +1428,9 @@ def test_create_service_dependencies_merge_collision_prevented() -> None:
             assert resp.status_code == 200, resp.text
             data = resp.json()
             assert data["user_filters"]["SearchFilter"]["value"] == "alice"
-            assert data["user_filters"]["LimitOffset"] == {"limit": 5, "offset": 5}
+            assert data["user_filters"]["LimitOffsetFilter"] == {"limit": 5, "offset": 5}
             assert data["course_filters"]["SearchFilter"]["value"] == "math"
-            assert data["course_filters"]["LimitOffset"] == {"limit": 12, "offset": 24}
+            assert data["course_filters"]["LimitOffsetFilter"] == {"limit": 12, "offset": 24}
 
 
 def test_scoped_filters_prefix_subclass_and_pagination_isolation() -> None:
@@ -1455,8 +1464,8 @@ def test_scoped_filters_prefix_subclass_and_pagination_isolation() -> None:
         resp = client.get("/scoped-pages", params={"usersCurrentPage": 2, "rolesCurrentPage": 5})
         assert resp.status_code == 200, resp.text
         data = resp.json()
-        assert data["users"]["LimitOffset"] == {"limit": 20, "offset": 20}
-        assert data["roles"]["LimitOffset"] == {"limit": 20, "offset": 80}
+        assert data["users"]["LimitOffsetFilter"] == {"limit": 20, "offset": 20}
+        assert data["roles"]["LimitOffsetFilter"] == {"limit": 20, "offset": 80}
 
 
 def test_scoped_filters_snake_case_query_aliases() -> None:
@@ -1623,24 +1632,24 @@ def _serialize_grid_filters(filters: Sequence[Any]) -> list[dict[str, Any]]:
                     "ignore_case": item.ignore_case,
                 }
             )
-        elif isinstance(item, CollectionFilter):
+        elif isinstance(item, InCollectionFilter):
             serialized.append(
                 {
-                    "type": "CollectionFilter",
+                    "type": "InCollectionFilter",
                     "field_name": item.field_name,
                     "values": list(item.values or ()),
                 }
             )
-        elif isinstance(item, OrderBy):
+        elif isinstance(item, OrderByFilter):
             serialized.append(
                 {
-                    "type": "OrderBy",
+                    "type": "OrderByFilter",
                     "field_name": item.field_name,
                     "sort_order": item.sort_order,
                 }
             )
-        elif isinstance(item, LimitOffset):
-            serialized.append({"type": "LimitOffset", "limit": item.limit, "offset": item.offset})
+        elif isinstance(item, LimitOffsetFilter):
+            serialized.append({"type": "LimitOffsetFilter", "limit": item.limit, "offset": item.offset})
         elif isinstance(item, (NullFilter, NotNullFilter)):
             serialized.append({"type": type(item).__name__, "field_name": item.field_name})
     return serialized
@@ -1766,9 +1775,9 @@ def test_litestar_field_filter_fields_and_sort_fields_openapi_and_parsing() -> N
         assert {"type": "SearchFilter", "field_name": "title", "value": "sql", "ignore_case": True} in parsed
         assert {"type": "ComparisonFilter", "field_name": "views", "operator": "ge", "value": 100} in parsed
         assert {"type": "ComparisonFilter", "field_name": "views", "operator": "le", "value": 500} in parsed
-        assert {"type": "CollectionFilter", "field_name": "status", "values": ["draft"]} in parsed
+        assert {"type": "InCollectionFilter", "field_name": "status", "values": ["draft"]} in parsed
         assert {"type": "NullFilter", "field_name": "published_at"} in parsed
-        assert {"type": "LimitOffset", "limit": 25, "offset": 25} in parsed
+        assert {"type": "LimitOffsetFilter", "limit": 25, "offset": 25} in parsed
         rel_filters = [item for item in parsed if item["type"] == "RelationshipFilter"]
         assert len(rel_filters) == 1
         assert rel_filters[0]["relationship"] == "author"
@@ -1776,10 +1785,10 @@ def test_litestar_field_filter_fields_and_sort_fields_openapi_and_parsing() -> N
             {"type": "ComparisonFilter", "field_name": "name", "operator": "eq", "value": "Cody"},
             {"type": "SearchFilter", "field_name": "name", "value": "cody", "ignore_case": True},
         ]
-        order_filters = [item for item in parsed if item["type"] == "OrderBy"]
+        order_filters = [item for item in parsed if item["type"] == "OrderByFilter"]
         assert order_filters == [
-            {"type": "OrderBy", "field_name": "views", "sort_order": "desc"},
-            {"type": "OrderBy", "field_name": "author.name", "sort_order": "asc"},
+            {"type": "OrderByFilter", "field_name": "views", "sort_order": "desc"},
+            {"type": "OrderByFilter", "field_name": "author.name", "sort_order": "asc"},
         ]
 
         invalid_sort = client.get("/articles", params=[("orderBy", "-secret")])
@@ -1821,7 +1830,7 @@ def test_litestar_field_filters_snake_case_scoped_and_explicit_model() -> None:
             "relationship": "author",
             "filters": [{"type": "ComparisonFilter", "field_name": "name", "operator": "eq", "value": "Ada"}],
         } in parsed
-        assert {"type": "OrderBy", "field_name": "author.name", "sort_order": "desc"} in parsed
+        assert {"type": "OrderByFilter", "field_name": "author.name", "sort_order": "desc"} in parsed
 
 
 def test_litestar_field_e2e_async_sqlite_prototype() -> None:
@@ -1945,7 +1954,7 @@ def test_litestar_pagination_max_size_validation_and_openapi() -> None:
 
     @get("/items", sync_to_thread=False)
     def list_items(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> dict[str, int]:
-        limit_offset = next(f for f in filters if isinstance(f, LimitOffset))
+        limit_offset = next(f for f in filters if isinstance(f, LimitOffsetFilter))
         return {"limit": limit_offset.limit, "offset": limit_offset.offset}
 
     app = Litestar(

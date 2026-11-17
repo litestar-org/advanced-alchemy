@@ -618,12 +618,14 @@ class SQLAlchemyAsyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemyAsyn
         *filters: Union[StatementFilter, ColumnElement[bool]],
         apply_pagination: bool = True,
     ) -> List[ModelT]:
-        from advanced_alchemy.filterset import FilterSet
+        from advanced_alchemy.filters import FilterSet
 
         if any(isinstance(filter_, FilterSet) and filter_.model_type is not self.model_type for filter_ in filters):
             msg = "FilterSet model does not match the repository model"
             raise ValueError(msg)
-        return InMemoryFilterEvaluator.apply_filters(result, *filters, apply_pagination=apply_pagination)
+        return InMemoryFilterEvaluator.apply_filters(
+            result, *filters, apply_pagination=apply_pagination, model=self.model_type
+        )
 
     def _get_collection_items(self) -> List[ModelT]:
         return list(self.__collection__().get_all())
@@ -636,7 +638,7 @@ class SQLAlchemyAsyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemyAsyn
         filtered = self._filter_result_by_kwargs(self._get_collection_items(), kwargs)
         filtered = self._apply_filters(filtered, *filters, apply_pagination=False)
         total_count = len(filtered)
-        return InMemoryFilterEvaluator.paginate_items(filtered, *filters), total_count
+        return InMemoryFilterEvaluator.paginate_items(filtered, *filters, model=self.model_type), total_count
 
     async def _get_many_and_count_window(
         self,

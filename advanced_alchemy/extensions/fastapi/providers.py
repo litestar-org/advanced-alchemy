@@ -29,23 +29,24 @@ from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError
 from advanced_alchemy.extensions.fastapi.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
 from advanced_alchemy.extensions.fastapi.extension import AdvancedAlchemy
 from advanced_alchemy.filters import (
-    BeforeAfter,
+    BeforeAfterFilter,
     BooleanFilter,
     ChoicesFilter,
-    CollectionFilter,
+    CursorFilter,
+    FilterSet,
     FilterTypes,
-    LimitOffset,
+    InCollectionFilter,
+    LimitOffsetFilter,
     NotInCollectionFilter,
-    OrderBy,
+    OrderByFilter,
     RelationshipFilter,
     SearchFilter,
     StatementFilter,
 )
-from advanced_alchemy.filterset import FilterSet
 from advanced_alchemy.service import (
     Empty,
     EmptyType,
@@ -59,6 +60,7 @@ from advanced_alchemy.service import (
 )
 from advanced_alchemy.utils.dependencies import (
     ChoiceField,
+    CursorSettings,
     DependencyCache,
     FieldNameType,
     FilterConfig,
@@ -74,6 +76,7 @@ from advanced_alchemy.utils.dependencies import (
     normalize_field_name_types,
     normalize_sort_field,
     normalize_sort_fields,
+    resolve_cursor_settings,
     resolve_filter_aliases,
     resolve_filter_fields,
     resolve_pagination_bounds,
@@ -126,6 +129,8 @@ class DependencyDefaults:
     """Key for the order by dependency."""
     SEARCH_FILTER_DEPENDENCY_KEY: str = "search_filter"
     """Key for the search filter dependency."""
+    CURSOR_FILTER_DEPENDENCY_KEY: str = "cursor_filter"
+    """Key for the cursor pagination dependency."""
     DEFAULT_PAGINATION_SIZE: int = 20
     """Default pagination size."""
 
@@ -428,10 +433,13 @@ def _create_filterset_dependency(
     for spec in filterset_type.parameter_specs():
         alias = f"{prefix.rstrip('_')}_{spec.param_name}" if prefix else spec.param_name
         entries.append((spec.param_name, filter_parameter_type(spec), Query(alias=alias)))
-    if config.get("pagination_type"):
+    pagination_type = config.get("pagination_type")
+    if pagination_type:
         entries.extend(
             [
-                ("page", Optional[int], Query(alias=aliases.get("current_page", "currentPage"), ge=1)),
+                ("cursor", Optional[str], Query(alias=aliases.get("cursor", "cursor")))
+                if pagination_type == "cursor"
+                else ("page", Optional[int], Query(alias=aliases.get("current_page", "currentPage"), ge=1)),
                 (
                     "pageSize",
                     Optional[int],
@@ -530,7 +538,7 @@ def provide_filters(
     return dep
 
 
-_CollectionFilterType = Union[CollectionFilter[Any], NotInCollectionFilter[Any], ChoicesFilter[Any]]
+_CollectionFilterType = Union[InCollectionFilter[Any], NotInCollectionFilter[Any], ChoicesFilter[Any]]
 
 
 def _build_collection_filter_provider(
@@ -588,6 +596,69 @@ def _build_collection_filter_provider(
     return cast("Any", Annotated)[return_annotation, Depends(provide_filter)]
 
 
+def _create_cursor_filter_provider(
+    settings: CursorSettings,
+    alias_for: Callable[[str], str],
+    default_size: int,
+    max_size: Optional[int],
+    *,
+    repeatable_order: bool,
+) -> Callable[..., CursorFilter]:
+    """Build the cursor pagination dependency; ordering parameters appear only when sorting is configured."""
+    cursor_alias = alias_for("cursor")
+    size_alias = alias_for("page_size")
+    cursor_query = Query(alias=cursor_alias, description="Token from a previous page's cursor.")
+    size_query = Query(ge=1, le=max_size, alias=size_alias, description="Number of items per page.")
+
+    def build(
+        cursor: Optional[str], page_size: int, order_by: Union[str, list[str], None], sort_order: Optional[SortOrder]
+    ) -> CursorFilter:
+        try:
+            return settings.build(cursor=cursor, page_size=page_size, order_by=order_by, sort_order=sort_order)
+        except InvalidCursorError as exc:
+            raise RequestValidationError(
+                errors=[{"loc": ["query", cursor_alias], "msg": str(exc), "type": "value_error"}]
+            ) from exc
+        except ValueError as exc:
+            order_alias = alias_for("order_by")
+            raise RequestValidationError(
+                errors=[{"loc": ["query", order_alias], "msg": str(exc), "type": "value_error"}]
+            ) from exc
+
+    def provide_cursor_pagination(
+        cursor: Annotated[Optional[str], cursor_query] = None,
+        page_size: Annotated[int, size_query] = default_size,
+    ) -> CursorFilter:
+        return build(cursor, page_size, None, None)
+
+    if not settings.allowed_fields:
+        return provide_cursor_pagination
+
+    order_query = Query(
+        alias=alias_for("order_by"),
+        description=f"Sort fields (prefix '-' for descending). Allowed: {', '.join(sorted(settings.allowed_fields))}",
+    )
+    sort_order_query = Query(alias=alias_for("sort_order"), description="Sort order ('asc' or 'desc').")
+
+    def provide_cursor_pagination_ordered(
+        cursor: Annotated[Optional[str], cursor_query] = None,
+        page_size: Annotated[int, size_query] = default_size,
+        order_by: Annotated[Optional[str], order_query] = None,
+        sort_order: Annotated[Optional[SortOrder], sort_order_query] = None,
+    ) -> CursorFilter:
+        return build(cursor, page_size, order_by, sort_order)
+
+    def provide_cursor_pagination_multi_ordered(
+        cursor: Annotated[Optional[str], cursor_query] = None,
+        page_size: Annotated[int, size_query] = default_size,
+        order_by: Annotated[Optional[list[str]], order_query] = None,
+        sort_order: Annotated[Optional[SortOrder], sort_order_query] = None,
+    ) -> CursorFilter:
+        return build(cursor, page_size, order_by, sort_order)
+
+    return provide_cursor_pagination_multi_ordered if repeatable_order else provide_cursor_pagination_ordered
+
+
 def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
     config: FilterConfig,
     dep_defaults: DependencyDefaults = DEPENDENCY_DEFAULTS,
@@ -610,7 +681,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 
     if (id_filter := config.get("id_filter", False)) is not False:
         id_dep_annotation = _build_collection_filter_provider(
-            filter_cls=CollectionFilter,
+            filter_cls=InCollectionFilter,
             field_name=config.get("id_field", "id"),
             item_type=id_filter,
             collection_cls=list,
@@ -650,7 +721,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     json_schema_extra={"format": "date-time"},
                 ),
             ] = None,
-        ) -> Optional[BeforeAfter]:
+        ) -> Optional[BeforeAfterFilter]:
             before_dt = None
             after_dt = None
 
@@ -672,7 +743,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     ) from e
 
             return (
-                BeforeAfter(field_name="created_at", before=before_dt, after=after_dt)
+                BeforeAfterFilter(field_name="created_at", before=before_dt, after=after_dt)
                 if before_dt or after_dt
                 else None  # pyright: ignore
             )
@@ -682,10 +753,10 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             inspect.Parameter(
                 name=param_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[Optional[BeforeAfter], Depends(provide_created_at_filter)],
+                annotation=Annotated[Optional[BeforeAfterFilter], Depends(provide_created_at_filter)],
             )
         )
-        annotations[param_name] = Annotated[Optional[BeforeAfter], Depends(provide_created_at_filter)]
+        annotations[param_name] = Annotated[Optional[BeforeAfterFilter], Depends(provide_created_at_filter)]
 
     # Add updated_at filter providers
     if config.get("updated_at", False):
@@ -709,7 +780,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     json_schema_extra={"format": "date-time"},
                 ),
             ] = None,
-        ) -> Optional[BeforeAfter]:
+        ) -> Optional[BeforeAfterFilter]:
             before_dt = None
             after_dt = None
 
@@ -731,7 +802,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     ) from e
 
             return (
-                BeforeAfter(field_name="updated_at", before=before_dt, after=after_dt)
+                BeforeAfterFilter(field_name="updated_at", before=before_dt, after=after_dt)
                 if before_dt or after_dt
                 else None  # pyright: ignore
             )
@@ -741,10 +812,10 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             inspect.Parameter(
                 name=param_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[Optional[BeforeAfter], Depends(provide_updated_at_filter)],
+                annotation=Annotated[Optional[BeforeAfterFilter], Depends(provide_updated_at_filter)],
             )
         )
-        annotations[param_name] = Annotated[Optional[BeforeAfter], Depends(provide_updated_at_filter)]
+        annotations[param_name] = Annotated[Optional[BeforeAfterFilter], Depends(provide_updated_at_filter)]
 
     # Add pagination filter providers
     default_pagination_size, max_pagination_size = resolve_pagination_bounds(
@@ -770,18 +841,35 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     description="Number of items per page.",
                 ),
             ] = default_pagination_size,
-        ) -> LimitOffset:
-            return LimitOffset(limit=page_size, offset=page_size * (current_page - 1))
+        ) -> LimitOffsetFilter:
+            return LimitOffsetFilter(limit=page_size, offset=page_size * (current_page - 1))
 
         param_name = dep_defaults.LIMIT_OFFSET_FILTER_DEPENDENCY_KEY
         params.append(
             inspect.Parameter(
                 name=param_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[LimitOffset, Depends(provide_limit_offset_pagination)],
+                annotation=Annotated[LimitOffsetFilter, Depends(provide_limit_offset_pagination)],
             )
         )
-        annotations[param_name] = Annotated[LimitOffset, Depends(provide_limit_offset_pagination)]
+        annotations[param_name] = Annotated[LimitOffsetFilter, Depends(provide_limit_offset_pagination)]
+    elif config.get("pagination_type") == "cursor":
+        cursor_provider = _create_cursor_filter_provider(
+            resolve_cursor_settings(config, model),
+            alias_for,
+            default_pagination_size,
+            max_pagination_size,
+            repeatable_order=bool(config.get("sort_fields")),
+        )
+        param_name = dep_defaults.CURSOR_FILTER_DEPENDENCY_KEY
+        params.append(
+            inspect.Parameter(
+                name=param_name,
+                kind=inspect.Parameter.KEYWORD_ONLY,
+                annotation=Annotated[CursorFilter, Depends(cursor_provider)],
+            )
+        )
+        annotations[param_name] = Annotated[CursorFilter, Depends(cursor_provider)]
 
     if search_fields := config.get("search"):
         parsed_field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else set(search_fields)
@@ -820,7 +908,8 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
         annotations[param_name] = Annotated[Optional[SearchFilter], Depends(provide_search_filter)]
 
     # Add sort filter providers
-    if sort_fields_cfg := config.get("sort_fields"):
+    order_by_provided = config.get("pagination_type") != "cursor"
+    if order_by_provided and (sort_fields_cfg := config.get("sort_fields")):
         allowed_sort_fields = frozenset(normalize_sort_fields(sort_fields_cfg, model=model))
         raw_default_sort = config.get("sort_field")
         default_sort_field = normalize_sort_field(raw_default_sort) if raw_default_sort else None
@@ -848,7 +937,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     description="Sort order ('asc' or 'desc').",
                 ),
             ] = None,
-        ) -> list[OrderBy]:
+        ) -> list[OrderByFilter]:
             try:
                 return build_order_by_filters(
                     field_name,
@@ -866,11 +955,11 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             inspect.Parameter(
                 name=param_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[list[OrderBy], Depends(provide_order_by_multi)],
+                annotation=Annotated[list[OrderByFilter], Depends(provide_order_by_multi)],
             )
         )
-        annotations[param_name] = Annotated[list[OrderBy], Depends(provide_order_by_multi)]
-    elif sort_field := config.get("sort_field"):
+        annotations[param_name] = Annotated[list[OrderByFilter], Depends(provide_order_by_multi)]
+    elif order_by_provided and (sort_field := config.get("sort_field")):
         sort_field_default = normalize_sort_field(sort_field)
         sort_order_default = config.get("sort_order", "desc")
         sort_nulls_default = config.get("sort_nulls")
@@ -890,18 +979,20 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     description="Sort order ('asc' or 'desc').",
                 ),
             ] = sort_order_default,
-        ) -> OrderBy:
-            return OrderBy(field_name=field_name, sort_order=sort_order or sort_order_default, nulls=sort_nulls_default)
+        ) -> OrderByFilter:
+            return OrderByFilter(
+                field_name=field_name, sort_order=sort_order or sort_order_default, nulls=sort_nulls_default
+            )
 
         param_name = dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY
         params.append(
             inspect.Parameter(
                 name=param_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[OrderBy, Depends(provide_order_by)],
+                annotation=Annotated[OrderByFilter, Depends(provide_order_by)],
             )
         )
-        annotations[param_name] = Annotated[OrderBy, Depends(provide_order_by)]
+        annotations[param_name] = Annotated[OrderByFilter, Depends(provide_order_by)]
 
     if not_in_fields := config.get("not_in_fields"):
         for field_def in normalize_field_name_types(not_in_fields):
@@ -928,7 +1019,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
     if in_fields := config.get("in_fields"):
         for field_def in normalize_field_name_types(in_fields):
             in_dep_annotation = _build_collection_filter_provider(
-                filter_cls=CollectionFilter,
+                filter_cls=InCollectionFilter,
                 field_name=field_def.name,
                 item_type=field_def.type_hint,
                 collection_cls=set,
@@ -1058,7 +1149,7 @@ def _aggregate_filter_function(**kwargs: Any) -> list[FilterTypes]:
             filters.extend(cast("list[FilterTypes]", filter_value))
         elif isinstance(filter_value, SearchFilter) and filter_value.value is None:  # pyright: ignore # noqa: SIM114
             continue  # type: ignore
-        elif isinstance(filter_value, OrderBy) and filter_value.field_name is None:  # pyright: ignore
+        elif isinstance(filter_value, OrderByFilter) and filter_value.field_name is None:  # pyright: ignore
             continue  # type: ignore
         else:
             filters.append(cast("FilterTypes", filter_value))

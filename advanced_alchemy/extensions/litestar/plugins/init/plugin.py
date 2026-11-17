@@ -13,27 +13,37 @@ from advanced_alchemy.exceptions import ImproperConfigurationError, RepositoryEr
 from advanced_alchemy.extensions.litestar.exception_handler import exception_to_http_response
 from advanced_alchemy.extensions.litestar.plugins import _slots_base
 from advanced_alchemy.filters import (
-    BeforeAfter,
-    CollectionFilter,
+    BeforeAfterFilter,
     ComparisonFilter,
+    CursorFilter,
+    CursorKey,
     ExistsFilter,
     FilterGroup,
     FilterMap,
     FilterTypes,
     InAnyFilter,
-    LimitOffset,
+    InCollectionFilter,
+    LimitOffsetFilter,
     LogicalOperatorMap,
     MultiFilter,
     NotExistsFilter,
     NotInCollectionFilter,
     NotInSearchFilter,
-    OnBeforeAfter,
-    OrderBy,
+    OnBeforeAfterFilter,
+    OrderByFilter,
     SearchFilter,
     StatementFilter,
     StatementTypeT,
 )
-from advanced_alchemy.service import ModelDictListT, ModelDictT, ModelDTOT, ModelOrRowMappingT, ModelT, OffsetPagination
+from advanced_alchemy.service import (
+    CursorPagination,
+    ModelDictListT,
+    ModelDictT,
+    ModelDTOT,
+    ModelOrRowMappingT,
+    ModelT,
+    OffsetPagination,
+)
 
 if TYPE_CHECKING:
     from click import Group
@@ -46,16 +56,24 @@ __all__ = ("SQLAlchemyInitPlugin",)
 
 
 signature_namespace_values: dict[str, Any] = {
-    "BeforeAfter": BeforeAfter,
-    "OnBeforeAfter": OnBeforeAfter,
-    "CollectionFilter": CollectionFilter,
-    "LimitOffset": LimitOffset,
-    "OrderBy": OrderBy,
+    "BeforeAfterFilter": BeforeAfterFilter,
+    "BeforeAfter": BeforeAfterFilter,
+    "OnBeforeAfterFilter": OnBeforeAfterFilter,
+    "OnBeforeAfter": OnBeforeAfterFilter,
+    "InCollectionFilter": InCollectionFilter,
+    "CollectionFilter": InCollectionFilter,
+    "LimitOffsetFilter": LimitOffsetFilter,
+    "LimitOffset": LimitOffsetFilter,
+    "OrderByFilter": OrderByFilter,
+    "OrderBy": OrderByFilter,
     "SearchFilter": SearchFilter,
     "NotInCollectionFilter": NotInCollectionFilter,
     "NotInSearchFilter": NotInSearchFilter,
     "FilterTypes": FilterTypes,
     "OffsetPagination": OffsetPagination,
+    "CursorFilter": CursorFilter,
+    "CursorKey": CursorKey,
+    "CursorPagination": CursorPagination,
     "ExistsFilter": ExistsFilter,
     "DTOData": DTOData,
     "NamedDependency": NamedDependency,

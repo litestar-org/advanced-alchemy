@@ -20,11 +20,13 @@ from typing_extensions import NotRequired, TypeAlias, TypedDict, TypeGuard
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.filters import (
-    CollectionFilter,
     ComparisonFilter,
+    CursorFilter,
+    CursorKey,
+    InCollectionFilter,
     NotNullFilter,
     NullFilter,
-    OrderBy,
+    OrderByFilter,
     RelationshipFilter,
     RelationshipPath,
     SearchFilter,
@@ -36,6 +38,7 @@ from advanced_alchemy.utils.text import camelize
 
 __all__ = (
     "ChoiceField",
+    "CursorSettings",
     "DependencyCache",
     "FieldNameType",
     "FilterConfig",
@@ -54,6 +57,7 @@ __all__ = (
     "normalize_field_name_types",
     "normalize_sort_field",
     "normalize_sort_fields",
+    "resolve_cursor_settings",
     "resolve_filter_aliases",
     "resolve_filter_fields",
     "resolve_pagination_bounds",
@@ -154,12 +158,18 @@ class FilterConfig(TypedDict):
     """Default sort order."""
     sort_nulls: NotRequired[Optional[Literal["first", "last"]]]
     """Where NULLs sort in the order-by filter. ``None`` leaves the placement to the database."""
-    pagination_type: NotRequired[Literal["limit_offset"]]
+    pagination_type: NotRequired[Literal["limit_offset", "cursor"]]
     """Pagination mode to enable."""
     pagination_size: NotRequired[int]
     """Default pagination size."""
     pagination_max_size: NotRequired[Optional[int]]
     """Maximum allowed pagination size. ``None`` leaves page size unbounded."""
+    pagination_cursor_secret: NotRequired[Union[str, bytes, None]]
+    """Key that signs cursor tokens, or encrypts them with ``pagination_cursor_encrypted``."""
+    pagination_cursor_ttl: NotRequired[Union[float, dt.timedelta, None]]
+    """Cursor token lifetime in seconds or as a ``timedelta``."""
+    pagination_cursor_encrypted: NotRequired[bool]
+    """Encrypt cursor tokens so clients cannot read the key values. Requires a secret."""
     search: NotRequired[Union[str, set[str], list[str]]]
     """Fields to enable search on."""
     search_ignore_case: NotRequired[bool]
@@ -363,6 +373,111 @@ def normalize_sort_field(sort_field: SortField) -> str:
     if isinstance(sort_field, list):
         return sort_field[0]
     return min(sort_field)
+
+
+@dataclass(frozen=True)
+class CursorSettings:
+    """Cursor pagination settings resolved from :class:`FilterConfig` once, when dependencies are built."""
+
+    allowed_fields: frozenset[str]
+    """Column names clients may order by."""
+    default_field: Optional[str]
+    """Ordering column when the request names none. ``None`` orders by primary key."""
+    default_order: SortOrder
+    """Direction of the default ordering column."""
+    nulls: Optional[Literal["first", "last"]]
+    """NULL placement applied to every ordering key."""
+    secret: Optional[bytes]
+    """Signing or encryption key."""
+    ttl: Union[float, dt.timedelta, None]
+    """Token lifetime."""
+    encrypted: bool
+    """Whether tokens are encrypted."""
+
+    def build(
+        self,
+        *,
+        cursor: Optional[str],
+        page_size: int,
+        order_by: Union[str, Sequence[str], None] = None,
+        sort_order: Optional[SortOrder] = None,
+    ) -> CursorFilter:
+        """Build the cursor filter for one request.
+
+        Args:
+            cursor: Token from the request, or ``None`` for the first page.
+            page_size: Validated page size.
+            order_by: Requested ordering tokens; ``-name`` sorts descending.
+            sort_order: Direction for a single unprefixed ``order_by`` token.
+
+        Returns:
+            The request's cursor filter.
+
+        Raises:
+            ValueError: The ordering is not allowed or the token is invalid
+                (:class:`~advanced_alchemy.exceptions.InvalidCursorError`).
+        """
+        tokens = [order_by] if isinstance(order_by, str) else order_by
+        ordering = build_order_by_filters(
+            tokens,
+            sort_order,
+            allowed_fields=self.allowed_fields,
+            default_field=self.default_field,
+            default_order=self.default_order,
+            nulls=self.nulls,
+        )
+        keys = [CursorKey(item.field_name, item.sort_order, item.nulls) for item in ordering]
+        return CursorFilter(keys, page_size, cursor, self.secret, ttl=self.ttl, encrypted=self.encrypted)
+
+
+def resolve_cursor_settings(config: FilterConfig, model: Optional[type[Any]] = None) -> CursorSettings:
+    """Validate cursor options in ``config`` and resolve them for per-request use.
+
+    Args:
+        config: Filter configuration with ``pagination_type="cursor"``.
+        model: Mapped model, used to validate ``sort_fields`` when known.
+
+    Returns:
+        Resolved settings.
+
+    Raises:
+        ImproperConfigurationError: A sort path crosses a relationship, or the secret or TTL is invalid.
+    """
+    from advanced_alchemy.filters._cursor import normalize_cursor_ttl
+
+    allowed: set[str] = set()
+    if sort_fields := config.get("sort_fields"):
+        allowed.update(normalize_sort_fields(sort_fields, model))
+    sort_field = config.get("sort_field")
+    if sort_field:
+        allowed.update([sort_field] if isinstance(sort_field, str) else sort_field)
+    if dotted := sorted(name for name in allowed if "." in name):
+        msg = f"Cursor pagination orders by columns of the model; relationship sort paths are not supported: {dotted}"
+        raise ImproperConfigurationError(msg)
+    raw_secret = config.get("pagination_cursor_secret")
+    secret = raw_secret.encode("utf-8") if isinstance(raw_secret, str) else raw_secret
+    if secret == b"":
+        msg = "pagination_cursor_secret must not be empty"
+        raise ImproperConfigurationError(msg)
+    encrypted = bool(config.get("pagination_cursor_encrypted", False))
+    if encrypted and not secret:
+        msg = "pagination_cursor_encrypted requires pagination_cursor_secret"
+        raise ImproperConfigurationError(msg)
+    ttl = config.get("pagination_cursor_ttl")
+    try:
+        normalize_cursor_ttl(ttl)
+    except (TypeError, ValueError) as exc:
+        msg = f"pagination_cursor_ttl must be a positive finite duration, got {ttl!r}"
+        raise ImproperConfigurationError(msg) from exc
+    return CursorSettings(
+        allowed_fields=frozenset(allowed),
+        default_field=normalize_sort_field(sort_field) if sort_field else None,
+        default_order=config.get("sort_order", "desc"),
+        nulls=config.get("sort_nulls"),
+        secret=secret,
+        ttl=ttl,
+        encrypted=encrypted,
+    )
 
 
 def resolve_pagination_bounds(
@@ -689,7 +804,7 @@ def build_field_filter(
             cmp_op = f"{'i' if ignore_case else ''}{spec.operator}"
             built = ComparisonFilter(field_name=spec.leaf_field, operator=cmp_op, value=value)
         elif spec.operator == "in":
-            built = CollectionFilter(field_name=spec.leaf_field, values=value) if value else None
+            built = InCollectionFilter(field_name=spec.leaf_field, values=value) if value else None
         else:
             built = ComparisonFilter(field_name=spec.leaf_field, operator=spec.operator, value=value)
     return built
@@ -781,14 +896,14 @@ def build_order_by_filters(
     default_field: Optional[str] = None,
     default_order: SortOrder = "desc",
     nulls: Optional[Literal["first", "last"]] = None,
-) -> list[OrderBy]:
+) -> list[OrderByFilter]:
     """Parse repeatable ``orderBy`` tokens (`-col` descending) against ``allowed_fields``."""
     if not order_by_values:
         if default_field is None:
             return []
-        return [OrderBy(field_name=default_field, sort_order=sort_order or default_order, nulls=nulls)]
+        return [OrderByFilter(field_name=default_field, sort_order=sort_order or default_order, nulls=nulls)]
 
-    filters: list[OrderBy] = []
+    filters: list[OrderByFilter] = []
     for raw in order_by_values:
         if not raw:
             msg = "Sort field name must not be empty"
@@ -807,7 +922,7 @@ def build_order_by_filters(
             allowed_display = ", ".join(sorted(allowed_fields))
             msg = f"Invalid sort field {field_name!r}; allowed fields are: {allowed_display}"
             raise ValueError(msg)
-        filters.append(OrderBy(field_name=field_name, sort_order=direction, nulls=nulls))
+        filters.append(OrderByFilter(field_name=field_name, sort_order=direction, nulls=nulls))
     return filters
 
 
@@ -818,11 +933,15 @@ def _collect_filter_parameter_names(config: FilterConfig, model: Optional[type[A
         ("id_filter", ("ids",)),
         ("created_at", ("created_before", "created_after")),
         ("updated_at", ("updated_before", "updated_after")),
-        ("pagination_type", ("current_page", "page_size")),
         ("search", ("search_string", "search_ignore_case")),
     ):
         if config.get(key):
             names.extend(parameters)
+    pagination_type = config.get("pagination_type")
+    if pagination_type == "cursor":
+        names.extend(("cursor", "page_size"))
+    elif pagination_type:
+        names.extend(("current_page", "page_size"))
     if config.get("sort_field") or config.get("sort_fields"):
         names.extend(("order_by", "sort_order"))
     for key, suffix in (("not_in_fields", "_not_in"), ("in_fields", "_in"), ("boolean_fields", "")):

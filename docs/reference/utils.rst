@@ -68,6 +68,12 @@ Dependency & Filter Helpers
 
 .. autofunction:: advanced_alchemy.utils.dependencies.resolve_filter_aliases
 
+.. autoclass:: advanced_alchemy.utils.dependencies.CursorSettings
+    :members: build
+    :no-inherited-members:
+
+.. autofunction:: advanced_alchemy.utils.dependencies.resolve_cursor_settings
+
 .. autofunction:: advanced_alchemy.utils.dependencies.normalize_field_name_types
 
 .. autofunction:: advanced_alchemy.utils.dependencies.normalize_choice_field_types

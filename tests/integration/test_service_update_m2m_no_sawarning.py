@@ -14,7 +14,7 @@ rows onto one of its relationships, e.g.::
             model.roles = await RoleRepository(
                 session=self.repository.session
             ).get_many(
-                CollectionFilter(
+                InCollectionFilter(
                     field_name="id", values=role_ids
                 )
             )
@@ -47,7 +47,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column, relationship, selectinload
 
 from advanced_alchemy.base import UUIDBase
-from advanced_alchemy.filters import CollectionFilter
+from advanced_alchemy.filters import InCollectionFilter
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from advanced_alchemy.service import SQLAlchemyAsyncRepositoryService
 from advanced_alchemy.utils.serialization import schema_dump
@@ -94,7 +94,7 @@ class UserService790(SQLAlchemyAsyncRepositoryService[User790]):
         model = await self.to_model(data)
         if role_ids is not None:
             model.roles = await RoleRepository790(session=self.repository.session).get_many(
-                CollectionFilter(field_name="id", values=role_ids)
+                InCollectionFilter(field_name="id", values=role_ids)
             )
         return model
 
@@ -220,7 +220,7 @@ class TeamService790(SQLAlchemyAsyncRepositoryService[Team790]):
         model = await self.to_model(data)
         if member_ids is not None:
             members = await MemberRepository790(session=self.repository.session).get_many(
-                CollectionFilter(field_name="id", values=member_ids)
+                InCollectionFilter(field_name="id", values=member_ids)
             )
             model.members = {member.name: member for member in members}
         return model
@@ -299,7 +299,7 @@ class PostService790(SQLAlchemyAsyncRepositoryService[Post790]):
         model = await self.to_model(data)
         if tag_ids is not None:
             model.tags = await TagRepository790(session=self.repository.session).get_many(
-                CollectionFilter(field_name="id", values=tag_ids)
+                InCollectionFilter(field_name="id", values=tag_ids)
             )
         return model
 
@@ -355,7 +355,7 @@ class UserServiceTransientRelated790(SQLAlchemyAsyncRepositoryService[User790]):
         model = await self.to_model(data)
         if role_ids is not None:
             roles = await RoleRepository790(session=self.repository.session).get_many(
-                CollectionFilter(field_name="id", values=role_ids)
+                InCollectionFilter(field_name="id", values=role_ids)
             )
             model.roles = [*roles, Role790(name="not_yet_persisted")]
         return model

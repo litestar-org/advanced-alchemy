@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from advanced_alchemy.filterset import FilterSet
+from advanced_alchemy.filters import FilterSet
 from tests.helpers import maybe_async
 from tests.integration.test_repository import create_repository
 

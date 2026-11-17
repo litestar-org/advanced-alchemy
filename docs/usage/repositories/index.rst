@@ -14,7 +14,7 @@ A **Repository** binds to a single SQLAlchemy model and provides typed synchrono
         :alt: How a repository connects your code and filters to your SQL database
         :class: aa-diagram--dark
 
-.. grid:: 1 1 3 3
+.. grid:: 1 1 2 2
     :padding: 0
     :gutter: 3
 
@@ -30,6 +30,12 @@ A **Repository** binds to a single SQLAlchemy model and provides typed synchrono
 
       Search text, filter by IDs or dates, and return paginated results with total counts.
 
+    .. grid-item-card:: :octicon:`arrow-right` Cursor Pagination
+      :link: cursor_pagination
+      :link-type: doc
+
+      Page large or changing tables by position, with signed tokens and stable ordering.
+
     .. grid-item-card:: :octicon:`lock` Advanced Patterns
       :link: advanced
       :link-type: doc
@@ -43,4 +49,5 @@ A **Repository** binds to a single SQLAlchemy model and provides typed synchrono
     basics
     filtering
     filtersets
+    cursor_pagination
     advanced

@@ -14,11 +14,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.filters import (
-    CollectionFilter,
     ComparisonFilter,
+    InCollectionFilter,
     NotNullFilter,
     NullFilter,
-    OrderBy,
+    OrderByFilter,
     RelationshipFilter,
     SearchFilter,
 )
@@ -321,7 +321,7 @@ def test_field_filter_query_types_and_filter_builders() -> None:
 
     assert isinstance(build_field_filter(by_name["subtitle_is_null"], True), NullFilter)
     assert isinstance(build_field_filter(by_name["subtitle_is_null"], False), NotNullFilter)
-    assert isinstance(build_field_filter(by_name["views_in"], [10, 20]), CollectionFilter)
+    assert isinstance(build_field_filter(by_name["views_in"], [10, 20]), InCollectionFilter)
     assert build_field_filter(by_name["views_in"], []) is None
 
 
@@ -358,10 +358,15 @@ def test_normalize_sort_fields_and_collection_rejection() -> None:
 @pytest.mark.parametrize(
     ("order_by_values", "sort_order", "default_field", "expected"),
     [
-        (["-views", "author.name"], None, "title", [OrderBy("views", "desc"), OrderBy("author.name", "asc")]),
-        (["+title"], "desc", None, [OrderBy("title", "asc")]),
-        (["views"], "desc", None, [OrderBy("views", "desc")]),
-        (None, None, "views", [OrderBy("views", "desc")]),
+        (
+            ["-views", "author.name"],
+            None,
+            "title",
+            [OrderByFilter("views", "desc"), OrderByFilter("author.name", "asc")],
+        ),
+        (["+title"], "desc", None, [OrderByFilter("title", "asc")]),
+        (["views"], "desc", None, [OrderByFilter("views", "desc")]),
+        (None, None, "views", [OrderByFilter("views", "desc")]),
         (None, None, None, []),
     ],
 )
@@ -369,7 +374,7 @@ def test_build_order_by_filters_valid_cases(
     order_by_values: Optional[list[str]],
     sort_order: Any,
     default_field: Optional[str],
-    expected: list[OrderBy],
+    expected: list[OrderByFilter],
 ) -> None:
     result = build_order_by_filters(
         order_by_values,

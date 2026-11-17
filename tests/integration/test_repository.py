@@ -17,8 +17,8 @@ import advanced_alchemy.repository._async as async_repo_mod
 import advanced_alchemy.repository._sync as sync_repo_mod
 from advanced_alchemy.exceptions import NotFoundError, RepositoryError
 from advanced_alchemy.filters import (
-    BeforeAfter,
-    OrderBy,
+    BeforeAfterFilter,
+    OrderByFilter,
     SearchFilter,
 )
 from advanced_alchemy.mixins import BigIntPrimaryKey
@@ -603,13 +603,13 @@ async def test_service_delete_many_accepts_mixed_instances_and_ids(
 
 # Additional filter tests
 async def test_repo_filter_before_after(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
-    """Test repository with BeforeAfter filter."""
+    """Test repository with BeforeAfterFilter filter."""
     session, models = seeded_test_session_async
     author_repo = create_repository(session, models["author"])
 
     # Test date filtering
     cutoff_date = dt.datetime(2023, 4, 1, tzinfo=dt.timezone.utc)
-    filter_obj = BeforeAfter(field_name="created_at", before=cutoff_date, after=None)
+    filter_obj = BeforeAfterFilter(field_name="created_at", before=cutoff_date, after=None)
 
     authors = await maybe_async(author_repo.get_many(filter_obj))
     # Should get authors created before April 1, 2023
@@ -630,12 +630,12 @@ async def test_repo_filter_search(seeded_test_session_async: "tuple[AsyncSession
 
 
 async def test_repo_filter_order_by(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
-    """Test repository with OrderBy filter."""
+    """Test repository with OrderByFilter filter."""
     session, models = seeded_test_session_async
     author_repo = create_repository(session, models["author"])
 
     # Order by name ascending
-    order_filter = OrderBy(field_name="name")
+    order_filter = OrderByFilter(field_name="name")
 
     authors = await maybe_async(author_repo.get_many(order_filter))
     assert len(authors) == 2
@@ -648,13 +648,15 @@ async def test_repo_filter_order_by(seeded_test_session_async: "tuple[AsyncSessi
 # Pagination tests
 async def test_service_paginated_list(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
     """Test service paginated list."""
-    from advanced_alchemy.filters import LimitOffset
+    from advanced_alchemy.filters import LimitOffsetFilter
 
     _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
-    # Test pagination using LimitOffset filter with consistent ordering
-    paginated = await maybe_async(author_service.get_many(LimitOffset(limit=1, offset=0), OrderBy(field_name="name")))
+    # Test pagination using LimitOffsetFilter filter with consistent ordering
+    paginated = await maybe_async(
+        author_service.get_many(LimitOffsetFilter(limit=1, offset=0), OrderByFilter(field_name="name"))
+    )
 
     assert len(paginated) == 1
 

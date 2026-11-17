@@ -128,6 +128,17 @@ Auto-Generating DTOs from Models
 
     UserAccountDTO = SQLAlchemyDTO[UserAccount]
 
+Cursor Pagination
+-----------------
+
+Set ``pagination_type="cursor"`` in the controller's filter configuration and return a ``CursorPagination``. Clients pass ``next_cursor`` back as ``?cursor=``; invalid tokens and sort fields return 400:
+
+.. literalinclude:: /examples/litestar/cursor_pagination.py
+    :language: python
+    :pyobject: ArticleController
+
+See :doc:`/usage/repositories/cursor_pagination` for ordering keys, token signing, and indexing.
+
 Complete Runnable App
 ---------------------
 

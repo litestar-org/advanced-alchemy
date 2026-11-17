@@ -7,6 +7,7 @@ from litestar.exceptions import (
     HTTPException,
     InternalServerException,
     NotFoundException,
+    ValidationException,
 )
 from litestar.exceptions.responses import (
     create_debug_response,  # pyright: ignore[reportUnknownVariableType]
@@ -21,6 +22,7 @@ from advanced_alchemy.exceptions import (
     DuplicateKeyError,
     ForeignKeyError,
     IntegrityError,
+    InvalidCursorError,
     NotFoundError,
     RepositoryError,
 )
@@ -43,6 +45,8 @@ def exception_to_http_response(request: "Request[UserT, AuthT, StateT]", exc: "R
         http_exc: type[HTTPException] = NotFoundException
     elif isinstance(exc, (DuplicateKeyError, IntegrityError, ForeignKeyError)):
         http_exc = ConflictError
+    elif isinstance(exc, InvalidCursorError):
+        http_exc = ValidationException
     else:
         http_exc = InternalServerException
     if request.app.debug:

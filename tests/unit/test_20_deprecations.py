@@ -347,3 +347,69 @@ async def test_cache_get_list_and_count_async_emits_deprecation(cache_manager: A
 async def test_cache_set_list_and_count_async_emits_deprecation(cache_manager: Any) -> None:
     with pytest.warns(DeprecationWarning, match="set_list_and_count_async"):
         await cache_manager.set_list_and_count_async("key", [], 0)
+
+
+DEPRECATED_FILTER_NAMES = [
+    ("BeforeAfter", "BeforeAfterFilter"),
+    ("CollectionFilter", "InCollectionFilter"),
+    ("LimitOffset", "LimitOffsetFilter"),
+    ("OnBeforeAfter", "OnBeforeAfterFilter"),
+    ("OrderBy", "OrderByFilter"),
+]
+
+
+@pytest.mark.parametrize(("old_name", "new_name"), DEPRECATED_FILTER_NAMES)
+def test_deprecated_filter_name_warns_and_resolves_to_replacement(old_name: str, new_name: str) -> None:
+    from advanced_alchemy import filters
+
+    with pytest.warns(DeprecationWarning, match=rf"filters\.{old_name}'.*2\.0\.0.*filters\.{new_name}"):
+        old_class = getattr(filters, old_name)
+
+    assert old_class is getattr(filters, new_name)
+
+
+@pytest.mark.parametrize(("old_name", "new_name"), DEPRECATED_FILTER_NAMES)
+def test_filter_replacement_name_does_not_warn(old_name: str, new_name: str) -> None:
+    import warnings
+
+    from advanced_alchemy import filters
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        new_class = getattr(filters, new_name)
+
+    assert new_class.__name__ == new_name
+    assert old_name in filters.__all__
+
+
+def test_deprecated_filter_instances_keep_type_identity() -> None:
+    import pickle
+
+    from advanced_alchemy import filters
+
+    with pytest.warns(DeprecationWarning):
+        legacy_limit_offset = filters.LimitOffset
+
+    instance = legacy_limit_offset(limit=10, offset=20)
+
+    assert isinstance(instance, filters.LimitOffsetFilter)
+    assert repr(instance) == "LimitOffsetFilter(limit=10, offset=20)"
+    assert pickle.loads(pickle.dumps(instance)) == instance
+
+
+def test_unknown_filter_name_raises_attribute_error() -> None:
+    from advanced_alchemy import filters
+
+    with pytest.raises(AttributeError, match="has no attribute 'NotAFilter'"):
+        _ = filters.NotAFilter  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize(("old_name", "new_name"), DEPRECATED_FILTER_NAMES)
+def test_litestar_signature_namespace_resolves_both_filter_names(old_name: str, new_name: str) -> None:
+    from advanced_alchemy import filters
+    from advanced_alchemy.extensions.litestar.plugins.init.plugin import signature_namespace_values
+
+    expected = getattr(filters, new_name)
+
+    assert signature_namespace_values[old_name] is expected
+    assert signature_namespace_values[new_name] is expected

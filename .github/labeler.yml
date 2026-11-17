@@ -89,7 +89,7 @@ labels:
   - label: 'area/filters'
     sync: true
     matcher:
-      files: ['advanced_alchemy/filters.py']
+      files: ['advanced_alchemy/filters/**']
 
   - label: 'area/operations'
     sync: true

@@ -56,7 +56,7 @@ Advanced Alchemy provides asynchronous and synchronous repository classes for CR
 from sqlalchemy.orm import Mapped
 
 from advanced_alchemy import base, config, repository
-from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.filters import LimitOffsetFilter
 
 
 class User(base.UUIDBase):
@@ -93,7 +93,7 @@ with db.get_session() as db_session:
     print(f"Created {len(objs)} new objects.")
 
     # 2) Select paginated data and total row count, passing equality filters as kwargs.
-    created_objs, total_objs = repo.get_many_and_count(LimitOffset(limit=10, offset=0), name="Cody")
+    created_objs, total_objs = repo.get_many_and_count(LimitOffsetFilter(limit=10, offset=0), name="Cody")
     print(f"Selected {len(created_objs)} records out of a total of {total_objs}.")
 
     # 3) Delete the selected batch of records.
@@ -121,7 +121,7 @@ Service classes wrap repositories and accept dictionaries, SQLAlchemy models, or
 from sqlalchemy.orm import Mapped
 
 from advanced_alchemy import base, config, repository, service
-from advanced_alchemy.filters import LimitOffset
+from advanced_alchemy.filters import LimitOffsetFilter
 
 
 class User(base.UUIDBase):
@@ -163,7 +163,7 @@ with db.get_session() as db_session:
     print(f"Created {len(objs)} new objects.")
 
     # 2) Select paginated data and total row count, passing equality filters as kwargs.
-    created_objs, total_objs = user_service.get_many_and_count(LimitOffset(limit=10, offset=0), name="Cody")
+    created_objs, total_objs = user_service.get_many_and_count(LimitOffsetFilter(limit=10, offset=0), name="Cody")
     print(f"Selected {len(created_objs)} records out of a total of {total_objs}.")
 
     # 3) Delete the selected batch of records.

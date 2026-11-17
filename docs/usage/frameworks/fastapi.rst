@@ -105,6 +105,18 @@ Building a FastAPI Service Step by Step
 
     For multi-database configurations, pass the target bind key to ``alchemy.provide_session("reporting")`` or ``alchemy.provide_service(ReportService, key="reporting")``.
 
+Cursor Pagination
+-----------------
+
+Pass ``pagination_type="cursor"`` to ``alchemy.provide_filters`` and return a ``CursorPagination``. Clients pass ``next_cursor`` back as ``?cursor=``; invalid tokens and sort fields return 422:
+
+.. literalinclude:: /examples/fastapi/cursor_pagination.py
+    :language: python
+    :start-at: @router.get("/events")
+    :end-before: app.include_router
+
+See :doc:`/usage/repositories/cursor_pagination` for ordering keys, token signing, and indexing.
+
 Complete Runnable App
 ---------------------
 

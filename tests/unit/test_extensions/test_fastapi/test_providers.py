@@ -39,16 +39,16 @@ from advanced_alchemy.extensions.fastapi.providers import (
     provide_filters,
 )
 from advanced_alchemy.filters import (
-    BeforeAfter,
+    BeforeAfterFilter,
     BooleanFilter,
     ChoicesFilter,
-    CollectionFilter,
     ComparisonFilter,
     FilterTypes,
-    LimitOffset,
+    InCollectionFilter,
+    LimitOffsetFilter,
     NotNullFilter,
     NullFilter,
-    OrderBy,
+    OrderByFilter,
     RelationshipFilter,
     SearchFilter,
 )
@@ -130,7 +130,7 @@ def test_create_filter_dependencies_cache_miss() -> None:
         "advanced_alchemy.extensions.fastapi.providers", config, DEPENDENCY_DEFAULTS, resolve_filter_aliases(config)
     )
     mock_agg_func = lambda: [  # noqa: E731
-        BeforeAfter(field_name="created_at", before=None, after=None)
+        BeforeAfterFilter(field_name="created_at", before=None, after=None)
     ]  # Dummy aggregate function
 
     with patch.object(dep_cache, "get_dependencies", return_value=None) as mock_get:  # Simulate cache miss
@@ -208,11 +208,11 @@ def test_create_filter_aggregate_function_fastapi() -> None:
             assert type(None) in inner_type.__args__
 
     # Directly call the aggregate function with mock filter objects
-    mock_id_filter = CollectionFilter(field_name="id", values=["1"])
-    mock_created_filter = BeforeAfter(field_name="created_at", before=datetime.now(), after=None)
-    mock_limit_offset = LimitOffset(limit=10, offset=0)
+    mock_id_filter = InCollectionFilter(field_name="id", values=["1"])
+    mock_created_filter = BeforeAfterFilter(field_name="created_at", before=datetime.now(), after=None)
+    mock_limit_offset = LimitOffsetFilter(limit=10, offset=0)
     mock_search_filter = SearchFilter(field_name={"title"}, value="test", ignore_case=False)
-    mock_order_by = OrderBy(field_name="id", sort_order="asc")
+    mock_order_by = OrderByFilter(field_name="id", sort_order="asc")
 
     result = aggregate_func(
         id_filter=mock_id_filter,
@@ -232,7 +232,7 @@ def test_create_filter_aggregate_function_fastapi() -> None:
 
     # Test with None values for filters that can return None
     mock_search_filter_none = SearchFilter(field_name={"title"}, value=None, ignore_case=False)  # type: ignore[arg-type]
-    mock_order_by_none = OrderBy(field_name=None, sort_order="asc")  # type: ignore[arg-type]
+    mock_order_by_none = OrderByFilter(field_name=None, sort_order="asc")  # type: ignore[arg-type]
 
     result_some_none = aggregate_func(
         id_filter=None,  # Simulate no 'ids' param provided
@@ -241,7 +241,7 @@ def test_create_filter_aggregate_function_fastapi() -> None:
         search_filter=mock_search_filter_none,  # Aggregate func should filter this out based on value=None
         order_by=mock_order_by_none,  # Aggregate func should filter this out based on field_name=None
     )
-    assert len(result_some_none) == 1  # Only LimitOffset should remain
+    assert len(result_some_none) == 1  # Only LimitOffsetFilter should remain
     assert mock_limit_offset in result_some_none
     assert mock_id_filter not in result_some_none
     assert mock_created_filter not in result_some_none
@@ -318,7 +318,7 @@ def test_create_filter_dependencies_integration_and_openapi() -> None:
             "id_filter": UUID,
             "pagination_type": "limit_offset",
             "search": "name",
-            "sort_field": "name",  # Enables OrderBy
+            "sort_field": "name",  # Enables OrderByFilter
             "created_at": True,
             "boolean_fields": ["is_featured"],
             "choice_fields": [ChoiceField("status", ("active", "pending"))],
@@ -344,27 +344,27 @@ def test_create_filter_dependencies_integration_and_openapi() -> None:
     data = cast(list[str], response.json())
     assert isinstance(data, list)
     # Check that all expected filter types were created and collected
-    assert "CollectionFilter" in data
-    assert "LimitOffset" in data
+    assert "InCollectionFilter" in data
+    assert "LimitOffsetFilter" in data
     assert "SearchFilter" in data
-    assert "OrderBy" in data
-    assert "BeforeAfter" in data
+    assert "OrderByFilter" in data
+    assert "BeforeAfterFilter" in data
     assert "BooleanFilter" in data
     assert "ChoicesFilter" in data
     assert len(data) == 7
 
-    # Test case: Only defaults (expect LimitOffset, OrderBy)
+    # Test case: Only defaults (expect LimitOffsetFilter, OrderByFilter)
     response = client.get("/items")
     assert response.status_code == 200
     data = cast(list[str], response.json())
     assert isinstance(data, list)
-    assert "LimitOffset" in data
-    assert "OrderBy" in data
-    assert "CollectionFilter" not in data
+    assert "LimitOffsetFilter" in data
+    assert "OrderByFilter" in data
+    assert "InCollectionFilter" not in data
     assert "BooleanFilter" not in data
     assert "ChoicesFilter" not in data
     assert "SearchFilter" not in data
-    assert "BeforeAfter" not in data
+    assert "BeforeAfterFilter" not in data
     assert len(data) == 2
 
     # === OpenAPI Schema Test ===
@@ -533,9 +533,9 @@ def test_custom_dependency_defaults_fastapi() -> None:
     assert response.status_code == 200
     data = cast(list[str], response.json())
     assert isinstance(data, list)
-    assert "CollectionFilter" in data
-    assert "LimitOffset" in data
-    assert "OrderBy" in data
+    assert "InCollectionFilter" in data
+    assert "LimitOffsetFilter" in data
+    assert "OrderByFilter" in data
     assert len(data) == 3
 
     # Check OpenAPI uses custom default page size
@@ -591,19 +591,21 @@ def test_openapi_schema_comprehensive() -> None:
         if name == "id_filter":
             assert "UUID" in str(param.annotation), f"id_filter should have UUID type, got {param.annotation}"
         elif name in ("created_filter", "updated_filter"):
-            assert "BeforeAfter" in str(param.annotation), (
-                f"{name} should have BeforeAfter type, got {param.annotation}"
+            assert "BeforeAfterFilter" in str(param.annotation), (
+                f"{name} should have BeforeAfterFilter type, got {param.annotation}"
             )
         elif name == "limit_offset":
-            assert "LimitOffset" in str(param.annotation), (
-                f"limit_offset should have LimitOffset type, got {param.annotation}"
+            assert "LimitOffsetFilter" in str(param.annotation), (
+                f"limit_offset should have LimitOffsetFilter type, got {param.annotation}"
             )
         elif name == "search_filter":
             assert "SearchFilter" in str(param.annotation), (
                 f"search_filter should have SearchFilter type, got {param.annotation}"
             )
         elif name == "order_by":
-            assert "OrderBy" in str(param.annotation), f"order_by should have OrderBy type, got {param.annotation}"
+            assert "OrderByFilter" in str(param.annotation), (
+                f"order_by should have OrderByFilter type, got {param.annotation}"
+            )
         elif "not_in" in name:
             assert "NotInCollectionFilter" in str(param.annotation), (
                 f"{name} should have NotInCollectionFilter type, got {param.annotation}"
@@ -617,19 +619,19 @@ def test_openapi_schema_comprehensive() -> None:
                 f"{name} should have ChoicesFilter type, got {param.annotation}"
             )
         elif "in_filter" in name:
-            assert "CollectionFilter" in str(param.annotation), (
-                f"{name} should have CollectionFilter type, got {param.annotation}"
+            assert "InCollectionFilter" in str(param.annotation), (
+                f"{name} should have InCollectionFilter type, got {param.annotation}"
             )
 
     # Check that the return annotation is list[FilterTypes]
     assert deps.__annotations__["return"] == list[FilterTypes]
 
     # Test direct call with filter values
-    mock_id_filter = CollectionFilter(field_name="id", values=["123e4567-e89b-12d3-a456-426614174000"])
-    mock_created_filter = BeforeAfter(field_name="created_at", before=datetime.now(), after=None)
-    mock_limit_offset = LimitOffset(limit=10, offset=0)
+    mock_id_filter = InCollectionFilter(field_name="id", values=["123e4567-e89b-12d3-a456-426614174000"])
+    mock_created_filter = BeforeAfterFilter(field_name="created_at", before=datetime.now(), after=None)
+    mock_limit_offset = LimitOffsetFilter(limit=10, offset=0)
     mock_search_filter = SearchFilter(field_name={"name"}, value="test", ignore_case=False)
-    mock_order_by = OrderBy(field_name="name", sort_order="asc")
+    mock_order_by = OrderByFilter(field_name="name", sort_order="asc")
     mock_boolean_filter = BooleanFilter(field_name="is_featured", value=True)
     mock_choices_filter = ChoicesFilter(field_name="state", values=["active"])
 
@@ -694,7 +696,7 @@ def test_provide_filters_uses_scalar_default_from_list_sort_field() -> None:
         return [
             {"field_name": cast(str, filter_.field_name), "sort_order": filter_.sort_order}
             for filter_ in filters
-            if isinstance(filter_, OrderBy)
+            if isinstance(filter_, OrderByFilter)
         ]
 
     client = TestClient(app)
@@ -708,14 +710,14 @@ def test_provide_filters_uses_scalar_default_from_list_sort_field() -> None:
 
 
 def test_provide_filters_applies_configured_nulls_placement() -> None:
-    """The `sort_nulls` config key pins NULL placement on every generated OrderBy."""
+    """The `sort_nulls` config key pins NULL placement on every generated OrderByFilter."""
     deps = provide_filters({"sort_field": "name", "sort_nulls": "first"})
 
     app = FastAPI()
 
     @app.get("/items")
     async def get_items(filters: Annotated[list[FilterTypes], Depends(deps)]) -> list[Optional[str]]:
-        return [filter_.nulls for filter_ in filters if isinstance(filter_, OrderBy)]
+        return [filter_.nulls for filter_ in filters if isinstance(filter_, OrderByFilter)]
 
     client = TestClient(app)
 
@@ -824,7 +826,7 @@ def test_openapi_schema_edge_cases() -> None:
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == 1  # type: ignore[arg-type]
-    assert "LimitOffset" in data
+    assert "LimitOffsetFilter" in data
 
     # Test runtime behavior for no optionals
     response = client.get("/no-optionals")
@@ -832,8 +834,8 @@ def test_openapi_schema_edge_cases() -> None:
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == 2  # type: ignore[arg-type]
-    assert "LimitOffset" in data
-    assert "OrderBy" in data
+    assert "LimitOffsetFilter" in data
+    assert "OrderByFilter" in data
 
     # Test runtime behavior for custom validation
     response = client.get(
@@ -843,11 +845,11 @@ def test_openapi_schema_edge_cases() -> None:
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == 5  # type: ignore[arg-type]
-    assert "CollectionFilter" in data
-    assert "LimitOffset" in data
-    assert "OrderBy" in data
+    assert "InCollectionFilter" in data
+    assert "LimitOffsetFilter" in data
+    assert "OrderByFilter" in data
     assert "SearchFilter" in data
-    assert "BeforeAfter" in data
+    assert "BeforeAfterFilter" in data
 
 
 class SimpleDishkaTable(UUIDBase):
@@ -928,15 +930,15 @@ async def test_provide_filters_with_dishka_integration(monkeypatch: pytest.Monke
     assert data["simple_model_table_name"] == "simple_dishka_table"
     filter_types = data.get("filters", [])  # type: ignore
     assert isinstance(filter_types, list)
-    assert "CollectionFilter" in filter_types
-    assert "LimitOffset" in filter_types
+    assert "InCollectionFilter" in filter_types
+    assert "LimitOffsetFilter" in filter_types
     assert "SearchFilter" in filter_types
-    assert "BeforeAfter" in filter_types
-    # OrderBy is not explicitly configured but might have defaults, let's check if it's NOT there unless configured
-    assert "OrderBy" not in filter_types  # OrderBy was not configured in this specific provide_filters call
+    assert "BeforeAfterFilter" in filter_types
+    # OrderByFilter is not explicitly configured but might have defaults, let's check if it's NOT there unless configured
+    assert "OrderByFilter" not in filter_types  # OrderByFilter was not configured in this specific provide_filters call
     assert len(filter_types) == 4  # type: ignore
 
-    # Test case: Only defaults (expect LimitOffset)
+    # Test case: Only defaults (expect LimitOffsetFilter)
     response = client.get("/diska-items")
     assert response.status_code == 200
     data = response.json()
@@ -944,11 +946,11 @@ async def test_provide_filters_with_dishka_integration(monkeypatch: pytest.Monke
     assert data["simple_model_table_name"] == "simple_dishka_table"
     filter_types = data.get("filters", [])  # type: ignore
     assert isinstance(filter_types, list)
-    assert "LimitOffset" in filter_types  # Default pagination
-    assert "CollectionFilter" not in filter_types
+    assert "LimitOffsetFilter" in filter_types  # Default pagination
+    assert "InCollectionFilter" not in filter_types
     assert "SearchFilter" not in filter_types
-    assert "BeforeAfter" not in filter_types
-    assert "OrderBy" not in filter_types
+    assert "BeforeAfterFilter" not in filter_types
+    assert "OrderByFilter" not in filter_types
     assert len(filter_types) == 1  # type: ignore
 
     await container.close()
@@ -1231,8 +1233,8 @@ def test_is_async_service_target_uses_extension_for_undetermined_group() -> None
 def test_fastapi_aggregate_filter_flattens_list_values() -> None:
     """Extend aggregated filter output when a sub-dependency returns a list of filters."""
     agg = _create_filter_aggregate_function_fastapi({"id_filter": int})
-    first = CollectionFilter(field_name="id", values=[1])
-    second = CollectionFilter(field_name="id", values=[2])
+    first = InCollectionFilter(field_name="id", values=[1])
+    second = InCollectionFilter(field_name="id", values=[2])
     result = agg(id_filter=cast("Any", [first, second]))
     assert result == [first, second]
 
@@ -1306,24 +1308,24 @@ def _serialize_fastapi_grid_filters(filters: Sequence[Any]) -> list[dict[str, An
                     "ignore_case": item.ignore_case,
                 }
             )
-        elif isinstance(item, CollectionFilter):
+        elif isinstance(item, InCollectionFilter):
             serialized.append(
                 {
-                    "type": "CollectionFilter",
+                    "type": "InCollectionFilter",
                     "field_name": item.field_name,
                     "values": list(item.values or ()),
                 }
             )
-        elif isinstance(item, OrderBy):
+        elif isinstance(item, OrderByFilter):
             serialized.append(
                 {
-                    "type": "OrderBy",
+                    "type": "OrderByFilter",
                     "field_name": item.field_name,
                     "sort_order": item.sort_order,
                 }
             )
-        elif isinstance(item, LimitOffset):
-            serialized.append({"type": "LimitOffset", "limit": item.limit, "offset": item.offset})
+        elif isinstance(item, LimitOffsetFilter):
+            serialized.append({"type": "LimitOffsetFilter", "limit": item.limit, "offset": item.offset})
         elif isinstance(item, (NullFilter, NotNullFilter)):
             serialized.append({"type": type(item).__name__, "field_name": item.field_name})
     return serialized
@@ -1441,9 +1443,9 @@ def test_fastapi_field_filter_fields_and_sort_fields_openapi_and_parsing() -> No
         assert {"type": "SearchFilter", "field_name": "title", "value": "sql", "ignore_case": True} in parsed
         assert {"type": "ComparisonFilter", "field_name": "views", "operator": "ge", "value": 100} in parsed
         assert {"type": "ComparisonFilter", "field_name": "views", "operator": "le", "value": 500} in parsed
-        assert {"type": "CollectionFilter", "field_name": "status", "values": ["draft"]} in parsed
+        assert {"type": "InCollectionFilter", "field_name": "status", "values": ["draft"]} in parsed
         assert {"type": "NullFilter", "field_name": "published_at"} in parsed
-        assert {"type": "LimitOffset", "limit": 25, "offset": 25} in parsed
+        assert {"type": "LimitOffsetFilter", "limit": 25, "offset": 25} in parsed
         rel_filters = [item for item in parsed if item["type"] == "RelationshipFilter"]
         assert len(rel_filters) == 1
         assert rel_filters[0]["relationship"] == "author"
@@ -1451,10 +1453,10 @@ def test_fastapi_field_filter_fields_and_sort_fields_openapi_and_parsing() -> No
             {"type": "ComparisonFilter", "field_name": "name", "operator": "eq", "value": "Cody"},
             {"type": "SearchFilter", "field_name": "name", "value": "cody", "ignore_case": True},
         ]
-        order_filters = [item for item in parsed if item["type"] == "OrderBy"]
+        order_filters = [item for item in parsed if item["type"] == "OrderByFilter"]
         assert order_filters == [
-            {"type": "OrderBy", "field_name": "views", "sort_order": "desc"},
-            {"type": "OrderBy", "field_name": "author.name", "sort_order": "asc"},
+            {"type": "OrderByFilter", "field_name": "views", "sort_order": "desc"},
+            {"type": "OrderByFilter", "field_name": "author.name", "sort_order": "asc"},
         ]
 
         invalid_sort = client.get("/articles", params=[("orderBy", "-secret")])
@@ -1462,7 +1464,7 @@ def test_fastapi_field_filter_fields_and_sort_fields_openapi_and_parsing() -> No
 
 
 def test_fastapi_grid_snake_case_and_e2e_async_sqlite_prototype() -> None:
-    """Exercise FastAPI grid filtering + relationship OrderBy + pagination against async SQLite."""
+    """Exercise FastAPI grid filtering + relationship OrderByFilter + pagination against async SQLite."""
     config: FilterConfig = {
         "filter_fields": {
             "title": {"contains", "eq"},
@@ -1547,7 +1549,7 @@ def test_fastapi_pagination_max_size_validation_and_openapi() -> None:
 
     @app.get("/items")
     def list_items(filters: Annotated[list[FilterTypes], Depends(filter_dep)]) -> dict[str, int]:
-        limit_offset = next(f for f in filters if isinstance(f, LimitOffset))
+        limit_offset = next(f for f in filters if isinstance(f, LimitOffsetFilter))
         return {"limit": limit_offset.limit, "offset": limit_offset.offset}
 
     with TestClient(app) as client:
@@ -1568,7 +1570,7 @@ def test_fastapi_pagination_max_size_validation_and_openapi() -> None:
 
     @clamped_app.get("/clamped")
     def list_clamped(filters: Annotated[list[FilterTypes], Depends(clamped_dep)]) -> dict[str, int]:
-        limit_offset = next(f for f in filters if isinstance(f, LimitOffset))
+        limit_offset = next(f for f in filters if isinstance(f, LimitOffsetFilter))
         return {"limit": limit_offset.limit, "offset": limit_offset.offset}
 
     with TestClient(clamped_app) as client:
