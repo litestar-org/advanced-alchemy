@@ -1,9 +1,9 @@
 """Obstore-backed storage backend for file objects."""
 
-import datetime
+import datetime as dt
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union, cast
 
 from advanced_alchemy.exceptions import MissingDependencyError
 from advanced_alchemy.types.file_object._utils import get_mtime_equivalent, get_or_generate_etag
@@ -23,10 +23,21 @@ if TYPE_CHECKING:
 try:
     from obstore import sign as obstore_sign
     from obstore import sign_async as obstore_sign_async
-    from obstore.store import ObjectStore, from_url
+    from obstore.store import (
+        AzureStore,
+        GCSStore,
+        HTTPStore,
+        LocalStore,
+        MemoryStore,
+        ObjectStore,
+        S3Store,
+        from_url,  # pyright: ignore[reportUnknownVariableType]
+    )
 
 except ImportError as e:
     raise MissingDependencyError(package="obstore") from e
+
+_SignCapableStore = Union[AzureStore, GCSStore, S3Store]
 
 
 def schema_from_type(obj: Any) -> str:  # noqa: PLR0911
@@ -38,8 +49,6 @@ def schema_from_type(obj: Any) -> str:  # noqa: PLR0911
     Returns:
         The schema extracted from the object
     """
-    from obstore.store import AzureStore, GCSStore, HTTPStore, LocalStore, MemoryStore, S3Store
-
     if isinstance(obj, S3Store):
         return "s3"
     if isinstance(obj, AzureStore):
@@ -90,8 +99,8 @@ class ObstoreBackend(StorageBackend):
             key: The key for the storage backend
             kwargs: Additional keyword arguments to pass to the ObjectStore constructor
         """
-        self.fs = from_url(fs, **kwargs) if isinstance(fs, str) else fs  # pyright: ignore
-        self.protocol = schema_from_type(self.fs)  # pyright: ignore
+        self.fs: ObjectStore = from_url(fs, **kwargs) if isinstance(fs, str) else fs
+        self.protocol: str = schema_from_type(self.fs)
         self.key = key
         self.options = kwargs
 
@@ -103,12 +112,11 @@ class ObstoreBackend(StorageBackend):
             options: Optional backend-specific options
         """
         options = options or {}
-        # Filter out unsupported options
         supported_options = {
             k: v for k, v in options.items() if k in {"use_multipart", "chunk_size", "max_concurrency"}
         }
         obj = self.fs.get(self._to_path(path), **supported_options)
-        return obj.bytes().to_bytes()  # type: ignore[no-any-return]
+        return obj.bytes().to_bytes()
 
     async def get_content_async(self, path: "PathLike", *, options: "Optional[dict[str, Any]]" = None) -> bytes:
         """Return the bytes stored at the specified location asynchronously.
@@ -118,12 +126,11 @@ class ObstoreBackend(StorageBackend):
             options: Optional backend-specific options
         """
         options = options or {}
-        # Filter out unsupported options
         supported_options = {
             k: v for k, v in options.items() if k in {"use_multipart", "chunk_size", "max_concurrency"}
         }
         obj = await self.fs.get_async(self._to_path(path), **supported_options)
-        return (await obj.bytes_async()).to_bytes()  # type: ignore[no-any-return]
+        return (await obj.bytes_async()).to_bytes()
 
     def save_object(
         self,
@@ -170,15 +177,13 @@ class ObstoreBackend(StorageBackend):
 
         _ = self.fs.put(file_object.path, data, **put_params)
         info = self.fs.head(file_object.path)
-        file_object.size = cast("int", info.get("size", file_object.size))  # pyright: ignore
-        file_object.last_modified = (
-            get_mtime_equivalent(info) or datetime.datetime.now(tz=datetime.timezone.utc).timestamp()  # pyright: ignore
-        )
-        file_object.etag = get_or_generate_etag(file_object, info, file_object.last_modified)  # pyright: ignore
-        # Merge backend metadata if available and different
-        backend_meta: dict[str, Any] = info.get("metadata", {})  # pyright: ignore
+        file_object.size = info.get("size", file_object.size)
+        file_object.last_modified = get_mtime_equivalent(info) or dt.datetime.now(tz=dt.timezone.utc).timestamp()
+        file_object.etag = get_or_generate_etag(file_object, info, file_object.last_modified)
+        raw_meta = info.get("metadata")
+        backend_meta: dict[str, Any] = cast("dict[str, Any]", raw_meta) if isinstance(raw_meta, dict) else {}
         if backend_meta and backend_meta != file_object.metadata:
-            file_object.update_metadata(backend_meta)  # pyright: ignore
+            file_object.update_metadata(backend_meta)
 
         return file_object
 
@@ -204,19 +209,13 @@ class ObstoreBackend(StorageBackend):
             A FileObject object representing the saved file, potentially updated.
 
         """
-        from obstore.store import LocalStore
-
-        # Prepare attributes with content_type and custom metadata
         attributes: dict[str, Any] = {}
         if file_object.content_type:
             attributes["Content-Type"] = file_object.content_type
 
-        # Add any custom metadata from file_object.metadata
-        # Obstore attributes must be strings, so serialize non-string values to JSON
         if file_object.metadata:
             attributes.update(_serialize_metadata_for_attributes(file_object.metadata))
 
-        # LocalStore doesn't support attributes parameter - skip it for local filesystem
         put_params: dict[str, Any] = {
             "use_multipart": use_multipart,
             "chunk_size": chunk_size,
@@ -227,15 +226,13 @@ class ObstoreBackend(StorageBackend):
 
         _ = await self.fs.put_async(file_object.path, data, **put_params)
         info = await self.fs.head_async(file_object.path)
-        file_object.size = cast("int", info.get("size", file_object.size))  # pyright: ignore
-        file_object.last_modified = (
-            get_mtime_equivalent(info) or datetime.datetime.now(tz=datetime.timezone.utc).timestamp()  # pyright: ignore
-        )
-        file_object.etag = get_or_generate_etag(file_object, info, file_object.last_modified)  # pyright: ignore
-        # Merge backend metadata if available and different
-        backend_meta: dict[str, Any] = info.get("metadata", {})  # pyright: ignore
+        file_object.size = info.get("size", file_object.size)
+        file_object.last_modified = get_mtime_equivalent(info) or dt.datetime.now(tz=dt.timezone.utc).timestamp()
+        file_object.etag = get_or_generate_etag(file_object, info, file_object.last_modified)
+        raw_meta = info.get("metadata")
+        backend_meta: dict[str, Any] = cast("dict[str, Any]", raw_meta) if isinstance(raw_meta, dict) else {}
         if backend_meta and backend_meta != file_object.metadata:
-            file_object.update_metadata(backend_meta)  # pyright: ignore
+            file_object.update_metadata(backend_meta)
 
         return file_object
 
@@ -265,6 +262,13 @@ class ObstoreBackend(StorageBackend):
 
         await self.fs.delete_async(path_list)
 
+    def _ensure_sign_capable_store(self, target: str) -> "_SignCapableStore":
+        """Validate and narrow ``self.fs`` to a store backend supporting URL signing."""
+        if isinstance(self.fs, (AzureStore, GCSStore, S3Store)):
+            return self.fs
+        msg = f"Error signing {target}: signing is not supported for {type(self.fs).__name__}"
+        raise NotImplementedError(msg)
+
     def sign(
         self,
         paths: "Union[PathLike, Sequence[PathLike]]",
@@ -282,21 +286,33 @@ class ObstoreBackend(StorageBackend):
         Returns:
             A URL or list of URLs for accessing the file
         """
-        http_method = "PUT" if for_upload else "GET"
-        expires_delta = (
-            datetime.timedelta(seconds=expires_in) if expires_in is not None else datetime.timedelta(hours=1)
-        )
+        http_method: Literal["GET", "PUT"] = "PUT" if for_upload else "GET"
+        expires_delta = dt.timedelta(seconds=expires_in) if expires_in is not None else dt.timedelta(hours=1)
         if isinstance(paths, (str, Path, os.PathLike)):
             single_path = self._to_path(paths)
+            store = self._ensure_sign_capable_store(f"path {single_path}")
             try:
-                return obstore_sign(store=self.fs, method=http_method, paths=single_path, expires_in=expires_delta)  # type: ignore
+                return obstore_sign(
+                    store=store,
+                    method=http_method,
+                    paths=single_path,
+                    expires_in=expires_delta,
+                )
             except ValueError as e:
                 msg = f"Error signing path {single_path}: {e}"
                 raise NotImplementedError(msg) from e
 
         path_list = [self._to_path(p) for p in paths]
+        store = self._ensure_sign_capable_store(f"paths {path_list}")
         try:
-            return obstore_sign(store=self.fs, method=http_method, paths=path_list, expires_in=expires_delta)  # type: ignore
+            return list(
+                obstore_sign(
+                    store=store,
+                    method=http_method,
+                    paths=path_list,
+                    expires_in=expires_delta,
+                )
+            )
         except ValueError as e:
             msg = f"Error signing paths {path_list}: {e}"
             raise NotImplementedError(msg) from e
@@ -318,15 +334,14 @@ class ObstoreBackend(StorageBackend):
         Returns:
             A URL or list of URLs for accessing the file
         """
-        http_method = "PUT" if for_upload else "GET"
-        expires_delta = (
-            datetime.timedelta(seconds=expires_in) if expires_in is not None else datetime.timedelta(hours=1)
-        )
+        http_method: Literal["GET", "PUT"] = "PUT" if for_upload else "GET"
+        expires_delta = dt.timedelta(seconds=expires_in) if expires_in is not None else dt.timedelta(hours=1)
         if isinstance(paths, (str, Path, os.PathLike)):
             single_path = self._to_path(paths)
+            store = self._ensure_sign_capable_store(f"path {single_path}")
             try:
-                return await obstore_sign_async(  # type: ignore
-                    store=self.fs,  # pyright: ignore
+                return await obstore_sign_async(
+                    store=store,
                     method=http_method,
                     paths=single_path,
                     expires_in=expires_delta,
@@ -336,12 +351,15 @@ class ObstoreBackend(StorageBackend):
                 raise NotImplementedError(msg) from e
 
         path_list = [self._to_path(p) for p in paths]
+        store = self._ensure_sign_capable_store(f"paths {path_list}")
         try:
-            return await obstore_sign_async(  # type: ignore
-                store=self.fs,  # pyright: ignore
-                method=http_method,
-                paths=path_list,
-                expires_in=expires_delta,
+            return list(
+                await obstore_sign_async(
+                    store=store,
+                    method=http_method,
+                    paths=path_list,
+                    expires_in=expires_delta,
+                )
             )
         except ValueError as e:
             msg = f"Error signing paths {path_list}: {e}"

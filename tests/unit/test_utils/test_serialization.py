@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import importlib
 import json
 import threading
@@ -69,17 +69,17 @@ class ChildCustomType(CustomType):
 
 
 def test_convert_datetime_to_gmt_iso_naive() -> None:
-    dt = datetime.datetime(2025, 12, 17, 10, 30, 0)
-    assert convert_datetime_to_gmt_iso(dt) == "2025-12-17T10:30:00Z"
+    dt_value = dt.datetime(2025, 12, 17, 10, 30, 0)
+    assert convert_datetime_to_gmt_iso(dt_value) == "2025-12-17T10:30:00Z"
 
 
 def test_convert_datetime_to_gmt_iso_aware() -> None:
-    dt = datetime.datetime(2025, 12, 17, 10, 30, 0, tzinfo=datetime.timezone.utc)
-    assert convert_datetime_to_gmt_iso(dt) == "2025-12-17T10:30:00Z"
+    dt_value = dt.datetime(2025, 12, 17, 10, 30, 0, tzinfo=dt.timezone.utc)
+    assert convert_datetime_to_gmt_iso(dt_value) == "2025-12-17T10:30:00Z"
 
 
 def test_convert_date_to_iso() -> None:
-    assert convert_date_to_iso(datetime.date(2025, 12, 17)) == "2025-12-17"
+    assert convert_date_to_iso(dt.date(2025, 12, 17)) == "2025-12-17"
 
 
 # ----------------------------------------------------------------------
@@ -88,23 +88,23 @@ def test_convert_date_to_iso() -> None:
 
 
 def test_default_datetime_encoder() -> None:
-    encoder = DEFAULT_TYPE_ENCODERS[datetime.datetime]
-    assert encoder(datetime.datetime(2025, 12, 17, 10, 30, 0)) == "2025-12-17T10:30:00Z"
+    encoder = DEFAULT_TYPE_ENCODERS[dt.datetime]
+    assert encoder(dt.datetime(2025, 12, 17, 10, 30, 0)) == "2025-12-17T10:30:00Z"
 
 
 def test_default_date_encoder() -> None:
-    encoder = DEFAULT_TYPE_ENCODERS[datetime.date]
-    assert encoder(datetime.date(2025, 12, 17)) == "2025-12-17"
+    encoder = DEFAULT_TYPE_ENCODERS[dt.date]
+    assert encoder(dt.date(2025, 12, 17)) == "2025-12-17"
 
 
 def test_default_time_encoder() -> None:
-    encoder = DEFAULT_TYPE_ENCODERS[datetime.time]
-    assert encoder(datetime.time(10, 30, 0)) == "10:30:00"
+    encoder = DEFAULT_TYPE_ENCODERS[dt.time]
+    assert encoder(dt.time(10, 30, 0)) == "10:30:00"
 
 
 def test_default_timedelta_encoder() -> None:
-    encoder = DEFAULT_TYPE_ENCODERS[datetime.timedelta]
-    assert encoder(datetime.timedelta(hours=1, minutes=30)) == 5400.0
+    encoder = DEFAULT_TYPE_ENCODERS[dt.timedelta]
+    assert encoder(dt.timedelta(hours=1, minutes=30)) == 5400.0
 
 
 def test_default_decimal_encoder() -> None:
@@ -181,6 +181,19 @@ def test_pydantic_missing_sentinel_is_unavailable_when_pydantic_support_is_disab
     monkeypatch.setattr("advanced_alchemy.utils.serialization.PYDANTIC_INSTALLED", False)
 
     assert serialization._get_pydantic_missing_sentinel() is None
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic not installed")
+def test_schema_dump_pydantic_emits_no_warnings() -> None:
+    """Dumping a Pydantic model with sentinels included must not emit deprecation warnings."""
+    from pydantic import BaseModel
+
+    class UpdateSchema(BaseModel):
+        name: str = "Ada"
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert schema_dump(UpdateSchema(), exclude_unset=False) == {"name": "Ada"}
 
 
 @pytest.mark.skipif(not MSGSPEC_INSTALLED, reason="msgspec not installed")
@@ -556,7 +569,7 @@ def test_msgspec_custom_type_encoders_override_native_values() -> None:
             Decimal: lambda _: "custom-decimal",
             UUID: lambda _: "custom-uuid",
             bytes: lambda _: "custom-bytes",
-            datetime.datetime: lambda _: "custom-datetime",
+            dt.datetime: lambda _: "custom-datetime",
         }
     )
 
@@ -566,7 +579,7 @@ def test_msgspec_custom_type_encoders_override_native_values() -> None:
                 "decimal": Decimal("1.2"),
                 "uuid": UUID("12345678-1234-5678-1234-567812345678"),
                 "bytes": b"abc",
-                "datetime": datetime.datetime(2026, 1, 2, 3, 4, 5, tzinfo=datetime.timezone.utc),
+                "datetime": dt.datetime(2026, 1, 2, 3, 4, 5, tzinfo=dt.timezone.utc),
             }
         )
     )
@@ -855,22 +868,22 @@ def test_all_exports_present() -> None:
 
 
 def test_encode_complex_type_datetime() -> None:
-    dt = datetime.datetime(2025, 12, 17, 10, 30, 0)
-    assert encode_complex_type(dt) == {"__type__": "datetime", "value": "2025-12-17T10:30:00"}
+    dt_value = dt.datetime(2025, 12, 17, 10, 30, 0)
+    assert encode_complex_type(dt_value) == {"__type__": "datetime", "value": "2025-12-17T10:30:00"}
 
 
 def test_encode_complex_type_date() -> None:
-    d = datetime.date(2025, 12, 17)
+    d = dt.date(2025, 12, 17)
     assert encode_complex_type(d) == {"__type__": "date", "value": "2025-12-17"}
 
 
 def test_encode_complex_type_time() -> None:
-    t = datetime.time(10, 30, 0)
+    t = dt.time(10, 30, 0)
     assert encode_complex_type(t) == {"__type__": "time", "value": "10:30:00"}
 
 
 def test_encode_complex_type_timedelta() -> None:
-    td = datetime.timedelta(seconds=42)
+    td = dt.timedelta(seconds=42)
     assert encode_complex_type(td) == {"__type__": "timedelta", "value": 42.0}
 
 
@@ -924,10 +937,10 @@ def test_decode_complex_type_unknown_marker_returns_dict() -> None:
 @pytest.mark.parametrize(
     ("marker", "expected"),
     [
-        ({"__type__": "datetime", "value": "2025-12-17T10:30:00"}, datetime.datetime(2025, 12, 17, 10, 30, 0)),
-        ({"__type__": "date", "value": "2025-12-17"}, datetime.date(2025, 12, 17)),
-        ({"__type__": "time", "value": "10:30:00"}, datetime.time(10, 30, 0)),
-        ({"__type__": "timedelta", "value": 42.0}, datetime.timedelta(seconds=42)),
+        ({"__type__": "datetime", "value": "2025-12-17T10:30:00"}, dt.datetime(2025, 12, 17, 10, 30, 0)),
+        ({"__type__": "date", "value": "2025-12-17"}, dt.date(2025, 12, 17)),
+        ({"__type__": "time", "value": "10:30:00"}, dt.time(10, 30, 0)),
+        ({"__type__": "timedelta", "value": 42.0}, dt.timedelta(seconds=42)),
         ({"__type__": "decimal", "value": "19.99"}, Decimal("19.99")),
         ({"__type__": "bytes", "value": "00ff"}, b"\x00\xff"),
         (
@@ -1092,3 +1105,31 @@ def test_pydantic_support() -> None:
         age: int
 
     assert encode_json({"model": MyModel(name="test", age=25)}) == '{"model":{"name":"test","age":25}}'
+
+
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="pydantic not installed")
+def test_get_type_adapter_guards_failfast_for_models_and_lists(monkeypatch: pytest.MonkeyPatch) -> None:
+    from collections.abc import Sequence
+
+    from pydantic import BaseModel, ValidationError
+
+    from advanced_alchemy.utils.serialization import get_type_adapter
+
+    class ItemModel(BaseModel):
+        name: str
+        count: int
+
+    invalid_items = [{"name": "bad", "count": "bad"}, {"name": "bad2", "count": "bad2"}]
+
+    with pytest.raises(ValidationError) as exc_info:
+        get_type_adapter(list[ItemModel]).validate_python(invalid_items)
+    assert exc_info.value.error_count() == 2
+
+    monkeypatch.setattr(serialization, "PYDANTIC_USE_FAILFAST", True)
+    model_adapter = get_type_adapter(ItemModel)
+    sequence_adapter = get_type_adapter(Sequence[ItemModel])
+    assert model_adapter.validate_python({"name": "a", "count": 1}) == ItemModel(name="a", count=1)
+    assert sequence_adapter.validate_python([{"name": "a", "count": 1}]) == [ItemModel(name="a", count=1)]
+    with pytest.raises(ValidationError) as exc_info:
+        get_type_adapter(list[ItemModel]).validate_python(invalid_items)
+    assert exc_info.value.error_count() == 1

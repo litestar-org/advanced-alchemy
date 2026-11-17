@@ -2,9 +2,7 @@
 Database Seeding
 ====================
 
-When setting up a new environment or staging server, you often want starter rows—such as default roles, categories, or sample products—loaded from version-controlled fixture files.
-
-Advanced Alchemy's fixture helpers find, parse, stream, and write these files for you: ``open_fixture_sync`` and ``open_fixture_async`` load a whole fixture, ``iter_fixture_sync`` and ``iter_fixture_async`` stream it in batches, and ``write_fixture_sync`` and ``write_fixture_async`` write one.
+Advanced Alchemy provides synchronous and asynchronous utilities for loading, streaming, and writing JSON, JSON Lines, and CSV seed fixtures: ``open_fixture_sync`` and ``open_fixture_async`` load complete fixtures, ``iter_fixture_sync`` and ``iter_fixture_async`` stream records in batches, and ``write_fixture_sync`` and ``write_fixture_async`` write plain, compressed, or sharded fixture files.
 
 Fixture Formats
 ---------------

@@ -2,7 +2,7 @@
 Sanic Integration
 =================
 
-Advanced Alchemy integrates with Sanic through ``sanic-ext``, managing engines on ``app.ctx``, creating lazy per-request sessions on ``request.ctx``, and injecting ``AsyncSession`` straight into route handlers.
+Advanced Alchemy integrates with Sanic and ``sanic-ext``, managing engine lifecycles on ``app.ctx``, attaching per-request sessions on ``request.ctx``, and injecting ``AsyncSession`` or ``Session`` into route handlers.
 
 What's Included for Sanic
 -------------------------
@@ -12,13 +12,13 @@ What's Included for Sanic
    :widths: 28 46 26
 
    * - Feature
-     - What It Gives You
+     - Capabilities
      - Reference
    * - **sanic-ext Injection**
      - Injects ``AsyncSession`` or ``Session`` directly into route parameters with ``add_session_dependency``.
      - :doc:`API </reference/extensions/sanic/index>`
    * - **Request Context Sessions**
-     - Lazily opens one session per request on ``request.ctx`` and cleans it up when the response finishes.
+     - Attaches a SQLAlchemy session on ``request.ctx`` during ``on_request`` middleware and commits or closes it when the response completes.
      - :doc:`API </reference/extensions/sanic/index>`
    * - **Multiple Databases**
      - Supports multiple sync or async databases side by side using named ``bind_key`` configs.

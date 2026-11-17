@@ -2,12 +2,10 @@
 Litestar Services, Filters and DTOs
 ===================================
 
-When building CRUD routes in Litestar, you rarely want to wire up ``db_session`` manually or hand-write query parameters for pagination, search, and sorting on every controller.
+Advanced Alchemy provides two Litestar helpers for controller dependency injection and schema generation:
 
-Advanced Alchemy provides two Litestar helpers that remove that boilerplate:
-
-1. **Service & Filter Dependencies** (``create_service_dependencies``) — injects your service and pre-built query filters directly into controller methods.
-2. **SQLAlchemy DTOs** (``SQLAlchemyDTO``) — generates Litestar request and response DTOs straight from your SQLAlchemy models.
+1. **Service & Filter Dependencies** (``create_service_dependencies``): Injects services and typed OpenAPI query filters into controller routes.
+2. **SQLAlchemy DTOs** (``SQLAlchemyDTO``): Generates Litestar request and response DTOs directly from SQLAlchemy models.
 
 Injecting Services and Query Filters
 ------------------------------------
@@ -149,6 +147,6 @@ Use ``max_nested_depth`` to control how many relationship levels ``SQLAlchemyDTO
 Related Guides
 --------------
 
-* :doc:`/usage/frameworks/litestar` — Litestar plugin setup and complete runnable app.
-* :doc:`/usage/frameworks/litestar_sessions` — Transactions, multi-binds, and server-side session stores.
-* :doc:`/reference/extensions/litestar/dto` — ``SQLAlchemyDTO`` and ``SQLAlchemyDTOConfig`` API reference.
+* :doc:`/usage/frameworks/litestar`: Litestar plugin setup and complete runnable app.
+* :doc:`/usage/frameworks/litestar_sessions`: Transactions, multi-binds, and server-side session stores.
+* :doc:`/reference/extensions/litestar/dto`: ``SQLAlchemyDTO`` and ``SQLAlchemyDTOConfig`` API reference.

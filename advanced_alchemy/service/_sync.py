@@ -178,7 +178,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         if resolved_model_type is not None and getattr(resolved_repo_type, "model_type", None) is None:
             repo_kwargs.setdefault("model_type", resolved_model_type)
         self.repository_type = resolved_repo_type
-        self._repository_instance: SQLAlchemySyncRepositoryT = resolved_repo_type(  # type: ignore[assignment]
+        repository_instance: Any = resolved_repo_type(
             session=session,
             statement=statement,
             auto_expunge=auto_expunge,
@@ -193,6 +193,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
             count_with_window_function=count_with_window_function,
             **repo_kwargs,
         )
+        self._repository_instance: SQLAlchemySyncRepositoryT = repository_instance
 
     def _get_uniquify(self, uniquify: Optional[bool] = None) -> bool:
         return bool(uniquify or self.uniquify)
@@ -220,7 +221,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     def count(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -294,7 +295,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         self,
         item_id: PrimaryKeyType,
         *,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
         auto_expunge: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
@@ -354,7 +355,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
         self,
         item_id: PrimaryKeyType,
         *,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
         auto_expunge: Optional[bool] = None,
         load: Optional[LoadSpec] = None,
@@ -391,7 +392,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     def get_one(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         auto_expunge: Optional[bool] = None,
         load: Optional[LoadSpec] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
@@ -438,7 +439,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     def get_one_or_none(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         auto_expunge: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
@@ -581,7 +582,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     def get_many_and_count(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         auto_expunge: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
@@ -634,7 +635,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     def list_and_count(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         auto_expunge: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
@@ -678,7 +679,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     def new(
         cls,
         session: Optional[Union[Session, scoped_session[Session]]] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         config: Optional[SQLAlchemySyncConfig] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
@@ -734,7 +735,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     def get_many(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         auto_expunge: Optional[bool] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
@@ -784,7 +785,7 @@ class SQLAlchemySyncRepositoryReadService(ResultConverter, Generic[ModelT, SQLAl
     def list(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         auto_expunge: Optional[bool] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,

@@ -6,7 +6,7 @@
 #   "orjson"
 # ]
 # ///
-import datetime
+import datetime as dt
 from typing import Annotated, Optional
 from uuid import UUID
 
@@ -41,7 +41,7 @@ class AuthorModel(base.UUIDBase):
     # we can optionally provide the table name instead of auto-generating it
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[Optional[datetime.date]]
+    dob: Mapped[Optional[dt.date]]
 
 
 class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
@@ -59,17 +59,17 @@ class AuthorService(service.SQLAlchemyAsyncRepositoryService[AuthorModel]):
 class Author(BaseModel):
     id: Optional[UUID]
     name: str
-    dob: Optional[datetime.date]
+    dob: Optional[dt.date]
 
 
 class AuthorCreate(BaseModel):
     name: str
-    dob: Optional[datetime.date]
+    dob: Optional[dt.date]
 
 
 class AuthorUpdate(BaseModel):
     name: Optional[str]
-    dob: Optional[datetime.date]
+    dob: Optional[dt.date]
 
 
 @author_router.get(path="/authors", response_model=service.OffsetPagination[Author])

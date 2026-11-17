@@ -2,9 +2,7 @@
 Filtering and Pagination
 ========================
 
-Suppose a reader visits your blog and searches for ``"python"``, filters to published articles from the past week, and views 20 posts per page.
-
-Instead of manually conditionally appending ``.where()`` and ``.limit()`` clauses in every route, you can pass both plain SQLAlchemy expressions and ready-made filter objects directly into your repository calls.
+Repository query methods accept both SQLAlchemy column expressions and reusable :class:`~advanced_alchemy.filters.StatementFilter` objects without manual conditional ``.where()`` and ``.limit()`` chaining.
 
 Example Setup
 -------------
@@ -59,7 +57,7 @@ Example Setup
 Plain SQLAlchemy Conditions
 ---------------------------
 
-For straightforward checks inside Python code, pass SQLAlchemy column expressions directly to ``get_many`` or ``get_many_and_count``:
+Pass SQLAlchemy column expressions directly to ``get_many`` or ``get_many_and_count``:
 
 .. code-block:: python
 
@@ -108,7 +106,7 @@ Built-In Filter Helpers
 Paginating Results
 ------------------
 
-Combine ``LimitOffset`` with ``get_many_and_count`` for both page rows and total matching counts. By default (``count_with_window_function=True``), ``get_many_and_count`` runs a single query using an analytical ``COUNT(*) OVER()`` window function. Pass ``count_with_window_function=False`` (per call, or as a class default on your repository or service) to run two focused queries—an indexed page ``SELECT`` and a separate ``COUNT(*)``—which avoids extra sorting or scattered heap reads on large sorted tables or random/UUID primary keys (Cloud Spanner always uses the two-query path):
+Combine ``LimitOffset`` with ``get_many_and_count`` for both page rows and total matching counts. By default (``count_with_window_function=True``), ``get_many_and_count`` runs a single query using an analytical ``COUNT(*) OVER()`` window function. Pass ``count_with_window_function=False`` (per call, or as a class default on your repository or service) to run two focused queries (an indexed page ``SELECT`` and a separate ``COUNT(*)``), avoiding extra sorting or scattered heap reads on large sorted tables or random/UUID primary keys (Cloud Spanner always uses the two-query path):
 
 .. code-block:: python
 

@@ -1462,7 +1462,7 @@ def test_setup_file_object_listeners() -> None:
 
 def test_touch_updated_timestamp() -> None:
     """Test touch_updated_timestamp updates timestamps on dirty instances."""
-    import datetime
+    import datetime as dt
 
     from advanced_alchemy._listeners import touch_updated_timestamp
 
@@ -1489,7 +1489,7 @@ def test_touch_updated_timestamp() -> None:
             touch_updated_timestamp(session)
 
             # Verify instance.updated_at was set
-            assert isinstance(instance.updated_at, datetime.datetime)
+            assert isinstance(instance.updated_at, dt.datetime)
 
 
 def test_has_persistent_column_changes() -> None:
@@ -1787,7 +1787,7 @@ def test_sync_file_object_listener_no_tracker_rollback() -> None:
 
 def test_touch_updated_timestamp_with_column_changes() -> None:
     """Test touch_updated_timestamp sets timestamp when persistent column changes detected."""
-    import datetime
+    import datetime as dt
 
     from advanced_alchemy._listeners import touch_updated_timestamp
 
@@ -1819,7 +1819,7 @@ def test_touch_updated_timestamp_with_column_changes() -> None:
 
         touch_updated_timestamp(session)
 
-        assert isinstance(instance.updated_at, datetime.datetime)
+        assert isinstance(instance.updated_at, dt.datetime)
 
 
 def test_touch_updated_timestamp_skips_when_no_changes() -> None:
@@ -2055,3 +2055,36 @@ def test_flush_logs_failed_listener_task(caplog: pytest.LogCaptureFixture) -> No
         asyncio.run(run())
 
     assert "cache backend down" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_obstore_backend_sign_narrows_store_and_coerces_sequence_to_list() -> None:
+    """Verify ObstoreBackend rejects non-signable stores and returns a list for multi-path signing."""
+    pytest.importorskip("obstore")
+    from obstore.store import MemoryStore, S3Store
+
+    from advanced_alchemy.types.file_object.backends.obstore import ObstoreBackend
+
+    memory_backend = ObstoreBackend(key="mem", fs=MemoryStore())
+    with pytest.raises(NotImplementedError, match=r"Error signing path a\.txt"):
+        memory_backend.sign("a.txt")
+    with pytest.raises(NotImplementedError, match=r"Error signing paths"):
+        await memory_backend.sign_async(["a.txt", "b.txt"])
+
+    s3_store = S3Store(bucket="bucket", region="us-east-1", skip_signature=True)
+    s3_backend = ObstoreBackend(key="s3", fs=s3_store)
+    with patch(
+        "advanced_alchemy.types.file_object.backends.obstore.obstore_sign",
+        return_value=("https://example.com/a", "https://example.com/b"),
+    ):
+        signed_sync = s3_backend.sign(["a.txt", "b.txt"])
+    assert signed_sync == ["https://example.com/a", "https://example.com/b"]
+    assert isinstance(signed_sync, list)
+
+    with patch(
+        "advanced_alchemy.types.file_object.backends.obstore.obstore_sign_async",
+        new=AsyncMock(return_value=("https://example.com/a", "https://example.com/b")),
+    ):
+        signed_async = await s3_backend.sign_async(["a.txt", "b.txt"])
+    assert signed_async == ["https://example.com/a", "https://example.com/b"]
+    assert isinstance(signed_async, list)

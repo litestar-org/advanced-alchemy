@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import datetime  # noqa: TC003
+import datetime as dt  # noqa: TC003
 from typing import Annotated, Optional
 from uuid import UUID  # noqa: TC003
 
@@ -32,7 +32,7 @@ class BaseModel(_BaseModel):
 class AuthorModel(UUIDBase):
     __tablename__ = "author"
     name: Mapped[str]
-    dob: Mapped[Optional[datetime.date]]  # noqa: UP045
+    dob: Mapped[Optional[dt.date]]  # noqa: UP045
     books: Mapped[list[BookModel]] = relationship(back_populates="author", lazy="noload")
 
 
@@ -46,17 +46,17 @@ class BookModel(UUIDAuditBase):
 class Author(BaseModel):
     id: UUID | None
     name: str
-    dob: datetime.date | None = None
+    dob: dt.date | None = None
 
 
 class AuthorCreate(BaseModel):
     name: str
-    dob: datetime.date | None = None
+    dob: dt.date | None = None
 
 
 class AuthorUpdate(BaseModel):
     name: str | None = None
-    dob: datetime.date | None = None
+    dob: dt.date | None = None
 
 
 class AuthorRepository(SQLAlchemyAsyncRepository[AuthorModel]):

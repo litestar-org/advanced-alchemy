@@ -2,9 +2,7 @@
 Repositories
 ============
 
-Without a repository, every web route ends up repeating the same SQLAlchemy query code: building a ``select()``, adding ``where()`` clauses, counting total rows for pagination, and handling ``NoResultFound`` errors.
-
-A **Repository** wraps one table model and gives you ready-made, type-checked methods—``add``, ``get``, ``get_many``, ``get_many_and_count``, ``upsert_many``, and ``delete``—so your routes read like plain English.
+A **Repository** binds to a single SQLAlchemy model and provides typed synchronous or asynchronous methods (``add``, ``get``, ``get_many``, ``get_many_and_count``, ``upsert_many``, ``delete``) for CRUD, filtering, pagination, and dialect-translated error handling.
 
 .. container:: aa-diagram
 

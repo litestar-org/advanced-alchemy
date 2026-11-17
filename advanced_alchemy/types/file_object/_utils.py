@@ -5,11 +5,13 @@ from typing import TYPE_CHECKING, Any, Optional
 from zlib import adler32
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from advanced_alchemy.types.file_object.base import PathLike
     from advanced_alchemy.types.file_object.file import FileObject
 
 
-def get_mtime_equivalent(info: dict[str, Any]) -> Optional[float]:
+def get_mtime_equivalent(info: "Mapping[str, Any]") -> Optional[float]:
     """Return standardized mtime from different implementations.
 
     Args:
@@ -42,7 +44,9 @@ def get_mtime_equivalent(info: dict[str, Any]) -> Optional[float]:
     return None
 
 
-def get_or_generate_etag(file_object: "FileObject", info: dict[str, Any], modified_time: Optional[float] = None) -> str:
+def get_or_generate_etag(
+    file_object: "FileObject", info: "Mapping[str, Any]", modified_time: Optional[float] = None
+) -> str:
     """Return standardized etag from different implementations.
 
     Args:
@@ -64,7 +68,7 @@ def get_or_generate_etag(file_object: "FileObject", info: dict[str, Any], modifi
         return str(etag)
     if file_object.etag is not None:
         return file_object.etag
-    return create_etag_for_file(file_object.path, modified_time, info.get("size", file_object.size))  # type: ignore[arg-type]
+    return create_etag_for_file(file_object.path, modified_time, info.get("size", file_object.size))
 
 
 def create_etag_for_file(path: "PathLike", modified_time: Optional[float], file_size: int) -> str:

@@ -73,7 +73,7 @@ Release Process
 Each major release cycle consists of a few phases:
 
 #. **Planning**: Define roadmap, spec out major features. Work should begin on implementation.
-#. **Development**: Active development on planned features. Ends with an alpha release and branch of ``A.B.x``
-   branch from `main`.
+#. **Development**: Active development on planned features. Ends with an alpha release and cutting an ``A.B.x``
+   branch from ``main``.
 #. **Bugfixes**: Only bugfixes, no new features. Progressively release beta, release candidates.
    Feature freeze at RC. Become more selective with backports to avoid regressions.

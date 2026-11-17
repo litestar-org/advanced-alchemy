@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-import datetime
+import datetime as dt
 import decimal
 import warnings
 from collections.abc import AsyncGenerator, Collection, Generator
@@ -1069,7 +1069,7 @@ async def test_sqlalchemy_repo_list_with_before_after_filter(
     mocker.patch.object(mock_repo.model_type.updated_at, "__gt__", return_value="gt")
     mocker.patch.object(BeforeAfter, "append_to_statement", return_value=statement)
     mock_repo_execute.return_value = MagicMock()
-    await maybe_async(mock_repo.get_many(BeforeAfter("updated_at", datetime.datetime.max, datetime.datetime.min)))
+    await maybe_async(mock_repo.get_many(BeforeAfter("updated_at", dt.datetime.max, dt.datetime.min)))
     mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -1086,7 +1086,7 @@ async def test_sqlalchemy_repo_list_with_on_before_after_filter(
     mocker.patch.object(OnBeforeAfter, "append_to_statement", return_value=statement)
 
     mock_repo_execute.return_value = MagicMock()
-    await maybe_async(mock_repo.get_many(OnBeforeAfter("updated_at", datetime.datetime.max, datetime.datetime.min)))
+    await maybe_async(mock_repo.get_many(OnBeforeAfter("updated_at", dt.datetime.max, dt.datetime.min)))
     mock_repo._execute.assert_called_with(statement, uniquify=False)  # pyright: ignore[reportFunctionMemberAccess,reportPrivateUsage]
 
 
@@ -1263,14 +1263,14 @@ async def test_filter_in_collection_noop_if_collection_empty(mock_repo: SQLAlche
 @pytest.mark.parametrize(
     ("before", "after"),
     [
-        (datetime.datetime.max, datetime.datetime.min),
-        (None, datetime.datetime.min),
-        (datetime.datetime.max, None),
+        (dt.datetime.max, dt.datetime.min),
+        (None, dt.datetime.min),
+        (dt.datetime.max, None),
     ],
 )
 async def test_filter_on_datetime_field(
-    before: datetime.datetime,
-    after: datetime.datetime,
+    before: dt.datetime,
+    after: dt.datetime,
     mock_repo: SQLAlchemyAsyncRepository[Any],
     mocker: MockerFixture,
     monkeypatch: MonkeyPatch,
@@ -1349,19 +1349,19 @@ async def test_type_must_use_in_standard_python_types(mock_repo: SQLAlchemyAsync
 async def test_type_must_use_in_safe_datetime_decimal_types(mock_repo: SQLAlchemyAsyncRepository[Any]) -> None:
     """Test that datetime and decimal types can use ANY() operator."""
     # Test datetime.date
-    result = mock_repo._type_must_use_in_instead_of_any([datetime.date(2024, 1, 1)])
+    result = mock_repo._type_must_use_in_instead_of_any([dt.date(2024, 1, 1)])
     assert result is False
 
     # Test datetime.datetime
-    result = mock_repo._type_must_use_in_instead_of_any([datetime.datetime.now()])
+    result = mock_repo._type_must_use_in_instead_of_any([dt.datetime.now()])
     assert result is False
 
     # Test datetime.time
-    result = mock_repo._type_must_use_in_instead_of_any([datetime.time(12, 30)])
+    result = mock_repo._type_must_use_in_instead_of_any([dt.time(12, 30)])
     assert result is False
 
     # Test datetime.timedelta
-    result = mock_repo._type_must_use_in_instead_of_any([datetime.timedelta(days=1)])
+    result = mock_repo._type_must_use_in_instead_of_any([dt.timedelta(days=1)])
     assert result is False
 
     # Test decimal.Decimal
@@ -1586,10 +1586,10 @@ def test_async_no_field_type_safe_values(mock_repo: SQLAlchemyAsyncRepository[An
         True,
         b"bytes",
         decimal.Decimal("10.5"),
-        datetime.date.today(),
-        datetime.datetime.now(),
-        datetime.time(12, 30),
-        datetime.timedelta(days=1),
+        dt.date.today(),
+        dt.datetime.now(),
+        dt.time(12, 30),
+        dt.timedelta(days=1),
     ]
 
     result = mock_repo._type_must_use_in_instead_of_any(safe_values)
@@ -1883,8 +1883,8 @@ def test_build_cache_key_returns_none_for_raw_filters() -> None:
 
 def test_normalize_cache_key_value_complex_types() -> None:
     """Normalize cache key values for complex types (datetime, uuid, etc)."""
-    dt = datetime.datetime(2025, 12, 14, 10, 30, 0)
-    result = _normalize_cache_key_value(dt)
+    dt_value = dt.datetime(2025, 12, 14, 10, 30, 0)
+    result = _normalize_cache_key_value(dt_value)
     assert result == {"__type__": "datetime", "value": "2025-12-14T10:30:00"}
 
     from uuid import UUID
@@ -2491,7 +2491,7 @@ def test_was_attribute_set_with_modified_attributes() -> None:
     instance.id = uuid4()  # Explicitly set id
 
     # Also test setting a datetime attribute
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = dt.datetime.now(dt.timezone.utc)
     instance.created_at = now  # Explicitly modify created_at
 
     # Get the mapper/inspector
@@ -3176,7 +3176,7 @@ async def test_mock_repository_limit_offset_and_get_many_and_count_parity() -> N
 
     ItemRepo.__database_clear__()
     repo = ItemRepo(session=AsyncMock(spec=AsyncSession, bind=MagicMock()))
-    base_time = datetime.datetime(2026, 1, 1, 12, 0, tzinfo=datetime.timezone.utc)
+    base_time = dt.datetime(2026, 1, 1, 12, 0, tzinfo=dt.timezone.utc)
     items = [
         InMemoryFilterTestModel(
             id=i,
@@ -3185,8 +3185,8 @@ async def test_mock_repository_limit_offset_and_get_many_and_count_parity() -> N
             category="even" if i % 2 == 0 else "odd",
             score=i * 10,
             is_active=i <= 8,
-            created_at=base_time + datetime.timedelta(days=i),
-            updated_at=base_time + datetime.timedelta(days=i),
+            created_at=base_time + dt.timedelta(days=i),
+            updated_at=base_time + dt.timedelta(days=i),
         )
         for i in range(1, 13)
     ]
@@ -3212,7 +3212,7 @@ async def test_mock_repository_datetime_and_extended_filters_parity() -> None:
 
     ItemRepo.__database_clear__()
     repo = ItemRepo(session=AsyncMock(spec=AsyncSession, bind=MagicMock()))
-    base_time = datetime.datetime(2026, 1, 1, 12, 0, tzinfo=datetime.timezone.utc)
+    base_time = dt.datetime(2026, 1, 1, 12, 0, tzinfo=dt.timezone.utc)
     await repo.add_many(
         [
             InMemoryFilterTestModel(
@@ -3222,8 +3222,8 @@ async def test_mock_repository_datetime_and_extended_filters_parity() -> None:
                 category="tech",
                 score=10,
                 is_active=True,
-                created_at=base_time + datetime.timedelta(days=1),
-                updated_at=base_time + datetime.timedelta(days=1),
+                created_at=base_time + dt.timedelta(days=1),
+                updated_at=base_time + dt.timedelta(days=1),
             ),
             InMemoryFilterTestModel(
                 id=2,
@@ -3232,8 +3232,8 @@ async def test_mock_repository_datetime_and_extended_filters_parity() -> None:
                 category=None,
                 score=20,
                 is_active=False,
-                created_at=base_time + datetime.timedelta(days=5),
-                updated_at=base_time + datetime.timedelta(days=5),
+                created_at=base_time + dt.timedelta(days=5),
+                updated_at=base_time + dt.timedelta(days=5),
             ),
             InMemoryFilterTestModel(
                 id=3,
@@ -3242,8 +3242,8 @@ async def test_mock_repository_datetime_and_extended_filters_parity() -> None:
                 category="science",
                 score=30,
                 is_active=True,
-                created_at=base_time + datetime.timedelta(days=10),
-                updated_at=base_time + datetime.timedelta(days=10),
+                created_at=base_time + dt.timedelta(days=10),
+                updated_at=base_time + dt.timedelta(days=10),
             ),
         ]
     )
@@ -3251,8 +3251,8 @@ async def test_mock_repository_datetime_and_extended_filters_parity() -> None:
     window_matches = await repo.get_many(
         BeforeAfter(
             field_name="created_at",
-            after=base_time + datetime.timedelta(days=2),
-            before=base_time + datetime.timedelta(days=8),
+            after=base_time + dt.timedelta(days=2),
+            before=base_time + dt.timedelta(days=8),
         )
     )
     assert [m.id for m in window_matches] == [2]
@@ -3598,7 +3598,7 @@ def test_mock_repository_comparison_filter_operators(
     class ItemMockRepo(SQLAlchemySyncMockRepository[InMemoryFilterTestModel]):
         pass
 
-    base_time = datetime.datetime(2026, 1, 10, 12, 0, tzinfo=datetime.timezone.utc)
+    base_time = dt.datetime(2026, 1, 10, 12, 0, tzinfo=dt.timezone.utc)
     ItemMockRepo.__database_clear__()
     try:
         repo = ItemMockRepo(session=MagicMock(spec=Session, bind=MagicMock()))
@@ -3625,7 +3625,7 @@ def test_mock_repository_sql_ast_and_edge_expressions() -> None:
     class ItemMockRepo(SQLAlchemySyncMockRepository[InMemoryFilterTestModel]):
         pass
 
-    base_time = datetime.datetime(2026, 1, 10, 12, 0, tzinfo=datetime.timezone.utc)
+    base_time = dt.datetime(2026, 1, 10, 12, 0, tzinfo=dt.timezone.utc)
     ItemMockRepo.__database_clear__()
     try:
         repo = ItemMockRepo(session=MagicMock(spec=Session, bind=MagicMock()))
@@ -3640,7 +3640,7 @@ def test_mock_repository_sql_ast_and_edge_expressions() -> None:
                     slug="beta",
                     category=None,
                     score=20,
-                    created_at=base_time + datetime.timedelta(days=2),
+                    created_at=base_time + dt.timedelta(days=2),
                 ),
                 InMemoryFilterTestModel(
                     id=3,
@@ -3648,7 +3648,7 @@ def test_mock_repository_sql_ast_and_edge_expressions() -> None:
                     slug="gamma",
                     category="science",
                     score=30,
-                    created_at=base_time + datetime.timedelta(days=4),
+                    created_at=base_time + dt.timedelta(days=4),
                 ),
             ]
         )
@@ -3671,7 +3671,7 @@ def test_mock_repository_sql_ast_and_edge_expressions() -> None:
         assert [
             i.id
             for i in repo.get_many(
-                ComparisonFilter(field_name="created_at", operator="dateeq", value=datetime.date(2026, 1, 12))
+                ComparisonFilter(field_name="created_at", operator="dateeq", value=dt.date(2026, 1, 12))
             )
         ] == [2]
         assert [
@@ -3679,8 +3679,8 @@ def test_mock_repository_sql_ast_and_edge_expressions() -> None:
             for i in repo.get_many(
                 OnBeforeAfter(
                     field_name="created_at",
-                    on_or_after=base_time + datetime.timedelta(days=2),
-                    on_or_before=base_time + datetime.timedelta(days=2),
+                    on_or_after=base_time + dt.timedelta(days=2),
+                    on_or_before=base_time + dt.timedelta(days=2),
                 )
             )
         ] == [2]
@@ -4165,7 +4165,7 @@ class MockGridArticle(MockGridBase):
     views: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(30))
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False)
-    published_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
+    published_at: Mapped[dt.datetime | None] = mapped_column(nullable=True)
     author_id: Mapped[int | None] = mapped_column(ForeignKey("mock_grid_author.id"), nullable=True)
     author: Mapped[MockGridAuthor | None] = relationship(back_populates="articles")
     tags: Mapped[list[MockGridTag]] = relationship(secondary=mock_grid_article_tag)
@@ -4184,7 +4184,7 @@ def _seed_mock_grid_entities() -> list[MockGridArticle]:
             views=250,
             status="draft",
             is_featured=False,
-            published_at=datetime.datetime(2026, 1, 10, 12, 0),
+            published_at=dt.datetime(2026, 1, 10, 12, 0),
             author=cody,
             tags=[tag_py, tag_sql],
         ),
@@ -4194,7 +4194,7 @@ def _seed_mock_grid_entities() -> list[MockGridArticle]:
             views=400,
             status="draft",
             is_featured=False,
-            published_at=datetime.datetime(2026, 2, 15, 8, 30),
+            published_at=dt.datetime(2026, 2, 15, 8, 30),
             author=ada,
             tags=[tag_sql],
         ),
@@ -4285,8 +4285,8 @@ def _seed_mock_grid_entities() -> list[MockGridArticle]:
             [
                 BeforeAfter(
                     "published_at",
-                    before=datetime.datetime(2026, 3, 1, 0, 0),
-                    after=datetime.datetime(2026, 1, 1, 0, 0),
+                    before=dt.datetime(2026, 3, 1, 0, 0),
+                    after=dt.datetime(2026, 1, 1, 0, 0),
                 ),
                 NullFilter("published_at"),
             ],
@@ -4387,8 +4387,8 @@ async def test_async_mock_repository_matches_sync_and_sqlite_grid_parity() -> No
         inclusive_items = await mock_repo.get_many(
             OnBeforeAfter(
                 "published_at",
-                on_or_before=datetime.datetime(2026, 1, 10, 12, 0),
-                on_or_after=datetime.datetime(2026, 1, 10, 12, 0),
+                on_or_before=dt.datetime(2026, 1, 10, 12, 0),
+                on_or_after=dt.datetime(2026, 1, 10, 12, 0),
             )
         )
         assert [item.id for item in inclusive_items] == [1]
@@ -4399,8 +4399,8 @@ async def test_async_mock_repository_matches_sync_and_sqlite_grid_parity() -> No
             for item in await mock_repo.get_many(
                 OnBeforeAfter(
                     "published_at",
-                    on_or_before=datetime.datetime(2026, 2, 15, 8, 30),
-                    on_or_after=datetime.datetime(2026, 2, 15, 8, 30),
+                    on_or_before=dt.datetime(2026, 2, 15, 8, 30),
+                    on_or_after=dt.datetime(2026, 2, 15, 8, 30),
                 )
             )
         ] == [2]
@@ -4409,8 +4409,8 @@ async def test_async_mock_repository_matches_sync_and_sqlite_grid_parity() -> No
             for item in await mock_repo.get_many(
                 BeforeAfter(
                     "published_at",
-                    before=datetime.datetime(2026, 2, 15, 8, 30),
-                    after=datetime.datetime(2026, 1, 10, 12, 0),
+                    before=dt.datetime(2026, 2, 15, 8, 30),
+                    after=dt.datetime(2026, 1, 10, 12, 0),
                 )
             )
         ] == []
@@ -4422,7 +4422,7 @@ async def test_async_mock_repository_matches_sync_and_sqlite_grid_parity() -> No
                 RelationshipFilter(MockGridArticle.author, [ComparisonFilter("name", "eq", "Ada")]),
                 ComparisonFilter("views", "lt", 500),
                 ComparisonFilter("views", "gt", 200),
-                ComparisonFilter("published_at", "dateeq", datetime.date(2026, 2, 15)),
+                ComparisonFilter("published_at", "dateeq", dt.date(2026, 2, 15)),
             )
         } == {2}
         assert {

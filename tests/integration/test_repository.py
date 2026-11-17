@@ -1,7 +1,7 @@
 """Integration tests for the SQLAlchemy Repository implementation using session-based fixtures."""
 
 import asyncio
-import datetime
+import datetime as dt
 from collections.abc import Generator
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union, cast
 from unittest.mock import create_autospec
@@ -193,7 +193,7 @@ def _clear_in_memory_db() -> "Generator[None, None, None]":  # pyright: ignore[r
 
 @pytest.fixture()
 def frozen_datetime() -> "Generator[Coordinates, None, None]":
-    with travel(lambda: datetime.datetime.now(datetime.timezone.utc), tick=False) as frozen:
+    with travel(lambda: dt.datetime.now(dt.timezone.utc), tick=False) as frozen:
         yield frozen
 
 
@@ -327,7 +327,7 @@ async def test_repo_create_method(seeded_test_session_async: "tuple[AsyncSession
     session, models = seeded_test_session_async
     author_repo = create_repository(session, models["author"])
 
-    new_author_data = {"name": "Test Author", "dob": datetime.datetime.now(datetime.timezone.utc).date()}
+    new_author_data = {"name": "Test Author", "dob": dt.datetime.now(dt.timezone.utc).date()}
 
     new_author = await maybe_async(author_repo.create(new_author_data))
     assert new_author.name == "Test Author"
@@ -375,7 +375,7 @@ async def test_service_update_with_dict_data_refreshes_timestamp(
     original_created_at = author.created_at
     original_updated_at = author.updated_at
 
-    frozen_datetime.shift(datetime.timedelta(seconds=5))
+    frozen_datetime.shift(dt.timedelta(seconds=5))
     update_payload = {"name": "Dict Driven Update"}
 
     updated_author = await maybe_async(author_service.update(update_payload, item_id=author.id))
@@ -517,7 +517,7 @@ async def test_service_create_method(seeded_test_session_async: "tuple[AsyncSess
     _session, _models = seeded_test_session_async
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
-    new_author_data = {"name": "Service Test Author", "dob": datetime.datetime.now(datetime.timezone.utc).date()}
+    new_author_data = {"name": "Service Test Author", "dob": dt.datetime.now(dt.timezone.utc).date()}
 
     new_author = await maybe_async(author_service.create(new_author_data))
     assert new_author.name == "Service Test Author"
@@ -608,7 +608,7 @@ async def test_repo_filter_before_after(seeded_test_session_async: "tuple[AsyncS
     author_repo = create_repository(session, models["author"])
 
     # Test date filtering
-    cutoff_date = datetime.datetime(2023, 4, 1, tzinfo=datetime.timezone.utc)
+    cutoff_date = dt.datetime(2023, 4, 1, tzinfo=dt.timezone.utc)
     filter_obj = BeforeAfter(field_name="created_at", before=cutoff_date, after=None)
 
     authors = await maybe_async(author_repo.get_many(filter_obj))
@@ -747,13 +747,13 @@ async def test_service_pydantic_partial_update_github_535(
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Create an author
-    author = await maybe_async(author_service.create({"name": "Original Name", "dob": datetime.date(1990, 1, 1)}))
+    author = await maybe_async(author_service.create({"name": "Original Name", "dob": dt.date(1990, 1, 1)}))
     original_dob = author.dob
 
     # Create a Pydantic model for partial update with optional fields
     class AuthorUpdateSchema(pydantic.BaseModel):  # type: ignore[name-defined,misc]
         name: "Optional[str]" = None
-        dob: "Optional[datetime.date]" = None
+        dob: "Optional[dt.date]" = None
 
     # Partial update with only name field set (dob is unset)
     partial_update = AuthorUpdateSchema(name="Updated Name")
@@ -779,13 +779,13 @@ async def test_service_msgspec_partial_update_github_535(
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Create an author
-    author = await maybe_async(author_service.create({"name": "Original Name", "dob": datetime.date(1990, 1, 1)}))
+    author = await maybe_async(author_service.create({"name": "Original Name", "dob": dt.date(1990, 1, 1)}))
     original_dob = author.dob
 
     # Create a msgspec struct for partial update with UNSET field
     class AuthorUpdateSchema(msgspec.Struct):  # type: ignore[name-defined,misc]
         name: "str" = msgspec.UNSET
-        dob: "datetime.date" = msgspec.UNSET
+        dob: "dt.date" = msgspec.UNSET
 
     # Partial update with only name field set (dob is UNSET)
     partial_update = AuthorUpdateSchema(name="Updated Name")
@@ -812,8 +812,8 @@ async def test_service_update_many_schema_types_github_535(
     author_service = get_service_from_session(seeded_test_session_async, "author")
 
     # Create multiple authors
-    author1 = await maybe_async(author_service.create({"name": "Author One", "dob": datetime.date(1990, 1, 1)}))
-    author2 = await maybe_async(author_service.create({"name": "Author Two", "dob": datetime.date(1991, 2, 2)}))
+    author1 = await maybe_async(author_service.create({"name": "Author One", "dob": dt.date(1990, 1, 1)}))
+    author2 = await maybe_async(author_service.create({"name": "Author Two", "dob": dt.date(1991, 2, 2)}))
 
     original_dob1 = author1.dob
     original_dob2 = author2.dob
@@ -835,13 +835,13 @@ async def test_service_update_many_schema_types_github_535(
     class AuthorUpdateSchema(pydantic.BaseModel):  # type: ignore[name-defined,misc]
         id: id_type  # type: ignore[valid-type]
         name: "Optional[str]" = None
-        dob: "Optional[datetime.date]" = None
+        dob: "Optional[dt.date]" = None
 
     # Create msgspec schema for partial updates
     class AuthorUpdateMsgspecSchema(msgspec.Struct):  # type: ignore[name-defined,misc]
         id: id_type  # type: ignore[valid-type]
         name: "str" = msgspec.UNSET
-        dob: "datetime.date" = msgspec.UNSET
+        dob: "dt.date" = msgspec.UNSET
 
     # Test update_many with mixed schema types (Pydantic, msgspec, dict)
     update_data = [
@@ -885,8 +885,8 @@ async def test_repo_update_many_non_returning_backend_refresh(
     authors = await maybe_async(
         author_repo.create_many(
             [
-                {"name": "Author A", "dob": datetime.date(1990, 1, 1)},
-                {"name": "Author B", "dob": datetime.date(1991, 2, 2)},
+                {"name": "Author A", "dob": dt.date(1990, 1, 1)},
+                {"name": "Author B", "dob": dt.date(1991, 2, 2)},
             ]
         )
     )
@@ -926,9 +926,9 @@ async def test_service_mixed_input_types_update_many(
     authors = await maybe_async(
         author_service.create_many(
             [
-                {"name": "Author 1", "dob": datetime.date(1990, 1, 1)},
-                {"name": "Author 2", "dob": datetime.date(1991, 2, 2)},
-                {"name": "Author 3", "dob": datetime.date(1992, 3, 3)},
+                {"name": "Author 1", "dob": dt.date(1990, 1, 1)},
+                {"name": "Author 2", "dob": dt.date(1991, 2, 2)},
+                {"name": "Author 3", "dob": dt.date(1992, 3, 3)},
             ]
         )
     )
@@ -947,12 +947,12 @@ async def test_service_mixed_input_types_update_many(
     class AuthorUpdatePydantic(pydantic.BaseModel):  # type: ignore[name-defined,misc]
         id: id_type  # type: ignore[valid-type]
         name: "Optional[str]" = None
-        dob: "Optional[datetime.date]" = None
+        dob: "Optional[dt.date]" = None
 
     class AuthorUpdateMsgspec(msgspec.Struct):  # type: ignore[name-defined,misc]
         id: id_type  # type: ignore[valid-type]
         name: "str" = msgspec.UNSET
-        dob: "datetime.date" = msgspec.UNSET
+        dob: "dt.date" = msgspec.UNSET
 
     # Test with mixed input types
     mixed_update_data = [
@@ -995,7 +995,7 @@ async def test_repo_update_with_model_instance_partial_fields_github_560(
     author_repo = get_repository_from_session(seeded_test_session_async, "author")
 
     # Create an author with all fields populated
-    author = await maybe_async(author_repo.create({"name": "Original Name", "dob": datetime.date(1990, 1, 1)}))
+    author = await maybe_async(author_repo.create({"name": "Original Name", "dob": dt.date(1990, 1, 1)}))
     original_dob = author.dob
     original_id = author.id
 
@@ -1026,8 +1026,8 @@ async def test_repo_update_many_with_model_instances_partial_fields_github_560(
     author_repo = get_repository_from_session(seeded_test_session_async, "author")
 
     # Create multiple authors with all fields populated
-    author1 = await maybe_async(author_repo.create({"name": "Author One", "dob": datetime.date(1990, 1, 1)}))
-    author2 = await maybe_async(author_repo.create({"name": "Author Two", "dob": datetime.date(1991, 2, 2)}))
+    author1 = await maybe_async(author_repo.create({"name": "Author One", "dob": dt.date(1990, 1, 1)}))
+    author2 = await maybe_async(author_repo.create({"name": "Author Two", "dob": dt.date(1991, 2, 2)}))
 
     original_dob1 = author1.dob
     original_dob2 = author2.dob
@@ -1497,7 +1497,7 @@ async def test_upsert_many_native_path_is_single_statement_per_chunk(
     sync_engine = getattr(bind, "sync_engine", bind)
     event.listen(sync_engine, "before_execute", _record)
     try:
-        data = [author_model(name=f"native-upsert-author-{i}", dob=datetime.date(1990, 1, 1)) for i in range(5)]
+        data = [author_model(name=f"native-upsert-author-{i}", dob=dt.date(1990, 1, 1)) for i in range(5)]
         results = await maybe_async(author_repo.upsert_many(data, match_fields=["id"]))
     finally:
         event.remove(sync_engine, "before_execute", _record)
@@ -1535,7 +1535,7 @@ async def test_upsert_many_no_merge_forces_fallback(
     sync_engine = getattr(bind, "sync_engine", bind)
     event.listen(sync_engine, "before_execute", _record)
     try:
-        data = [author_model(name=f"fallback-author-{i}", dob=datetime.date(1990, 1, 1)) for i in range(3)]
+        data = [author_model(name=f"fallback-author-{i}", dob=dt.date(1990, 1, 1)) for i in range(3)]
         results = await maybe_async(author_repo.upsert_many(data, match_fields=["id"], no_merge=True))
     finally:
         event.remove(sync_engine, "before_execute", _record)
@@ -1584,7 +1584,7 @@ async def test_upsert_many_chunk_size_emits_multiple_chunks(
     sync_engine = getattr(bind, "sync_engine", bind)
     event.listen(sync_engine, "before_execute", _record)
     try:
-        data = [author_model(name=f"chunked-author-{i}", dob=datetime.date(1990, 1, 1)) for i in range(8)]
+        data = [author_model(name=f"chunked-author-{i}", dob=dt.date(1990, 1, 1)) for i in range(8)]
         results = await maybe_async(author_repo.upsert_many(data, match_fields=["id"], chunk_size=4))
     finally:
         event.remove(sync_engine, "before_execute", _record)
@@ -1732,7 +1732,7 @@ async def test_repo_update_partial_does_not_clear_relationships_github_684(
     book_repo = create_repository(session, book_model)
 
     # Create an author with a book using the relationship (so ORM tracks it)
-    author = author_model(name="Alice", dob=datetime.date(1980, 1, 1))
+    author = author_model(name="Alice", dob=dt.date(1980, 1, 1))
     book = book_model(title="Great Book")
     author.books = [book]
     author = await maybe_async(author_repo.add(author))
@@ -1788,7 +1788,7 @@ async def test_repo_update_partial_does_not_crash_non_nullable_fk_github_684(
     book_repo = create_repository(session, book_model)
 
     # Create an author with a book (book.author_id is non-nullable)
-    author = author_model(name="Charlie", dob=datetime.date(1990, 5, 5))
+    author = author_model(name="Charlie", dob=dt.date(1990, 5, 5))
     book = book_model(title="Non-Nullable FK Book")
     author.books = [book]
     author = await maybe_async(author_repo.add(author))
@@ -1829,8 +1829,8 @@ async def test_repo_update_explicit_relationship_still_works_github_684(
     book_repo = create_repository(session, book_model)
 
     # Create two authors
-    author1 = await maybe_async(author_repo.add(author_model(name="Author1", dob=datetime.date(1980, 1, 1))))
-    author2 = await maybe_async(author_repo.add(author_model(name="Author2", dob=datetime.date(1985, 2, 2))))
+    author1 = await maybe_async(author_repo.add(author_model(name="Author1", dob=dt.date(1980, 1, 1))))
+    author2 = await maybe_async(author_repo.add(author_model(name="Author2", dob=dt.date(1985, 2, 2))))
     await session.flush()
 
     # Save IDs before any expire_all() calls to avoid MissingGreenlet

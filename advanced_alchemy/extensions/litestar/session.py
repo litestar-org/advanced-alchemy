@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Final, Generic, Optional, TypeVar, Union, cast
@@ -21,6 +21,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, Session, declared_attr, mapped_column
 
 from advanced_alchemy.base import UUIDv7Base
+from advanced_alchemy.extensions.litestar._utils import get_async_session_bind
 from advanced_alchemy.extensions.litestar.plugins.init import (
     SQLAlchemyAsyncConfig,
     SQLAlchemySyncConfig,
@@ -78,7 +79,7 @@ class SessionModelMixin(UUIDv7Base):
         return mapped_column(LargeBinary, nullable=False)
 
     @declared_attr
-    def expires_at(cls) -> Mapped[datetime.datetime]:
+    def expires_at(cls) -> Mapped[dt.datetime]:
         return mapped_column(index=True)
 
     @classmethod
@@ -98,7 +99,7 @@ class SessionModelMixin(UUIDv7Base):
         Returns:
             `True` if the session has expired, otherwise `False`
         """
-        return datetime.datetime.now(datetime.timezone.utc) > self.expires_at
+        return dt.datetime.now(dt.timezone.utc) > self.expires_at
 
     @is_expired.expression  # type: ignore[no-redef]
     def is_expired(cls) -> "BooleanClauseList":  # noqa: N805
@@ -161,13 +162,11 @@ class SQLAlchemySessionBackendBase(ServerSideSessionBackend, ABC, Generic[SQLAlc
 
         return new_obj
 
-    def _select_session_obj(self, session_id: str) -> "Select[tuple[SessionModelMixin]]":
+    def _select_session_obj(self, session_id: str) -> "Select[Any]":
         return select(self._model).where(self._model.session_id == session_id)
 
     def _update_session_expiry(self, session_obj: "SessionModelMixin") -> None:
-        session_obj.expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
-            seconds=self.config.max_age
-        )
+        session_obj.expires_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=self.config.max_age)
 
     @staticmethod
     def supports_merge(dialect: "Optional[Dialect]" = None, force_disable_merge: bool = False) -> bool:
@@ -177,6 +176,7 @@ class SQLAlchemySessionBackendBase(ServerSideSessionBackend, ABC, Generic[SQLAlc
             and (
                 (
                     dialect.server_version_info is not None
+                    and isinstance(dialect.server_version_info[0], int)
                     and dialect.server_version_info[0] >= _POSTGRES_VERSION_SUPPORTING_MERGE
                     and dialect.name == "postgresql"
                     and not _DISABLE_POSTGRES_MERGE  # Temporary PostgreSQL MERGE disable
@@ -272,13 +272,14 @@ class SQLAlchemyAsyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemyAsync
             store: The store to store the session in (not used in this backend)
         """
         session_id = session_id[:SESSION_ID_MAX_LENGTH] if len(session_id) > SESSION_ID_MAX_LENGTH else session_id
-        expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=self.config.max_age)
+        expires_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=self.config.max_age)
 
         async with self.alchemy.get_session() as db_session:
-            if db_session.bind is None:  # pyright: ignore[reportUnnecessaryComparison]
-                msg = "Database connection is not available"  # type: ignore[unreachable]
+            bind = get_async_session_bind(db_session)
+            if bind is None:
+                msg = "Database connection is not available"
                 raise ImproperlyConfiguredException(msg)
-            dialect = db_session.bind.dialect
+            dialect = bind.dialect
             dialect_name = dialect.name
 
             values = {
@@ -354,7 +355,9 @@ class SQLAlchemySyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemySyncCo
     """Synchronous SQLAlchemy backend."""
 
     def _get_session_obj(self, *, db_session: "Session", session_id: str) -> "Optional[SessionModelMixin]":
-        return db_session.scalars(self._select_session_obj(session_id)).one_or_none()
+        return cast(
+            "Optional[SessionModelMixin]", db_session.scalars(self._select_session_obj(session_id)).one_or_none()
+        )
 
     def _get_sync(self, session_id: str) -> Optional[bytes]:
         session_id = session_id[:SESSION_ID_MAX_LENGTH] if len(session_id) > SESSION_ID_MAX_LENGTH else session_id
@@ -386,7 +389,7 @@ class SQLAlchemySyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemySyncCo
 
     def _set_sync(self, session_id: str, data: bytes) -> None:
         session_id = session_id[:SESSION_ID_MAX_LENGTH] if len(session_id) > SESSION_ID_MAX_LENGTH else session_id
-        expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=self.config.max_age)
+        expires_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=self.config.max_age)
 
         with self.alchemy.get_session() as db_session:
             if db_session.bind is None:

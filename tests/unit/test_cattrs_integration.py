@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import datetime as dt
+import decimal
 import unittest.mock as mock
+import uuid
 from typing import Optional
 
 import pytest
@@ -30,6 +33,17 @@ if ATTRS_INSTALLED:
         name: str
         age: int
         email: Optional[str] = None
+
+    @define
+    class ScalarAttrsModel:
+        """Attrs model covering common scalar column types."""
+
+        id: uuid.UUID
+        created_at: dt.datetime
+        born_on: dt.date
+        starts_at: dt.time
+        duration: dt.timedelta
+        price: decimal.Decimal
 
 
 class TestCattrsIntegration:
@@ -239,3 +253,38 @@ class TestCattrsIntegration:
         assert result.email == "kate@example.com"
         # Extra field should not cause issues
         assert not hasattr(result, "phone")
+
+
+@pytest.mark.skipif(not CATTRS_INSTALLED, reason="cattrs not installed")
+def test_to_schema_with_cattrs_handles_scalar_column_types() -> None:
+    """Attrs schemas with common column types convert from loaded values and from strings."""
+    from advanced_alchemy.service._util import ResultConverter
+
+    record_id = uuid.uuid4()
+    created_at = dt.datetime(2026, 1, 2, 3, 4, 5, tzinfo=dt.timezone.utc)
+    loaded = {
+        "id": record_id,
+        "created_at": created_at,
+        "born_on": dt.date(2026, 1, 2),
+        "starts_at": dt.time(3, 4, 5),
+        "duration": dt.timedelta(seconds=90),
+        "price": decimal.Decimal("19.99"),
+    }
+    serialized = {
+        "id": str(record_id),
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "born_on": "2026-01-02",
+        "starts_at": "03:04:05",
+        "duration": 90,
+        "price": "19.99",
+    }
+    converter = ResultConverter()
+
+    from_loaded = converter.to_schema(loaded, schema_type=ScalarAttrsModel)
+    from_serialized = converter.to_schema(serialized, schema_type=ScalarAttrsModel)
+    paginated = converter.to_schema([loaded, serialized], schema_type=ScalarAttrsModel)
+
+    assert from_loaded.id is record_id
+    assert from_loaded.created_at is created_at
+    assert from_serialized == from_loaded
+    assert paginated.items == [from_loaded, from_loaded]

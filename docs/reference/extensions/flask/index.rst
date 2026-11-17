@@ -2,7 +2,7 @@
 Flask
 =====
 
-API Reference for the ``Flask`` extensions module.
+Flask app-context SQLAlchemy extension, JSON response service mixin, and CLI integration.
 
 .. py:module:: advanced_alchemy.extensions.flask
 

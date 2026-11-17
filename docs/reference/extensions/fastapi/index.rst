@@ -2,7 +2,7 @@
 FastAPI
 =======
 
-API Reference for the ``FastAPI`` extensions module.
+FastAPI ASGI lifespan extension, dependency injection providers, and CLI helpers.
 
 .. py:module:: advanced_alchemy.extensions.fastapi
 

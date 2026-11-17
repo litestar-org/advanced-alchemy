@@ -135,7 +135,7 @@ class SessionMiddleware:
                 await run_in_threadpool(session.commit)
             else:
                 await run_in_threadpool(session.rollback)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug("Session commit/rollback failed during middleware cleanup", exc_info=True)
         finally:
             try:
@@ -143,7 +143,7 @@ class SessionMiddleware:
                     await session.close()
                 else:
                     await run_in_threadpool(session.close)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("Session close failed during middleware cleanup", exc_info=True)
             with contextlib.suppress(AttributeError, KeyError):
                 delattr(request.state, config.session_key)
@@ -276,12 +276,12 @@ class SQLAlchemyAsyncConfig(_SQLAlchemyAsyncConfig):
                 await session.commit()
             else:
                 await session.rollback()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
         finally:
             try:
                 await session.close()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("Session close failed during cleanup", exc_info=True)
             with contextlib.suppress(AttributeError, KeyError):
                 delattr(request.state, self.session_key)
@@ -435,12 +435,12 @@ class SQLAlchemySyncConfig(_SQLAlchemySyncConfig):
                 await run_in_threadpool(session.commit)
             else:
                 await run_in_threadpool(session.rollback)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug("Session commit/rollback failed during cleanup", exc_info=True)
         finally:
             try:
                 await run_in_threadpool(session.close)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("Session close failed during cleanup", exc_info=True)
             with contextlib.suppress(AttributeError, KeyError):
                 delattr(request.state, self.session_key)

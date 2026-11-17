@@ -2,7 +2,7 @@
 """Application ORM configuration."""
 
 import asyncio
-import datetime
+import datetime as dt
 import logging
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
 
@@ -671,7 +671,7 @@ def touch_updated_timestamp(session: Session, *_: Any) -> None:
             continue
 
         if _has_persistent_column_changes(state, skip_keys={"updated_at"}):
-            instance.updated_at = datetime.datetime.now(datetime.timezone.utc)
+            instance.updated_at = dt.datetime.now(dt.timezone.utc)
 
 
 def _register_session_async_task(session: Any, task: "asyncio.Task[Any]") -> None:

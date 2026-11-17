@@ -2,14 +2,12 @@
 Getting Started
 ===============
 
-When you build an app with SQLAlchemy from scratch, you end up writing the same plumbing over and over: ID and timestamp columns on every table, ``select()`` and pagination queries in every endpoint, and session cleanup code for every web request.
+A carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy 2.0+:
 
-Advanced Alchemy handles that repetitive plumbing while keeping plain SQLAlchemy 2.0 front and center:
-
-* **Models** come with ready-made IDs, ``created_at`` / ``updated_at`` timestamps, and portable column types.
-* **Repositories** give every model ``add``, ``get``, ``get_many_and_count``, ``upsert``, and ``delete`` methods out of the box.
-* **Services** connect your repositories to Pydantic, Msgspec, or dataclass API schemas.
-* **Framework plugins** manage database engines and per-request sessions automatically.
+* **Models**: Declarative base classes with UUID, NanoID, or integer primary keys, ``created_at`` and ``updated_at`` audit timestamps, and portable custom column types.
+* **Repositories**: Synchronous and asynchronous ``add``, ``get``, ``get_many_and_count``, ``upsert``, filtering, and bulk operations for SQLAlchemy models.
+* **Services**: Typed service wrappers converting between ORM models and Pydantic, Msgspec, dataclass, ``attrs``, or SQLModel schemas.
+* **Framework plugins**: Engine lifecycle management, per-request sessions, dependency injection providers, and migration CLIs.
 
 Installation
 ------------
@@ -50,7 +48,7 @@ Install ``advanced-alchemy`` with your preferred package manager and database/fr
 Your First Model and Repository
 -------------------------------
 
-Imagine you are building a small blog. Define a ``BlogPost`` table using ``UUIDAuditBase`` (which automatically adds a UUID ``id`` plus ``created_at`` and ``updated_at`` columns) and attach a repository to save and query posts:
+Define a ``BlogPost`` model using ``UUIDAuditBase`` (which provides a UUID ``id`` column along with ``created_at`` and ``updated_at`` timestamps) and attach an async repository to persist and query rows:
 
 .. code-block:: python
 
@@ -86,6 +84,6 @@ Imagine you are building a small blog. Define a ``BlogPost`` table using ``UUIDA
 Where to Go Next
 ----------------
 
-* :doc:`Usage Guide <usage/index>` — Walk through models, repositories, services, caching, and read-replica routing step by step.
-* :doc:`Framework Integrations <usage/frameworks/index>` — Plug Advanced Alchemy into Litestar, FastAPI, Starlette, Flask, or Sanic.
-* `Discord Community <https://discord.gg/dSDXd4mKhp>`_ — Ask questions and get help from the maintainers.
+* :doc:`Usage Guide <usage/index>`: Models, repositories, services, caching, replica routing, CLI commands, and fixture seeding.
+* :doc:`Framework Integrations <usage/frameworks/index>`: Integrate Advanced Alchemy with Litestar, FastAPI, Starlette, Flask, or Sanic.
+* `Discord Community <https://discord.gg/dSDXd4mKhp>`_: Ask questions and discuss with maintainers.

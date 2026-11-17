@@ -2,12 +2,12 @@
 Services
 ========
 
-A :doc:`Repository </usage/repositories/basics>` speaks in database tables (``BlogPost`` rows), while a **Service** speaks in your API's input and output shapes (``BlogPostCreate``, ``BlogPostResponse``). Use a repository directly for simple table persistence and queries; add a service on top when you want automatic schema conversion (``to_model`` / ``to_schema``), transaction commits, validation hooks, or multi-step business rules—such as creating missing tags or generating URL slugs before saving.
+A :doc:`Repository </usage/repositories/basics>` operates directly on SQLAlchemy model instances (``BlogPost``), whereas a **Service** operates on typed input and output schemas (``BlogPostCreate``, ``BlogPostResponse``). Use a repository directly for table persistence and queries; add a service when you need schema conversion (``to_model`` and ``to_schema``), transaction commits, validation hooks, or multi-step domain logic such as generating URL slugs before saving.
 
 Setting Up a Service
 --------------------
 
-Let's connect a ``BlogPost`` table, Pydantic request/response schemas, and a ``BlogPostService``:
+Define a ``BlogPost`` model, Pydantic request and response schemas, and a ``BlogPostService``:
 
 .. tab-set::
 
@@ -64,7 +64,7 @@ Let's connect a ``BlogPost`` table, Pydantic request/response schemas, and a ``B
 Creating, Updating, and Returning Schemas
 -----------------------------------------
 
-Pass dictionaries, Pydantic models, ``msgspec`` structs, dataclasses, ``attrs`` classes, or ``SQLModel`` objects straight into ``create`` and ``update``, then call ``to_schema`` to format the response (or ``get_or_none`` when missing IDs should return ``None``):
+Pass dictionaries, Pydantic models, ``msgspec`` structs, dataclasses, ``attrs`` classes, or ``SQLModel`` objects directly to ``create`` and ``update``, then call ``to_schema`` to format the response (or ``get_or_none`` when missing IDs should return ``None``):
 
 .. code-block:: python
 
@@ -81,7 +81,7 @@ Pass dictionaries, Pydantic models, ``msgspec`` structs, dataclasses, ``attrs`` 
 Adding Custom Business Rules
 ----------------------------
 
-Need to auto-generate a unique URL slug whenever a tag is created or renamed? Override ``to_model`` (or ``to_model_on_create`` / ``to_model_on_update``):
+Override ``to_model`` (or ``to_model_on_create`` and ``to_model_on_update``) to run custom logic before persistence, such as generating a unique URL slug when creating or renaming a tag:
 
 .. code-block:: python
 
@@ -104,7 +104,7 @@ Need to auto-generate a unique URL slug whenever a tag is created or renamed? Ov
 Using Pydantic, Msgspec, Dataclasses, attrs, or SQLModel
 --------------------------------------------------------
 
-Services work with all five major Python schema libraries—normalizing partial updates (ignoring unset fields automatically) and converting rows into response schemas:
+Services integrate with all five supported Python schema libraries, omitting unset fields during partial updates and converting ORM rows into response objects:
 
 .. tab-set::
 
@@ -188,7 +188,7 @@ Services work with all five major Python schema libraries—normalizing partial 
 Related Guides
 --------------
 
-* :doc:`/usage/service_composition` — Coordinate multiple services on one shared session with ``ServiceGroup``.
-* :doc:`/usage/frameworks/litestar` — Inject services directly into Litestar controllers.
-* :doc:`/usage/frameworks/fastapi` — Inject services into FastAPI routes with ``Depends``.
-* :doc:`/reference/service` — Full service API reference.
+* :doc:`/usage/service_composition`: Coordinate multiple services on one shared session with ``ServiceGroup``.
+* :doc:`/usage/frameworks/litestar`: Inject services into Litestar controllers and route handlers.
+* :doc:`/usage/frameworks/fastapi`: Inject services into FastAPI routes with ``Depends``.
+* :doc:`/reference/service`: Full service API reference.

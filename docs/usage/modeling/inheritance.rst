@@ -2,13 +2,11 @@
 Inheritance Patterns
 ====================
 
-Sometimes several models share most of their fields—for example, **Managers** and **Engineers** are both **Employees**, or **Articles** and **Videos** are both **Posts**.
+Advanced Alchemy's declarative base classes and repositories support all three SQLAlchemy inheritance strategies:
 
-SQLAlchemy supports three ways to lay out shared models in the database, and Advanced Alchemy's base classes and repositories work with all three:
-
-* **Single Table**: Everything lives in **one table** with a ``type`` column. Fastest to query when subclasses only add a few optional columns.
-* **Joined Table**: Shared fields live in a **parent table**, and extra fields live in **child tables** linked by a foreign key. Best when subclasses have many required columns.
-* **Concrete Table**: An abstract Python base class shares column definitions, while each subclass gets its own **separate table**.
+* **Single Table**: Subclasses share one table distinguished by a discriminator column (``polymorphic_on``). Suitable when subclasses add only a few nullable columns.
+* **Joined Table**: Shared columns reside in a parent table and subtype-specific columns reside in child tables joined by a foreign key.
+* **Concrete Table**: An abstract Python base class (``__abstract__ = True``) shares column definitions while each subclass maps to an independent table.
 
 Comparing the Layouts
 ---------------------
@@ -97,7 +95,7 @@ Comparing the Layouts
 Querying Inherited Models
 -------------------------
 
-Attach a repository to the parent model when you want all subtypes back together, or attach one to a child model when you only want rows of that specific subtype:
+Bind a repository to the parent model to query across all polymorphic subtypes, or bind a repository to a specific subclass to query only that subtype:
 
 .. code-block:: python
 

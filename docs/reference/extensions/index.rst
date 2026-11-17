@@ -4,7 +4,7 @@ Extensions
 
 .. py:module:: advanced_alchemy.extensions
 
-API Reference for the ``advanced_alchemy.extensions`` framework integration packages.
+First-party web framework integration packages for Litestar, FastAPI, Starlette, Flask, and Sanic.
 
 Framework API References
 ------------------------

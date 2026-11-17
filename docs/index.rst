@@ -1,5 +1,5 @@
 :layout: landing
-:description: Production-ready models, repositories, services, and web framework integrations for SQLAlchemy.
+:description: Advanced Alchemy is a carefully crafted, thoroughly tested, optimized companion library for SQLAlchemy.
 
 .. container::
     :name: home-head
@@ -37,9 +37,9 @@
 
 .. rst-class:: lead
 
-    Write clean `SQLAlchemy <https://docs.sqlalchemy.org/en/20/>`_ applications without repeating database boilerplate.
+    A carefully crafted, thoroughly tested, optimized companion library for `SQLAlchemy <https://docs.sqlalchemy.org/en/20/>`_.
 
-Advanced Alchemy gives your tables ready-made IDs and timestamps, provides ready-to-use :doc:`repositories <usage/repositories/index>` and :doc:`services <usage/services>` for querying and validation, and plugs directly into :doc:`Litestar, FastAPI, Starlette, Flask, and Sanic <usage/frameworks/index>`.
+Advanced Alchemy provides declarative bases with primary keys and audit timestamps, synchronous and asynchronous :doc:`repositories <usage/repositories/index>` and :doc:`services <usage/services>` for querying and schema conversion, and integrations for :doc:`Litestar, FastAPI, Starlette, Flask, and Sanic <usage/frameworks/index>`.
 
 .. container:: buttons wrap
 
@@ -76,7 +76,7 @@ Advanced Alchemy gives your tables ready-made IDs and timestamps, provides ready
       :link: usage/routing
       :link-type: doc
 
-      Add read-replica routing, automatic query caching, Alembic migrations, and fixture seeding as your application grows.
+      Configure read-replica routing, Dogpile query caching, Alembic migrations, and fixture seeding.
 
 
 .. _sponsor-github: https://github.com/sponsors/litestar-org

@@ -1,5 +1,5 @@
 import contextlib
-import datetime
+import datetime as dt
 import random
 import string
 from collections.abc import Iterable, Mapping, Sequence
@@ -95,7 +95,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
 
     id_attribute: str
     match_fields: Optional[Union[List[str], str]] = None
-    statement: Select[tuple[ModelT]]
+    statement: Select[Any]
     session: Union[AsyncSession, async_scoped_session[AsyncSession]]
     auto_expunge: bool
     auto_refresh: bool
@@ -119,7 +119,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
     def __init__(
         self,
         *,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         session: Union[AsyncSession, async_scoped_session[AsyncSession]],
         model_type: Optional[type[ModelT]] = None,
         auto_expunge: bool = False,
@@ -227,7 +227,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         item_id: PrimaryKeyType,
         *,
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
@@ -241,7 +241,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         item_id: PrimaryKeyType,
         *,
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -253,7 +253,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -266,7 +266,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -311,7 +311,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
     async def count(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         load: Optional[LoadSpec] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         execution_options: Optional[dict[str, Any]] = None,
@@ -391,7 +391,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         count_with_window_function: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
@@ -406,7 +406,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         count_with_window_function: Optional[bool] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
@@ -426,7 +426,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -440,7 +440,7 @@ class SQLAlchemyAsyncRepositoryProtocol(FilterableRepositoryProtocol[ModelT], Pr
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -561,7 +561,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
     def __init__(
         self,
         *,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         session: Union[AsyncSession, async_scoped_session[AsyncSession]],
         model_type: Optional[type[ModelT]] = None,
         auto_expunge: bool = False,
@@ -1014,7 +1014,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 ).returning(self.model_type)
                 instances.extend(await self.session.scalars(returning_delete_stmt))
             else:
-                select_stmt = self._get_base_stmt(
+                select_stmt: Select[Any] = self._get_base_stmt(
                     statement=select(self.model_type).where(pk_filter),
                     loader_options=loader_options,
                     execution_options=execution_options,
@@ -1167,7 +1167,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                             **kwargs,
                         ),
                     )
-                    result = await self.session.execute(statement)
+                    result: Result[Any] = await self.session.execute(statement)
                     row_count = getattr(result, "rowcount", -2)
                     if sanity_check and row_count >= 0 and len(instances) != row_count:  # pyright: ignore
                         await self.session.rollback()
@@ -1206,7 +1206,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                     if self._dialect.name == "mssql"
                     else tuple_(*self._pk_columns).in_(chunk)
                 )
-                select_stmt = self._get_base_stmt(
+                select_stmt: Select[Any] = self._get_base_stmt(
                     statement=select(self.model_type).where(pk_filter),
                     loader_options=loader_options,
                     execution_options=execution_options,
@@ -1227,7 +1227,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             for idx in range(0, len(item_ids), effective_chunk_size):
                 chunk = cast("List[Any]", item_ids[idx : min(idx + effective_chunk_size, len(item_ids))])
                 select_stmt = cast(
-                    "Select[tuple[ModelT]]",
+                    "Select[Any]",
                     self._get_delete_many_statement(
                         statement_type="select",
                         model_type=self.model_type,
@@ -1310,9 +1310,9 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
 
     def _apply_for_update_options(
         self,
-        statement: Select[tuple[ModelT]],
+        statement: Select[Any],
         with_for_update: ForUpdateParameter,
-    ) -> Select[tuple[ModelT]]:
+    ) -> Select[Any]:
         """Apply FOR UPDATE options to a SELECT statement when requested."""
 
         if with_for_update in (None, False):
@@ -1343,7 +1343,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         statement_type: Literal["delete", "select"] = "delete",
         loader_options: Optional[Sequence[ExecutableOption]],
         execution_options: Optional[dict[str, Any]],
-    ) -> Union[Select[tuple[ModelT]], Delete, ReturningDelete[tuple[ModelT]]]:
+    ) -> Union[Select[Any], Delete, ReturningDelete[Any]]:
         statement = self._get_base_stmt(
             statement=delete(model_type) if statement_type == "delete" else select(model_type),
             loader_options=loader_options,
@@ -1363,7 +1363,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         item_id: Any,
         *,
         auto_expunge: Optional[bool],
-        statement: Optional[Select[tuple[ModelT]]],
+        statement: Optional[Select[Any]],
         id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]],
         error_messages: Optional[ErrorMessages],
         load: Optional[LoadSpec],
@@ -1403,7 +1403,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         item_id: Any,
         *,
         auto_expunge: Optional[bool],
-        statement: Optional[Select[tuple[ModelT]]],
+        statement: Optional[Select[Any]],
         id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]],
         error_messages: Optional[ErrorMessages],
         load: Optional[LoadSpec],
@@ -1453,7 +1453,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         *,
         filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
         auto_expunge: Optional[bool],
-        statement: Optional[Select[tuple[ModelT]]],
+        statement: Optional[Select[Any]],
         order_by: Optional[Union[List[OrderingPair], OrderingPair]],
         error_messages: Optional[ErrorMessages],
         load: Optional[LoadSpec],
@@ -1492,7 +1492,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         *,
         filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
         auto_expunge: Optional[bool],
-        statement: Optional[Select[tuple[ModelT]]],
+        statement: Optional[Select[Any]],
         order_by: Optional[Union[List[OrderingPair], OrderingPair]],
         error_messages: Optional[ErrorMessages],
         load: Optional[LoadSpec],
@@ -1540,7 +1540,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         *,
         filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
         auto_expunge: Optional[bool],
-        statement: Optional[Select[tuple[ModelT]]],
+        statement: Optional[Select[Any]],
         count_with_window_function: bool,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]],
         error_messages: Optional[ErrorMessages],
@@ -1583,7 +1583,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         *,
         filters: Sequence[Union[StatementFilter, ColumnElement[bool]]],
         auto_expunge: Optional[bool],
-        statement: Optional[Select[tuple[ModelT]]],
+        statement: Optional[Select[Any]],
         count_with_window_function: bool,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]],
         error_messages: Optional[ErrorMessages],
@@ -1634,7 +1634,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         item_id: PrimaryKeyType,
         *,
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
@@ -1760,7 +1760,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         item_id: PrimaryKeyType,
         *,
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         id_attribute: Optional[Union[str, InstrumentedAttribute[Any]]] = None,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -1806,7 +1806,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -1860,7 +1860,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -1900,14 +1900,14 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             statement = self._filter_select_by_kwargs(statement, kwargs)
             statement = self._apply_for_update_options(statement, with_for_update)
             instance = cast(
-                "Result[tuple[ModelT]]",
+                "Optional[ModelT]",
                 (
                     await self._execute(
                         statement,
                         uniquify=self._get_uniquify(requires_unique or uniquify),
                     )
-                ),
-            ).scalar_one_or_none()
+                ).scalar_one_or_none(),
+            )
             if instance:
                 self._expunge(instance, auto_expunge=auto_expunge)
             return instance
@@ -2082,7 +2082,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
     async def count(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
         execution_options: Optional[dict[str, Any]] = None,
@@ -2339,7 +2339,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             update_payload = model_to_dict(v) if hasattr(v, "__mapper__") else schema_dump(cast("dict[str, Any]", v))
 
             if supports_updated_at and (update_payload.get("updated_at") is None):
-                update_payload["updated_at"] = datetime.datetime.now(datetime.timezone.utc)
+                update_payload["updated_at"] = dt.datetime.now(dt.timezone.utc)
             data_to_update.append(update_payload)
         with self._wrap_exceptions(error_messages=error_messages):
             resolved_bind_group = self._resolve_bind_group(bind_group)
@@ -2411,7 +2411,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
     async def get_many_and_count(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         auto_expunge: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
@@ -2593,7 +2593,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
@@ -2640,18 +2640,20 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
             )
             count: int = 0
             instances: List[ModelT] = []
-            for i, (instance, count_value) in enumerate(result):
+            for i, row in enumerate(result):
+                row_values = tuple(row)
+                instance = cast("ModelT", row_values[0])
                 self._expunge(instance, auto_expunge=auto_expunge)
                 instances.append(instance)
                 if i == 0:
-                    count = count_value
+                    count = int(row_values[1])
             return instances, count
 
     async def _get_many_and_count_basic(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
@@ -2699,7 +2701,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                     execution_options=execution_options,
                 ),
             )
-            count = count_result.scalar_one()
+            count = int(count_result.scalar_one())
             if count == 0:
                 return [], 0
             result = await self._execute(
@@ -2714,10 +2716,10 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
 
     @staticmethod
     def _get_count_stmt(
-        statement: Select[tuple[ModelT]],
+        statement: Select[Any],
         loader_options: Optional[Sequence[ExecutableOption]],  # noqa: ARG004
         execution_options: Optional[dict[str, Any]],  # noqa: ARG004
-    ) -> Select[tuple[int]]:
+    ) -> Select[Any]:
         return (
             statement.with_only_columns(sql_func.count(text("1")), maintain_column_froms=True)
             .limit(None)
@@ -3217,7 +3219,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
@@ -3331,7 +3333,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
     async def list_and_count(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         auto_expunge: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
@@ -3374,7 +3376,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         auto_expunge: Optional[bool] = None,
-        statement: Optional[Select[tuple[ModelT]]] = None,
+        statement: Optional[Select[Any]] = None,
         order_by: Optional[Union[List[OrderingPair], OrderingPair]] = None,
         error_messages: Optional[Union[ErrorMessages, EmptyType]] = Empty,
         load: Optional[LoadSpec] = None,
@@ -3473,7 +3475,7 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
         statement: Select[Any],
         uniquify: Optional[bool] = None,
     ) -> Result[Any]:
-        result = await self.session.execute(statement)
+        result: Result[Any] = await self.session.execute(statement)
         if self._get_uniquify(uniquify):
             result = result.unique()
         return result
@@ -3582,7 +3584,7 @@ class SQLAlchemyAsyncQueryRepository:
 
     async def get_one(
         self,
-        statement: Select[tuple[Any]],
+        statement: Select[Any],
         bind_group: Optional[str] = None,
         **kwargs: Any,
     ) -> Row[Any]:
@@ -3603,7 +3605,9 @@ class SQLAlchemyAsyncQueryRepository:
         ):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             execution_options = {"bind_group": bind_group} if bind_group else None
-            instance = (await self.execute(statement, execution_options=execution_options)).scalar_one_or_none()
+            instance: Optional[Row[Any]] = (
+                await self.execute(statement, execution_options=execution_options)
+            ).scalar_one_or_none()
             return self.check_not_found(instance)
 
     async def get_one_or_none(
@@ -3629,7 +3633,9 @@ class SQLAlchemyAsyncQueryRepository:
         ):
             statement = self._filter_statement_by_kwargs(statement, **kwargs)
             execution_options = {"bind_group": bind_group} if bind_group else None
-            instance = (await self.execute(statement, execution_options=execution_options)).scalar_one_or_none()
+            instance: Optional[Row[Any]] = (
+                await self.execute(statement, execution_options=execution_options)
+            ).scalar_one_or_none()
             return instance or None
 
     async def count(self, statement: Select[Any], bind_group: Optional[str] = None, **kwargs: Any) -> int:
@@ -3734,10 +3740,11 @@ class SQLAlchemyAsyncQueryRepository:
             result = await self.execute(statement, execution_options=execution_options)
             count: int = 0
             instances: List[Row[Any]] = []
-            for i, (instance, count_value) in enumerate(result):
-                instances.append(instance)
+            for i, row in enumerate(result):
+                row_values = tuple(row)
+                instances.append(cast("Row[Any]", row_values[0]))
                 if i == 0:
-                    count = count_value
+                    count = int(row_values[1])
             return instances, count
 
     @staticmethod
@@ -3771,7 +3778,7 @@ class SQLAlchemyAsyncQueryRepository:
             count_result = await self.session.execute(
                 self._get_count_stmt(statement), execution_options=execution_options or {}
             )
-            count = count_result.scalar_one()
+            count = int(count_result.scalar_one())
             result = await self.execute(statement, execution_options=execution_options)
             instances: List[Row[Any]] = []
             for (instance,) in result:

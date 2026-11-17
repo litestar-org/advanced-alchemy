@@ -2,7 +2,7 @@
 FastAPI Integration
 ===================
 
-Advanced Alchemy plugs into FastAPI through the ``AdvancedAlchemy`` extension, managing database startup/shutdown automatically and giving your routes clean ``Depends(...)`` helpers for sessions, services, and OpenAPI-documented search/pagination filters.
+Advanced Alchemy integrates with FastAPI through the ``AdvancedAlchemy`` extension, managing engine startup and disposal via ASGI lifespan hooks and providing ``Depends(...)`` callables for sessions, services, and OpenAPI query filters.
 
 What's Included for FastAPI
 ---------------------------
@@ -12,16 +12,16 @@ What's Included for FastAPI
    :widths: 26 48 26
 
    * - Feature
-     - What It Gives You
+     - Capabilities
      - Guide & API
    * - **Lifespan & Sessions**
      - Starts and disposes engines automatically and opens a fresh database session per request.
      - :doc:`API </reference/extensions/fastapi/index>`
    * - **Depends Helpers**
-     - ``provide_session``, ``provide_service``, and ``provide_filters`` (with automatic Swagger UI query params).
+     - ``provide_session``, ``provide_service``, and ``provide_filters`` (with automatic OpenAPI query parameters).
      - :doc:`Guide <fastapi_dependencies>` · :doc:`API </reference/extensions/fastapi/index>`
    * - **Uploads & Multi-Binds**
-     - Multipart ``UploadFile`` storage columns and support for multiple databases in one app.
+     - Multipart ``UploadFile`` persistence via ``StoredObject`` and multi-database bind configurations.
      - :doc:`Guide <fastapi_storage>` · :doc:`API </reference/types>`
    * - **Migrations CLI**
      - Works directly with the ``alchemy`` CLI to generate and run Alembic migrations.
@@ -103,7 +103,7 @@ Building a FastAPI Service Step by Step
 
 .. tip::
 
-    Using multiple databases? Pass the bind key to ``alchemy.provide_session("reporting")`` or ``alchemy.provide_service(ReportService, key="reporting")``.
+    For multi-database configurations, pass the target bind key to ``alchemy.provide_session("reporting")`` or ``alchemy.provide_service(ReportService, key="reporting")``.
 
 Complete Runnable App
 ---------------------
@@ -117,9 +117,9 @@ Complete Runnable App
 Related Guides
 --------------
 
-* :doc:`fastapi_dependencies` — Injecting services and automatic Swagger UI search/pagination filters with ``Depends``.
-* :doc:`fastapi_storage` — File uploads with ``UploadFile`` and multi-database setups.
-* :doc:`/reference/extensions/fastapi/index` — FastAPI extension API reference.
+* :doc:`fastapi_dependencies`: Injecting services and OpenAPI search, sort, and pagination filters with ``Depends``.
+* :doc:`fastapi_storage`: File uploads with ``UploadFile`` and multi-database setups.
+* :doc:`/reference/extensions/fastapi/index`: FastAPI extension API reference.
 
 .. toctree::
     :titlesonly:

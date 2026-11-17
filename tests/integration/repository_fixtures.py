@@ -4,7 +4,7 @@ This module provides a two-tier fixture architecture that separates DDL operatio
 from DML operations, ensuring proper test isolation and preventing metadata conflicts.
 """
 
-import datetime
+import datetime as dt
 from collections.abc import AsyncGenerator, Generator
 from typing import TYPE_CHECKING, Any, Optional, Union
 from uuid import UUID
@@ -74,7 +74,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
 
             name: Mapped[str] = mapped_column(String(length=100))
             string_field: Mapped[Optional[str]] = mapped_column(String(20), default="static value", nullable=True)
-            dob: Mapped[Optional[datetime.date]] = mapped_column(nullable=True)
+            dob: Mapped[Optional[dt.date]] = mapped_column(nullable=True)
 
         class IntegrationUUIDBook(SimpleBaseClass):  # type: ignore[valid-type,misc]
             """The Book domain object."""
@@ -187,9 +187,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
 
             user_id: Mapped[int] = mapped_column(primary_key=True)
             role_id: Mapped[int] = mapped_column(primary_key=True)
-            assigned_at: Mapped[datetime.datetime] = mapped_column(
-                default=lambda: datetime.datetime.now(datetime.timezone.utc)
-            )
+            assigned_at: Mapped[dt.datetime] = mapped_column(default=lambda: dt.datetime.now(dt.timezone.utc))
             is_active: Mapped[bool] = mapped_column(default=True)
 
     else:  # bigint
@@ -216,7 +214,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
 
             name: Mapped[str] = mapped_column(String(length=100))
             string_field: Mapped[Optional[str]] = mapped_column(String(20), default="static value", nullable=True)
-            dob: Mapped[Optional[datetime.date]] = mapped_column(nullable=True)
+            dob: Mapped[Optional[dt.date]] = mapped_column(nullable=True)
 
         class BigIntBook(SimpleBaseClass):  # type: ignore[valid-type,misc]
             """The Book domain object."""
@@ -323,9 +321,7 @@ def create_dynamic_models(base_type: str = "uuid", worker_id: str = "master") ->
 
             user_id: Mapped[int] = mapped_column(primary_key=True)
             role_id: Mapped[int] = mapped_column(primary_key=True)
-            assigned_at: Mapped[datetime.datetime] = mapped_column(
-                default=lambda: datetime.datetime.now(datetime.timezone.utc)
-            )
+            assigned_at: Mapped[dt.datetime] = mapped_column(default=lambda: dt.datetime.now(dt.timezone.utc))
             is_active: Mapped[bool] = mapped_column(default=True)
 
     # Return all models
@@ -371,16 +367,16 @@ class TestDataManager:
                     {
                         "id": UUID("97108ac1-ffcb-411d-8b1e-d9183399f63b"),
                         "name": "Agatha Christie",
-                        "dob": datetime.date(1890, 9, 15),
-                        "created_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
-                        "updated_at": datetime.datetime(2023, 5, 11, tzinfo=datetime.timezone.utc),
+                        "dob": dt.date(1890, 9, 15),
+                        "created_at": dt.datetime(2023, 3, 1, tzinfo=dt.timezone.utc),
+                        "updated_at": dt.datetime(2023, 5, 11, tzinfo=dt.timezone.utc),
                     },
                     {
                         "id": UUID("5ef29f3c-3560-4d15-ba6b-a2e5c721e4d2"),
                         "name": "Leo Tolstoy",
-                        "dob": datetime.date(1828, 9, 9),
-                        "created_at": datetime.datetime(2023, 5, 2, tzinfo=datetime.timezone.utc),
-                        "updated_at": datetime.datetime(2023, 5, 15, tzinfo=datetime.timezone.utc),
+                        "dob": dt.date(1828, 9, 9),
+                        "created_at": dt.datetime(2023, 5, 2, tzinfo=dt.timezone.utc),
+                        "updated_at": dt.datetime(2023, 5, 15, tzinfo=dt.timezone.utc),
                     },
                 ],
                 "rules": [
@@ -388,15 +384,15 @@ class TestDataManager:
                         "id": UUID("f34545b9-663c-4fce-915d-dd1ae9cea42a"),
                         "name": "Initial loading rule.",
                         "config": {"url": "https://example.org", "setting_123": 1},
-                        "created_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
-                        "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                        "created_at": dt.datetime(2023, 1, 1, tzinfo=dt.timezone.utc),
+                        "updated_at": dt.datetime(2023, 2, 1, tzinfo=dt.timezone.utc),
                     },
                     {
                         "id": UUID("f34545b9-663c-4fce-915d-dd1ae9cea34b"),
                         "name": "Secondary loading rule.",
                         "config": {"url": "https://example.org", "bar": "foo", "setting_123": 4},
-                        "created_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
-                        "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                        "created_at": dt.datetime(2023, 2, 1, tzinfo=dt.timezone.utc),
+                        "updated_at": dt.datetime(2023, 2, 1, tzinfo=dt.timezone.utc),
                     },
                 ],
                 "secrets": [
@@ -410,19 +406,19 @@ class TestDataManager:
                     {
                         "user_id": 1,
                         "role_id": 10,
-                        "assigned_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
+                        "assigned_at": dt.datetime(2023, 1, 1, tzinfo=dt.timezone.utc),
                         "is_active": True,
                     },
                     {
                         "user_id": 1,
                         "role_id": 20,
-                        "assigned_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                        "assigned_at": dt.datetime(2023, 2, 1, tzinfo=dt.timezone.utc),
                         "is_active": True,
                     },
                     {
                         "user_id": 2,
                         "role_id": 10,
-                        "assigned_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
+                        "assigned_at": dt.datetime(2023, 3, 1, tzinfo=dt.timezone.utc),
                         "is_active": False,
                     },
                 ],
@@ -433,16 +429,16 @@ class TestDataManager:
                 {
                     "id": 2023,
                     "name": "Agatha Christie",
-                    "dob": datetime.date(1890, 9, 15),
-                    "created_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
-                    "updated_at": datetime.datetime(2023, 5, 11, tzinfo=datetime.timezone.utc),
+                    "dob": dt.date(1890, 9, 15),
+                    "created_at": dt.datetime(2023, 3, 1, tzinfo=dt.timezone.utc),
+                    "updated_at": dt.datetime(2023, 5, 11, tzinfo=dt.timezone.utc),
                 },
                 {
                     "id": 2024,
                     "name": "Leo Tolstoy",
-                    "dob": datetime.date(1828, 9, 9),
-                    "created_at": datetime.datetime(2023, 5, 2, tzinfo=datetime.timezone.utc),
-                    "updated_at": datetime.datetime(2023, 5, 15, tzinfo=datetime.timezone.utc),
+                    "dob": dt.date(1828, 9, 9),
+                    "created_at": dt.datetime(2023, 5, 2, tzinfo=dt.timezone.utc),
+                    "updated_at": dt.datetime(2023, 5, 15, tzinfo=dt.timezone.utc),
                 },
             ],
             "rules": [
@@ -450,15 +446,15 @@ class TestDataManager:
                     "id": 2025,
                     "name": "Initial loading rule.",
                     "config": {"url": "https://example.org", "setting_123": 1},
-                    "created_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
-                    "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                    "created_at": dt.datetime(2023, 1, 1, tzinfo=dt.timezone.utc),
+                    "updated_at": dt.datetime(2023, 2, 1, tzinfo=dt.timezone.utc),
                 },
                 {
                     "id": 2026,
                     "name": "Secondary loading rule.",
                     "config": {"url": "https://example.org", "bar": "foo", "setting_123": 4},
-                    "created_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
-                    "updated_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                    "created_at": dt.datetime(2023, 2, 1, tzinfo=dt.timezone.utc),
+                    "updated_at": dt.datetime(2023, 2, 1, tzinfo=dt.timezone.utc),
                 },
             ],
             "secrets": [
@@ -472,19 +468,19 @@ class TestDataManager:
                 {
                     "user_id": 1,
                     "role_id": 10,
-                    "assigned_at": datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
+                    "assigned_at": dt.datetime(2023, 1, 1, tzinfo=dt.timezone.utc),
                     "is_active": True,
                 },
                 {
                     "user_id": 1,
                     "role_id": 20,
-                    "assigned_at": datetime.datetime(2023, 2, 1, tzinfo=datetime.timezone.utc),
+                    "assigned_at": dt.datetime(2023, 2, 1, tzinfo=dt.timezone.utc),
                     "is_active": True,
                 },
                 {
                     "user_id": 2,
                     "role_id": 10,
-                    "assigned_at": datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc),
+                    "assigned_at": dt.datetime(2023, 3, 1, tzinfo=dt.timezone.utc),
                     "is_active": False,
                 },
             ],
@@ -547,6 +543,13 @@ class SchemaManager:
     """Manages schema creation and destruction for test databases."""
 
     _created_schemas: dict[str, bool] = {}
+
+    @classmethod
+    def build_schema_key(cls, schema_prefix: str, engine: "Union[Engine, AsyncEngine]", worker_id: str) -> str:
+        """Build a schema cache key scoped to prefix, dialect, engine URL, and worker."""
+        url = getattr(engine, "url", None)
+        engine_id = url.render_as_string(hide_password=True) if url is not None else str(id(engine))
+        return f"{schema_prefix}_{engine.dialect.name}_{engine_id}_{worker_id}"
 
     @classmethod
     def ensure_schema_sync(cls, engine: Engine, metadata: MetaData, schema_key: str) -> None:
@@ -625,7 +628,7 @@ def uuid_schema_sync(engine: Engine, uuid_models_dba: dict[str, type], request: 
         )
     if getattr(engine.dialect, "name", "") != "mock":
         worker_id = get_worker_id(request)
-        schema_key = f"uuid_sync_{engine.dialect.name}_{worker_id}"
+        schema_key = SchemaManager.build_schema_key("uuid_sync", engine, worker_id)
         SchemaManager.ensure_schema_sync(engine, uuid_models_dba["base"].metadata, schema_key)
 
 
@@ -637,7 +640,7 @@ def bigint_schema_sync(engine: Engine, bigint_models_dba: dict[str, type], reque
         pytest.skip(f"{engine.dialect.name} doesn't support bigint PKs well")
 
     worker_id = get_worker_id(request)
-    schema_key = f"bigint_sync_{engine.dialect.name}_{worker_id}"
+    schema_key = SchemaManager.build_schema_key("bigint_sync", engine, worker_id)
     SchemaManager.ensure_schema_sync(engine, bigint_models_dba["base"].metadata, schema_key)
 
 
@@ -648,7 +651,7 @@ async def uuid_schema_async(
     """Ensure UUID schema exists for async engine."""
     if getattr(async_engine.dialect, "name", "") != "mock":
         worker_id = get_worker_id(request)
-        schema_key = f"uuid_async_{async_engine.dialect.name}_{worker_id}"
+        schema_key = SchemaManager.build_schema_key("uuid_async", async_engine, worker_id)
         await SchemaManager.ensure_schema_async(async_engine, uuid_models_dba["base"].metadata, schema_key)
 
 
@@ -662,7 +665,7 @@ async def bigint_schema_async(
         pytest.skip(f"{async_engine.dialect.name} doesn't support bigint PKs well")
 
     worker_id = get_worker_id(request)
-    schema_key = f"bigint_async_{async_engine.dialect.name}_{worker_id}"
+    schema_key = SchemaManager.build_schema_key("bigint_async", async_engine, worker_id)
     await SchemaManager.ensure_schema_async(async_engine, bigint_models_dba["base"].metadata, schema_key)
 
 

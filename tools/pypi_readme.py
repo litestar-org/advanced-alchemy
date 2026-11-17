@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-PYPI_BANNER = '<img src="https://raw.githubusercontent.com/litestar-org/branding/refs/heads/main/assets/Branding%20-%20SVG%20-%20Transparent/AA%20-%20Banner%20-%20Inline%20-%20Light.svg" alt="Litestar Logo - Light" width="100%" height="auto" />'
+PYPI_BANNER = '<img src="https://raw.githubusercontent.com/litestar-org/branding/main/assets/projects/advanced-alchemy/banners/banner-inline-light.png" alt="Advanced Alchemy" width="560" />'
 
 
 def generate_pypi_readme() -> None:

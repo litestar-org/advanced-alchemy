@@ -2,7 +2,7 @@
 # ruff: noqa: SLF001
 """FSSpec-backed storage backend for file objects."""
 
-import datetime
+import datetime as dt
 import os
 from collections.abc import AsyncIterable, AsyncIterator, Iterable, Sequence
 from pathlib import Path
@@ -138,7 +138,7 @@ class FSSpecBackend(StorageBackend):
             info.update(fs_info)  # pyright: ignore
         file_object.size = cast("int", info.get("size", file_object.size))  # pyright: ignore
         file_object.last_modified = (
-            get_mtime_equivalent(info) or datetime.datetime.now(tz=datetime.timezone.utc).timestamp()  # pyright: ignore
+            get_mtime_equivalent(info) or dt.datetime.now(tz=dt.timezone.utc).timestamp()  # pyright: ignore
         )
         file_object.etag = get_or_generate_etag(file_object, info, file_object.last_modified)  # pyright: ignore
         # Merge backend metadata if available and different
@@ -192,7 +192,7 @@ class FSSpecBackend(StorageBackend):
             info.update(fs_info)  # pyright: ignore
         file_object.size = cast("int", info.get("size", file_object.size))  # pyright: ignore
         file_object.last_modified = (
-            get_mtime_equivalent(info) or datetime.datetime.now(tz=datetime.timezone.utc).timestamp()  # pyright: ignore
+            get_mtime_equivalent(info) or dt.datetime.now(tz=dt.timezone.utc).timestamp()  # pyright: ignore
         )
         file_object.etag = get_or_generate_etag(file_object, info, file_object.last_modified)  # pyright: ignore
         # Merge backend metadata if available and different

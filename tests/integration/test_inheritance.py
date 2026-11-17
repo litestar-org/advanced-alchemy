@@ -6,7 +6,7 @@ This module tests all three SQLAlchemy inheritance patterns:
 - Concrete Table Inheritance (CTI)
 """
 
-import datetime
+import datetime as dt
 from typing import Optional
 
 import pytest
@@ -436,7 +436,7 @@ def test_mixin_with_inheritance() -> None:
         metadata = test_metadata
 
     class TimestampMixin:
-        created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.now)
+        created_at: Mapped[dt.datetime] = mapped_column(default=dt.datetime.now)
 
     class Employee(TimestampMixin, base.CommonTableAttributes, LocalBase):
         __tablename__ = "employee_mixin"
@@ -462,7 +462,7 @@ def test_abstract_base_class() -> None:
 
     class BaseEntity(base.CommonTableAttributes, LocalBase):
         __abstract__ = True
-        created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.now)
+        created_at: Mapped[dt.datetime] = mapped_column(default=dt.datetime.now)
 
     class Employee(BaseEntity):
         __tablename__ = "employee_abstract"

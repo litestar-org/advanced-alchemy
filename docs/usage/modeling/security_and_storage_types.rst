@@ -2,9 +2,7 @@
 Security and File Storage Types
 ================================
 
-Most apps eventually need to store sensitive values—API keys, user passwords, two-factor login codes—or attach uploaded files like avatars and PDF reports to a database row.
-
-Advanced Alchemy provides dedicated column types so sensitive values are never stored in plain text and uploaded files stay in sync with your database transactions.
+Advanced Alchemy includes column types for symmetric field encryption, password hashing, TOTP seeds, one-time verification codes, and transaction-synchronized object storage.
 
 Encrypted Text and Password Hashing
 -----------------------------------
@@ -105,7 +103,7 @@ For multi-factor login flows, ``TOTPSecret`` encrypts authenticator app seeds (G
 File and Object Storage
 -----------------------
 
-Instead of storing large binary blobs inside SQL tables, ``StoredObject`` saves lightweight file metadata in your table and writes the file bytes to local disk, S3, Google Cloud Storage, or Azure via ``storages``:
+Instead of storing binary payloads inside SQL columns, ``StoredObject`` persists file metadata in the table and writes object bytes to local disk, S3, Google Cloud Storage, or Azure Blob Storage through ``storages``:
 
 .. code-block:: python
 

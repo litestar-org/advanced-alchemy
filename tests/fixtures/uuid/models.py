@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from uuid import UUID
 
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
@@ -26,7 +26,7 @@ class UUIDAuthor(UUIDAuditBase):
 
     name: Mapped[str] = mapped_column(String(length=100))  # pyright: ignore
     string_field: Mapped[str] = mapped_column(String(20), default="static value", nullable=True)  # pyright: ignore
-    dob: Mapped[datetime.date] = mapped_column(nullable=True)  # pyright: ignore
+    dob: Mapped[dt.date] = mapped_column(nullable=True)  # pyright: ignore
     books: Mapped[list[UUIDBook]] = relationship(
         lazy="selectin",
         back_populates="author",
@@ -60,7 +60,7 @@ class UUIDSlugBook(UUIDBase, SlugKey):
 class UUIDEventLog(UUIDAuditBase):
     """The event log domain object."""
 
-    logged_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.now())  # pyright: ignore
+    logged_at: Mapped[dt.datetime] = mapped_column(default=dt.datetime.now())  # pyright: ignore
     payload: Mapped[dict] = mapped_column(default={})  # pyright: ignore
 
 
@@ -83,7 +83,7 @@ class UUIDModelWithFetchedValue(UUIDv6Base):
     """The ModelWithFetchedValue UUIDBase."""
 
     val: Mapped[int]
-    updated: Mapped[datetime.datetime] = mapped_column(
+    updated: Mapped[dt.datetime] = mapped_column(
         server_default=func.current_timestamp(),
         onupdate=func.current_timestamp(),
         server_onupdate=FetchedValue(),

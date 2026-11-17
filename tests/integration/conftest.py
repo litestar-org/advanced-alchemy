@@ -177,7 +177,7 @@ def pytest_configure(config: pytest.Config) -> None:
     """
     for plugin in _DATABASE_PLUGINS:
         if not config.pluginmanager.has_plugin(plugin):
-            with contextlib.suppress(ImportError):
+            with contextlib.suppress(ImportError, pytest.UsageError):
                 config.pluginmanager.import_plugin(plugin)
 
 

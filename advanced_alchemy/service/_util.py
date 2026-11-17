@@ -4,8 +4,9 @@ RepositoryService object is generic on the domain model type which
 should be a SQLAlchemy model.
 """
 
-import datetime
+import datetime as dt
 from collections.abc import Sequence
+from decimal import Decimal
 from enum import Enum
 from functools import lru_cache, partial
 from pathlib import Path, PurePath
@@ -26,6 +27,8 @@ from advanced_alchemy.typing import (
     CATTRS_INSTALLED,
     MSGSPEC_INSTALLED,
     PYDANTIC_INSTALLED,
+    CattrsStructureHandlerNotFoundError,
+    cattrs_global_converter,
 )
 from advanced_alchemy.utils.serialization import (
     BaseModel,
@@ -37,7 +40,6 @@ from advanced_alchemy.utils.serialization import (
     get_type_adapter,
     is_attrs_schema,
     schema_dump,
-    structure,
 )
 
 if TYPE_CHECKING:
@@ -51,9 +53,9 @@ __all__ = ("ResultConverter", "configure_service_subclass", "find_filter", "reso
 
 DEFAULT_TYPE_DECODERS = [  # pyright: ignore[reportUnknownVariableType]
     (lambda x: x is UUID, lambda t, v: t(v.hex)),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-    (lambda x: x is datetime.datetime, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-    (lambda x: x is datetime.date, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
-    (lambda x: x is datetime.time, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    (lambda x: x is dt.datetime, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    (lambda x: x is dt.date, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    (lambda x: x is dt.time, lambda t, v: t(v.isoformat())),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
     (lambda x: x is Enum, lambda t, v: t(v.value)),  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
 ]
 
@@ -321,9 +323,12 @@ class ResultConverter:
             )
             return cast("OffsetPagination[ModelDTOT]", _create_pagination(validated_items, filters, total))
         if CATTRS_INSTALLED and is_attrs_schema(schema_type):
+            cattrs_converter = _get_cattrs_converter()
             if not isinstance(data, Sequence):
-                return cast("ModelDTOT", structure(schema_dump(data), schema_type))
-            structured_items = [cast("ModelDTOT", structure(schema_dump(item), schema_type)) for item in data]
+                return cast("ModelDTOT", cattrs_converter.structure(schema_dump(data), schema_type))
+            structured_items = cattrs_converter.structure(
+                [schema_dump(item) for item in data], _get_list_schema_type(cast("Any", schema_type))
+            )
             return cast("OffsetPagination[ModelDTOT]", _create_pagination(structured_items, filters, total))
 
         if ATTRS_INSTALLED and is_attrs_schema(schema_type):
@@ -386,6 +391,52 @@ _DEFAULT_MSGSPEC_DEC_HOOK = partial(
 )
 
 
+_CATTRS_SCALAR_TYPES: "tuple[type[Any], ...]" = (UUID, dt.datetime, dt.date, dt.time, dt.timedelta, Decimal)
+
+
+def _structure_cattrs_scalar(value: Any, target_type: Any) -> Any:
+    """Structure a scalar column value into ``target_type`` for ``cattrs``.
+
+    Values that already have the target type, which is the case for anything loaded
+    from the database, are returned unchanged.
+
+    Args:
+        value: The value to structure.
+        target_type: The scalar type declared on the attrs field.
+
+    Returns:
+        ``value`` as an instance of ``target_type``.
+    """
+    if isinstance(value, target_type):
+        return value
+    if isinstance(value, str) and hasattr(target_type, "fromisoformat"):
+        return target_type.fromisoformat(value)
+    if target_type is dt.timedelta:
+        return dt.timedelta(seconds=float(value))
+    constructor: Callable[[Any], Any] = target_type
+    return constructor(value)
+
+
+@lru_cache(maxsize=1)
+def _get_cattrs_converter() -> Any:
+    """Return the ``cattrs`` converter used to build attrs schemas.
+
+    The converter is a copy of the ``cattrs`` global converter taken on first use, so
+    hooks registered on the global converter beforehand are honored. Structure hooks
+    are added for the scalar column types ``cattrs`` has no built-in handler for.
+
+    Returns:
+        A configured ``cattrs`` converter.
+    """
+    converter = cattrs_global_converter.copy()
+    for scalar_type in _CATTRS_SCALAR_TYPES:
+        try:
+            converter.get_structure_hook(scalar_type)
+        except CattrsStructureHandlerNotFoundError:
+            converter.register_structure_hook(scalar_type, _structure_cattrs_scalar)
+    return converter
+
+
 @lru_cache(maxsize=256)
 def _get_list_schema_type(schema_type: "type[Any]") -> Any:
     """Return and cache ``list[schema_type]`` generic alias."""
@@ -420,7 +471,8 @@ def _convert_attrs_item(item: Any, schema_type: "type[ModelDTOT]", field_names: 
     """
     item_dict = schema_dump(item)
     filtered_dict = {k: v for k, v in item_dict.items() if k in field_names}
-    return schema_type(**filtered_dict)  # type: ignore[return-value]
+    converted: Any = schema_type(**filtered_dict)
+    return cast("ModelDTOT", converted)
 
 
 def _create_pagination(items: Any, filters: Any, total: "Optional[int]") -> "OffsetPagination[Any]":

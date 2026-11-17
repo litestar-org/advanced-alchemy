@@ -157,15 +157,14 @@ def get_primary_key_info(
         Returns empty tuples if the model cannot be inspected (e.g., unmapped models).
     """
     try:
-        mapper = inspect(model)
+        mapper: Optional[Mapper[Any]] = inspect(model)
     except NoInspectionAvailable:
         return (), ()
     else:
-        pk_columns: tuple[Column[Any], ...] = tuple(mapper.primary_key)  # type: ignore[union-attr]
-        pk_attr_names: tuple[str, ...] = tuple(
-            mapper.get_property_by_column(col).key  # type: ignore[union-attr]
-            for col in pk_columns
-        )
+        if mapper is None:
+            return (), ()
+        pk_columns: tuple[Column[Any], ...] = cast("tuple[Column[Any], ...]", mapper.primary_key)
+        pk_attr_names: tuple[str, ...] = tuple(mapper.get_property_by_column(col).key for col in pk_columns)
         return pk_columns, pk_attr_names
 
 
@@ -919,8 +918,8 @@ class FilterableRepository(
         self,
         *filters: Union[StatementFilter, ColumnElement[bool]],
         apply_pagination: bool = True,
-        statement: Select[tuple[ModelT]],
-    ) -> Select[tuple[ModelT]]: ...
+        statement: Select[Any],
+    ) -> Select[Any]: ...
 
     @overload
     def _apply_filters(

@@ -27,11 +27,12 @@ Example:
         '{"price":"19.99"}'
 """
 
-import datetime
+import datetime  # noqa: ICN001
 import enum
 import json
 import threading
 from abc import ABC, abstractmethod
+from collections import deque
 from collections.abc import Mapping
 from dataclasses import MISSING as DATACLASS_MISSING
 from dataclasses import dataclass
@@ -52,6 +53,7 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    get_origin,
     overload,
     runtime_checkable,
 )
@@ -60,6 +62,7 @@ from uuid import UUID
 from sqlalchemy import RowMapping
 from typing_extensions import TypeAlias, TypeGuard
 
+from advanced_alchemy._typing import msgspec_asdict_stub
 from advanced_alchemy.typing import (
     ATTRS_INSTALLED,
     CATTRS_INSTALLED,
@@ -68,6 +71,7 @@ from advanced_alchemy.typing import (
     NUMPY_INSTALLED,
     ORJSON_INSTALLED,
     PYDANTIC_INSTALLED,
+    PYDANTIC_MISSING,
     SQLMODEL_INSTALLED,
     UNSET,
     AttrsInstance,
@@ -79,8 +83,10 @@ from advanced_alchemy.typing import (
     FailFast,
     Struct,
     StructLike,
+    TypeAdapter,
     attrs_nothing,
     convert,
+    msgspec_asdict,
 )
 from advanced_alchemy.typing import attrs_asdict as asdict
 from advanced_alchemy.typing import attrs_fields as fields
@@ -95,6 +101,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.engine.row import Row
 
+    from advanced_alchemy._typing import TypeAdapterProtocol
     from advanced_alchemy.filters import StatementFilter
     from advanced_alchemy.repository.typing import ModelT
 
@@ -173,7 +180,12 @@ TypeEncodersMap = Mapping[type, Callable[[Any], Any]]
 
 T = TypeVar("T")
 
-PYDANTIC_USE_FAILFAST = False  # leave permanently disabled for now
+PYDANTIC_USE_FAILFAST = False
+"""Stop Pydantic collection validation at the first invalid item.
+
+Applies to adapters built by :func:`get_type_adapter` for ``list``, ``tuple``, ``set``,
+``frozenset``, ``dict``, and ``deque`` types. Other types are validated in full.
+"""
 
 FilterTypeT = TypeVar("FilterTypeT", bound="StatementFilter")
 """Type variable for filter types."""
@@ -226,14 +238,10 @@ def _get_schema_dump_config(exclude_unset: bool, config: "Optional[SchemaDumpCon
 
 
 def _get_pydantic_missing_sentinel() -> Any:
-    """Return Pydantic's experimental MISSING sentinel when available."""
+    """Return Pydantic's MISSING sentinel when available."""
     if not PYDANTIC_INSTALLED:
         return None
-    try:
-        from pydantic.experimental.missing_sentinel import MISSING
-    except ImportError:  # pragma: no cover - depends on installed Pydantic version
-        return None
-    return MISSING
+    return PYDANTIC_MISSING
 
 
 # ============================================================================
@@ -281,14 +289,27 @@ def convert_date_to_iso(dt: datetime.date) -> str:
     return dt.isoformat()
 
 
-@lru_cache(typed=True)
-def get_type_adapter(f: "type[T]") -> Any:
-    """Caches and returns a pydantic type adapter."""
-    from advanced_alchemy.typing import TypeAdapter
+_FAILFAST_COLLECTION_ORIGINS: tuple[Any, ...] = (list, tuple, set, frozenset, dict, deque)
 
-    if PYDANTIC_USE_FAILFAST:
-        return TypeAdapter(Annotated[f, FailFast()])  # pyright: ignore
+
+@lru_cache(typed=True)
+def _build_type_adapter(f: Any, fail_fast: bool) -> "TypeAdapterProtocol[Any]":
+    if fail_fast and get_origin(f) in _FAILFAST_COLLECTION_ORIGINS:
+        return TypeAdapter(cast("Any", Annotated[f, FailFast()]))
     return TypeAdapter(f)
+
+
+@overload
+def get_type_adapter(f: "type[T]") -> "TypeAdapterProtocol[T]": ...
+
+
+@overload
+def get_type_adapter(f: Any) -> "TypeAdapterProtocol[Any]": ...
+
+
+def get_type_adapter(f: Any) -> "TypeAdapterProtocol[Any]":
+    """Caches and returns a pydantic type adapter."""
+    return _build_type_adapter(f, PYDANTIC_USE_FAILFAST)
 
 
 @lru_cache(maxsize=128, typed=True)
@@ -325,7 +346,7 @@ def is_sqlmodel_table_model(v: Any) -> bool:
             return issubclass(v, BaseModel) and hasattr(v, "__mapper__")
         except TypeError:
             return False
-    return isinstance(v, BaseModel) and hasattr(v, "__mapper__")
+    return isinstance(v, BaseModel) and hasattr(type(v), "__mapper__")
 
 
 def is_msgspec_struct(v: Any) -> TypeGuard[StructLike]:
@@ -469,23 +490,29 @@ def _dump_pydantic_model(data: BaseModelLike, dump_config: SchemaDumpConfig) -> 
 
 def _dump_msgspec_struct(data: StructLike, dump_config: SchemaDumpConfig) -> "dict[str, Any]":
     """Dump a msgspec struct according to the schema dump config."""
-    fields = data.__struct_fields__
+    try:
+        values = msgspec_asdict(data)
+    except (AttributeError, TypeError):
+        values = msgspec_asdict_stub(data)
+    exclude_sentinels = dump_config.exclude_sentinels
+    exclude_none = dump_config.exclude_none
+    if not dump_config.exclude_defaults:
+        if not exclude_sentinels and not exclude_none:
+            return values
+        return {
+            name: value
+            for name, value in values.items()
+            if not (exclude_sentinels and value is UNSET) and not (exclude_none and value is None)
+        }
     defaults = getattr(data, "__struct_defaults__", ())
-    default_fields = fields[-len(defaults) :] if defaults else ()
-    default_values = dict(zip(default_fields, defaults))
-    dumped: dict[str, Any] = {}
-    for field_name in fields:
-        if not hasattr(data, field_name):
-            continue
-        value = getattr(data, field_name)
-        if dump_config.exclude_sentinels and value is UNSET:
-            continue
-        if dump_config.exclude_none and value is None:
-            continue
-        if dump_config.exclude_defaults and field_name in default_values and value == default_values[field_name]:
-            continue
-        dumped[field_name] = value
-    return dumped
+    default_values = dict(zip(data.__struct_fields__[-len(defaults) :], defaults)) if defaults else {}
+    return {
+        name: value
+        for name, value in values.items()
+        if not (exclude_sentinels and value is UNSET)
+        and not (exclude_none and value is None)
+        and not (name in default_values and value == default_values[name])
+    }
 
 
 def _dump_attrs_instance(data: AttrsLike, dump_config: SchemaDumpConfig) -> "dict[str, Any]":

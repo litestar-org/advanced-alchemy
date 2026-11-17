@@ -1,6 +1,6 @@
 """Unit tests for cache serialization utilities."""
 
-import datetime
+import datetime as dt
 from decimal import Decimal
 
 import pytest
@@ -22,7 +22,7 @@ class CacheModel(CacheBase):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(length=50))
-    created_at: Mapped[datetime.datetime] = mapped_column()
+    created_at: Mapped[dt.datetime] = mapped_column()
     payload: Mapped[bytes] = mapped_column(LargeBinary())
     amount: Mapped[Decimal] = mapped_column(Numeric())
 
@@ -61,7 +61,7 @@ def test_default_serializer_encodes_complex_types() -> None:
     instance = CacheModel(
         id=1,
         name="alpha",
-        created_at=datetime.datetime(2025, 12, 14, 10, 30, 0),
+        created_at=dt.datetime(2025, 12, 14, 10, 30, 0),
         payload=b"\x00\xff",
         amount=Decimal("12.34"),
     )
@@ -81,7 +81,7 @@ def test_default_deserializer_roundtrip() -> None:
     instance = CacheModel(
         id=7,
         name="beta",
-        created_at=datetime.datetime(2025, 1, 1, 9, 0, 0),
+        created_at=dt.datetime(2025, 1, 1, 9, 0, 0),
         payload=b"\xaa\xbb",
         amount=Decimal("99.99"),
     )
@@ -92,7 +92,7 @@ def test_default_deserializer_roundtrip() -> None:
     assert isinstance(restored, CacheModel)
     assert restored.id == 7
     assert restored.name == "beta"
-    assert restored.created_at == datetime.datetime(2025, 1, 1, 9, 0, 0)
+    assert restored.created_at == dt.datetime(2025, 1, 1, 9, 0, 0)
     assert restored.payload == b"\xaa\xbb"
     assert restored.amount == Decimal("99.99")
 
@@ -102,7 +102,7 @@ def test_default_deserializer_model_mismatch() -> None:
     instance = CacheModel(
         id=3,
         name="gamma",
-        created_at=datetime.datetime(2025, 6, 1, 12, 0, 0),
+        created_at=dt.datetime(2025, 6, 1, 12, 0, 0),
         payload=b"\x01",
         amount=Decimal("1.00"),
     )

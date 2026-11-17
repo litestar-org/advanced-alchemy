@@ -2,7 +2,7 @@
 Starlette Integration
 =====================
 
-For lightweight ASGI services built on Starlette, ``AdvancedAlchemy`` manages engine startup/shutdown and attaches a request-scoped database session to ``request.state`` automatically.
+``AdvancedAlchemy`` manages engine startup and shutdown for Starlette ASGI applications and provides lazy per-request SQLAlchemy sessions on ``request.state``.
 
 What's Included for Starlette
 -----------------------------
@@ -12,10 +12,10 @@ What's Included for Starlette
    :widths: 28 46 26
 
    * - Feature
-     - What It Gives You
+     - Capabilities
      - Reference
    * - **Session Middleware**
-     - Opens and cleans up a SQLAlchemy session on ``request.state`` for every HTTP request.
+     - Lazily creates a SQLAlchemy session on ``request.state`` on first access and closes it when the request finishes.
      - :doc:`API </reference/extensions/starlette/index>`
    * - **Commit Modes**
      - Supports manual commits, ``"autocommit"`` on ``2xx``, and ``"autocommit_include_redirect"``.
@@ -61,7 +61,7 @@ Installation
 Setup and Route Usage
 ---------------------
 
-Attach ``AdvancedAlchemy`` to your ``Starlette`` app and grab the current request's session with ``alchemy.get_async_session(request)``:
+Attach ``AdvancedAlchemy`` to your ``Starlette`` app and retrieve the current request's session with ``alchemy.get_async_session(request)``:
 
 .. tab-set::
 

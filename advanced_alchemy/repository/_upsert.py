@@ -1,7 +1,7 @@
 """Native and ORM fallback upsert planning utilities for SQLAlchemy repositories."""
 
 import contextlib
-import datetime
+import datetime as dt
 import decimal
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Final, Generic, Optional, cast
@@ -38,10 +38,10 @@ DEFAULT_SAFE_TYPES: Final[set[type[Any]]] = {
     bool,
     bytes,
     decimal.Decimal,
-    datetime.date,
-    datetime.datetime,
-    datetime.time,
-    datetime.timedelta,
+    dt.date,
+    dt.datetime,
+    dt.time,
+    dt.timedelta,
 }
 
 

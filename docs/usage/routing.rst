@@ -2,9 +2,7 @@
 Read/Write Routing
 ==================
 
-As your app grows, most database traffic is reading data—loading feeds, search pages, and dashboards—while only a fraction is saving changes.
-
-Read/write routing lets you add **Read Replicas** alongside your main **Primary Database** without rewriting your repository calls:
+Read/write routing directs mutating statements to a **Primary Database** and distributes ``SELECT`` queries across one or more **Read Replica** pools without changing repository or service calls:
 
 .. raw:: html
 
@@ -13,12 +11,10 @@ Read/write routing lets you add **Read Replicas** alongside your main **Primary 
         <img src="../_static/diagrams/routing-topology-dark.svg" alt="How Read and Write Routing Works" class="aa-diagram--dark" />
     </div>
 
-How Your Own Changes Stay Fresh
--------------------------------
+Primary Pinning After Writes
+----------------------------
 
-Replicas take a few milliseconds to copy new data from Primary. What happens if a user creates a new blog post and your code immediately loads that post on the next line?
-
-Advanced Alchemy solves replica lag automatically: as soon as a session writes data, subsequent reads in that transaction stay pinned to Primary until ``commit()`` or ``rollback()`` finishes:
+Asynchronous replication introduces replication lag between the primary database and read replicas. When ``sticky_after_write=True`` (the default), once a session flushes a write, subsequent reads within that transaction remain pinned to the primary database until ``commit()`` or ``rollback()`` completes:
 
 .. raw:: html
 
@@ -109,7 +105,7 @@ Define your ``"default"`` writer and ``"read"`` replica pools in ``RoutingConfig
 Choosing a Pool Manually
 ------------------------
 
-Most routes never need manual overrides. When a critical checkout check must read from Primary—or a slow report should run on an ``"analytics"`` replica—wrap the call in a context manager or pass ``bind_group``:
+Use ``primary_context()``, ``replica_context()``, or ``use_bind_group()`` to target a specific engine pool for an individual operation (such as forcing a primary read or routing reporting queries to an ``"analytics"`` pool):
 
 .. code-block:: python
 

@@ -21,6 +21,7 @@ from advanced_alchemy._typing import (
     PASSLIB_INSTALLED,
     PWDLIB_INSTALLED,
     PYDANTIC_INSTALLED,
+    PYDANTIC_MISSING,
     PYOTP_INSTALLED,
     SQLMODEL_INSTALLED,
     UNSET,
@@ -28,6 +29,7 @@ from advanced_alchemy._typing import (
     AttrsLike,
     BaseModel,
     BaseModelLike,
+    CattrsStructureHandlerNotFoundError,
     DataclassProtocol,
     DTOData,
     DTODataLike,
@@ -44,9 +46,11 @@ from advanced_alchemy._typing import (
     attrs_fields,
     attrs_has,
     attrs_nothing,
+    cattrs_global_converter,
     cattrs_structure,
     cattrs_unstructure,
     convert,
+    msgspec_asdict,
 )
 
 __all__ = (  # noqa: F822
@@ -62,6 +66,7 @@ __all__ = (  # noqa: F822
     "PASSLIB_INSTALLED",
     "PWDLIB_INSTALLED",
     "PYDANTIC_INSTALLED",
+    "PYDANTIC_MISSING",
     "PYOTP_INSTALLED",
     "SQLMODEL_INSTALLED",
     "UNSET",
@@ -69,6 +74,7 @@ __all__ = (  # noqa: F822
     "AttrsLike",
     "BaseModel",
     "BaseModelLike",
+    "CattrsStructureHandlerNotFoundError",
     "DTOData",
     "DTODataLike",
     "DataclassProtocol",
@@ -86,9 +92,11 @@ __all__ = (  # noqa: F822
     "attrs_fields",
     "attrs_has",
     "attrs_nothing",
+    "cattrs_global_converter",
     "cattrs_structure",
     "cattrs_unstructure",
     "convert",
+    "msgspec_asdict",
 )
 
 

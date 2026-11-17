@@ -6,7 +6,7 @@ This module contains functions to create dependency providers for services and f
 You should not have modify this module very often and should only be invoked under normal usage.
 """
 
-import datetime
+import datetime as dt
 import inspect
 import re
 from collections.abc import AsyncGenerator, Callable, Generator, Mapping
@@ -49,7 +49,6 @@ from advanced_alchemy.service import (
     EmptyType,
     ErrorMessages,
     LoadSpec,
-    ModelT,
     ServiceGroup,
     SQLAlchemyAsyncRepositoryService,
     SQLAlchemySyncRepositoryService,
@@ -86,7 +85,7 @@ if TYPE_CHECKING:
     from advanced_alchemy.extensions.litestar.plugins.init.config.asyncio import SQLAlchemyAsyncConfig
     from advanced_alchemy.extensions.litestar.plugins.init.config.sync import SQLAlchemySyncConfig
 
-DTorNone = Optional[datetime.datetime]
+DTorNone = Optional[dt.datetime]
 StringOrNone = Optional[str]
 UuidOrNone = Optional[UUID]
 IntOrNone = Optional[int]
@@ -244,7 +243,7 @@ def _with_dep_defaults_prefix(
 def create_service_provider(
     service_class: type["AsyncServiceT_co"],
     /,
-    statement: "Optional[Select[tuple[ModelT]]]" = None,
+    statement: "Optional[Select[Any]]" = None,
     config: "Optional[SQLAlchemyAsyncConfig]" = None,
     error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
     load: "Optional[LoadSpec]" = None,
@@ -258,7 +257,7 @@ def create_service_provider(
 def create_service_provider(
     service_class: type["SyncServiceT_co"],
     /,
-    statement: "Optional[Select[tuple[ModelT]]]" = None,
+    statement: "Optional[Select[Any]]" = None,
     config: "Optional[SQLAlchemySyncConfig]" = None,
     error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
     load: "Optional[LoadSpec]" = None,
@@ -285,7 +284,7 @@ def create_service_provider(
 def create_service_provider(
     service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co", "ServiceGroupT"]],
     /,
-    statement: "Optional[Select[tuple[ModelT]]]" = None,
+    statement: "Optional[Select[Any]]" = None,
     config: "Optional[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]" = None,
     error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
     load: "Optional[LoadSpec]" = None,
@@ -446,7 +445,7 @@ def create_service_dependencies(
     service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co", "ServiceGroupT"]],
     /,
     key: str,
-    statement: "Optional[Select[tuple[ModelT]]]" = None,
+    statement: "Optional[Select[Any]]" = None,
     config: "Optional[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]" = None,
     error_messages: "Optional[Union[ErrorMessages, EmptyType]]" = Empty,
     load: "Optional[LoadSpec]" = None,
@@ -832,29 +831,26 @@ def _create_statement_filters(  # noqa: C901, PLR0915
         not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
 
         for field_def in not_in_fields:
-            field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+            resolved_field_def = (
+                FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+            )
 
-            # Capture field_def by value to avoid Python closure late binding gotcha
-            # Without default parameter, all closures would reference the loop variable's final value
             def create_not_in_filter_provider(  # pyright: ignore
-                field_name: FieldNameType = field_def,  # type: ignore[assignment]
+                field_name: FieldNameType = resolved_field_def,
             ) -> Callable[..., Optional[NotInCollectionFilter[Any]]]:
                 param_name = f"{field_name.name}_not_in"
-
-                def provide_not_in_filter(  # pyright: ignore
-                    **kwargs: Any,
-                ) -> Optional[NotInCollectionFilter[field_name.type_hint]]:  # type: ignore
-                    values = kwargs.get(param_name)
-                    return (
-                        NotInCollectionFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore
-                        if values
-                        else None
-                    )
-
-                annotation = Annotated[
-                    Optional[list[field_name.type_hint]],  # type: ignore
+                filter_return_type: Any = cast("Any", Optional)[
+                    cast("Any", NotInCollectionFilter)[field_name.type_hint]
+                ]
+                annotation: Any = cast("Any", Annotated)[
+                    cast("Any", Optional)[cast("Any", list)[field_name.type_hint]],
                     QueryParameter(name=alias_for(param_name)),
                 ]
+
+                def provide_not_in_filter(**kwargs: Any) -> Optional[NotInCollectionFilter[Any]]:
+                    values = kwargs.get(param_name)
+                    return NotInCollectionFilter(field_name=field_name.name, values=values) if values else None
+
                 provide_not_in_filter.__name__ = f"provide_not_in_filter_{field_name.name}"
                 provide_not_in_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
                     parameters=[
@@ -865,16 +861,18 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                             annotation=annotation,
                         )
                     ],
-                    return_annotation=Optional[NotInCollectionFilter[field_name.type_hint]],  # type: ignore
+                    return_annotation=filter_return_type,
                 )
                 provide_not_in_filter.__annotations__ = {
                     param_name: annotation,
-                    "return": Optional[NotInCollectionFilter[field_name.type_hint]],  # type: ignore
+                    "return": filter_return_type,
                 }
                 return provide_not_in_filter  # pyright: ignore
 
-            provider = create_not_in_filter_provider(field_def)  # pyright: ignore
-            filters[f"{prefix_str}{field_def.name}_not_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
+            not_in_provider = create_not_in_filter_provider(resolved_field_def)  # pyright: ignore
+            filters[f"{prefix_str}{resolved_field_def.name}_not_in_filter"] = Provide(
+                not_in_provider, sync_to_thread=False
+            )  # pyright: ignore
 
     # Add in filter providers
     if in_fields := config.get("in_fields"):
@@ -882,32 +880,25 @@ def _create_statement_filters(  # noqa: C901, PLR0915
         in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
 
         for field_def in in_fields:
-            field_def = FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+            resolved_field_def = (
+                FieldNameType(name=field_def, type_hint=str) if isinstance(field_def, str) else field_def
+            )
 
-            # Capture field_def by value to avoid Python closure late binding gotcha
-            # Without default parameter, all closures would reference the loop variable's final value
             def create_in_filter_provider(  # pyright: ignore
-                field_name: FieldNameType = field_def,  # type: ignore[assignment]
+                field_name: FieldNameType = resolved_field_def,
             ) -> Callable[..., Optional[CollectionFilter[Any]]]:
                 param_name = f"{field_name.name}_in"
+                filter_return_type: Any = cast("Any", Optional)[cast("Any", CollectionFilter)[field_name.type_hint]]
+                annotation: Any = cast("Any", Annotated)[
+                    cast("Any", Optional)[cast("Any", list)[field_name.type_hint]],
+                    QueryParameter(name=alias_for(param_name)),
+                ]
 
-                def provide_in_filter(  # pyright: ignore
-                    **kwargs: Any,
-                ) -> Optional[CollectionFilter[field_name.type_hint]]:  # type: ignore # pyright: ignore
+                def provide_in_filter(**kwargs: Any) -> Optional[CollectionFilter[Any]]:
                     values = kwargs.get(param_name)
-                    return (
-                        CollectionFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore  # pyright: ignore
-                        if values
-                        else None
-                    )
+                    return CollectionFilter(field_name=field_name.name, values=values) if values else None
 
                 provide_in_filter.__name__ = f"provide_in_filter_{field_name.name}"
-                annotation = Annotated[
-                    Optional[list[field_name.type_hint]],  # type: ignore
-                    QueryParameter(
-                        name=alias_for(param_name),
-                    ),
-                ]
                 provide_in_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
                     parameters=[
                         inspect.Parameter(
@@ -917,16 +908,16 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                             annotation=annotation,
                         )
                     ],
-                    return_annotation=Optional[CollectionFilter[field_name.type_hint]],  # type: ignore
+                    return_annotation=filter_return_type,
                 )
                 provide_in_filter.__annotations__ = {
                     param_name: annotation,
-                    "return": Optional[CollectionFilter[field_name.type_hint]],  # type: ignore
+                    "return": filter_return_type,
                 }
                 return provide_in_filter  # pyright: ignore
 
-            provider = create_in_filter_provider(field_def)  # type: ignore
-            filters[f"{prefix_str}{field_def.name}_in_filter"] = Provide(provider, sync_to_thread=False)  # pyright: ignore
+            in_provider = create_in_filter_provider(resolved_field_def)
+            filters[f"{prefix_str}{resolved_field_def.name}_in_filter"] = Provide(in_provider, sync_to_thread=False)  # pyright: ignore
 
     if boolean_fields := config.get("boolean_fields"):
         for boolean_field_def in normalize_field_name_types(boolean_fields):
@@ -974,19 +965,15 @@ def _create_statement_filters(  # noqa: C901, PLR0915
                 field_name: FieldNameType = choice_field_def,
             ) -> Callable[..., Optional[ChoicesFilter[Any]]]:
                 param_name = f"{field_name.name}_choices"
+                annotation: Any = cast("Any", Annotated)[
+                    cast("Any", Optional)[cast("Any", list)[field_name.type_hint]],
+                    QueryParameter(name=alias_for(field_name.name)),
+                ]
 
                 def provide_choices_filter(**kwargs: Any) -> Optional[ChoicesFilter[Any]]:
                     values = kwargs.get(param_name)
-                    return (
-                        ChoicesFilter[field_name.type_hint](field_name=field_name.name, values=values)  # type: ignore
-                        if values
-                        else None
-                    )
+                    return ChoicesFilter(field_name=field_name.name, values=values) if values else None
 
-                annotation = Annotated[
-                    Optional[list[field_name.type_hint]],  # type: ignore
-                    QueryParameter(name=alias_for(field_name.name)),
-                ]
                 provide_choices_filter.__name__ = f"provide_choices_filter_{field_name.name}"
                 provide_choices_filter.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
                     parameters=[

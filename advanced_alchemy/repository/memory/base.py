@@ -1,7 +1,7 @@
 # ruff: noqa: PLR0911
 import builtins
 import contextlib
-import datetime
+import datetime as dt
 import re
 from collections import abc, defaultdict
 from collections.abc import Callable, Collection, Iterable, Mapping
@@ -406,7 +406,15 @@ class SQLAlchemyMultiStore(MultiStore[ModelT]):
             attr_name = obj_mapper.get_property_by_column(column).key
             if attr_name not in new_attrs:
                 continue
-            remote_mapper = mappers[next(iter(column.foreign_keys))._table_key()]  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
+            foreign_key = next(iter(column.foreign_keys))
+            table_key = cast("Optional[str]", getattr(foreign_key, "target_table_key", None))
+            if table_key is None:
+                get_table_key = cast("Optional[Callable[[], str]]", getattr(foreign_key, "_table_key", None))
+                if get_table_key is None:
+                    msg = f"Cannot resolve target table key for foreign key {foreign_key!r}"
+                    raise RepositoryError(msg)
+                table_key = get_table_key()
+            remote_mapper = mappers[table_key]
             try:
                 obj = self.store(remote_mapper.class_).get(new_attrs.get(attr_name))
             except KeyError:
@@ -589,10 +597,10 @@ class InMemoryFilterEvaluator:
         cls,
         result: List[ModelT],
         field_name: "Union[str, ColumnElement[Any], InstrumentedAttribute[Any]]",
-        before: Optional[datetime.datetime] = None,
-        after: Optional[datetime.datetime] = None,
-        on_or_before: Optional[datetime.datetime] = None,
-        on_or_after: Optional[datetime.datetime] = None,
+        before: Optional[dt.datetime] = None,
+        after: Optional[dt.datetime] = None,
+        on_or_before: Optional[dt.datetime] = None,
+        on_or_after: Optional[dt.datetime] = None,
     ) -> List[ModelT]:
         """Filter items by conjunctive (`AND`) datetime range bounds."""
         if before is None and after is None and on_or_before is None and on_or_after is None:
@@ -600,7 +608,7 @@ class InMemoryFilterEvaluator:
         field_str = cls.extract_field_name(field_name)
         result_: List[ModelT] = []
         for item in result:
-            attr: Optional[datetime.datetime] = cls.resolve_attr_value(item, field_str)
+            attr: Optional[dt.datetime] = cls.resolve_attr_value(item, field_str)
             if attr is None:
                 continue
             if before is not None and attr >= before:
@@ -1003,8 +1011,8 @@ class InMemoryFilterEvaluator:
         if value_op is not None:
             return value_op(val, target)
         if op_name == "dateeq":
-            val_date = val.date() if isinstance(val, datetime.datetime) else val
-            target_date = target.date() if isinstance(target, datetime.datetime) else target
+            val_date = val.date() if isinstance(val, dt.datetime) else val
+            target_date = target.date() if isinstance(target, dt.datetime) else target
             return bool(val_date == target_date)
         if isinstance(val, str):
             return cls._eval_string_comparison_op(val, op_name, target)

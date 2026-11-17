@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Generator
+from importlib import import_module
 
 import pytest
 from pytest import MonkeyPatch
@@ -79,3 +80,17 @@ def monkeypatch_session() -> Generator[MonkeyPatch, None, None]:
     mpatch = MonkeyPatch()
     yield mpatch
     mpatch.undo()
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Synchronize pytest 9.2 ``_id`` storage with pytest-xdist loadgroup suffixes."""
+    coerce_node_id = getattr(import_module("_pytest.nodes"), "coerce_node_id", None)
+    if coerce_node_id is None:
+        return
+    for item in items:
+        if not hasattr(item, "_id"):
+            continue
+        raw_nodeid = getattr(item, "_nodeid", None)
+        if isinstance(raw_nodeid, str) and raw_nodeid != item.nodeid:
+            object.__setattr__(item, "_id", coerce_node_id(raw_nodeid))

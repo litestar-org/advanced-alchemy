@@ -7,7 +7,7 @@ This guide shows how to attach uploaded files to SQLAlchemy models in FastAPI an
 Storing Uploaded Files
 ----------------------
 
-Register a local folder or cloud bucket (S3, GCS, Azure) in ``storages`` and add a ``StoredObject`` column to your model. In FastAPI routes that receive an ``UploadFile``, pass ``FileObject(backend=..., filename=file.filename, content=await file.read())`` to ``service.create(...)``—Advanced Alchemy saves the file when the transaction commits and deletes it if the row is deleted:
+Register a local folder or cloud bucket (S3, GCS, Azure) in ``storages`` and add a ``StoredObject`` column to your model. In FastAPI routes that receive an ``UploadFile``, pass ``FileObject(backend=..., filename=file.filename, content=await file.read())`` to ``service.create(...)``. Pending files are written when the transaction commits and deleted when the row is removed:
 
 .. code-block:: python
 
@@ -55,7 +55,7 @@ Register a local folder or cloud bucket (S3, GCS, Azure) in ``storages`` and add
 Connecting Multiple Databases
 -----------------------------
 
-Pass a list of configs with distinct ``bind_key`` names when your FastAPI app talks to more than one database (for example, an async main database and a sync reporting database):
+Pass a list of configs with distinct ``bind_key`` names when your FastAPI app connects to multiple databases (for example, an async primary database and a sync reporting database):
 
 .. code-block:: python
 
@@ -83,5 +83,5 @@ Pass a list of configs with distinct ``bind_key`` names when your FastAPI app ta
 Related Guides
 --------------
 
-* :doc:`/usage/frameworks/fastapi` — Core FastAPI setup, ``Depends`` services, and query filters.
-* :doc:`/reference/extensions/fastapi/index` — FastAPI extension API reference.
+* :doc:`/usage/frameworks/fastapi`: Core FastAPI setup, ``Depends`` services, and query filters.
+* :doc:`/reference/extensions/fastapi/index`: FastAPI extension API reference.

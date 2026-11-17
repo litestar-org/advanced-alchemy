@@ -49,7 +49,7 @@ class ORA_JSONB(TypeDecorator[dict[str, Any]], SchemaType):  # noqa: N801
         if ora_json is None:
             return dialect.type_descriptor(ORA_BLOB())
         sv = dialect.server_version_info
-        if sv and sv[0] >= _ORACLE_NATIVE_JSON_MIN_VERSION:
+        if sv and isinstance(sv[0], int) and sv[0] >= _ORACLE_NATIVE_JSON_MIN_VERSION:
             return dialect.type_descriptor(ora_json())
         return dialect.type_descriptor(ORA_BLOB())
 

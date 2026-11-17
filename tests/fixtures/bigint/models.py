@@ -1,6 +1,6 @@
 """Example domain objects for testing."""
 
-import datetime
+import datetime as dt
 
 from sqlalchemy import Column, FetchedValue, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
@@ -17,7 +17,7 @@ class BigIntAuthor(BigIntAuditBase):
 
     name: Mapped[str] = mapped_column(String(length=100))
     string_field: Mapped[str] = mapped_column(String(20), default="static value", nullable=True)
-    dob: Mapped[datetime.date] = mapped_column(nullable=True)
+    dob: Mapped[dt.date] = mapped_column(nullable=True)
     books: Mapped[list["BigIntBook"]] = relationship(
         lazy="selectin",
         back_populates="author",
@@ -55,7 +55,7 @@ class BigIntSlugBook(BigIntBase, SlugKey):
 class BigIntEventLog(BigIntAuditBase):
     """The event log domain object."""
 
-    logged_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.now())  # pyright: ignore
+    logged_at: Mapped[dt.datetime] = mapped_column(default=dt.datetime.now())  # pyright: ignore
     payload: Mapped[dict] = mapped_column(default=lambda: {})  # pyright: ignore
 
 
@@ -63,7 +63,7 @@ class BigIntModelWithFetchedValue(BigIntBase):
     """The ModelWithFetchedValue BigIntBase."""
 
     val: Mapped[int]  # pyright: ignore
-    updated: Mapped[datetime.datetime] = mapped_column(  # pyright: ignore
+    updated: Mapped[dt.datetime] = mapped_column(  # pyright: ignore
         server_default=func.current_timestamp(),
         onupdate=func.current_timestamp(),
         server_onupdate=FetchedValue(),

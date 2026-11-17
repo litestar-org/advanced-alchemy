@@ -2,7 +2,7 @@
 Starlette
 =========
 
-API Reference for the ``Starlette`` extensions module.
+Starlette ASGI extension, lazy ``request.state`` session middleware, and configuration classes.
 
 .. py:module:: advanced_alchemy.extensions.starlette
 

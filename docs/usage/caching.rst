@@ -2,9 +2,7 @@
 Caching
 =======
 
-Imagine 500 visitors opening the same popular author page at the exact same second. Without a cache, your database runs the exact same ``SELECT`` query 500 times.
-
-Advanced Alchemy integrates with `dogpile.cache <https://dogpilecache.sqlalchemy.org/>`__ so repeated lookups come straight from memory or Redis—and whenever you save changes to a row, stale cache entries are cleared automatically when the transaction commits.
+Advanced Alchemy integrates with `dogpile.cache <https://dogpilecache.sqlalchemy.org/>`__ to cache repository lookups in memory, Redis, or Memcached and automatically invalidate affected cache entries after transactions commit.
 
 .. container:: aa-diagram
 
@@ -53,7 +51,7 @@ Installation
 Quick Start
 -----------
 
-Pass ``CacheConfig`` to your database configuration and enable ``auto_expunge=True`` on cached repositories. Every ``repo.get()`` and ``repo.get_many()`` call uses the cache automatically—or pass ``use_cache=False`` to skip the cache for a specific query:
+Pass ``CacheConfig`` to your database configuration and enable ``auto_expunge=True`` on cached repositories. Repository ``get()`` and ``get_many()`` calls read through the configured cache by default; pass ``use_cache=False`` to bypass the cache for an individual query:
 
 .. code-block:: python
 
@@ -144,12 +142,12 @@ Choosing a Cache Backend
 
             disabled_cache = CacheConfig(enabled=False)
 
-What Happens Behind the Scenes
-------------------------------
+Invalidation and Consistency Behavior
+-------------------------------------
 
-* **Safe rollbacks**: Cache entries are only cleared *after* ``commit()`` succeeds. If a transaction rolls back, your cache stays untouched.
-* **No cache stampedes**: If 50 requests miss the same uncached key at once, one query runs and shares the result with the waiting requests.
-* **Columns only**: Cached rows store column values, not related tables. Call ``session.merge(row)`` first if you need to lazy-load relationships later.
+* **Post-commit invalidation**: Cache entries are invalidated only after ``commit()`` succeeds; rolled-back transactions leave existing cache entries intact.
+* **Single-flight dogpile locking**: Concurrent cache misses on the same key serialize behind the Dogpile lock so one query populates the cache for waiting callers.
+* **Detached column state**: Cached instances serialize mapped column values without loaded relationships. Call ``session.merge(row)`` before accessing lazy relationships.
 
 .. dropdown:: Custom JSON Serializer & Standalone Setup
     :icon: gear

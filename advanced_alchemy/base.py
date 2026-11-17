@@ -1,7 +1,7 @@
 """Common base classes for SQLAlchemy declarative models."""
 
 import contextlib
-import datetime
+import datetime as dt
 import re
 from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING, Any, ClassVar, Final, Optional, Protocol, Union, cast, runtime_checkable
@@ -398,8 +398,8 @@ def create_registry(
     type_annotation_map: dict[Any, Union[type[TypeEngine[Any]], TypeEngine[Any]]] = {
         UUID: GUID,
         core_uuid.UUID: GUID,
-        datetime.datetime: DateTimeUTC,
-        datetime.date: Date,
+        dt.datetime: DateTimeUTC,
+        dt.date: Date,
         dict: JsonB,
         dict[str, Any]: JsonB,
         dict[str, str]: JsonB,

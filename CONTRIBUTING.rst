@@ -17,8 +17,8 @@ Workflow
 2. Clone your fork locally with git
 3. `Set up the environment <#setting-up-the-environment>`_
 4. Make your changes
-5. Run ``make lint`` to run linters and formatters. This step is optional and will be executed
-   automatically by git before you make a commit, but you may want to run it manually in order to apply fixes  automatically by git before you make a commit, but you may want to run it manually in order to apply fixes
+5. Run ``make lint`` to run linters and formatters. This step is optional and runs
+   automatically via pre-commit before each commit, or manually to apply formatting fixes.
 6. Commit your changes to git
 7. Push the changes to your fork
 8. Open a `pull request <https://docs.github.com/en/pull-requests>`_. Give the pull request a descriptive title
@@ -29,28 +29,34 @@ Workflow
 .. tip:: Pull requests and commits all need to follow the
     `Conventional Commit format <https://www.conventionalcommits.org>`_
 
-.. note:: To run the integration tests locally, you will need the `ODBC Driver for SQL Server <https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server?view=sql-server-ver16>`_, one option is using `unixODBC <https://www.unixodbc.org/>`_.
+.. note:: Running SQL Server integration tests locally requires the `ODBC Driver for SQL Server <https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server?view=sql-server-ver16>`_ (for example, via `unixODBC <https://www.unixodbc.org/>`_).
 
 Guidelines for writing code
 ----------------------------
 
 - All code should be fully `typed <https://peps.python.org/pep-0484/>`_. This is enforced via
-  `mypy <https://mypy.readthedocs.io/en/stable/>`_.
+  `mypy <https://mypy.readthedocs.io/en/stable/>`_ and `Pyright <https://github.com/microsoft/pyright>`_.
 - All code should be tested. This is enforced via `pytest <https://docs.pytest.org/en/stable/>`_.
-- All code should be properly formatted. This is enforced via `Ruff <https://beta.ruff.rs/docs/>`_.
+- All code should be properly formatted and linted. This is enforced via `Ruff <https://docs.astral.sh/ruff/>`_.
 
 Writing and running tests
 +++++++++++++++++++++++++
 
-.. todo:: Write this section
+Unit tests live under ``tests/unit/`` and multi-database integration tests live under ``tests/integration/``:
+
+.. code-block:: bash
+
+   uv run pytest tests/unit -q   # Run pure-Python unit tests
+   make test-fast                # Run unit tests + embedded PostgreSQL integration tests
+   make test                     # Run the full multi-database test suite
 
 Project documentation
 ---------------------
 
-The documentation is located in the ``/docs`` directory and is `ReST <https://docutils.sourceforge.io/rst.html>`_ and
-`Sphinx <https://www.sphinx-doc.org/en/master/>`_. If you're unfamiliar with any of those,
-`ReStructuredText primer <https://www.sphinx-doc.org/en/master/lib/usage/restructuredtext/basics.html>`_ and
-`Sphinx quickstart <https://www.sphinx-doc.org/en/master/lib/usage/quickstart.html>`_ are recommended reads.
+The documentation is located in the ``/docs`` directory and is built with `reStructuredText <https://docutils.sourceforge.io/rst.html>`_ and
+`Sphinx <https://www.sphinx-doc.org/en/master/>`_. See the
+`reStructuredText primer <https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html>`_ and
+`Sphinx quickstart <https://www.sphinx-doc.org/en/master/usage/quickstart.html>`_ for syntax details.
 
 Running the docs locally
 ++++++++++++++++++++++++
