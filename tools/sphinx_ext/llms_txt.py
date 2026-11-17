@@ -7,7 +7,7 @@ import inspect
 import re
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urljoin
 
 import msgspec
@@ -204,14 +204,13 @@ class SphinxLlmsGenerator:
         if env is None:
             return []
 
-        resolve_supports_tags = "tags" in inspect.signature(env.get_and_resolve_doctree).parameters
+        resolve_kwargs: dict[str, Any] = (
+            {"tags": app.tags} if "tags" in inspect.signature(env.get_and_resolve_doctree).parameters else {}
+        )
         entries: list[LlmsPageEntry] = []
         for docname in self.collect_ordered_docnames(env):
             try:
-                if resolve_supports_tags:
-                    doctree = env.get_and_resolve_doctree(docname, app.builder, tags=app.tags)
-                else:
-                    doctree = env.get_and_resolve_doctree(docname, app.builder)
+                doctree = env.get_and_resolve_doctree(docname, app.builder, **resolve_kwargs)
             except (AttributeError, KeyError, OSError, RuntimeError, TypeError, ValueError):
                 doctree = env.get_doctree(docname)
             fallback_title = docname.rsplit("/", 1)[-1].replace("-", " ").replace("_", " ").title()

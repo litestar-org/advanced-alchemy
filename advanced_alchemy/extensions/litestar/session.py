@@ -21,6 +21,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, Session, declared_attr, mapped_column
 
 from advanced_alchemy.base import UUIDv7Base
+from advanced_alchemy.extensions.litestar._utils import get_async_session_bind
 from advanced_alchemy.extensions.litestar.plugins.init import (
     SQLAlchemyAsyncConfig,
     SQLAlchemySyncConfig,
@@ -30,7 +31,7 @@ from advanced_alchemy.utils.sync_tools import async_
 
 if TYPE_CHECKING:
     from litestar.stores.base import Store
-    from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
+    from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm.decl_base import _TableArgsType as TableArgsType  # pyright: ignore[reportPrivateUsage]
     from sqlalchemy.sql import Select
     from sqlalchemy.sql.elements import BooleanClauseList
@@ -274,7 +275,7 @@ class SQLAlchemyAsyncSessionBackend(SQLAlchemySessionBackendBase[SQLAlchemyAsync
         expires_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=self.config.max_age)
 
         async with self.alchemy.get_session() as db_session:
-            bind: Optional[Union[AsyncEngine, AsyncConnection]] = db_session.bind
+            bind = get_async_session_bind(db_session)
             if bind is None:
                 msg = "Database connection is not available"
                 raise ImproperlyConfiguredException(msg)

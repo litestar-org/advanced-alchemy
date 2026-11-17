@@ -1,15 +1,32 @@
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 if TYPE_CHECKING:
     from litestar.types import Scope
+    from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
 __all__ = (
     "delete_aa_scope_state",
     "get_aa_scope_state",
+    "get_async_session_bind",
     "set_aa_scope_state",
 )
 
 _SCOPE_NAMESPACE = "_aa_connection_state"
+
+
+def get_async_session_bind(session: "AsyncSession") -> "Optional[Union[AsyncEngine, AsyncConnection]]":
+    """Return the engine or connection an async session is bound to, if any.
+
+    SQLAlchemy 2.0 annotates ``AsyncSession.bind`` as always present while 2.1 annotates it as
+    optional. Reading it through this function gives callers one optional type on both.
+
+    Args:
+        session: The async session to inspect.
+
+    Returns:
+        The bound engine or connection, or ``None`` when the session is unbound.
+    """
+    return session.bind
 
 
 def get_aa_scope_state(scope: "Scope", key: str, default: Any = None, pop: bool = False) -> Any:

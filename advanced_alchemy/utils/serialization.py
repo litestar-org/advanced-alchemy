@@ -33,7 +33,7 @@ import json
 import threading
 from abc import ABC, abstractmethod
 from collections import deque
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import MISSING as DATACLASS_MISSING
 from dataclasses import dataclass
 from dataclasses import fields as dataclass_fields
@@ -94,6 +94,8 @@ from advanced_alchemy.utils.dataclass import Empty as DataclassEmpty
 from advanced_alchemy.utils.dataclass import is_dataclass_instance
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from sqlalchemy.engine.row import Row
 
     from advanced_alchemy._typing import TypeAdapterProtocol
@@ -283,7 +285,7 @@ def convert_date_to_iso(dt: datetime.date) -> str:
     return dt.isoformat()
 
 
-_FAILFAST_COLLECTION_ORIGINS: tuple[Any, ...] = (list, tuple, set, frozenset, dict, deque, Sequence)
+_FAILFAST_COLLECTION_ORIGINS: tuple[Any, ...] = (list, tuple, set, frozenset, dict, deque)
 
 
 @lru_cache(typed=True)

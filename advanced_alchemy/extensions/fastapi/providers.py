@@ -530,25 +530,42 @@ def provide_filters(
     return dep
 
 
+_CollectionFilterType = Union[CollectionFilter[Any], NotInCollectionFilter[Any], ChoicesFilter[Any]]
+
+
 def _build_collection_filter_provider(
     *,
-    filter_cls: type[Any],
+    filter_cls: type[_CollectionFilterType],
     field_name: str,
     item_type: Any,
-    collection_cls: type[Any],
+    collection_cls: Union[type[list[Any]], type[set[Any]]],
     param_name: str,
     query_alias: str,
     query_description: str,
     provider_name: str,
-) -> tuple[Callable[..., Any], Any]:
-    """Construct a FastAPI filter dependency callable and Annotated Depends type."""
+) -> Any:
+    """Build the ``Annotated[Optional[Filter[item_type]], Depends(...)]`` annotation for a collection filter.
+
+    Args:
+        filter_cls: The collection filter class the dependency produces.
+        field_name: Model field the filter applies to.
+        item_type: Element type of the collection query parameter.
+        collection_cls: Container the query parameter values are collected into.
+        param_name: Name of the dependency callable's query parameter.
+        query_alias: Query string alias for the parameter.
+        query_description: OpenAPI description for the parameter.
+        provider_name: ``__name__`` assigned to the dependency callable.
+
+    Returns:
+        The annotation to attach to the aggregate filter dependency parameter.
+    """
     collection_type: Any = cast("Any", collection_cls)[item_type]
     param_type: Any = cast("Any", Optional)[collection_type]
     query_annotation: Any = cast("Any", Annotated)[param_type, Query(alias=query_alias, description=query_description)]
     filter_type: Any = cast("Any", filter_cls)[item_type]
     return_annotation: Any = cast("Any", Optional)[filter_type]
 
-    def provide_filter(*args: Any, **kwargs: Any) -> Any:
+    def provide_filter(*args: Any, **kwargs: Any) -> Optional[_CollectionFilterType]:
         values = args[0] if args else kwargs.get(param_name)
         return filter_cls(field_name=field_name, values=values) if values else None
 
@@ -568,8 +585,7 @@ def _build_collection_filter_provider(
         param_name: query_annotation,
         "return": return_annotation,
     }
-    dep_annotation: Any = cast("Any", Annotated)[return_annotation, Depends(provide_filter)]
-    return provide_filter, dep_annotation
+    return cast("Any", Annotated)[return_annotation, Depends(provide_filter)]
 
 
 def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
@@ -593,7 +609,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
     alias_for = (resolve_filter_aliases(config, model=model) if aliases is None else aliases).__getitem__
 
     if (id_filter := config.get("id_filter", False)) is not False:
-        _, id_dep_annotation = _build_collection_filter_provider(
+        id_dep_annotation = _build_collection_filter_provider(
             filter_cls=CollectionFilter,
             field_name=config.get("id_field", "id"),
             item_type=id_filter,
@@ -889,7 +905,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 
     if not_in_fields := config.get("not_in_fields"):
         for field_def in normalize_field_name_types(not_in_fields):
-            _, not_in_dep_annotation = _build_collection_filter_provider(
+            not_in_dep_annotation = _build_collection_filter_provider(
                 filter_cls=NotInCollectionFilter,
                 field_name=field_def.name,
                 item_type=field_def.type_hint,
@@ -911,7 +927,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 
     if in_fields := config.get("in_fields"):
         for field_def in normalize_field_name_types(in_fields):
-            _, in_dep_annotation = _build_collection_filter_provider(
+            in_dep_annotation = _build_collection_filter_provider(
                 filter_cls=CollectionFilter,
                 field_name=field_def.name,
                 item_type=field_def.type_hint,
@@ -963,7 +979,7 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 
     if choice_fields := config.get("choice_fields"):
         for choice_field_def in normalize_choice_field_types(choice_fields):
-            _, choices_dep_annotation = _build_collection_filter_provider(
+            choices_dep_annotation = _build_collection_filter_provider(
                 filter_cls=ChoicesFilter,
                 field_name=choice_field_def.name,
                 item_type=choice_field_def.type_hint,

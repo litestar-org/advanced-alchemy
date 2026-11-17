@@ -163,7 +163,7 @@ def get_primary_key_info(
     else:
         if mapper is None:
             return (), ()
-        pk_columns: tuple[Column[Any], ...] = tuple(cast("Sequence[Column[Any]]", getattr(mapper, "primary_key", ())))
+        pk_columns: tuple[Column[Any], ...] = cast("tuple[Column[Any], ...]", mapper.primary_key)
         pk_attr_names: tuple[str, ...] = tuple(mapper.get_property_by_column(col).key for col in pk_columns)
         return pk_columns, pk_attr_names
 

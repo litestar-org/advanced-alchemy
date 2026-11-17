@@ -73,7 +73,7 @@ class RoutingSyncSession(Session):
         """
         kwargs.pop("bind", None)
         kwargs.pop("binds", None)
-        self.bind = cast("Any", None)
+        self.bind = None
         super().__init__(**kwargs)
         self._default_engine = default_engine
         self._selectors = selectors
