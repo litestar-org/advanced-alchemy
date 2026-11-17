@@ -32,3 +32,23 @@ Token Codec
 -----------
 
 .. autofunction:: advanced_alchemy.filters.register_cursor_type
+
+Framework Settings
+------------------
+
+Options the Litestar and FastAPI filter dependencies resolve for each request. See
+:doc:`/usage/repositories/cursor_pagination` for how the secret is configured.
+
+.. autoclass:: advanced_alchemy.utils.dependencies.CursorSettings
+    :members: build, token_options
+    :no-inherited-members:
+
+.. autofunction:: advanced_alchemy.utils.dependencies.resolve_cursor_settings
+
+.. autoclass:: advanced_alchemy.utils.dependencies.CursorDefaults
+    :no-members:
+    :no-inherited-members:
+
+.. autofunction:: advanced_alchemy.utils.dependencies.resolve_cursor_defaults
+
+.. autodata:: advanced_alchemy.utils.dependencies.CURSOR_SECRET_ENV_VARS
