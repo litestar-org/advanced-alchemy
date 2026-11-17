@@ -13,7 +13,19 @@ optional-dependency placeholder types.  Public re-exports live in
 import enum
 from dataclasses import dataclass
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any, ClassVar, Final, Generic, Optional, Protocol, Union, cast, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ClassVar,
+    Final,
+    Generic,
+    Optional,
+    Protocol,
+    Union,
+    cast,
+    runtime_checkable,
+)
 
 from typing_extensions import Literal, TypeVar, dataclass_transform
 
@@ -202,6 +214,26 @@ except ImportError:
     FailFast = FailFastStub  # type: ignore[assignment,misc]
 
 
+def _resolve_pydantic_missing() -> Any:
+    if not PYDANTIC_INSTALLED:
+        return None
+    try:
+        from pydantic import MISSING
+    except ImportError:
+        pass
+    else:
+        return MISSING
+    try:
+        from pydantic.experimental.missing_sentinel import MISSING as EXPERIMENTAL_MISSING
+    except ImportError:
+        return None
+    return EXPERIMENTAL_MISSING
+
+
+PYDANTIC_MISSING: Final[Any] = _resolve_pydantic_missing()
+"""Pydantic's ``MISSING`` sentinel, or ``None`` when the installed Pydantic does not provide one."""
+
+
 # ---------------------------------------------------------------------------
 # Msgspec shims.
 # ---------------------------------------------------------------------------
@@ -231,6 +263,11 @@ def convert_stub(  # noqa: PLR0913
     return {}
 
 
+def msgspec_asdict_stub(struct: Any) -> "dict[str, Any]":
+    """Collect the set fields of a struct-like object without ``msgspec``."""
+    return {name: getattr(struct, name) for name in struct.__struct_fields__ if hasattr(struct, name)}
+
+
 class UnsetTypeStub(enum.Enum):
     UNSET = "UNSET"
 
@@ -243,16 +280,19 @@ try:
     from msgspec import Struct as _RealStruct
     from msgspec import UnsetType as _RealUnsetType
     from msgspec import convert as _real_convert
+    from msgspec.structs import asdict as _real_msgspec_asdict
 
     Struct = _RealStruct
     UnsetType = _RealUnsetType
     UNSET = _REAL_UNSET
     convert = _real_convert
+    msgspec_asdict = cast("Callable[[Any], dict[str, Any]]", _real_msgspec_asdict)
 except ImportError:
     Struct = StructLike  # type: ignore[assignment,misc]
     UnsetType = UnsetTypeStub  # type: ignore[assignment,misc]
     UNSET = UNSET_STUB  # type: ignore[assignment] # pyright: ignore[reportConstantRedefinition]
     convert = convert_stub
+    msgspec_asdict = msgspec_asdict_stub
 
 
 # ---------------------------------------------------------------------------
@@ -369,6 +409,22 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Cattrs shims.
 # ---------------------------------------------------------------------------
+class CattrsStructureHandlerNotFoundStubError(Exception):
+    """Placeholder implementation."""
+
+
+cattrs_global_converter: Any = None
+"""The ``cattrs`` global converter, or ``None`` when ``cattrs`` is not installed."""
+CattrsStructureHandlerNotFoundError: "type[Exception]" = CattrsStructureHandlerNotFoundStubError
+try:
+    from cattrs import global_converter as _real_cattrs_global_converter
+    from cattrs.errors import StructureHandlerNotFoundError as _RealCattrsStructureHandlerNotFoundError
+
+    cattrs_global_converter = _real_cattrs_global_converter
+    CattrsStructureHandlerNotFoundError = _RealCattrsStructureHandlerNotFoundError
+except ImportError:
+    pass
+
 try:
     from cattrs import structure as cattrs_structure
     from cattrs import unstructure as cattrs_unstructure
@@ -410,6 +466,7 @@ __all__ = (
     "PASSLIB_INSTALLED",
     "PWDLIB_INSTALLED",
     "PYDANTIC_INSTALLED",
+    "PYDANTIC_MISSING",
     "PYOTP_INSTALLED",
     "SQLMODEL_INSTALLED",
     "UNSET",
@@ -419,6 +476,8 @@ __all__ = (
     "AttrsNothingStub",
     "BaseModel",
     "BaseModelLike",
+    "CattrsStructureHandlerNotFoundError",
+    "CattrsStructureHandlerNotFoundStubError",
     "DTOData",
     "DTODataLike",
     "DataclassProtocol",
@@ -450,8 +509,11 @@ __all__ = (
     "attrs_has",
     "attrs_has_stub",
     "attrs_nothing",
+    "cattrs_global_converter",
     "cattrs_structure",
     "cattrs_unstructure",
     "convert",
     "convert_stub",
+    "msgspec_asdict",
+    "msgspec_asdict_stub",
 )

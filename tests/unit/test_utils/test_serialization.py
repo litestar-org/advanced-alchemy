@@ -183,6 +183,19 @@ def test_pydantic_missing_sentinel_is_unavailable_when_pydantic_support_is_disab
     assert serialization._get_pydantic_missing_sentinel() is None
 
 
+@pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic not installed")
+def test_schema_dump_pydantic_emits_no_warnings() -> None:
+    """Dumping a Pydantic model with sentinels included must not emit deprecation warnings."""
+    from pydantic import BaseModel
+
+    class UpdateSchema(BaseModel):
+        name: str = "Ada"
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert schema_dump(UpdateSchema(), exclude_unset=False) == {"name": "Ada"}
+
+
 @pytest.mark.skipif(not MSGSPEC_INSTALLED, reason="msgspec not installed")
 def test_schema_dump_config_msgspec_exclude_sentinels() -> None:
     """SchemaDumpConfig should control msgspec UNSET sentinel filtering."""
