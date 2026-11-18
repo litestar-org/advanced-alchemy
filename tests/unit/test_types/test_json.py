@@ -1,126 +1,53 @@
 """Unit tests for advanced_alchemy.types.json.ORA_JSONB dialect dispatch."""
 
-import sys
-from types import SimpleNamespace
+from __future__ import annotations
+
+import json
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy import CheckConstraint, Column, MetaData, Table, literal_column
-from sqlalchemy.dialects.oracle import BLOB as ORA_BLOB
-from sqlalchemy.engine import Dialect
+from sqlalchemy import JSON, CheckConstraint, Column, MetaData, Table, create_mock_engine, literal_column, select
+from sqlalchemy.dialects import oracle
+from sqlalchemy.schema import CreateTable
 from sqlalchemy.sql import operators
 
 from advanced_alchemy.types.json import ORA_JSONB, JsonB
 
 
-def _make_dialect(server_version_info: Any) -> MagicMock:
-    """Build a MagicMock dialect that returns the input descriptor unchanged."""
-    dialect = MagicMock(spec=Dialect)
-    dialect.name = "oracle"
-    dialect.server_version_info = server_version_info
-    dialect.type_descriptor.side_effect = lambda t: t
-    return dialect
+@pytest.mark.parametrize(
+    ("supports_native_type", "server_version", "use_blob", "expects_native"),
+    [
+        (False, (23,), False, False),
+        (True, (19,), False, False),
+        (True, (21,), False, True),
+        (True, (23,), False, True),
+        (True, (23,), True, False),
+        (True, None, False, False),
+    ],
+)
+def test_oracle_json_storage(
+    monkeypatch: pytest.MonkeyPatch,
+    supports_native_type: bool,
+    server_version: tuple[int, ...] | None,
+    use_blob: bool,
+    expects_native: bool,
+) -> None:
+    if supports_native_type:
+        monkeypatch.setattr(oracle, "JSON", JSON, raising=False)
+    else:
+        monkeypatch.delattr(oracle, "JSON", raising=False)
 
+    dialect = create_mock_engine("oracle+oracledb://", lambda *_args, **_kwargs: None).dialect
+    dialect.server_version_info = server_version
+    column_type = ORA_JSONB(use_blob=True) if use_blob else JsonB
+    table = Table("documents", MetaData(), Column("payload", column_type))
+    ddl = str(CreateTable(table).compile(dialect=dialect)).upper()
+    query = str(select(table.c.payload).compile(dialect=dialect)).upper()
 
-@pytest.fixture
-def _no_oracle_json(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Simulate SA 2.0.x where sqlalchemy.dialects.oracle has no JSON symbol."""
-    import sqlalchemy.dialects.oracle as ora
-
-    monkeypatch.delattr(ora, "JSON", raising=False)
-    monkeypatch.setitem(
-        sys.modules,
-        "sqlalchemy.dialects.oracle",
-        ora,
-    )
-
-
-@pytest.fixture
-def _with_oracle_json(monkeypatch: pytest.MonkeyPatch) -> type:
-    """Simulate SA 2.1+ by injecting a fake JSON class into sqlalchemy.dialects.oracle."""
-    import sqlalchemy.dialects.oracle as ora
-
-    class _FakeOracleJSON:
-        def __init__(self) -> None:
-            self.is_fake_native_oracle_json = True
-
-    monkeypatch.setattr(ora, "JSON", _FakeOracleJSON, raising=False)
-    return _FakeOracleJSON
-
-
-def test_load_dialect_impl_sa20_returns_blob(_no_oracle_json: None) -> None:
-    """SA 2.0.x: no native oracle.JSON available, fall back to ORA_BLOB."""
-    dialect = _make_dialect(server_version_info=(23, 0))
-    result = ORA_JSONB().load_dialect_impl(dialect)
-    assert isinstance(result, ORA_BLOB)
-
-
-def test_load_dialect_impl_sa21_oracle_23c_returns_native_json(_with_oracle_json: type) -> None:
-    """SA 2.1+ on Oracle 21c or newer returns native oracle.JSON."""
-    dialect = _make_dialect(server_version_info=(23, 0))
-    result = ORA_JSONB().load_dialect_impl(dialect)
-    assert isinstance(result, _with_oracle_json)
-
-
-def test_load_dialect_impl_sa21_oracle_21c_returns_native_json(_with_oracle_json: type) -> None:
-    """SA 2.1+ on Oracle 21c exactly returns native oracle.JSON."""
-    dialect = _make_dialect(server_version_info=(21, 0))
-    result = ORA_JSONB().load_dialect_impl(dialect)
-    assert isinstance(result, _with_oracle_json)
-
-
-def test_load_dialect_impl_sa21_oracle_19c_returns_blob(_with_oracle_json: type) -> None:
-    """SA 2.1+ on Oracle 19c falls back to ORA_BLOB."""
-    dialect = _make_dialect(server_version_info=(19, 0))
-    result = ORA_JSONB().load_dialect_impl(dialect)
-    assert isinstance(result, ORA_BLOB)
-
-
-def test_load_dialect_impl_sa21_missing_server_version_returns_blob(_with_oracle_json: type) -> None:
-    """SA 2.1+ but server_version_info is None (offline / first-connect) falls back to ORA_BLOB."""
-    dialect = _make_dialect(server_version_info=None)
-    result = ORA_JSONB().load_dialect_impl(dialect)
-    assert isinstance(result, ORA_BLOB)
-
-
-def test_should_create_constraint_non_oracle_dialect_returns_false() -> None:
-    """Non-oracle dialects never get the JSON CHECK constraint."""
-    compiler = MagicMock()
-    compiler.dialect.name = "postgresql"
-    assert ORA_JSONB()._should_create_constraint(compiler) is False
-
-
-def test_should_create_constraint_sa20_oracle_returns_true(_no_oracle_json: None) -> None:
-    """SA 2.0.x oracle still emits the 'is json (strict)' CHECK."""
-    compiler = MagicMock()
-    compiler.dialect.name = "oracle"
-    compiler.dialect.server_version_info = (23, 0)
-    assert ORA_JSONB()._should_create_constraint(compiler) is True
-
-
-def test_should_create_constraint_sa21_oracle_21c_returns_false(_with_oracle_json: type) -> None:
-    """SA 2.1+ oracle 21c+ skips CHECK because native JSON validates itself."""
-    compiler = MagicMock()
-    compiler.dialect.name = "oracle"
-    compiler.dialect.server_version_info = (21, 0)
-    assert ORA_JSONB()._should_create_constraint(compiler) is False
-
-
-def test_should_create_constraint_sa21_oracle_19c_returns_true(_with_oracle_json: type) -> None:
-    """SA 2.1+ oracle 19c still needs CHECK because we keep ORA_BLOB path."""
-    compiler = MagicMock()
-    compiler.dialect.name = "oracle"
-    compiler.dialect.server_version_info = (19, 0)
-    assert ORA_JSONB()._should_create_constraint(compiler) is True
-
-
-def test_should_create_constraint_sa21_oracle_missing_version_returns_true(_with_oracle_json: type) -> None:
-    """SA 2.1+ oracle with no server version info is treated like older Oracle and keeps CHECK."""
-    compiler = MagicMock()
-    compiler.dialect.name = "oracle"
-    compiler.dialect.server_version_info = None
-    assert ORA_JSONB()._should_create_constraint(compiler) is True
+    assert ("PAYLOAD JSON" if expects_native else "PAYLOAD BLOB") in ddl
+    assert ("PAYLOAD IS JSON (STRICT)" in ddl) is not expects_native
+    assert ("JSON_SERIALIZE(DOCUMENTS.PAYLOAD RETURNING BLOB)" in query) is expects_native
 
 
 def test_set_table_adds_is_json_check_constraint() -> None:
@@ -165,19 +92,35 @@ def test_ora_jsonb_coerce_compared_value_initializes_impl() -> None:
     assert coerced is not None
 
 
-@pytest.mark.parametrize(
-    ("dialect", "raw", "expected"),
-    [
-        (SimpleNamespace(oracledb_ver=(1, 4, 0)), b'{"a": 1}', {"a": 1}),
-        (SimpleNamespace(oracledb_ver=(2, 1, 0)), b'{"a": 1}', b'{"a": 1}'),
-        (SimpleNamespace(), b'{"a": 1}', {"a": 1}),
-        (SimpleNamespace(), None, None),
-    ],
-)
-def test_ora_jsonb_process_result_value_oracledb_ver_guard(
-    dialect: Any,
-    raw: Any,
-    expected: Any,
-) -> None:
-    """Safely guard dialect.oracledb_ver access across drivers and non-Oracle dialects."""
-    assert ORA_JSONB().process_result_value(raw, dialect) == expected
+@pytest.mark.parametrize("column_type", [ORA_JSONB(), JsonB])
+@pytest.mark.parametrize("value", [{"a": [1, 1.25]}, "123", '{"a": 1}', None])
+def test_oracle_json_runs_each_codec_once(monkeypatch: pytest.MonkeyPatch, column_type: Any, value: Any) -> None:
+    dialect = create_mock_engine("oracle+oracledb://", lambda *_args, **_kwargs: None).dialect
+    dialect.server_version_info = (23,)
+    serializer = MagicMock(side_effect=lambda value: json.dumps(value, ensure_ascii=False))
+    deserializer = MagicMock(side_effect=json.loads)
+    monkeypatch.setattr(dialect, "_json_serializer", serializer, raising=False)
+    monkeypatch.setattr(dialect, "_json_deserializer", deserializer, raising=False)
+    impl = column_type.dialect_impl(dialect)
+    bind = impl.bind_processor(dialect)
+    result = impl.result_processor(dialect, None)
+    assert bind is not None
+    assert result is not None
+
+    encoded = bind(value)
+    assert encoded == (None if value is None else json.dumps(value).encode())
+    assert result(encoded) == value
+    if value is None:
+        serializer.assert_not_called()
+        deserializer.assert_not_called()
+    else:
+        serializer.assert_called_once_with(value)
+        deserializer.assert_called_once_with(encoded.decode())
+
+
+def test_ora_jsonb_blob_option_participates_in_cache_key() -> None:
+    assert ORA_JSONB(use_blob=True)._static_cache_key != ORA_JSONB()._static_cache_key
+
+
+def test_ora_jsonb_repr_preserves_migration_options() -> None:
+    assert repr(ORA_JSONB(use_blob=True, oracle_strict=False)) == "ORA_JSONB(use_blob=True, oracle_strict=False)"
