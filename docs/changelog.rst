@@ -5,6 +5,16 @@
 
 .. changelog:: 1.13.0
 
+    .. change:: fix Oracle JSON round trips
+        :type: bugfix
+        :issue: 853
+
+        ``JsonB`` and ``ORA_JSONB`` encode values once, store Python ``None`` as
+        SQL ``NULL``, and read large documents through BLOB transport. Oracle
+        21c and later use native ``JSON`` when supported by SQLAlchemy.
+        Use ``ORA_JSONB(use_blob=True)`` to map an existing BLOB column on
+        newer setups.
+
     .. change:: add cursor (keyset) pagination
         :type: feature
         :pr: 852

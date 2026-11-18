@@ -24,6 +24,19 @@ Common Column Types at a Glance
    * - ``Vector(dim=...)``
      - Stores float vector embeddings using native vector columns on PostgreSQL (``pgvector``), CockroachDB, and Oracle 23ai+, with ``JSON`` array storage on SQLite, DuckDB, and other dialects.
 
+Oracle JSON storage
+-------------------
+
+``JsonB`` and ``ORA_JSONB`` use native ``JSON`` on Oracle 21c and later
+with SQLAlchemy 2.1 or later. Older combinations use a ``BLOB`` with an
+``IS JSON`` check. On Oracle versions before 21c, JSON documents must be
+objects or arrays at the top level. Python ``None`` maps to SQL ``NULL``.
+
+Use ``ORA_JSONB(use_blob=True)`` to map an existing Oracle BLOB column
+when upgrading to a combination that supports native JSON. If earlier
+writes double-encoded a value, Oracle stores it as a JSON string. Repair
+those rows explicitly using the expected application data shape.
+
 Examples by Type
 ----------------
 
