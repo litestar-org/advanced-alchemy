@@ -7,9 +7,10 @@ from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union, cast
 
 from sqlalchemy import ColumnElement, Integer, Select, and_, false, inspect, or_
+from sqlalchemy.engine.default import DefaultDialect
 from sqlalchemy.orm import InstrumentedAttribute
 from typing_extensions import TypeAlias
 
@@ -48,6 +49,7 @@ _KeysetTerm: TypeAlias = Union[bool, "ColumnElement[bool]"]
 
 _CURSOR_KEY_PAIR_LENGTH = 2
 _INT64_LIMIT = 2**63
+_STORAGE_DIALECT = DefaultDialect()
 
 
 class PaginationFilter(StatementFilter, ABC):
@@ -331,6 +333,10 @@ class CursorFilter(PaginationFilter):
     def paginate_items(self, items: "Sequence[Any]", model: Any) -> "list[Any]":
         """Apply this page's ordering, keyset bound, and ``limit + 1`` fetch to in-memory rows.
 
+        Enum keys are ordered by the value their column stores: the member name for
+        :class:`sqlalchemy.types.Enum`, or whatever a ``TypeDecorator`` binds. Databases
+        with a native enum type order by declaration instead.
+
         Args:
             items: Model instances to paginate.
             model: Mapped model the items belong to.
@@ -350,6 +356,9 @@ class CursorFilter(PaginationFilter):
             if self._backward and nulls is not None:
                 nulls = "last" if nulls == "first" else "first"
             effective.append((key.attr_key, ascending, nulls if nulls is not None else "first"))
+        processors: list[Optional[Callable[[Any], Any]]] = [
+            key.column.type.bind_processor(_STORAGE_DIALECT) if key.enum_class is not None else None for key in resolved
+        ]
 
         def compare(left: "Sequence[Any]", right: "Sequence[Any]") -> int:
             for (_, ascending, nulls), lv, rv in zip(effective, left, right):
@@ -357,17 +366,23 @@ class CursorFilter(PaginationFilter):
                     if lv is None and rv is None:
                         continue
                     return -1 if (lv is None) == (nulls == "first") else 1
-                result = _compare_values(lv, rv)
+                result = int(lv > rv) - int(lv < rv)
                 if result:
                     return result if ascending else -result
             return 0
 
+        def stored(values: "Sequence[Any]") -> "list[Any]":
+            return [
+                processor(value) if processor is not None and isinstance(value, Enum) else value
+                for processor, value in zip(processors, values)
+            ]
+
         def row_values(item: Any) -> "list[Any]":
-            return [_row_value(item, attr_key) for attr_key, _, _ in effective]
+            return stored([_row_value(item, attr_key) for attr_key, _, _ in effective])
 
         ordered = sorted(items, key=functools.cmp_to_key(lambda a, b: compare(row_values(a), row_values(b))))
         if self._values is not None:
-            bound = self._coerce_values(resolved)
+            bound = stored(self._coerce_values(resolved))
             ordered = [item for item in ordered if compare(row_values(item), bound) > 0]
         return ordered[: self.limit + 1]
 
@@ -476,11 +491,11 @@ class CursorFilter(PaginationFilter):
                 at_or_after = True if nulls == "first" else column.is_(None)
             elif isinstance(value, bool):
                 is_first_value = value is (not ascending)
-                after = column.is_(not value) if is_first_value else False
+                after = column == (not value) if is_first_value else False
                 at_or_after = (
                     (True if nulls == "last" or not key.nullable else column.is_not(None))
                     if is_first_value
-                    else column.is_(value)
+                    else column == value
                 )
                 if nulls == "last":
                     after = _fold_or(after, column.is_(None))
@@ -587,18 +602,6 @@ def _column_python_type(column_type: Any) -> Optional[type[Any]]:
     except (AttributeError, NotImplementedError):
         return None
     return python_type if isinstance(python_type, type) else None
-
-
-def _compare_values(left: Any, right: Any) -> int:
-    try:
-        return int(left > right) - int(left < right)
-    except TypeError:
-        if isinstance(left, Enum) and isinstance(right, Enum):
-            try:
-                return int(left.value > right.value) - int(left.value < right.value)
-            except TypeError:
-                return int(left.name > right.name) - int(left.name < right.name)
-        raise
 
 
 def _value_matches_type(value: Any, python_type: Optional[type[Any]]) -> bool:

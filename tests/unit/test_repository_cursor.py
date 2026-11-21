@@ -30,9 +30,9 @@ class CursorRepoBase(DeclarativeBase):
 
 
 class ArticleStatus(enum.Enum):
-    ARCHIVED = "archived"
-    DRAFT = "draft"
-    PUBLISHED = "published"
+    ARCHIVED = "z"
+    DRAFT = "m"
+    PUBLISHED = "a"
 
 
 class NonOrderableTag(enum.Enum):

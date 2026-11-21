@@ -21,6 +21,7 @@ from advanced_alchemy.filters import (
     BooleanFilter,
     ChoicesFilter,
     ComparisonFilter,
+    CursorFilter,
     ExistsFilter,
     FilterGroup,
     InCollectionFilter,
@@ -313,6 +314,39 @@ def test_boolean_filter(session: Session, movie_model_sync: type[DeclarativeBase
     statement = no_op_filter.append_to_statement(select(Movie), Movie)
     results = session.execute(statement).scalars().all()
     assert len(results) == 3
+
+
+@pytest.mark.parametrize("sort_order", ["asc", "desc"])
+def test_cursor_filter_pages_by_a_boolean_key(
+    session: Session, movie_model_sync: type[DeclarativeBase], sort_order: Literal["asc", "desc"]
+) -> None:
+    Movie = movie_model_sync
+
+    if getattr(session.bind.dialect, "name", "") == "mock":
+        pytest.skip("Mock engines not supported for filter tests")
+
+    session.execute(Movie.__table__.delete())
+    session.commit()
+    setup_movie_data(session, Movie)
+    ordering = [OrderByFilter("is_featured", sort_order), OrderByFilter("id", sort_order)]
+    expected_statement = select(Movie)
+    for order_by_filter in ordering:
+        expected_statement = order_by_filter.append_to_statement(expected_statement, Movie)
+    expected = [movie.title for movie in session.execute(expected_statement).scalars()]
+
+    titles: list[str] = []
+    cursor: Optional[str] = None
+    while True:
+        cursor_filter = CursorFilter([("is_featured", sort_order)], 1, cursor)
+        rows = session.execute(cursor_filter.append_to_statement(select(Movie), Movie)).scalars().all()
+        page = cursor_filter.build_page(rows, model=Movie)
+        titles.extend(movie.title for movie in page.items)
+        if not page.has_next:
+            break
+        cursor = page.next_cursor
+
+    assert titles == expected
+    assert len(titles) == 3
 
 
 def test_not_in_collection_filter(session: Session, movie_model_sync: type[DeclarativeBase]) -> None:

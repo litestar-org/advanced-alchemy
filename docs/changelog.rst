@@ -7,7 +7,7 @@
 
     .. change:: refine cursor token encryption, key derivation, and column validation
         :type: bugfix
-        :pr: 857
+        :pr: 857 863
         :issue: 858 859 860 861 862
 
         Encrypted cursor tokens (``encrypted=True``) now use AES-256-GCM behind the
@@ -16,9 +16,12 @@
         ``cryptography`` is not installed) while keeping core installs free of
         optional dependencies. Both direct :class:`~advanced_alchemy.filters.CursorFilter`
         calls and framework providers now derive signing and encryption keys
-        consistently inside the cursor codec. Also rejects boolean cursor values for
-        numeric columns, supports boolean columns in keyset predicates, handles
-        non-orderable ``Enum`` columns in
+        consistently inside the cursor codec. Signed tokens issued by a direct
+        ``CursorFilter(..., secret=...)`` and encrypted tokens issued on ``1.13.0b1``
+        or ``1.13.0b2`` are rejected and must be reissued; signed tokens issued by the
+        Litestar and FastAPI providers stay valid. Also rejects boolean cursor
+        values for numeric columns, pages by boolean columns, orders ``Enum`` columns
+        by their stored value in
         :meth:`~advanced_alchemy.filters.CursorFilter.paginate_items`, deduplicates
         repeated key names in :func:`~advanced_alchemy.filters.normalize_cursor_keys`
         errors, and adds a core-only CI import check. With contributions from

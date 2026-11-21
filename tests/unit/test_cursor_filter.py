@@ -6,6 +6,7 @@ import enum
 import functools
 import json
 import pickle
+import re
 from collections.abc import Iterator, Sequence
 from decimal import Decimal
 from typing import Any, Optional
@@ -27,7 +28,7 @@ from sqlalchemy import (
     select,
 )
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.dialects import postgresql, sqlite
+from sqlalchemy.dialects import mssql, mysql, oracle, postgresql, sqlite
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, column_property, mapped_column, relationship
 
 from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError, MissingDependencyError
@@ -513,13 +514,29 @@ def test_boolean_columns_walk_forward_and_backward(
     assert walk_backward(session, TypedColumns, keys, 3, pages[-1].previous_cursor) + list(pages[-1].items) == expected
 
 
+@pytest.mark.parametrize(
+    "dialect_module",
+    [sqlite, postgresql, mysql, mssql, oracle],
+    ids=["sqlite", "postgresql", "mysql", "mssql", "oracle"],
+)
 @pytest.mark.parametrize("flag", [True, False])
-def test_boolean_cursor_values_are_accepted_for_boolean_columns(flag: bool) -> None:
+def test_boolean_cursor_values_compare_by_equality_on_every_dialect(dialect_module: Any, flag: bool) -> None:
     cursor_filter = CursorFilter("active", 5, _forged_token("active", [["b", flag], ["i", 1]]))
 
     statement = cursor_filter.append_to_statement(select(TypedColumns), TypedColumns)
+    sql = compiled(statement, dialect_module.dialect())
 
-    assert "WHERE" in compiled(statement)
+    assert "active = " in sql
+    assert re.search(r"\bIS (?!NULL|NOT NULL)", sql) is None
+
+
+@pytest.mark.parametrize(("model", "key"), [(Item, "color"), (Job, "level")])
+def test_in_memory_enum_order_matches_sql(session: Session, model: Any, key: str) -> None:
+    rows = session.execute(select(model)).scalars().all()
+    cursor_filter = CursorFilter(key, len(rows))
+    expected = session.execute(cursor_filter.append_to_statement(select(model), model)).scalars().all()
+
+    assert CursorFilter(key, len(rows)).paginate_items(rows, model) == list(expected)
 
 
 @pytest.mark.parametrize("key", ["owner", "missing"])
