@@ -1,10 +1,12 @@
 """Cursor pagination through SQL and in-memory repositories."""
 
+import enum
 from collections.abc import Iterator
 from typing import Any, Optional
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
@@ -27,6 +29,17 @@ class CursorRepoBase(DeclarativeBase):
     pass
 
 
+class ArticleStatus(enum.Enum):
+    ARCHIVED = "z"
+    DRAFT = "m"
+    PUBLISHED = "a"
+
+
+class NonOrderableTag(enum.Enum):
+    ALPHA = {"rank": 1}
+    BETA = {"rank": 2}
+
+
 class Article(CursorRepoBase):
     __tablename__ = "cursor_repo_article"
 
@@ -34,6 +47,14 @@ class Article(CursorRepoBase):
     title: Mapped[str]
     views: Mapped[int]
     rating: Mapped[Optional[int]]
+    status: Mapped[ArticleStatus] = mapped_column(SAEnum(ArticleStatus), default=ArticleStatus.DRAFT)
+
+
+class TaggedArticle(CursorRepoBase):
+    __tablename__ = "cursor_repo_tagged_article"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tag: Mapped[NonOrderableTag] = mapped_column(SAEnum(NonOrderableTag))
 
 
 class Articles(FilterSet[Article]):
@@ -58,7 +79,17 @@ class ArticleMockRepository(SQLAlchemySyncMockRepository[Article]):
 
 
 def seed() -> list[Article]:
-    return [Article(id=i, title=f"t{i % 6}", views=i % 4, rating=None if i % 5 == 0 else i % 3) for i in range(1, 27)]
+    statuses = list(ArticleStatus)
+    return [
+        Article(
+            id=i,
+            title=f"t{i % 6}",
+            views=i % 4,
+            rating=None if i % 5 == 0 else i % 3,
+            status=statuses[i % len(statuses)],
+        )
+        for i in range(1, 27)
+    ]
 
 
 @pytest.fixture
@@ -166,7 +197,14 @@ def test_total_counts_the_full_filtered_set_on_every_page(session: Session, coun
 
 @pytest.mark.parametrize(
     "keys",
-    [[], "title", [("views", "desc"), "title"], [CursorKey("rating")], [CursorKey("rating", "desc", "first")]],
+    [
+        [],
+        "title",
+        [("views", "desc"), "title"],
+        [CursorKey("rating")],
+        [CursorKey("rating", "desc", "first")],
+        [("status", "desc")],
+    ],
 )
 def test_in_memory_walks_match_sql(session: Session, mock_repo: ArticleMockRepository, keys: Any) -> None:
     sql_forward, sql_backward = walk(ArticleRepository(session=session).get_many, keys, 4)
@@ -174,6 +212,21 @@ def test_in_memory_walks_match_sql(session: Session, mock_repo: ArticleMockRepos
 
     assert len(sql_forward) == 26
     assert memory_forward == sql_forward == sql_backward == memory_backward
+
+
+def test_in_memory_paginate_items_handles_enums_with_non_orderable_values() -> None:
+    items = [
+        TaggedArticle(id=1, tag=NonOrderableTag.BETA),
+        TaggedArticle(id=2, tag=NonOrderableTag.ALPHA),
+        TaggedArticle(id=3, tag=NonOrderableTag.BETA),
+    ]
+    first_filter = CursorFilter("tag", 2)
+    first_page = first_filter.build_page(first_filter.paginate_items(items, TaggedArticle), model=TaggedArticle)
+    second_filter = CursorFilter("tag", 2, first_page.next_cursor)
+    second_page = second_filter.build_page(second_filter.paginate_items(items, TaggedArticle), model=TaggedArticle)
+
+    assert [item.id for item in first_page.items] == [2, 1]
+    assert [item.id for item in second_page.items] == [3]
 
 
 def test_in_memory_count_ignores_the_cursor(mock_repo: ArticleMockRepository) -> None:

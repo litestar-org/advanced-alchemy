@@ -103,6 +103,41 @@ jobs:
       - name: Run slotscheck
         run: uv run slotscheck -m advanced_alchemy.config  -m advanced_alchemy.repository -m advanced_alchemy.service -m advanced_alchemy.extensions -m advanced_alchemy.base -m advanced_alchemy.types -m advanced_alchemy.operations
 
+  minimal-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install core dependencies only
+        run: uv sync --no-dev --no-default-groups
+
+      - name: Verify core imports without optional extras
+        run: |
+          uv run --no-sync python -c "
+          import advanced_alchemy
+          import advanced_alchemy.base
+          import advanced_alchemy.config
+          import advanced_alchemy.filters
+          import advanced_alchemy.mixins
+          import advanced_alchemy.operations
+          import advanced_alchemy.repository
+          import advanced_alchemy.service
+          import advanced_alchemy.types
+          import advanced_alchemy.utils
+          from advanced_alchemy.typing import CRYPTOGRAPHY_INSTALLED
+
+          assert not CRYPTOGRAPHY_INSTALLED
+          "
+
   test:
     name: "test (${{ matrix.python-version }}"
     strategy:

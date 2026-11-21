@@ -1,8 +1,6 @@
 """Cursor pagination configuration: resolved settings, query names, and FilterSet cursor mode."""
 
 import datetime as dt
-import hashlib
-import hmac
 from collections.abc import Iterator
 from typing import Any, Optional
 
@@ -166,11 +164,6 @@ def test_invalid_cursor_configuration_is_rejected(config: dict[str, Any], match:
         resolve_cursor_settings({"pagination_type": "cursor", **config}, Player)  # type: ignore[typeddict-item]
 
 
-def token_key(secret: str) -> bytes:
-    """Key the dependencies derive from a configured secret."""
-    return hmac.new(secret.encode(), b"advanced-alchemy-cursor-key-v1", hashlib.sha256).digest()
-
-
 @pytest.fixture
 def no_environment_secret(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET", raising=False)
@@ -203,14 +196,14 @@ def test_token_options_prefer_the_filter_configuration_then_application_defaults
     )
 
     assert unset.token_options() == (None, None, False)
-    assert unset.token_options(defaults) == (token_key("app-secret"), 60, True)
-    assert configured.token_options(defaults) == (token_key("route-secret"), 5, False)
+    assert unset.token_options(defaults) == (b"app-secret", 60, True)
+    assert configured.token_options(defaults) == (b"route-secret", 5, False)
 
     monkeypatch.setenv("SECRET_KEY", "fallback-secret")
-    assert unset.token_options() == (token_key("fallback-secret"), None, False)
+    assert unset.token_options() == (b"fallback-secret", None, False)
     monkeypatch.setenv("ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET", "environment-secret")
-    assert unset.token_options() == (token_key("environment-secret"), None, False)
-    assert unset.token_options(defaults)[0] == token_key("app-secret")
+    assert unset.token_options() == (b"environment-secret", None, False)
+    assert unset.token_options(defaults)[0] == b"app-secret"
 
 
 @pytest.mark.usefixtures("no_environment_secret")

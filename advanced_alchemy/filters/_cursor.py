@@ -2,8 +2,9 @@
 
 A token is URL-safe base64 of a JSON payload holding the format version, the traversal
 direction, a fingerprint of the ordering it was issued for, and the tagged sort-key values.
-With a secret, the payload is signed with HMAC-SHA256, or sealed with an HMAC-SHA256
-counter keystream and authenticated encrypt-then-MAC. The token layout matches SQLSpec.
+With a secret, the payload is signed with HMAC-SHA256 using a derived signing key, or
+encrypted with AES-256-GCM (requires the optional ``cryptography`` extra,
+``advanced-alchemy[cryptography]``).
 """
 
 import base64
@@ -20,8 +21,6 @@ from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Final, Optional, Union, cast
 from uuid import UUID
-
-from cryptography.exceptions import InvalidTag
 
 from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError, MissingDependencyError
 from advanced_alchemy.typing import CRYPTOGRAPHY_INSTALLED
@@ -49,6 +48,7 @@ _NONCE_LENGTH: Final = 12
 _SIGNED_PART_COUNT: Final = 2
 _ENCRYPTED_PART_COUNT: Final = 3
 _ENCRYPTED_PREFIX: Final = "e1"
+_SIGNING_KEY_INFO: Final = b"advanced-alchemy-cursor-key-v1"
 _ENCRYPTION_KEY_INFO: Final = b"advanced-alchemy-cursor-enc-v1"
 _PAYLOAD_VERSION_KEY: Final = "v"
 _PAYLOAD_DIRECTION_KEY: Final = "d"
@@ -177,6 +177,7 @@ def encode_cursor(
 
     Raises:
         ImproperConfigurationError: A value has a type the codec cannot encode.
+        MissingDependencyError: ``encrypted=True`` was requested without ``cryptography`` installed.
         ValueError: The secret, TTL, or resulting token is invalid.
     """
     ttl_seconds = normalize_cursor_ttl(ttl)
@@ -206,14 +207,14 @@ def encode_cursor(
 
         key = _derive_encryption_key(secret)
         nonce = secrets.token_bytes(_NONCE_LENGTH)
-        sealed = AESGCM(key).encrypt(nonce, plaintext, fingerprint.encode("utf-8"))
-        token = f"{fingerprint}.{_b64(nonce)}.{_b64(sealed)}"
+        sealed = AESGCM(key).encrypt(nonce, plaintext, _ENCRYPTED_PREFIX.encode("ascii"))
+        token = f"{_ENCRYPTED_PREFIX}.{_b64(nonce)}.{_b64(sealed)}"
     else:
         body = _b64(plaintext)
         token = (
             body
             if secret is None
-            else f"{body}.{_b64(hmac.new(secret, body.encode('ascii'), hashlib.sha256).digest())}"
+            else f"{body}.{_b64(hmac.new(_derive_signing_key(secret), body.encode('ascii'), hashlib.sha256).digest())}"
         )
     if len(token) > CURSOR_TOKEN_MAX_LENGTH:
         msg = "Cursor token exceeds maximum length"
@@ -243,6 +244,7 @@ def decode_cursor(
 
     Raises:
         InvalidCursorError: The token is malformed, tampered with, expired, or bound to another ordering.
+        MissingDependencyError: ``encrypted=True`` was requested without ``cryptography`` installed.
         ValueError: The secret or TTL configuration is invalid.
     """
     ttl_seconds = normalize_cursor_ttl(ttl)
@@ -317,13 +319,17 @@ def _b64(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
+def _derive_signing_key(secret: bytes) -> bytes:
+    return hmac.new(secret, _SIGNING_KEY_INFO, hashlib.sha256).digest()
+
+
 def _derive_encryption_key(secret: bytes) -> bytes:
     return hmac.new(secret, _ENCRYPTION_KEY_INFO, hashlib.sha256).digest()
 
 
 def _decode_encrypted_parts(parts: "list[str]", *, secret: Optional[bytes], encrypted: bool) -> bytes:
     if (
-        _B64_PART_PATTERN.fullmatch(parts[0]) is None
+        parts[0] != _ENCRYPTED_PREFIX
         or _B64_PART_PATTERN.fullmatch(parts[1]) is None
         or _B64_PART_PATTERN.fullmatch(parts[2]) is None
     ):
@@ -334,20 +340,18 @@ def _decode_encrypted_parts(parts: "list[str]", *, secret: Optional[bytes], encr
     if not encrypted:
         msg = "Invalid pagination cursor: unexpected encrypted token"
         raise InvalidCursorError(msg)
+    if not CRYPTOGRAPHY_INSTALLED:
+        raise MissingDependencyError(package="cryptography")
+    from cryptography.exceptions import InvalidTag
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
     key = _derive_encryption_key(secret)
     nonce = _b64decode(parts[1])
     if len(nonce) != _NONCE_LENGTH:
         raise InvalidCursorError(_MALFORMED)
-
     sealed = _b64decode(parts[2])
-
-    if not CRYPTOGRAPHY_INSTALLED:
-        raise MissingDependencyError(package="cryptography")
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
     try:
-        return AESGCM(key).decrypt(nonce, sealed, parts[0].encode("utf-8"))
+        return AESGCM(key).decrypt(nonce, sealed, _ENCRYPTED_PREFIX.encode("ascii"))
     except InvalidTag as exc:
         msg = "Invalid pagination cursor: signature mismatch"
         raise InvalidCursorError(msg) from exc
@@ -368,7 +372,7 @@ def _decode_signed_parts(parts: "list[str]", *, secret: Optional[bytes], encrypt
         if not has_signature:
             msg = "Invalid pagination cursor: missing signature"
             raise InvalidCursorError(msg)
-        expected = _b64(hmac.new(secret, body.encode("ascii"), hashlib.sha256).digest())
+        expected = _b64(hmac.new(_derive_signing_key(secret), body.encode("ascii"), hashlib.sha256).digest())
         if not hmac.compare_digest(expected.encode("ascii"), parts[1].encode("ascii")):
             msg = "Invalid pagination cursor: signature mismatch"
             raise InvalidCursorError(msg)

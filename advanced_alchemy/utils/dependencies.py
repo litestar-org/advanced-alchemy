@@ -5,8 +5,6 @@ These primitives are framework-agnostic and reused by framework
 """
 
 import datetime as dt
-import hashlib
-import hmac
 import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
@@ -90,7 +88,6 @@ FilterFieldsSpec: TypeAlias = Union[AbstractSet[str], Sequence[str], Mapping[str
 FIELD_TUPLE_LENGTH = 2
 CURSOR_SECRET_ENV_VARS: Final = ("ADVANCED_ALCHEMY_PAGINATION_CURSOR_SECRET", "SECRET_KEY")
 """Environment variables read, in order, for a cursor secret no configuration provides."""
-_CURSOR_KEY_INFO: Final = b"advanced-alchemy-cursor-key-v1"
 _FILTER_OPERATOR_ORDER: tuple[FilterOperator, ...] = (
     "eq",
     "ne",
@@ -459,15 +456,15 @@ class CursorSettings:
         """Resolve the secret, lifetime, and encryption flag for issued and accepted tokens.
 
         Each option comes from the filter configuration, then ``defaults``. The secret then
-        falls back to the :data:`CURSOR_SECRET_ENV_VARS` environment variables. Tokens are
-        keyed with a value derived from the secret, so the secret itself never signs a token.
+        falls back to the :data:`CURSOR_SECRET_ENV_VARS` environment variables. Signing and
+        encryption keys are derived from the secret inside the cursor codec.
 
         Args:
             defaults: Application-wide options.
             require_secret: Refuse to issue or accept unsigned tokens.
 
         Returns:
-            The token key, lifetime, and encryption flag.
+            The resolved secret, lifetime, and encryption flag.
 
         Raises:
             ImproperConfigurationError: No secret is configured and one is required or encryption is enabled.
@@ -489,7 +486,7 @@ class CursorSettings:
                 f"the filter configuration, or the {CURSOR_SECRET_ENV_VARS[0]} environment variable"
             )
             raise ImproperConfigurationError(msg)
-        return (None if secret is None else _derive_cursor_key(secret)), ttl, encrypted
+        return secret, ttl, encrypted
 
     def build(
         self,
@@ -572,10 +569,6 @@ def _cursor_secret_bytes(secret: Union[str, bytes, None]) -> Optional[bytes]:
         msg = "pagination_cursor_secret must not be empty"
         raise ImproperConfigurationError(msg)
     return encoded
-
-
-def _derive_cursor_key(secret: bytes) -> bytes:
-    return hmac.new(secret, _CURSOR_KEY_INFO, hashlib.sha256).digest()
 
 
 def _env_cursor_secret() -> Optional[bytes]:

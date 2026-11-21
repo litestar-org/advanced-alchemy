@@ -112,7 +112,40 @@ Tokens are URL-safe and record the ordering they were issued for; a token reused
     signed = CursorFilter("score", limit=20, secret="load-from-settings", ttl=datetime.timedelta(hours=1))
     sealed = CursorFilter("score", limit=20, secret="load-from-settings", encrypted=True)
 
-Use a separate secret per resource or tenant when a token must not be accepted by another endpoint. Malformed, tampered, expired, or mismatched tokens raise :class:`~advanced_alchemy.exceptions.InvalidCursorError`, a ``ValueError`` and ``RepositoryError`` subclass.
+Use a separate secret per resource or tenant when a token must not be accepted by another endpoint. Both direct :class:`~advanced_alchemy.filters.CursorFilter` calls and framework dependencies derive signing and encryption keys from ``secret`` so tokens issued by either are interchangeable and never sign directly with the raw secret. Malformed, tampered, expired, or mismatched tokens raise :class:`~advanced_alchemy.exceptions.InvalidCursorError`, a ``ValueError`` and ``RepositoryError`` subclass.
+
+Encrypted tokens (``encrypted=True``) use AES-256-GCM and require the optional ``cryptography`` extra. Enabling ``encrypted=True`` without ``cryptography`` installed raises :class:`~advanced_alchemy.exceptions.MissingDependencyError`.
+
+.. tab-set::
+    :sync-group: pkg
+
+    .. tab-item:: uv
+        :sync: uv
+
+        .. code-block:: bash
+
+            uv add "advanced-alchemy[cryptography]"
+
+    .. tab-item:: pip
+        :sync: pip
+
+        .. code-block:: bash
+
+            pip install "advanced-alchemy[cryptography]"
+
+    .. tab-item:: pdm
+        :sync: pdm
+
+        .. code-block:: bash
+
+            pdm add "advanced-alchemy[cryptography]"
+
+    .. tab-item:: poetry
+        :sync: poetry
+
+        .. code-block:: bash
+
+            poetry add "advanced-alchemy[cryptography]"
 
 Framework Dependencies
 ----------------------

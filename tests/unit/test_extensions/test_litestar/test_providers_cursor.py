@@ -1,7 +1,5 @@
 """Cursor pagination through Litestar filter dependencies."""
 
-import hashlib
-import hmac
 from collections.abc import Iterator
 from typing import Any, Optional
 
@@ -260,11 +258,6 @@ def test_prefixed_defaults_keep_custom_cursor_key() -> None:
     assert default_scoped.CURSOR_FILTER_DEPENDENCY_KEY == "orders_cursor_filter"
 
 
-def token_key(secret: str) -> bytes:
-    """Key the dependencies derive from a configured secret."""
-    return hmac.new(secret.encode(), b"advanced-alchemy-cursor-key-v1", hashlib.sha256).digest()
-
-
 def plugin_client(db: Session, config: Any, **config_options: Any) -> TestClient[Any]:
     @get("/widgets", sync_to_thread=False, dependencies=create_filter_dependencies(config))
     def list_widgets(filters: NamedDependency[SkipValidation[list[FilterTypes]]]) -> CursorPagination[WidgetOut]:
@@ -286,10 +279,9 @@ def test_config_secret_signs_tokens_for_every_filter_dependency(
         following = client.get("/widgets", params={"cursor": token})
 
     assert following.status_code == 200
-    assert CursorFilter(keys, limit, token, token_key("config-secret")).cursor == token
-    for other in (token_key("environment-secret"), b"config-secret"):
-        with pytest.raises(InvalidCursorError, match="signature"):
-            CursorFilter(keys, limit, token, other)
+    assert CursorFilter(keys, limit, token, "config-secret").cursor == token
+    with pytest.raises(InvalidCursorError, match="signature"):
+        CursorFilter(keys, limit, token, "environment-secret")
 
 
 def test_filter_configuration_secret_overrides_the_config_secret(db: Session) -> None:
@@ -298,7 +290,7 @@ def test_filter_configuration_secret_overrides_the_config_secret(db: Session) ->
     with plugin_client(db, config, pagination_cursor_secret="config-secret") as client:
         token = client.get("/widgets").json()["next_cursor"]
 
-    assert CursorFilter([("stock", "desc")], 5, token, token_key("route-secret")).cursor == token
+    assert CursorFilter([("stock", "desc")], 5, token, "route-secret").cursor == token
 
 
 @pytest.mark.parametrize("config", [CONFIG, Widgets])
