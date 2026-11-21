@@ -436,15 +436,15 @@ class CursorFilter(PaginationFilter):
         for key, value in zip(resolved, values):
             if value is None:
                 if not key.nullable:
-                    msg = f"Invalid pagination cursor: {key.attr_key} does not accept null values"
+                    msg = "Invalid pagination cursor: ordering mismatch"
                     raise InvalidCursorError(msg)
             elif isinstance(value, CursorEnumName):
                 if key.enum_class is None or value not in key.enum_class.__members__:
-                    msg = f"Invalid pagination cursor: value {value!r} does not exist for column {key.attr_key}"
+                    msg = "Invalid pagination cursor: value does not match the ordering column"
                     raise InvalidCursorError(msg)
                 value = key.enum_class[value]
             elif key.integer and isinstance(value, int) and not -_INT64_LIMIT <= value < _INT64_LIMIT:
-                msg = f"Invalid pagination cursor: value {value} is out of the allowed range for column {key.attr_key}"
+                msg = "Invalid pagination cursor: value is out of range for the ordering column"
                 raise InvalidCursorError(msg)
             elif not _value_matches_type(value, key.python_type):
                 msg = "Invalid pagination cursor: value does not match the ordering column"

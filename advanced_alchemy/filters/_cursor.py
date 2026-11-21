@@ -22,9 +22,9 @@ from typing import TYPE_CHECKING, Any, Callable, Final, Optional, Union, cast
 from uuid import UUID
 
 from cryptography.exceptions import InvalidTag
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError
+from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError, MissingDependencyError
+from advanced_alchemy.typing import CRYPTOGRAPHY_INSTALLED
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -200,10 +200,14 @@ def encode_cursor(
 
     plaintext = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
     if encrypted and secret:
-        key = hmac.new(secret, _ENCRYPTION_KEY_INFO, hashlib.sha256).digest()
+        if not CRYPTOGRAPHY_INSTALLED:
+            raise MissingDependencyError(package="cryptography")
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        key = _derive_encryption_key(secret)
         nonce = secrets.token_bytes(_NONCE_LENGTH)
         sealed = AESGCM(key).encrypt(nonce, plaintext, fingerprint.encode("utf-8"))
-        token = f"{_ENCRYPTED_PREFIX}.{_b64(nonce)}.{_b64(sealed)}"
+        token = f"{fingerprint}.{_b64(nonce)}.{_b64(sealed)}"
     else:
         body = _b64(plaintext)
         token = (
@@ -253,7 +257,7 @@ def decode_cursor(
 
     parts = token.split(".")
     if len(parts) == _ENCRYPTED_PART_COUNT:
-        raw_bytes = _decode_encrypted_parts(parts, secret=secret, encrypted=encrypted, fingerprint=fingerprint)
+        raw_bytes = _decode_encrypted_parts(parts, secret=secret, encrypted=encrypted)
     elif len(parts) in {1, _SIGNED_PART_COUNT}:
         raw_bytes = _decode_signed_parts(parts, secret=secret, encrypted=encrypted)
     else:
@@ -313,9 +317,13 @@ def _b64(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
-def _decode_encrypted_parts(parts: "list[str]", *, secret: Optional[bytes], encrypted: bool, fingerprint: str) -> bytes:
+def _derive_encryption_key(secret: bytes) -> bytes:
+    return hmac.new(secret, _ENCRYPTION_KEY_INFO, hashlib.sha256).digest()
+
+
+def _decode_encrypted_parts(parts: "list[str]", *, secret: Optional[bytes], encrypted: bool) -> bytes:
     if (
-        parts[0] != _ENCRYPTED_PREFIX
+        _B64_PART_PATTERN.fullmatch(parts[0]) is None
         or _B64_PART_PATTERN.fullmatch(parts[1]) is None
         or _B64_PART_PATTERN.fullmatch(parts[2]) is None
     ):
@@ -326,14 +334,23 @@ def _decode_encrypted_parts(parts: "list[str]", *, secret: Optional[bytes], encr
     if not encrypted:
         msg = "Invalid pagination cursor: unexpected encrypted token"
         raise InvalidCursorError(msg)
-    key = hmac.new(secret, _ENCRYPTION_KEY_INFO, hashlib.sha256).digest()
+
+    key = _derive_encryption_key(secret)
     nonce = _b64decode(parts[1])
+    if len(nonce) != _NONCE_LENGTH:
+        raise InvalidCursorError(_MALFORMED)
 
     sealed = _b64decode(parts[2])
+
+    if not CRYPTOGRAPHY_INSTALLED:
+        raise MissingDependencyError(package="cryptography")
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
     try:
-        return AESGCM(key).decrypt(nonce, sealed, fingerprint.encode("utf-8"))
+        return AESGCM(key).decrypt(nonce, sealed, parts[0].encode("utf-8"))
     except InvalidTag as exc:
-        raise InvalidCursorError(_MALFORMED) from exc
+        msg = "Invalid pagination cursor: signature mismatch"
+        raise InvalidCursorError(msg) from exc
 
 
 def _decode_signed_parts(parts: "list[str]", *, secret: Optional[bytes], encrypted: bool) -> bytes:
