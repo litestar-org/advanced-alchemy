@@ -189,17 +189,21 @@ def normalize_cursor_keys(keys: CursorKeys) -> "tuple[CursorKey, ...]":
         elif isinstance(item, tuple):
             pair = cast("tuple[Any, ...]", item)  # type: ignore[redundant-cast]
             if len(pair) != _CURSOR_KEY_PAIR_LENGTH:
-                msg = "Cursor key pairs must be (name, direction)"
+                msg = f"Cursor key pairs must be a (name, direction) pair; got a tuple with {len(pair)} items"
                 raise ValueError(msg)
             normalized.append(CursorKey(pair[0], pair[1]))
         elif isinstance(item, (str, InstrumentedAttribute)):
             normalized.append(CursorKey(cast("FilterFieldName", item)))
         else:
-            msg = "Cursor keys must be names, attributes, (name, direction) pairs, or CursorKey objects"
+            msg = (
+                "Each cursor key must be a name, an attribute, a (name, direction) pair, or a CursorKey."
+                f" Unsupported value: {item!r}"
+            )
             raise TypeError(msg)
     names = [key.name for key in normalized]
     if len(set(names)) != len(names):
-        msg = "Cursor keys must be unique"
+        duplicates = ", ".join([name for name in names if names.count(name) > 1])
+        msg = f"Cursor keys must be unique; duplicate keys: {duplicates}"
         raise ValueError(msg)
     return tuple(normalized)
 
@@ -259,7 +263,7 @@ class CursorFilter(PaginationFilter):
             raise ValueError(msg)
         self._secret: Optional[bytes] = secret.encode("utf-8") if isinstance(secret, str) else secret
         if self._secret == b"":
-            msg = "secret must not be empty"
+            msg = "a provided secret must not be empty"
             raise ValueError(msg)
         if encrypted and not self._secret:
             msg = "secret must not be empty when encrypted=True"
@@ -432,16 +436,17 @@ class CursorFilter(PaginationFilter):
         for key, value in zip(resolved, values):
             if value is None:
                 if not key.nullable:
-                    msg = "Invalid pagination cursor: ordering mismatch"
+                    msg = f"Invalid pagination cursor: {key.attr_key} does not accept null values"
                     raise InvalidCursorError(msg)
             elif isinstance(value, CursorEnumName):
                 if key.enum_class is None or value not in key.enum_class.__members__:
-                    msg = "Invalid pagination cursor: value does not match the ordering column"
+                    msg = f"Invalid pagination cursor: value {value!r} does not exist for column {key.attr_key}"
                     raise InvalidCursorError(msg)
                 value = key.enum_class[value]
-            elif not _value_matches_type(value, key.python_type) or (
-                key.integer and isinstance(value, int) and not -_INT64_LIMIT <= value < _INT64_LIMIT
-            ):
+            elif key.integer and isinstance(value, int) and not -_INT64_LIMIT <= value < _INT64_LIMIT:
+                msg = f"Invalid pagination cursor: value {value} is out of the allowed range for column {key.attr_key}"
+                raise InvalidCursorError(msg)
+            elif not _value_matches_type(value, key.python_type):
                 msg = "Invalid pagination cursor: value does not match the ordering column"
                 raise InvalidCursorError(msg)
             coerced.append(value)
