@@ -240,3 +240,14 @@ def test_hash_distinguishes_configs_by_cache_manager() -> None:
 
     assert hash(cfg_a) != hash(cfg_b)
     assert hash(cfg_a) != hash(cfg_none)
+
+
+def test_get_engine_uses_create_async_engine_patched_after_config_creation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default engine factory is resolved when the engine is created, so later patches (e.g. OpenTelemetry) apply."""
+    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+    patched_engine = MagicMock()
+    patched_create_engine = MagicMock(return_value=patched_engine)
+    monkeypatch.setattr("sqlalchemy.ext.asyncio.create_async_engine", patched_create_engine)
+
+    assert config.get_engine() is patched_engine
+    patched_create_engine.assert_called_once_with("sqlite+aiosqlite:///:memory:", **config.engine_config_dict)

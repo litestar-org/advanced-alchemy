@@ -50,5 +50,6 @@ Enable routing, caching, migrations, and fixture seeding without rewriting repos
 
 * :doc:`Replica Routing <routing>`: Route writes to a primary database and distribute reads across replica pools.
 * :doc:`Caching <caching>`: Cache lookups in memory, Redis, or Memcached with automatic invalidation on commit.
+* :doc:`OpenTelemetry <opentelemetry>`: Trace queries, including routed replicas, with OpenTelemetry's SQLAlchemy instrumentation.
 * :doc:`CLI & Migrations <cli>`: Generate and apply Alembic schema migrations from the terminal.
 * :doc:`Database Seeding <database_seeding>`: Stream and load seed data from JSON, JSONL, or CSV fixtures.

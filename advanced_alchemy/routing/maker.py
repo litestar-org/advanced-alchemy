@@ -7,11 +7,13 @@ with properly configured primary and replica engines.
 import warnings
 from typing import Any, Callable, Optional
 
-from sqlalchemy import Engine, create_engine
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy import Engine
+from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import sessionmaker
 
+from advanced_alchemy.config.asyncio import _create_async_engine  # pyright: ignore[reportPrivateUsage]
 from advanced_alchemy.config.routing import RoutingConfig, RoutingStrategy
+from advanced_alchemy.config.sync import _create_engine  # pyright: ignore[reportPrivateUsage]
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.routing.selectors import EngineSelector, RandomSelector, RoundRobinSelector
 from advanced_alchemy.routing.session import RoutingAsyncSession, RoutingSyncSession
@@ -61,7 +63,7 @@ class RoutingSyncSessionMaker:
         routing_config: RoutingConfig,
         engine_config: Optional[dict[str, Any]] = None,
         session_config: Optional[dict[str, Any]] = None,
-        create_engine_callable: Callable[[str], Engine] = create_engine,
+        create_engine_callable: Callable[[str], Engine] = _create_engine,
     ) -> None:
         """Initialize the session maker.
 
@@ -271,7 +273,7 @@ class RoutingAsyncSessionMaker:
         routing_config: RoutingConfig,
         engine_config: Optional[dict[str, Any]] = None,
         session_config: Optional[dict[str, Any]] = None,
-        create_engine_callable: Callable[[str], AsyncEngine] = create_async_engine,
+        create_engine_callable: Callable[[str], AsyncEngine] = _create_async_engine,
     ) -> None:
         """Initialize the async session maker.
 

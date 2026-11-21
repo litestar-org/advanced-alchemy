@@ -146,6 +146,23 @@ def test_sync_session_maker_passes_engine_config() -> None:
         assert kwargs.get("max_overflow") == 20
 
 
+def test_sync_session_maker_uses_create_engine_patched_after_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Engines for every group come from ``sqlalchemy.create_engine`` as it is when the maker is built."""
+    config = RoutingConfig(
+        engines={
+            "default": ["sqlite:///:memory:", "sqlite:///:memory:"],
+            "read": ["sqlite:///:memory:"],
+            "analytics": ["sqlite:///:memory:"],
+        }
+    )
+    patched_create_engine = MagicMock(return_value=MagicMock(spec=["dispose"]))
+    monkeypatch.setattr("sqlalchemy.create_engine", patched_create_engine)
+
+    RoutingSyncSessionMaker(routing_config=config)
+
+    assert patched_create_engine.call_count == 4
+
+
 def test_sync_session_maker_passes_session_config(routing_config: RoutingConfig) -> None:
     """Test that RoutingSyncSessionMaker passes session config to session."""
 
@@ -324,6 +341,23 @@ def test_async_session_maker_passes_engine_config() -> None:
         _, kwargs = call
         assert kwargs.get("pool_size") == 10
         assert kwargs.get("max_overflow") == 20
+
+
+def test_async_session_maker_uses_create_async_engine_patched_after_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Engines for every group come from ``sqlalchemy.ext.asyncio.create_async_engine`` as it is when the maker is built."""
+    config = RoutingConfig(
+        engines={
+            "default": ["sqlite+aiosqlite:///:memory:", "sqlite+aiosqlite:///:memory:"],
+            "read": ["sqlite+aiosqlite:///:memory:"],
+            "analytics": ["sqlite+aiosqlite:///:memory:"],
+        }
+    )
+    patched_create_engine = MagicMock(return_value=MagicMock(spec=["dispose", "sync_engine"]))
+    monkeypatch.setattr("sqlalchemy.ext.asyncio.create_async_engine", patched_create_engine)
+
+    RoutingAsyncSessionMaker(routing_config=config)
+
+    assert patched_create_engine.call_count == 4
 
 
 @pytest.mark.asyncio

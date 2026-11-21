@@ -96,6 +96,7 @@ Advanced Alchemy provides declarative bases with primary keys and audit timestam
     Service Composition <usage/service_composition>
     Read/Write Routing <usage/routing>
     Caching <usage/caching>
+    OpenTelemetry <usage/opentelemetry>
     CLI & Migrations <usage/cli>
     Database Seeding <usage/database_seeding>
 
