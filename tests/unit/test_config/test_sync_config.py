@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy.orm import sessionmaker
 
 from advanced_alchemy.config.common import GenericSQLAlchemyConfig
+from advanced_alchemy.config.routing import RoutingConfig
 from advanced_alchemy.config.sync import SQLAlchemySyncConfig, SyncSessionConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
@@ -227,3 +228,40 @@ def test_hash_distinguishes_configs_by_cache_manager() -> None:
 
     assert hash(cfg_a) != hash(cfg_b)
     assert hash(cfg_a) != hash(cfg_none)
+
+
+def test_get_engine_uses_create_engine_patched_after_config_creation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default engine factory is resolved when the engine is created, so later patches (e.g. OpenTelemetry) apply."""
+    config = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:")
+    patched_engine = MagicMock()
+    patched_create_engine = MagicMock(return_value=patched_engine)
+    monkeypatch.setattr("sqlalchemy.create_engine", patched_create_engine)
+
+    assert config.get_engine() is patched_engine
+    patched_create_engine.assert_called_once_with("sqlite:///:memory:", **config.engine_config_dict)
+
+
+def test_create_session_maker_forwards_create_engine_callable_to_routing() -> None:
+    """Custom create_engine_callable on a routed sync config is forwarded to RoutingSyncSessionMaker."""
+    custom_factory = MagicMock(return_value=MagicMock(spec=["dispose"]))
+    config = SQLAlchemySyncConfig(
+        routing_config=RoutingConfig(
+            primary_connection_string="sqlite:///:memory:",
+            read_replicas=["sqlite:///:memory:"],
+        ),
+        create_engine_callable=custom_factory,
+    )
+
+    config.create_session_maker()
+
+    assert custom_factory.call_count == 2
+
+
+def test_get_engine_uses_default_sqlalchemy_factory_without_patch() -> None:
+    """Without an active instrumentation patch, engine creation falls through to SQLAlchemy's default factory."""
+    config = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:")
+    engine = config.get_engine()
+    try:
+        assert engine.url.drivername == "sqlite"
+    finally:
+        engine.dispose()

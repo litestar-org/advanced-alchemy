@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from advanced_alchemy.config.asyncio import AsyncSessionConfig, SQLAlchemyAsyncConfig
 from advanced_alchemy.config.common import GenericSQLAlchemyConfig
+from advanced_alchemy.config.routing import RoutingConfig
 from advanced_alchemy.exceptions import ImproperConfigurationError
 
 
@@ -240,3 +241,41 @@ def test_hash_distinguishes_configs_by_cache_manager() -> None:
 
     assert hash(cfg_a) != hash(cfg_b)
     assert hash(cfg_a) != hash(cfg_none)
+
+
+def test_get_engine_uses_create_async_engine_patched_after_config_creation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default engine factory is resolved when the engine is created, so later patches (e.g. OpenTelemetry) apply."""
+    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+    patched_engine = MagicMock()
+    patched_create_engine = MagicMock(return_value=patched_engine)
+    monkeypatch.setattr("sqlalchemy.ext.asyncio.create_async_engine", patched_create_engine)
+
+    assert config.get_engine() is patched_engine
+    patched_create_engine.assert_called_once_with("sqlite+aiosqlite:///:memory:", **config.engine_config_dict)
+
+
+def test_create_session_maker_forwards_create_engine_callable_to_routing() -> None:
+    """Custom create_engine_callable on a routed async config is forwarded to RoutingAsyncSessionMaker."""
+    custom_factory = MagicMock(return_value=MagicMock(spec=["dispose", "sync_engine"]))
+    config = SQLAlchemyAsyncConfig(
+        routing_config=RoutingConfig(
+            primary_connection_string="sqlite+aiosqlite:///:memory:",
+            read_replicas=["sqlite+aiosqlite:///:memory:"],
+        ),
+        create_engine_callable=custom_factory,
+    )
+
+    config.create_session_maker()
+
+    assert custom_factory.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_get_engine_uses_default_sqlalchemy_async_factory_without_patch() -> None:
+    """Without an active instrumentation patch, async engine creation falls through to SQLAlchemy's default factory."""
+    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+    engine = config.get_engine()
+    try:
+        assert engine.url.drivername == "sqlite+aiosqlite"
+    finally:
+        await engine.dispose()

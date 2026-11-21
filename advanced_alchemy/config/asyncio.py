@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, cast
 
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+import sqlalchemy.ext.asyncio
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import sessionmaker as sync_sessionmaker
 
 from advanced_alchemy.config.common import (
@@ -27,6 +28,22 @@ __all__ = (
     "AsyncSessionConfig",
     "SQLAlchemyAsyncConfig",
 )
+
+
+def _create_async_engine(url: str, **kwargs: Any) -> AsyncEngine:
+    """Create an engine with :func:`sqlalchemy.ext.asyncio.create_async_engine`, looked up at call time.
+
+    Looking the factory up on each call, instead of binding it at import time, means a patch applied
+    after import (e.g. ``SQLAlchemyInstrumentor().instrument()`` from OpenTelemetry) still takes effect.
+
+    Args:
+        url: Database connection string.
+        **kwargs: Engine options passed through to :func:`sqlalchemy.ext.asyncio.create_async_engine`.
+
+    Returns:
+        The created async engine.
+    """
+    return sqlalchemy.ext.asyncio.create_async_engine(url, **kwargs)
 
 
 @dataclass
@@ -78,9 +95,11 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
             )
     """
 
-    create_engine_callable: "Callable[[str], AsyncEngine]" = create_async_engine
+    create_engine_callable: "Callable[[str], AsyncEngine]" = _create_async_engine
     """Callable that creates an :class:`AsyncEngine <sqlalchemy.ext.asyncio.AsyncEngine>` instance or instance of its
     subclass.
+
+    Defaults to :func:`sqlalchemy.ext.asyncio.create_async_engine`, resolved at call time.
     """
     session_config: AsyncSessionConfig = field(default_factory=AsyncSessionConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration options for the :class:`async_sessionmaker<sqlalchemy.ext.asyncio.async_sessionmaker>`."""
@@ -150,6 +169,7 @@ class SQLAlchemyAsyncConfig(GenericSQLAlchemyConfig[AsyncEngine, AsyncSession, a
                 routing_config=self.routing_config,
                 engine_config=self.engine_config_dict,
                 session_config=self.session_config_dict,
+                create_engine_callable=self.create_engine_callable,
             )
             self.session_maker = routing_maker
         else:

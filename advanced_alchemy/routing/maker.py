@@ -7,8 +7,10 @@ with properly configured primary and replica engines.
 import warnings
 from typing import Any, Callable, Optional
 
-from sqlalchemy import Engine, create_engine
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+import sqlalchemy
+import sqlalchemy.ext.asyncio
+from sqlalchemy import Engine
+from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import sessionmaker
 
 from advanced_alchemy.config.routing import RoutingConfig, RoutingStrategy
@@ -61,7 +63,7 @@ class RoutingSyncSessionMaker:
         routing_config: RoutingConfig,
         engine_config: Optional[dict[str, Any]] = None,
         session_config: Optional[dict[str, Any]] = None,
-        create_engine_callable: Callable[[str], Engine] = create_engine,
+        create_engine_callable: Optional[Callable[[str], Engine]] = None,
     ) -> None:
         """Initialize the session maker.
 
@@ -69,7 +71,8 @@ class RoutingSyncSessionMaker:
             routing_config: Configuration for read/write routing.
             engine_config: Configuration options for engine creation.
             session_config: Configuration options for session creation.
-            create_engine_callable: Callable to create engines (for testing).
+            create_engine_callable: Callable to create engines. Defaults to :func:`sqlalchemy.create_engine`,
+                resolved at call time.
         """
         self._routing_config = routing_config
         self._engine_config = engine_config or {}
@@ -84,11 +87,14 @@ class RoutingSyncSessionMaker:
 
         self._engines: dict[str, list[Engine]] = {}
         self._selectors: dict[str, EngineSelector[Engine]] = {}
+        engine_factory: Callable[[str], Engine] = (
+            create_engine_callable if create_engine_callable is not None else sqlalchemy.create_engine
+        )
 
         for group in routing_config.engines:
             engines_for_group: list[Engine] = []
             for config in routing_config.get_engine_configs(group):
-                engine = self._create_engine(config.connection_string, create_engine_callable)
+                engine = self._create_engine(config.connection_string, engine_factory)
                 engines_for_group.append(engine)
 
             if engines_for_group:
@@ -271,7 +277,7 @@ class RoutingAsyncSessionMaker:
         routing_config: RoutingConfig,
         engine_config: Optional[dict[str, Any]] = None,
         session_config: Optional[dict[str, Any]] = None,
-        create_engine_callable: Callable[[str], AsyncEngine] = create_async_engine,
+        create_engine_callable: Optional[Callable[[str], AsyncEngine]] = None,
     ) -> None:
         """Initialize the async session maker.
 
@@ -279,7 +285,8 @@ class RoutingAsyncSessionMaker:
             routing_config: Configuration for read/write routing.
             engine_config: Configuration options for engine creation.
             session_config: Configuration options for session creation.
-            create_engine_callable: Callable to create async engines (for testing).
+            create_engine_callable: Callable to create async engines. Defaults to
+                :func:`sqlalchemy.ext.asyncio.create_async_engine`, resolved at call time.
         """
         self._routing_config = routing_config
         self._engine_config = engine_config or {}
@@ -287,11 +294,14 @@ class RoutingAsyncSessionMaker:
 
         self._engines: dict[str, list[AsyncEngine]] = {}
         self._selectors: dict[str, EngineSelector[AsyncEngine]] = {}
+        engine_factory: Callable[[str], AsyncEngine] = (
+            create_engine_callable if create_engine_callable is not None else sqlalchemy.ext.asyncio.create_async_engine
+        )
 
         for group in routing_config.engines:
             engines_for_group: list[AsyncEngine] = []
             for config in routing_config.get_engine_configs(group):
-                engine = self._create_engine(config.connection_string, create_engine_callable)
+                engine = self._create_engine(config.connection_string, engine_factory)
                 engines_for_group.append(engine)
 
             if engines_for_group:
