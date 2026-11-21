@@ -185,8 +185,7 @@ def test_encrypted_tokens_hide_values_and_vary_per_issue() -> None:
     second = encode_cursor(["secret-value"], FINGERPRINT, secret=SECRET, encrypted=True)
 
     assert first != second
-    assert first.startswith("e1.")
-    assert b"secret-value" not in base64.urlsafe_b64decode(first.split(".")[1] + "==")
+    assert b"secret-value" not in base64.urlsafe_b64decode(first.split(".")[2] + "==")
     assert decode_cursor(first, FINGERPRINT, secret=SECRET, encrypted=True).values == ("secret-value",)
 
 
@@ -208,8 +207,8 @@ def test_encryption_mode_mismatch_is_rejected(
 
 
 def test_tampered_encrypted_token_is_rejected() -> None:
-    prefix, sealed, mac = encode_cursor([1], FINGERPRINT, secret=SECRET, encrypted=True).split(".")
-    tampered = f"{prefix}.{('A' if sealed[0] != 'A' else 'B') + sealed[1:]}.{mac}"
+    prefix, nonce, sealed = encode_cursor([1], FINGERPRINT, secret=SECRET, encrypted=True).split(".")
+    tampered = f"{prefix}.{nonce}.{('A' if sealed[0] != 'A' else 'B') + sealed[1:]}"
 
     with pytest.raises(InvalidCursorError, match="signature mismatch"):
         decode_cursor(tampered, FINGERPRINT, secret=SECRET, encrypted=True)

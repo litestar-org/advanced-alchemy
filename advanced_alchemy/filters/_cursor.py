@@ -21,7 +21,10 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Final, Optional, Union, cast
 from uuid import UUID
 
-from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError
+from cryptography.exceptions import InvalidTag
+
+from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError, MissingDependencyError
+from advanced_alchemy.typing import CRYPTOGRAPHY_INSTALLED
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -42,13 +45,17 @@ _DECIMAL_MAX_EXPONENT: Final = 6144
 _TIMEDELTA_MAX_DAYS: Final = 999_999_999
 _INT_LIMIT: Final = 2**127
 _ENTRY_LENGTH: Final = 2
-_NONCE_LENGTH: Final = 16
-_HASH_BLOCK_SIZE: Final = 32
+_NONCE_LENGTH: Final = 12
 _SIGNED_PART_COUNT: Final = 2
 _ENCRYPTED_PART_COUNT: Final = 3
 _ENCRYPTED_PREFIX: Final = "e1"
 _ENCRYPTION_KEY_INFO: Final = b"advanced-alchemy-cursor-enc-v1"
-_MAC_KEY_INFO: Final = b"advanced-alchemy-cursor-mac-v1"
+_PAYLOAD_VERSION_KEY: Final = "v"
+_PAYLOAD_DIRECTION_KEY: Final = "d"
+_PAYLOAD_FINGERPRINT_KEY: Final = "o"
+_PAYLOAD_KEYS_KEY: Final = "k"
+_PAYLOAD_ISSUED_AT_KEY: Final = "i"
+_PAYLOAD_EXPIRES_AT_KEY: Final = "e"
 _B64_PART_PATTERN: Final = re.compile(r"[A-Za-z0-9_-]+")
 _TAG_PATTERN: Final = re.compile(r"[a-z][a-z0-9_]{0,15}")
 _RESERVED_TAGS: Final = frozenset({"n", "b", "i", "e"})
@@ -181,23 +188,26 @@ def encode_cursor(
         raise ValueError(msg)
 
     payload: dict[str, Any] = {
-        "v": 1,
-        "d": "b" if backward else "f",
-        "o": fingerprint,
-        "k": [_encode_value(value) for value in values],
+        _PAYLOAD_VERSION_KEY: 1,
+        _PAYLOAD_DIRECTION_KEY: "b" if backward else "f",
+        _PAYLOAD_FINGERPRINT_KEY: fingerprint,
+        _PAYLOAD_KEYS_KEY: [_encode_value(value) for value in values],
     }
     if ttl_seconds is not None:
         issued_at = time.time()
-        payload["i"] = issued_at
-        payload["e"] = issued_at + ttl_seconds
+        payload[_PAYLOAD_ISSUED_AT_KEY] = issued_at
+        payload[_PAYLOAD_EXPIRES_AT_KEY] = issued_at + ttl_seconds
 
     plaintext = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
     if encrypted and secret:
-        encryption_key, mac_key = _derive_encryption_keys(secret)
+        if not CRYPTOGRAPHY_INSTALLED:
+            raise MissingDependencyError(package="cryptography")
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        key = _derive_encryption_key(secret)
         nonce = secrets.token_bytes(_NONCE_LENGTH)
-        sealed = _b64(nonce + _apply_keystream(encryption_key, nonce, plaintext))
-        mac = _b64(hmac.new(mac_key, f"{_ENCRYPTED_PREFIX}.{sealed}".encode("ascii"), hashlib.sha256).digest())
-        token = f"{_ENCRYPTED_PREFIX}.{sealed}.{mac}"
+        sealed = AESGCM(key).encrypt(nonce, plaintext, fingerprint.encode("utf-8"))
+        token = f"{fingerprint}.{_b64(nonce)}.{_b64(sealed)}"
     else:
         body = _b64(plaintext)
         token = (
@@ -261,22 +271,22 @@ def decode_cursor(
         raise InvalidCursorError(_MALFORMED)
     payload = cast("dict[str, Any]", raw_payload)
     if (
-        type(payload.get("v")) is not int
-        or payload["v"] != 1
-        or payload.get("d") not in ("f", "b")
-        or not isinstance(payload.get("o"), str)
-        or not isinstance(payload.get("k"), list)
+        type(payload.get(_PAYLOAD_VERSION_KEY)) is not int
+        or payload[_PAYLOAD_VERSION_KEY] != 1
+        or payload.get(_PAYLOAD_DIRECTION_KEY) not in ("f", "b")
+        or not isinstance(payload.get(_PAYLOAD_FINGERPRINT_KEY), str)
+        or not isinstance(payload.get(_PAYLOAD_KEYS_KEY), list)
     ):
         raise InvalidCursorError(_MALFORMED)
-    if payload["o"] != fingerprint:
+    if payload[_PAYLOAD_FINGERPRINT_KEY] != fingerprint:
         msg = "Invalid pagination cursor: ordering mismatch"
         raise InvalidCursorError(msg)
     _validate_payload_timestamps(payload, ttl_seconds)
     try:
-        values = tuple(_decode_value(entry) for entry in cast("list[Any]", payload["k"]))
+        values = tuple(_decode_value(entry) for entry in cast("list[Any]", payload[_PAYLOAD_KEYS_KEY]))
     except (ValueError, TypeError, ArithmeticError, LookupError) as exc:
         raise InvalidCursorError(_MALFORMED) from exc
-    return DecodedCursor(values, bool(payload["d"] == "b"))
+    return DecodedCursor(values, bool(payload[_PAYLOAD_DIRECTION_KEY] == "b"))
 
 
 def _encode_value(value: Any) -> "list[Any]":
@@ -303,29 +313,17 @@ def _encode_value(value: Any) -> "list[Any]":
     raise ImproperConfigurationError(msg)
 
 
-def _derive_encryption_keys(secret: bytes) -> "tuple[bytes, bytes]":
-    encryption_key = hmac.new(secret, _ENCRYPTION_KEY_INFO, hashlib.sha256).digest()
-    mac_key = hmac.new(secret, _MAC_KEY_INFO, hashlib.sha256).digest()
-    return encryption_key, mac_key
-
-
-def _apply_keystream(encryption_key: bytes, nonce: bytes, data: bytes) -> bytes:
-    """XOR ``data`` with an HMAC-SHA256 counter keystream; the same call encrypts and decrypts."""
-    output = bytearray(len(data))
-    for counter, offset in enumerate(range(0, len(data), _HASH_BLOCK_SIZE)):
-        block = hmac.new(encryption_key, nonce + counter.to_bytes(8, "big"), hashlib.sha256).digest()
-        chunk = data[offset : offset + _HASH_BLOCK_SIZE]
-        output[offset : offset + len(chunk)] = bytes(a ^ b for a, b in zip(chunk, block))
-    return bytes(output)
-
-
 def _b64(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
+def _derive_encryption_key(secret: bytes) -> bytes:
+    return hmac.new(secret, _ENCRYPTION_KEY_INFO, hashlib.sha256).digest()
+
+
 def _decode_encrypted_parts(parts: "list[str]", *, secret: Optional[bytes], encrypted: bool) -> bytes:
     if (
-        parts[0] != _ENCRYPTED_PREFIX
+        _B64_PART_PATTERN.fullmatch(parts[0]) is None
         or _B64_PART_PATTERN.fullmatch(parts[1]) is None
         or _B64_PART_PATTERN.fullmatch(parts[2]) is None
     ):
@@ -336,15 +334,23 @@ def _decode_encrypted_parts(parts: "list[str]", *, secret: Optional[bytes], encr
     if not encrypted:
         msg = "Invalid pagination cursor: unexpected encrypted token"
         raise InvalidCursorError(msg)
-    encryption_key, mac_key = _derive_encryption_keys(secret)
-    expected_mac = _b64(hmac.new(mac_key, f"{_ENCRYPTED_PREFIX}.{parts[1]}".encode("ascii"), hashlib.sha256).digest())
-    if not hmac.compare_digest(expected_mac.encode("ascii"), parts[2].encode("ascii")):
-        msg = "Invalid pagination cursor: signature mismatch"
-        raise InvalidCursorError(msg)
-    sealed = _b64decode(parts[1])
-    if len(sealed) < _NONCE_LENGTH:
+
+    key = _derive_encryption_key(secret)
+    nonce = _b64decode(parts[1])
+    if len(nonce) != _NONCE_LENGTH:
         raise InvalidCursorError(_MALFORMED)
-    return _apply_keystream(encryption_key, sealed[:_NONCE_LENGTH], sealed[_NONCE_LENGTH:])
+
+    sealed = _b64decode(parts[2])
+
+    if not CRYPTOGRAPHY_INSTALLED:
+        raise MissingDependencyError(package="cryptography")
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    try:
+        return AESGCM(key).decrypt(nonce, sealed, parts[0].encode("utf-8"))
+    except InvalidTag as exc:
+        msg = "Invalid pagination cursor: signature mismatch"
+        raise InvalidCursorError(msg) from exc
 
 
 def _decode_signed_parts(parts: "list[str]", *, secret: Optional[bytes], encrypted: bool) -> bytes:
@@ -377,8 +383,10 @@ def _b64decode(value: str) -> bytes:
 
 
 def _validate_payload_timestamps(payload: "dict[str, Any]", ttl_seconds: Optional[float]) -> None:
-    issued_at = _parse_timestamp_claim(payload["i"]) if "i" in payload else None
-    expires_at = _parse_timestamp_claim(payload["e"]) if "e" in payload else None
+    issued_at = _parse_timestamp_claim(payload[_PAYLOAD_ISSUED_AT_KEY]) if _PAYLOAD_ISSUED_AT_KEY in payload else None
+    expires_at = (
+        _parse_timestamp_claim(payload[_PAYLOAD_EXPIRES_AT_KEY]) if _PAYLOAD_EXPIRES_AT_KEY in payload else None
+    )
     now = time.time()
     expired = (expires_at is not None and now >= expires_at) or (
         ttl_seconds is not None and (issued_at is None or expires_at is None or now >= issued_at + ttl_seconds)
