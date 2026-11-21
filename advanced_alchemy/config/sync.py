@@ -4,7 +4,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Optional, cast
 
-from sqlalchemy import Connection, Engine, create_engine
+import sqlalchemy
+from sqlalchemy import Connection, Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from advanced_alchemy.config.common import GenericAlembicConfig, GenericSessionConfig, GenericSQLAlchemyConfig
@@ -22,6 +23,22 @@ __all__ = (
     "SQLAlchemySyncConfig",
     "SyncSessionConfig",
 )
+
+
+def _create_engine(url: str, **kwargs: Any) -> Engine:
+    """Create an engine with :func:`sqlalchemy.create_engine`, looked up at call time.
+
+    Looking the factory up on each call, instead of binding it at import time, means a patch applied
+    after import (e.g. ``SQLAlchemyInstrumentor().instrument()`` from OpenTelemetry) still takes effect.
+
+    Args:
+        url: Database connection string.
+        **kwargs: Engine options passed through to :func:`sqlalchemy.create_engine`.
+
+    Returns:
+        The created engine.
+    """
+    return sqlalchemy.create_engine(url, **kwargs)
 
 
 @dataclass
@@ -63,7 +80,7 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
             )
     """
 
-    create_engine_callable: "Callable[[str], Engine]" = create_engine
+    create_engine_callable: "Callable[[str], Engine]" = _create_engine
     """Callable that creates an :class:`Engine <sqlalchemy.Engine>` instance or instance of its subclass."""
     session_config: SyncSessionConfig = field(default_factory=SyncSessionConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration options for the :class:`sessionmaker<sqlalchemy.orm.sessionmaker>`."""
