@@ -81,7 +81,10 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
     """
 
     create_engine_callable: "Callable[[str], Engine]" = _create_engine
-    """Callable that creates an :class:`Engine <sqlalchemy.Engine>` instance or instance of its subclass."""
+    """Callable that creates an :class:`Engine <sqlalchemy.Engine>` instance or instance of its subclass.
+
+    Defaults to :func:`sqlalchemy.create_engine`, resolved at call time.
+    """
     session_config: SyncSessionConfig = field(default_factory=SyncSessionConfig)  # pyright: ignore[reportIncompatibleVariableOverride]
     """Configuration options for the :class:`sessionmaker<sqlalchemy.orm.sessionmaker>`."""
     session_maker_class: type[sessionmaker[Session]] = sessionmaker  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -150,6 +153,7 @@ class SQLAlchemySyncConfig(GenericSQLAlchemyConfig[Engine, Session, sessionmaker
                 routing_config=self.routing_config,
                 engine_config=self.engine_config_dict,
                 session_config=self.session_config_dict,
+                create_engine_callable=self.create_engine_callable,
             )
             self.session_maker = routing_maker
         else:

@@ -7,14 +7,41 @@ Advanced Alchemy looks up SQLAlchemy's ``create_engine`` and ``create_async_engi
 Installation
 ------------
 
-.. code-block:: bash
+.. tab-set::
+    :sync-group: pkg
 
-    pip install opentelemetry-sdk opentelemetry-instrumentation-sqlalchemy
+    .. tab-item:: uv
+        :sync: uv
+
+        .. code-block:: bash
+
+            uv add opentelemetry-sdk opentelemetry-instrumentation-sqlalchemy
+
+    .. tab-item:: pip
+        :sync: pip
+
+        .. code-block:: bash
+
+            pip install opentelemetry-sdk opentelemetry-instrumentation-sqlalchemy
+
+    .. tab-item:: pdm
+        :sync: pdm
+
+        .. code-block:: bash
+
+            pdm add opentelemetry-sdk opentelemetry-instrumentation-sqlalchemy
+
+    .. tab-item:: poetry
+        :sync: poetry
+
+        .. code-block:: bash
+
+            poetry add opentelemetry-sdk opentelemetry-instrumentation-sqlalchemy
 
 Enabling Tracing
 ----------------
 
-Call ``SQLAlchemyInstrumentor().instrument()`` once at application startup, before the first engine is created:
+Call ``SQLAlchemyInstrumentor().instrument()`` once before the first engine is created. For standalone configs and Litestar, calling it before app startup works because engines are created during lifespan startup. For FastAPI, Starlette, Flask, and Sanic, call it before attaching ``AdvancedAlchemy(config, app)`` or calling ``init_app(app)``, which creates engines eagerly:
 
 .. code-block:: python
 
@@ -30,7 +57,7 @@ Queries on those engines are then traced. Which spans are recorded and exported 
 
 .. note::
 
-    Each ``opentelemetry-instrumentation-sqlalchemy`` release declares the SQLAlchemy and Python versions it supports. For example, 0.66b2 requires Python 3.10 or later and SQLAlchemy earlier than 2.1. On an unsupported SQLAlchemy version, ``instrument()`` logs an error and traces nothing.
+    Advanced Alchemy does not add an OpenTelemetry dependency, so installs and tests across Python 3.9--3.15 and SQLAlchemy 2.0/2.1 are unaffected. Each ``opentelemetry-instrumentation-sqlalchemy`` release enforces its own Python and SQLAlchemy version bounds; for example, 0.66b2 requires Python 3.10 or later and SQLAlchemy earlier than 2.1. On an unsupported SQLAlchemy version, ``instrument()`` logs a version conflict and skips tracing gracefully without breaking engine creation.
 
 Engines Created Elsewhere
 -------------------------
