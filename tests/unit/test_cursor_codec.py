@@ -208,10 +208,10 @@ def test_encryption_mode_mismatch_is_rejected(
 
 
 def test_tampered_encrypted_token_is_rejected() -> None:
-    prefix, sealed, mac = encode_cursor([1], FINGERPRINT, secret=SECRET, encrypted=True).split(".")
-    tampered = f"{prefix}.{('A' if sealed[0] != 'A' else 'B') + sealed[1:]}.{mac}"
+    prefix, nonce, sealed = encode_cursor([1], FINGERPRINT, secret=SECRET, encrypted=True).split(".")
+    tampered = f"{prefix}.{nonce}.{('A' if sealed[0] != 'A' else 'B') + sealed[1:]}"
 
-    with pytest.raises(InvalidCursorError, match="signature mismatch"):
+    with pytest.raises(InvalidCursorError, match="malformed"):
         decode_cursor(tampered, FINGERPRINT, secret=SECRET, encrypted=True)
 
 

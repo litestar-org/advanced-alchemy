@@ -21,6 +21,9 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Final, Optional, Union, cast
 from uuid import UUID
 
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
 from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError
 
 if TYPE_CHECKING:
@@ -42,13 +45,11 @@ _DECIMAL_MAX_EXPONENT: Final = 6144
 _TIMEDELTA_MAX_DAYS: Final = 999_999_999
 _INT_LIMIT: Final = 2**127
 _ENTRY_LENGTH: Final = 2
-_NONCE_LENGTH: Final = 16
-_HASH_BLOCK_SIZE: Final = 32
+_NONCE_LENGTH: Final = 12
 _SIGNED_PART_COUNT: Final = 2
 _ENCRYPTED_PART_COUNT: Final = 3
 _ENCRYPTED_PREFIX: Final = "e1"
 _ENCRYPTION_KEY_INFO: Final = b"advanced-alchemy-cursor-enc-v1"
-_MAC_KEY_INFO: Final = b"advanced-alchemy-cursor-mac-v1"
 _B64_PART_PATTERN: Final = re.compile(r"[A-Za-z0-9_-]+")
 _TAG_PATTERN: Final = re.compile(r"[a-z][a-z0-9_]{0,15}")
 _RESERVED_TAGS: Final = frozenset({"n", "b", "i", "e"})
@@ -193,11 +194,10 @@ def encode_cursor(
 
     plaintext = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
     if encrypted and secret:
-        encryption_key, mac_key = _derive_encryption_keys(secret)
+        key = hmac.new(secret, _ENCRYPTION_KEY_INFO, hashlib.sha256).digest()
         nonce = secrets.token_bytes(_NONCE_LENGTH)
-        sealed = _b64(nonce + _apply_keystream(encryption_key, nonce, plaintext))
-        mac = _b64(hmac.new(mac_key, f"{_ENCRYPTED_PREFIX}.{sealed}".encode("ascii"), hashlib.sha256).digest())
-        token = f"{_ENCRYPTED_PREFIX}.{sealed}.{mac}"
+        sealed = AESGCM(key).encrypt(nonce, plaintext, fingerprint.encode("utf-8"))
+        token = f"{_ENCRYPTED_PREFIX}.{_b64(nonce)}.{_b64(sealed)}"
     else:
         body = _b64(plaintext)
         token = (
@@ -247,7 +247,7 @@ def decode_cursor(
 
     parts = token.split(".")
     if len(parts) == _ENCRYPTED_PART_COUNT:
-        raw_bytes = _decode_encrypted_parts(parts, secret=secret, encrypted=encrypted)
+        raw_bytes = _decode_encrypted_parts(parts, secret=secret, encrypted=encrypted, fingerprint=fingerprint)
     elif len(parts) in {1, _SIGNED_PART_COUNT}:
         raw_bytes = _decode_signed_parts(parts, secret=secret, encrypted=encrypted)
     else:
@@ -303,27 +303,11 @@ def _encode_value(value: Any) -> "list[Any]":
     raise ImproperConfigurationError(msg)
 
 
-def _derive_encryption_keys(secret: bytes) -> "tuple[bytes, bytes]":
-    encryption_key = hmac.new(secret, _ENCRYPTION_KEY_INFO, hashlib.sha256).digest()
-    mac_key = hmac.new(secret, _MAC_KEY_INFO, hashlib.sha256).digest()
-    return encryption_key, mac_key
-
-
-def _apply_keystream(encryption_key: bytes, nonce: bytes, data: bytes) -> bytes:
-    """XOR ``data`` with an HMAC-SHA256 counter keystream; the same call encrypts and decrypts."""
-    output = bytearray(len(data))
-    for counter, offset in enumerate(range(0, len(data), _HASH_BLOCK_SIZE)):
-        block = hmac.new(encryption_key, nonce + counter.to_bytes(8, "big"), hashlib.sha256).digest()
-        chunk = data[offset : offset + _HASH_BLOCK_SIZE]
-        output[offset : offset + len(chunk)] = bytes(a ^ b for a, b in zip(chunk, block))
-    return bytes(output)
-
-
 def _b64(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
-def _decode_encrypted_parts(parts: "list[str]", *, secret: Optional[bytes], encrypted: bool) -> bytes:
+def _decode_encrypted_parts(parts: "list[str]", *, secret: Optional[bytes], encrypted: bool, fingerprint: str) -> bytes:
     if (
         parts[0] != _ENCRYPTED_PREFIX
         or _B64_PART_PATTERN.fullmatch(parts[1]) is None
@@ -336,15 +320,14 @@ def _decode_encrypted_parts(parts: "list[str]", *, secret: Optional[bytes], encr
     if not encrypted:
         msg = "Invalid pagination cursor: unexpected encrypted token"
         raise InvalidCursorError(msg)
-    encryption_key, mac_key = _derive_encryption_keys(secret)
-    expected_mac = _b64(hmac.new(mac_key, f"{_ENCRYPTED_PREFIX}.{parts[1]}".encode("ascii"), hashlib.sha256).digest())
-    if not hmac.compare_digest(expected_mac.encode("ascii"), parts[2].encode("ascii")):
-        msg = "Invalid pagination cursor: signature mismatch"
-        raise InvalidCursorError(msg)
-    sealed = _b64decode(parts[1])
-    if len(sealed) < _NONCE_LENGTH:
-        raise InvalidCursorError(_MALFORMED)
-    return _apply_keystream(encryption_key, sealed[:_NONCE_LENGTH], sealed[_NONCE_LENGTH:])
+    key = hmac.new(secret, _ENCRYPTION_KEY_INFO, hashlib.sha256).digest()
+    nonce = _b64decode(parts[1])
+
+    sealed = _b64decode(parts[2])
+    try:
+        return AESGCM(key).decrypt(nonce, sealed, fingerprint.encode("utf-8"))
+    except InvalidTag as exc:
+        raise InvalidCursorError(_MALFORMED) from exc
 
 
 def _decode_signed_parts(parts: "list[str]", *, secret: Optional[bytes], encrypted: bool) -> bytes:
