@@ -5,6 +5,42 @@
 
 .. changelog:: 1.13.0
 
+    .. change:: refine cursor token encryption, key derivation, and column validation
+        :type: bugfix
+        :pr: 857
+        :issue: 858 859 860 861 862
+
+        Encrypted cursor tokens (``encrypted=True``) now use AES-256-GCM behind the
+        optional ``advanced-alchemy[cryptography]`` extra (raising
+        :class:`~advanced_alchemy.exceptions.MissingDependencyError` when
+        ``cryptography`` is not installed) while keeping core installs free of
+        optional dependencies. Both direct :class:`~advanced_alchemy.filters.CursorFilter`
+        calls and framework providers now derive signing and encryption keys
+        consistently inside the cursor codec. Also rejects boolean cursor values for
+        numeric columns, supports boolean columns in keyset predicates, handles
+        non-orderable ``Enum`` columns in
+        :meth:`~advanced_alchemy.filters.CursorFilter.paginate_items`, deduplicates
+        repeated key names in :func:`~advanced_alchemy.filters.normalize_cursor_keys`
+        errors, and adds a core-only CI import check. With contributions from
+        `Pavel Kirilin <https://github.com/s3rius>`_.
+
+    .. change:: support OpenTelemetry through late-bound engine factories
+        :type: feature
+        :pr: 856
+        :issue: 820
+
+        :class:`~advanced_alchemy.config.SQLAlchemySyncConfig`,
+        :class:`~advanced_alchemy.config.SQLAlchemyAsyncConfig`,
+        :class:`~advanced_alchemy.routing.RoutingSyncSessionMaker`, and
+        :class:`~advanced_alchemy.routing.RoutingAsyncSessionMaker` now resolve
+        ``sqlalchemy.create_engine`` and
+        ``sqlalchemy.ext.asyncio.create_async_engine`` when creating engines rather
+        than at import time, so calling ``SQLAlchemyInstrumentor().instrument()``
+        during application startup instruments all engines created by Advanced
+        Alchemy, including routing groups. Adds an OpenTelemetry usage guide. With
+        contributions from `Osama Zuhdi Osama Quttenh
+        <https://github.com/osamaps518>`_.
+
     .. change:: fix Oracle JSON round trips
         :type: bugfix
         :issue: 853
