@@ -50,6 +50,12 @@ _SIGNED_PART_COUNT: Final = 2
 _ENCRYPTED_PART_COUNT: Final = 3
 _ENCRYPTED_PREFIX: Final = "e1"
 _ENCRYPTION_KEY_INFO: Final = b"advanced-alchemy-cursor-enc-v1"
+_PAYLOAD_VERSION_KEY: Final = "v"
+_PAYLOAD_DIRECTION_KEY: Final = "d"
+_PAYLOAD_FINGERPRINT_KEY: Final = "o"
+_PAYLOAD_KEYS_KEY: Final = "k"
+_PAYLOAD_ISSUED_AT_KEY: Final = "i"
+_PAYLOAD_EXPIRES_AT_KEY: Final = "e"
 _B64_PART_PATTERN: Final = re.compile(r"[A-Za-z0-9_-]+")
 _TAG_PATTERN: Final = re.compile(r"[a-z][a-z0-9_]{0,15}")
 _RESERVED_TAGS: Final = frozenset({"n", "b", "i", "e"})
@@ -182,15 +188,15 @@ def encode_cursor(
         raise ValueError(msg)
 
     payload: dict[str, Any] = {
-        "v": 1,
-        "d": "b" if backward else "f",
-        "o": fingerprint,
-        "k": [_encode_value(value) for value in values],
+        _PAYLOAD_VERSION_KEY: 1,
+        _PAYLOAD_DIRECTION_KEY: "b" if backward else "f",
+        _PAYLOAD_FINGERPRINT_KEY: fingerprint,
+        _PAYLOAD_KEYS_KEY: [_encode_value(value) for value in values],
     }
     if ttl_seconds is not None:
         issued_at = time.time()
-        payload["i"] = issued_at
-        payload["e"] = issued_at + ttl_seconds
+        payload[_PAYLOAD_ISSUED_AT_KEY] = issued_at
+        payload[_PAYLOAD_EXPIRES_AT_KEY] = issued_at + ttl_seconds
 
     plaintext = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
     if encrypted and secret:
@@ -261,22 +267,22 @@ def decode_cursor(
         raise InvalidCursorError(_MALFORMED)
     payload = cast("dict[str, Any]", raw_payload)
     if (
-        type(payload.get("v")) is not int
-        or payload["v"] != 1
-        or payload.get("d") not in ("f", "b")
-        or not isinstance(payload.get("o"), str)
-        or not isinstance(payload.get("k"), list)
+        type(payload.get(_PAYLOAD_VERSION_KEY)) is not int
+        or payload[_PAYLOAD_VERSION_KEY] != 1
+        or payload.get(_PAYLOAD_DIRECTION_KEY) not in ("f", "b")
+        or not isinstance(payload.get(_PAYLOAD_FINGERPRINT_KEY), str)
+        or not isinstance(payload.get(_PAYLOAD_KEYS_KEY), list)
     ):
         raise InvalidCursorError(_MALFORMED)
-    if payload["o"] != fingerprint:
+    if payload[_PAYLOAD_FINGERPRINT_KEY] != fingerprint:
         msg = "Invalid pagination cursor: ordering mismatch"
         raise InvalidCursorError(msg)
     _validate_payload_timestamps(payload, ttl_seconds)
     try:
-        values = tuple(_decode_value(entry) for entry in cast("list[Any]", payload["k"]))
+        values = tuple(_decode_value(entry) for entry in cast("list[Any]", payload[_PAYLOAD_KEYS_KEY]))
     except (ValueError, TypeError, ArithmeticError, LookupError) as exc:
         raise InvalidCursorError(_MALFORMED) from exc
-    return DecodedCursor(values, bool(payload["d"] == "b"))
+    return DecodedCursor(values, bool(payload[_PAYLOAD_DIRECTION_KEY] == "b"))
 
 
 def _encode_value(value: Any) -> "list[Any]":
@@ -360,8 +366,10 @@ def _b64decode(value: str) -> bytes:
 
 
 def _validate_payload_timestamps(payload: "dict[str, Any]", ttl_seconds: Optional[float]) -> None:
-    issued_at = _parse_timestamp_claim(payload["i"]) if "i" in payload else None
-    expires_at = _parse_timestamp_claim(payload["e"]) if "e" in payload else None
+    issued_at = _parse_timestamp_claim(payload[_PAYLOAD_ISSUED_AT_KEY]) if _PAYLOAD_ISSUED_AT_KEY in payload else None
+    expires_at = (
+        _parse_timestamp_claim(payload[_PAYLOAD_EXPIRES_AT_KEY]) if _PAYLOAD_EXPIRES_AT_KEY in payload else None
+    )
     now = time.time()
     expired = (expires_at is not None and now >= expires_at) or (
         ttl_seconds is not None and (issued_at is None or expires_at is None or now >= issued_at + ttl_seconds)
