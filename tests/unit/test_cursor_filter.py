@@ -7,14 +7,18 @@ import functools
 import json
 import pickle
 from collections.abc import Iterator, Sequence
+from decimal import Decimal
 from typing import Any, Optional
 
 import pytest
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Delete,
+    Float,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     TypeDecorator,
     create_engine,
@@ -26,7 +30,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, column_property, mapped_column, relationship
 
-from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError
+from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError, MissingDependencyError
 from advanced_alchemy.filters import CursorFilter, CursorKey, OrderByFilter, normalize_cursor_keys
 from advanced_alchemy.filters._cursor import order_fingerprint
 from advanced_alchemy.service.pagination import CursorPagination
@@ -117,6 +121,16 @@ class Job(Base):
     half: Mapped[Optional[int]] = column_property(func.nullif(weight, 0))
 
 
+class TypedColumns(Base):
+    __tablename__ = "cursor_typed_columns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    active: Mapped[bool] = mapped_column(Boolean)
+    optional_active: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    ratio: Mapped[float] = mapped_column(Float)
+    price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+
+
 BASE_TIME = dt.datetime(2026, 1, 1, 12, 0, 0)
 PG_DIALECT = postgresql.dialect()  # type: ignore[no-untyped-call,unused-ignore]
 
@@ -142,6 +156,16 @@ def session() -> Iterator[Session]:
         db.add_all(Renamed(ident=i, amount=i % 6) for i in range(1, 24))
         levels = list(Level)
         db.add_all(Job(id=i, level=levels[i % 2], untyped_level=levels[i % 2], weight=i % 3) for i in range(1, 10))
+        db.add_all(
+            TypedColumns(
+                id=i,
+                active=bool(i % 2),
+                optional_active=None if i % 3 == 0 else bool(i % 2),
+                ratio=float(i) / 2.0,
+                price=Decimal(f"{i}.50"),
+            )
+            for i in range(1, 13)
+        )
         db.commit()
         yield db
 
@@ -440,6 +464,8 @@ def _forged_token(keys: Any, values: list[list[Any]]) -> str:
     ("keys", "values"),
     [
         ("score", [["s", "not-a-number"], ["i", 1]]),
+        ("score", [["b", True], ["i", 1]]),
+        ("score", [["b", False], ["i", 1]]),
         ("score", [["n", None], ["i", 1]]),
         ("color", [["e", "PURPLE"], ["i", 1]]),
         ("name", [["e", "RED"], ["i", 1]]),
@@ -452,6 +478,48 @@ def test_values_that_do_not_fit_the_columns_are_rejected(keys: Any, values: list
 
     with pytest.raises(InvalidCursorError):
         cursor_filter.append_to_statement(select(Item), Item)
+
+
+@pytest.mark.parametrize("column", ["id", "ratio", "price"])
+@pytest.mark.parametrize("flag", [True, False])
+def test_boolean_cursor_values_are_rejected_for_numeric_columns(column: str, flag: bool) -> None:
+    keys = [column]
+    values = [["b", flag]] if column == "id" else [["b", flag], ["i", 1]]
+    cursor_filter = CursorFilter(keys, 5, _forged_token(keys, values))
+
+    with pytest.raises(InvalidCursorError, match="does not match"):
+        cursor_filter.append_to_statement(select(TypedColumns), TypedColumns)
+
+
+@pytest.mark.parametrize(
+    ("keys", "spec"),
+    [
+        ("active", [("active", "asc", None), ("id", "asc", None)]),
+        ([("active", "desc")], [("active", "desc", None), ("id", "desc", None)]),
+        ([CursorKey("optional_active", "asc", "last")], [("optional_active", "asc", "last"), ("id", "asc", None)]),
+        ([CursorKey("optional_active", "desc", "first")], [("optional_active", "desc", "first"), ("id", "desc", None)]),
+    ],
+)
+def test_boolean_columns_walk_forward_and_backward(
+    session: Session, keys: Any, spec: list[tuple[str, str, Optional[str]]]
+) -> None:
+    every_row = session.execute(select(TypedColumns)).scalars().all()
+    expected = expected_order(every_row, spec)
+
+    pages = walk_forward(session, TypedColumns, keys, 3)
+
+    assert flatten(pages) == expected
+    assert pages[-1].previous_cursor is not None
+    assert walk_backward(session, TypedColumns, keys, 3, pages[-1].previous_cursor) + list(pages[-1].items) == expected
+
+
+@pytest.mark.parametrize("flag", [True, False])
+def test_boolean_cursor_values_are_accepted_for_boolean_columns(flag: bool) -> None:
+    cursor_filter = CursorFilter("active", 5, _forged_token("active", [["b", flag], ["i", 1]]))
+
+    statement = cursor_filter.append_to_statement(select(TypedColumns), TypedColumns)
+
+    assert "WHERE" in compiled(statement)
 
 
 @pytest.mark.parametrize("key", ["owner", "missing"])
@@ -559,3 +627,23 @@ def test_cursor_filter_is_a_dataclass_without_the_secret() -> None:
         "ttl": 30,
         "encrypted": False,
     }
+
+
+@pytest.mark.parametrize(
+    ("keys", "expected_duplicates"),
+    [
+        (["name", "name"], "name"),
+        (["name", "name", "id", "name"], "name"),
+        (["score", "name", "score", "name"], "score, name"),
+    ],
+)
+def test_normalize_cursor_keys_deduplicates_duplicate_names_in_error(keys: list[str], expected_duplicates: str) -> None:
+    with pytest.raises(ValueError, match=f"duplicate keys: {expected_duplicates}$"):
+        normalize_cursor_keys(keys)
+
+
+def test_cursor_filter_encrypted_requires_cryptography(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("advanced_alchemy.filters._pagination.CRYPTOGRAPHY_INSTALLED", False)
+
+    with pytest.raises(MissingDependencyError, match="cryptography"):
+        CursorFilter("score", 5, secret="k", encrypted=True)

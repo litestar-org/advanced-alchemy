@@ -13,7 +13,7 @@ from sqlalchemy import ColumnElement, Integer, Select, and_, false, inspect, or_
 from sqlalchemy.orm import InstrumentedAttribute
 from typing_extensions import TypeAlias
 
-from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError
+from advanced_alchemy.exceptions import ImproperConfigurationError, InvalidCursorError, MissingDependencyError
 from advanced_alchemy.filters._base import (
     FilterFieldName,
     ModelT,
@@ -28,6 +28,7 @@ from advanced_alchemy.filters._cursor import (
     normalize_cursor_ttl,
     order_fingerprint,
 )
+from advanced_alchemy.typing import CRYPTOGRAPHY_INSTALLED
 
 if TYPE_CHECKING:
     from advanced_alchemy.service.pagination import CursorPagination
@@ -202,7 +203,7 @@ def normalize_cursor_keys(keys: CursorKeys) -> "tuple[CursorKey, ...]":
             raise TypeError(msg)
     names = [key.name for key in normalized]
     if len(set(names)) != len(names):
-        duplicates = ", ".join([name for name in names if names.count(name) > 1])
+        duplicates = ", ".join(dict.fromkeys(name for name in names if names.count(name) > 1))
         msg = f"Cursor keys must be unique; duplicate keys: {duplicates}"
         raise ValueError(msg)
     return tuple(normalized)
@@ -232,6 +233,7 @@ class CursorFilter(PaginationFilter):
 
     Raises:
         ValueError: The keys, limit, secret, or ttl are invalid.
+        MissingDependencyError: ``encrypted=True`` was requested without ``cryptography`` installed.
         InvalidCursorError: ``cursor`` is malformed, tampered with, expired, or issued for a different ordering.
     """
 
@@ -268,6 +270,8 @@ class CursorFilter(PaginationFilter):
         if encrypted and not self._secret:
             msg = "secret must not be empty when encrypted=True"
             raise ValueError(msg)
+        if encrypted and not CRYPTOGRAPHY_INSTALLED:
+            raise MissingDependencyError(package="cryptography")
         normalize_cursor_ttl(ttl)
         self.limit = limit
         self.cursor = cursor
@@ -353,7 +357,7 @@ class CursorFilter(PaginationFilter):
                     if lv is None and rv is None:
                         continue
                     return -1 if (lv is None) == (nulls == "first") else 1
-                result = int(lv > rv) - int(lv < rv)
+                result = _compare_values(lv, rv)
                 if result:
                     return result if ascending else -result
             return 0
@@ -443,7 +447,12 @@ class CursorFilter(PaginationFilter):
                     msg = "Invalid pagination cursor: value does not match the ordering column"
                     raise InvalidCursorError(msg)
                 value = key.enum_class[value]
-            elif key.integer and isinstance(value, int) and not -_INT64_LIMIT <= value < _INT64_LIMIT:
+            elif (
+                key.integer
+                and isinstance(value, int)
+                and not isinstance(value, bool)
+                and not -_INT64_LIMIT <= value < _INT64_LIMIT
+            ):
                 msg = "Invalid pagination cursor: value is out of range for the ordering column"
                 raise InvalidCursorError(msg)
             elif not _value_matches_type(value, key.python_type):
@@ -465,6 +474,17 @@ class CursorFilter(PaginationFilter):
             if value is None:
                 after = column.is_not(None) if nulls == "first" else False
                 at_or_after = True if nulls == "first" else column.is_(None)
+            elif isinstance(value, bool):
+                is_first_value = value is (not ascending)
+                after = column.is_(not value) if is_first_value else False
+                at_or_after = (
+                    (True if nulls == "last" or not key.nullable else column.is_not(None))
+                    if is_first_value
+                    else column.is_(value)
+                )
+                if nulls == "last":
+                    after = _fold_or(after, column.is_(None))
+                    at_or_after = _fold_or(at_or_after, column.is_(None))
             else:
                 after = column > value if ascending else column < value
                 at_or_after = column >= value if ascending else column <= value
@@ -569,11 +589,27 @@ def _column_python_type(column_type: Any) -> Optional[type[Any]]:
     return python_type if isinstance(python_type, type) else None
 
 
+def _compare_values(left: Any, right: Any) -> int:
+    try:
+        return int(left > right) - int(left < right)
+    except TypeError:
+        if isinstance(left, Enum) and isinstance(right, Enum):
+            try:
+                return int(left.value > right.value) - int(left.value < right.value)
+            except TypeError:
+                return int(left.name > right.name) - int(left.name < right.name)
+        raise
+
+
 def _value_matches_type(value: Any, python_type: Optional[type[Any]]) -> bool:
-    if python_type is None or isinstance(value, python_type):
+    if python_type is None:
+        return True
+    if isinstance(value, bool):
+        return python_type is bool
+    if isinstance(value, python_type):
         return True
     numeric = (int, float, Decimal)
-    return python_type in numeric and isinstance(value, numeric) and not isinstance(value, bool)
+    return python_type in numeric and isinstance(value, numeric)
 
 
 def _fold_and(left: _KeysetTerm, right: _KeysetTerm) -> _KeysetTerm:
