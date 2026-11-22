@@ -22,6 +22,7 @@ from advanced_alchemy.exceptions import (
     ErrorMessages,
     ImproperConfigurationError,
     IntegrityError,
+    MultipleResultsFoundError,
 )
 from advanced_alchemy.filters import StatementFilter
 from advanced_alchemy.repository._async import (
@@ -219,7 +220,7 @@ class SQLAlchemyAsyncMockRepository(ModelRepositoryMixin[ModelT], SQLAlchemyAsyn
         result = self._filter_result_by_kwargs(result, kwargs)
         if len(result) > 1:
             msg = "Multiple objects when one was expected"
-            raise IntegrityError(msg)
+            raise MultipleResultsFoundError(msg)
         return result[0] if result else None
 
     async def get_or_upsert(
