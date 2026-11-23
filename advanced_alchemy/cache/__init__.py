@@ -61,11 +61,13 @@ Example:
         )
 
 Note:
-    This module requires the optional ``dogpile.cache`` dependency.
-    Install with: ``pip install advanced-alchemy[dogpile]``
+    The ``dogpile.cache`` dependency is optional. It is required for the
+    dogpile backends: ``pip install advanced-alchemy[dogpile]``
 
-    Without dogpile.cache installed, the cache manager will use a
-    NullRegion that provides the same interface but doesn't cache.
+    A custom region supplied through ``CacheConfig(region_factory=...)``
+    does not need dogpile.cache. Without dogpile.cache and without a
+    region factory, the cache manager falls back to a NullRegion that
+    provides the same interface but doesn't cache.
 
 Manual Setup:
     If not using the config system, call ``setup_cache_listeners()``
@@ -88,14 +90,19 @@ Manual Setup:
 """
 
 from advanced_alchemy._listeners import setup_cache_listeners
+from advanced_alchemy.cache._null import NO_VALUE, AsyncCacheRegionProtocol, NullRegion, SyncCacheRegionProtocol
 from advanced_alchemy.cache.config import CacheConfig
 from advanced_alchemy.cache.manager import DOGPILE_CACHE_INSTALLED, CacheManager
 from advanced_alchemy.cache.serializers import default_deserializer, default_serializer
 
 __all__ = (
     "DOGPILE_CACHE_INSTALLED",
+    "NO_VALUE",
+    "AsyncCacheRegionProtocol",
     "CacheConfig",
     "CacheManager",
+    "NullRegion",
+    "SyncCacheRegionProtocol",
     "default_deserializer",
     "default_serializer",
     "setup_cache_listeners",

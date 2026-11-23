@@ -58,7 +58,7 @@ def test_cache_manager_disabled_returns_null_region(disabled_config: CacheConfig
     region = manager.region
 
     # Should be NullRegion
-    from advanced_alchemy.cache._null import NullRegion
+    from advanced_alchemy.cache import NullRegion
 
     assert isinstance(region, NullRegion)
 
@@ -71,7 +71,7 @@ def test_cache_manager_without_dogpile_returns_null_region() -> None:
 
     region = manager.region
 
-    from advanced_alchemy.cache._null import NullRegion
+    from advanced_alchemy.cache import NullRegion
 
     assert isinstance(region, NullRegion)
 
@@ -370,7 +370,7 @@ def test_cache_manager_handles_region_creation_failure() -> None:
     # Should return NullRegion on failure
     region = manager.region
 
-    from advanced_alchemy.cache._null import NullRegion
+    from advanced_alchemy.cache import NullRegion
 
     assert isinstance(region, NullRegion)
 
