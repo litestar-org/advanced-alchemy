@@ -1,6 +1,6 @@
 """The in-memory repositories raise the same error as the SQL ones when a single row is expected."""
 
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -65,7 +65,7 @@ def sync_repos() -> Iterator[tuple[SyncSqlRepo, SyncMockRepo]]:
 
 
 @pytest.fixture
-async def async_repos() -> "Iterator[tuple[AsyncSqlRepo, AsyncMockRepo]]":
+async def async_repos() -> AsyncIterator[tuple[AsyncSqlRepo, AsyncMockRepo]]:
     engine = create_async_engine("sqlite+aiosqlite://")
     async with engine.begin() as conn:
         await conn.run_sync(MultipleBase.metadata.create_all)
