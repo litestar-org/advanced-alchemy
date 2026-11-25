@@ -84,9 +84,24 @@ async def test_async_filterset_offset_past_the_last_row_keeps_the_total(
     async_repo: AsyncOffsetItemRepository,
 ) -> None:
     class ItemFilters(FilterSet[OffsetItem]):
-        pass
+        pagination_type = "limit_offset"
 
-    items, total = await async_repo.get_many_and_count(ItemFilters(), LimitOffsetFilter(limit=2, offset=50))
+    # page 26 of size 2 is an offset of 50, past the last row
+    items, total = await async_repo.get_many_and_count(ItemFilters(page=26, page_size=2))
+
+    assert items == []
+    assert total == ROWS
+
+
+async def test_async_limit_zero_keeps_the_total(async_repo: AsyncOffsetItemRepository) -> None:
+    items, total = await async_repo.get_many_and_count(LimitOffsetFilter(limit=0, offset=0))
+
+    assert items == []
+    assert total == ROWS
+
+
+def test_sync_limit_zero_keeps_the_total(sync_repo: SyncOffsetItemRepository) -> None:
+    items, total = sync_repo.get_many_and_count(LimitOffsetFilter(limit=0, offset=0))
 
     assert items == []
     assert total == ROWS

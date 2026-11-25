@@ -1078,8 +1078,11 @@ def has_cursor_filter(filters: Sequence[Union[StatementFilter, ColumnElement[boo
 
 
 def has_offset_filter(filters: Sequence[Union[StatementFilter, ColumnElement[bool]]]) -> bool:
-    """Return whether ``filters``, including FilterSet contents, skip rows with a :class:`LimitOffsetFilter`."""
-    return any(isinstance(filter_, LimitOffsetFilter) and filter_.offset > 0 for filter_ in _expand_filtersets(filters))
+    """Return whether ``filters``, including FilterSet contents, can yield an empty page on a non-empty set."""
+    return any(
+        isinstance(filter_, LimitOffsetFilter) and (filter_.offset > 0 or filter_.limit == 0)
+        for filter_ in _expand_filtersets(filters)
+    )
 
 
 def order_cursor_filter_last(
