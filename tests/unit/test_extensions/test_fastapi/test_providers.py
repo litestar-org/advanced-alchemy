@@ -1617,6 +1617,20 @@ class _FastAPISyncReadService(SQLAlchemySyncRepositoryReadService[_FastAPIGridAr
     repository_type = _FastAPISyncArticleRepo
 
 
+class _FastAPIAsyncServiceGroup(ServiceGroup):
+    """Mock async ServiceGroup combining a query service and a read service."""
+
+    queries: _FastAPIAsyncQueryService
+    articles: _FastAPIAsyncReadService
+
+
+class _FastAPISyncServiceGroup(ServiceGroup):
+    """Mock sync ServiceGroup combining a query service and a read service."""
+
+    queries: _FastAPISyncQueryService
+    articles: _FastAPISyncReadService
+
+
 @pytest.mark.parametrize("use_extension_method", [True, False])
 @pytest.mark.parametrize("bind_key", [None, "reporting"])
 def test_provide_async_query_service(use_extension_method: bool, bind_key: Optional[str]) -> None:
@@ -1776,3 +1790,57 @@ def test_provide_query_service_allows_unset_error_messages(service_class: type[A
 
     provider = provide_service(service_class, extension=alchemy, error_messages=None)
     assert callable(provider)
+
+
+@pytest.mark.parametrize(
+    "service_class",
+    [_FastAPIAsyncQueryService, _FastAPIAsyncReadService, _FastAPIAsyncServiceGroup],
+)
+async def test_provide_async_service_generator_lifecycle(service_class: type[Any]) -> None:
+    """Verify async provider generators instantiate query, read, and group targets directly."""
+    config = SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+    alchemy = AdvancedAlchemy(config=config, app=FastAPI())
+    provider = alchemy.provide_service(service_class)
+    request = Request({"type": "http", "headers": []})
+
+    async with config.get_session() as db_session:
+        generator = provider(request=request, db_session=db_session)
+        try:
+            service = await generator.__anext__()
+            assert isinstance(service, service_class)
+            if isinstance(service, _FastAPIAsyncServiceGroup):
+                assert isinstance(service.queries, _FastAPIAsyncQueryService)
+                assert isinstance(service.articles, _FastAPIAsyncReadService)
+                assert service.queries.repository.session is db_session
+                assert service.articles.repository.session is db_session
+            else:
+                assert service.repository.session is db_session
+        finally:
+            await generator.aclose()
+
+
+@pytest.mark.parametrize(
+    "service_class",
+    [_FastAPISyncQueryService, _FastAPISyncReadService, _FastAPISyncServiceGroup],
+)
+def test_provide_sync_service_generator_lifecycle(service_class: type[Any]) -> None:
+    """Verify sync provider generators instantiate query, read, and group targets directly."""
+    config = SQLAlchemySyncConfig(connection_string="sqlite:///:memory:")
+    alchemy = AdvancedAlchemy(config=config, app=FastAPI())
+    provider = cast("Callable[..., Generator[Any, None, None]]", alchemy.provide_service(service_class))
+    request = Request({"type": "http", "headers": []})
+
+    with config.get_session() as db_session:
+        generator = provider(request=request, db_session=db_session)
+        try:
+            service = next(generator)
+            assert isinstance(service, service_class)
+            if isinstance(service, _FastAPISyncServiceGroup):
+                assert isinstance(service.queries, _FastAPISyncQueryService)
+                assert isinstance(service.articles, _FastAPISyncReadService)
+                assert service.queries.repository.session is db_session
+                assert service.articles.repository.session is db_session
+            else:
+                assert service.repository.session is db_session
+        finally:
+            generator.close()
