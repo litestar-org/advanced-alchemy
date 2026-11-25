@@ -73,6 +73,7 @@ from advanced_alchemy.repository._util import (
     get_instrumented_attr,
     get_primary_key_info,
     has_cursor_filter,
+    has_offset_filter,
     pk_values_present,
     snapshot_and_detach_relationships,
     was_attribute_set,
@@ -2648,6 +2649,16 @@ class SQLAlchemyAsyncRepository(FilterableRepository[ModelT], SQLAlchemyAsyncRep
                 instances.append(instance)
                 if i == 0:
                     count = int(row_values[1])
+            if not instances and has_offset_filter(filters):
+                # an empty page has no row to carry the window count, so count the filtered rows separately
+                count_result = await self.session.execute(
+                    self._get_count_stmt(
+                        statement,
+                        loader_options=loader_options,
+                        execution_options=execution_options,
+                    ),
+                )
+                count = int(count_result.scalar_one())
             return instances, count
 
     async def _get_many_and_count_basic(
