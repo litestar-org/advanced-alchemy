@@ -4,6 +4,7 @@ from typing import (
     Any,
     Optional,
     Union,
+    cast,
     overload,
 )
 
@@ -31,10 +32,12 @@ if TYPE_CHECKING:
     from advanced_alchemy import filters
     from advanced_alchemy.extensions.fastapi.config import SQLAlchemyAsyncConfig, SQLAlchemySyncConfig
     from advanced_alchemy.extensions.fastapi.providers import (
+        AsyncQueryServiceT_co,
         AsyncServiceT_co,
         DependencyDefaults,
         FilterConfig,
         ServiceGroupT,
+        SyncQueryServiceT_co,
         SyncServiceT_co,
     )
 
@@ -129,6 +132,22 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
     @overload
     def provide_service(
         self,
+        service_class: type["AsyncQueryServiceT_co"],  # pyright: ignore
+        /,
+        key: "Optional[str]" = None,
+    ) -> "Callable[..., AsyncGenerator[AsyncQueryServiceT_co, None]]": ...
+
+    @overload
+    def provide_service(
+        self,
+        service_class: type["SyncQueryServiceT_co"],  # pyright: ignore
+        /,
+        key: "Optional[str]" = None,
+    ) -> "Callable[..., Generator[SyncQueryServiceT_co, None, None]]": ...
+
+    @overload
+    def provide_service(
+        self,
         service_class: type["ServiceGroupT"],  # pyright: ignore
         /,
         key: "Optional[str]" = None,
@@ -142,7 +161,15 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
 
     def provide_service(  # pragma: no cover
         self,
-        service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co", "ServiceGroupT"]],
+        service_class: type[
+            Union[
+                "AsyncServiceT_co",
+                "SyncServiceT_co",
+                "AsyncQueryServiceT_co",
+                "SyncQueryServiceT_co",
+                "ServiceGroupT",
+            ]
+        ],
         /,
         key: "Optional[str]" = None,
         statement: "Optional[Select[Any]]" = None,
@@ -151,7 +178,7 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         execution_options: "Optional[dict[str, Any]]" = None,
         uniquify: Optional[bool] = None,
         count_with_window_function: Optional[bool] = None,
-    ) -> "Callable[..., Union[AsyncGenerator[Union[AsyncServiceT_co, ServiceGroupT], None], Generator[Union[SyncServiceT_co, ServiceGroupT], None, None]]]":
+    ) -> "Callable[..., Union[AsyncGenerator[Union[AsyncServiceT_co, AsyncQueryServiceT_co, ServiceGroupT], None], Generator[Union[SyncServiceT_co, SyncQueryServiceT_co, ServiceGroupT], None, None]]]":
         """Provides a service or ServiceGroup instance for dependency injection.
 
         Args:
@@ -169,16 +196,19 @@ class AdvancedAlchemy(StarletteAdvancedAlchemy):
         """
         from advanced_alchemy.extensions.fastapi.providers import provide_service as _provide_service
 
-        return _provide_service(
-            service_class,
-            extension=self,
-            key=key,
-            statement=statement,
-            error_messages=error_messages,
-            load=load,
-            execution_options=execution_options,
-            uniquify=uniquify,
-            count_with_window_function=count_with_window_function,
+        return cast(
+            "Callable[..., Union[AsyncGenerator[Union[AsyncServiceT_co, AsyncQueryServiceT_co, ServiceGroupT], None], Generator[Union[SyncServiceT_co, SyncQueryServiceT_co, ServiceGroupT], None, None]]]",
+            cast("Any", _provide_service)(
+                service_class,
+                extension=self,
+                key=key,
+                statement=statement,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                uniquify=uniquify,
+                count_with_window_function=count_with_window_function,
+            ),
         )
 
     @staticmethod

@@ -3,7 +3,7 @@
 import inspect
 import sys
 import typing
-from collections.abc import AsyncGenerator, Sequence
+from collections.abc import AsyncGenerator, Callable, Generator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, IntEnum
@@ -15,9 +15,10 @@ import anyio
 import pytest
 from fastapi import Depends, FastAPI, Request, params
 from fastapi.testclient import TestClient
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import ForeignKey, Integer, String, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from typing_extensions import assert_type
 
 from advanced_alchemy.base import UUIDBase
 from advanced_alchemy.exceptions import ImproperConfigurationError
@@ -37,6 +38,7 @@ from advanced_alchemy.extensions.fastapi.providers import (
     _should_commit_for_status,  # pyright: ignore[reportPrivateUsage]
     dep_cache,  # Import the global cache instance
     provide_filters,
+    provide_service,
 )
 from advanced_alchemy.filters import (
     BeforeAfterFilter,
@@ -52,8 +54,15 @@ from advanced_alchemy.filters import (
     RelationshipFilter,
     SearchFilter,
 )
-from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-from advanced_alchemy.service import ServiceGroup, SQLAlchemyAsyncRepositoryService
+from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
+from advanced_alchemy.service import (
+    ServiceGroup,
+    SQLAlchemyAsyncQueryService,
+    SQLAlchemyAsyncRepositoryReadService,
+    SQLAlchemyAsyncRepositoryService,
+    SQLAlchemySyncQueryService,
+    SQLAlchemySyncRepositoryReadService,
+)
 from advanced_alchemy.utils.dependencies import filter_cache_key, resolve_filter_aliases
 from advanced_alchemy.utils.singleton import SingletonMeta
 
@@ -1580,3 +1589,190 @@ def test_fastapi_pagination_max_size_validation_and_openapi() -> None:
         provide_filters({"pagination_type": "limit_offset", "pagination_size": 30, "pagination_max_size": 15})
     with pytest.raises(ImproperConfigurationError, match="pagination_max_size"):
         provide_filters({"pagination_max_size": 0})
+
+
+class _FastAPIAsyncQueryService(SQLAlchemyAsyncQueryService):
+    """Mock async query service class for FastAPI provider tests."""
+
+
+class _FastAPISyncQueryService(SQLAlchemySyncQueryService):
+    """Mock sync query service class for FastAPI provider tests."""
+
+
+class _FastAPIAsyncReadService(SQLAlchemyAsyncRepositoryReadService[_FastAPIGridArticle]):
+    """Mock async read-only repository service for FastAPI provider tests."""
+
+    repository_type = _FastAPIGridArticleRepo
+
+
+class _FastAPISyncArticleRepo(SQLAlchemySyncRepository[_FastAPIGridArticle]):
+    """Mock sync repository for FastAPI provider tests."""
+
+    model_type = _FastAPIGridArticle
+
+
+class _FastAPISyncReadService(SQLAlchemySyncRepositoryReadService[_FastAPIGridArticle]):
+    """Mock sync read-only repository service for FastAPI provider tests."""
+
+    repository_type = _FastAPISyncArticleRepo
+
+
+@pytest.mark.parametrize("use_extension_method", [True, False])
+@pytest.mark.parametrize("bind_key", [None, "reporting"])
+def test_provide_async_query_service(use_extension_method: bool, bind_key: Optional[str]) -> None:
+    """Verify FastAPI injects async query services for default and named bind keys."""
+    app = FastAPI()
+    configs: list[SQLAlchemyAsyncConfig] = [SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")]
+    if bind_key is not None:
+        configs.append(SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:", bind_key=bind_key))
+    alchemy = AdvancedAlchemy(config=configs if len(configs) > 1 else configs[0], app=app)
+
+    if use_extension_method:
+        provider = alchemy.provide_service(_FastAPIAsyncQueryService, key=bind_key)
+    else:
+        provider = provide_service(_FastAPIAsyncQueryService, extension=alchemy, key=bind_key)
+    assert_type(provider, Callable[..., AsyncGenerator[_FastAPIAsyncQueryService, None]])
+
+    @app.get("/report")
+    async def run_report(
+        service: Annotated[_FastAPIAsyncQueryService, Depends(provider)],
+    ) -> dict[str, Any]:
+        value = await service.repository.session.scalar(text("SELECT 42"))
+        return {"service_type": type(service).__name__, "value": value}
+
+    with TestClient(app) as client:
+        response = client.get("/report")
+        assert response.status_code == 200, response.text
+        assert response.json() == {"service_type": "_FastAPIAsyncQueryService", "value": 42}
+
+
+@pytest.mark.parametrize("use_extension_method", [True, False])
+@pytest.mark.parametrize("bind_key", [None, "reporting"])
+def test_provide_sync_query_service(use_extension_method: bool, bind_key: Optional[str]) -> None:
+    """Verify FastAPI injects sync query services for default and named bind keys."""
+    app = FastAPI()
+    configs: list[SQLAlchemySyncConfig] = [SQLAlchemySyncConfig(connection_string="sqlite:///:memory:")]
+    if bind_key is not None:
+        configs.append(SQLAlchemySyncConfig(connection_string="sqlite:///:memory:", bind_key=bind_key))
+    alchemy = AdvancedAlchemy(config=configs if len(configs) > 1 else configs[0], app=app)
+
+    if use_extension_method:
+        provider = alchemy.provide_service(_FastAPISyncQueryService, key=bind_key)
+    else:
+        provider = provide_service(_FastAPISyncQueryService, extension=alchemy, key=bind_key)
+    assert_type(provider, Callable[..., Generator[_FastAPISyncQueryService, None, None]])
+
+    @app.get("/report")
+    def run_report(
+        service: Annotated[_FastAPISyncQueryService, Depends(provider)],
+    ) -> dict[str, Any]:
+        value = service.repository.session.scalar(text("SELECT 7"))
+        return {"service_type": type(service).__name__, "value": value}
+
+    with TestClient(app) as client:
+        response = client.get("/report")
+        assert response.status_code == 200, response.text
+        assert response.json() == {"service_type": "_FastAPISyncQueryService", "value": 7}
+
+
+@pytest.mark.parametrize("use_extension_method", [True, False])
+def test_provide_async_read_service(use_extension_method: bool) -> None:
+    """Verify FastAPI injects async read-only repository services."""
+    app = FastAPI()
+    alchemy = AdvancedAlchemy(
+        config=SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:"),
+        app=app,
+    )
+
+    if use_extension_method:
+        provider = alchemy.provide_service(_FastAPIAsyncReadService)
+    else:
+        provider = provide_service(_FastAPIAsyncReadService, extension=alchemy)
+    assert_type(provider, Callable[..., AsyncGenerator[_FastAPIAsyncReadService, None]])
+
+    @app.get("/read")
+    async def read_info(
+        service: Annotated[_FastAPIAsyncReadService, Depends(provider)],
+    ) -> dict[str, str]:
+        return {"service_type": type(service).__name__, "model": service.model_type.__name__}
+
+    with TestClient(app) as client:
+        response = client.get("/read")
+        assert response.status_code == 200, response.text
+        assert response.json() == {"service_type": "_FastAPIAsyncReadService", "model": "_FastAPIGridArticle"}
+
+
+@pytest.mark.parametrize("use_extension_method", [True, False])
+def test_provide_sync_read_service(use_extension_method: bool) -> None:
+    """Verify FastAPI injects sync read-only repository services."""
+    app = FastAPI()
+    alchemy = AdvancedAlchemy(
+        config=SQLAlchemySyncConfig(connection_string="sqlite:///:memory:"),
+        app=app,
+    )
+
+    if use_extension_method:
+        provider = alchemy.provide_service(_FastAPISyncReadService)
+    else:
+        provider = provide_service(_FastAPISyncReadService, extension=alchemy)
+    assert_type(provider, Callable[..., Generator[_FastAPISyncReadService, None, None]])
+
+    @app.get("/read")
+    def read_info(
+        service: Annotated[_FastAPISyncReadService, Depends(provider)],
+    ) -> dict[str, str]:
+        return {"service_type": type(service).__name__, "model": service.model_type.__name__}
+
+    with TestClient(app) as client:
+        response = client.get("/read")
+        assert response.status_code == 200, response.text
+        assert response.json() == {"service_type": "_FastAPISyncReadService", "model": "_FastAPIGridArticle"}
+
+
+@pytest.mark.parametrize("use_extension_method", [True, False])
+@pytest.mark.parametrize("service_class", [_FastAPIAsyncQueryService, _FastAPISyncQueryService])
+@pytest.mark.parametrize(
+    "option",
+    [
+        {"statement": select(_FastAPIGridArticle)},
+        {"error_messages": {"not_found": "Missing"}},
+        {"load": "*"},
+        {"execution_options": {"populate_existing": True}},
+        {"uniquify": True},
+        {"count_with_window_function": False},
+    ],
+    ids=lambda option: next(iter(option)),
+)
+def test_provide_query_service_rejects_repository_options(
+    use_extension_method: bool,
+    service_class: type[Any],
+    option: dict[str, Any],
+) -> None:
+    """Verify repository-only options raise ImproperConfigurationError for query services."""
+    config = (
+        SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+        if service_class is _FastAPIAsyncQueryService
+        else SQLAlchemySyncConfig(connection_string="sqlite:///:memory:")
+    )
+    alchemy = AdvancedAlchemy(config=config, app=FastAPI())
+    option_name = next(iter(option))
+
+    with pytest.raises(ImproperConfigurationError, match=f"'{option_name}'"):
+        if use_extension_method:
+            alchemy.provide_service(service_class, **option)
+        else:
+            provide_service(service_class, extension=alchemy, **option)
+
+
+@pytest.mark.parametrize("service_class", [_FastAPIAsyncQueryService, _FastAPISyncQueryService])
+def test_provide_query_service_allows_unset_error_messages(service_class: type[Any]) -> None:
+    """Verify error_messages=None is treated as unset for query services."""
+    config = (
+        SQLAlchemyAsyncConfig(connection_string="sqlite+aiosqlite:///:memory:")
+        if service_class is _FastAPIAsyncQueryService
+        else SQLAlchemySyncConfig(connection_string="sqlite:///:memory:")
+    )
+    alchemy = AdvancedAlchemy(config=config, app=FastAPI())
+
+    provider = provide_service(service_class, extension=alchemy, error_messages=None)
+    assert callable(provider)
