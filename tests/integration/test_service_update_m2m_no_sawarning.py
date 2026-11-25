@@ -342,6 +342,100 @@ async def test_service_update_m2m_relationship_materialized_backref_no_sawarning
         assert [t.name for t in check.tags] == ["release"]
 
 
+label_note_790 = Table(
+    "label_note_790",
+    UUIDBase.metadata,
+    Column("label_id", ForeignKey("label_790.id"), primary_key=True),
+    Column("note_id", ForeignKey("note_790.id"), primary_key=True),
+)
+
+
+class Note790(UUIDBase):
+    __tablename__ = "note_790"
+
+    title: Mapped[str] = mapped_column(String(50))
+    labels: Mapped[list[Label790]] = relationship(secondary=label_note_790, back_populates="notes", lazy="raise")
+
+
+class Label790(UUIDBase):
+    """Label model whose back-populated ``notes`` collection is a loaded dict keyed by ``title``."""
+
+    __tablename__ = "label_790"
+
+    name: Mapped[str] = mapped_column(String(50))
+    notes: Mapped[dict[str, Note790]] = relationship(
+        secondary=label_note_790, back_populates="labels", collection_class=attribute_keyed_dict("title")
+    )
+
+
+class LabelRepository790(SQLAlchemyAsyncRepository[Label790]):
+    model_type = Label790
+
+
+class NoteRepository790(SQLAlchemyAsyncRepository[Note790]):
+    model_type = Note790
+
+
+class NoteService790(SQLAlchemyAsyncRepositoryService[Note790]):
+    repository_type = NoteRepository790
+
+    async def to_model_on_update(self, data: Any) -> Any:
+        data = schema_dump(data)
+        label_ids = data.pop("labels", None)
+        model = await self.to_model(data)
+        if label_ids is not None:
+            model.labels = await LabelRepository790(session=self.repository.session).get_many(
+                InCollectionFilter(field_name="id", values=label_ids)
+            )
+        return model
+
+
+async def test_service_update_m2m_relationship_materialized_dict_backref_no_sawarning_github_790(
+    user_790_session: AsyncSession,
+) -> None:
+    """When the back-populated collection is already loaded as a dict
+    (``attribute_keyed_dict``), the helper must remove the transient instance
+    from that dict by value and leave only the persistent instances in it,
+    including one that was there before the update."""
+    session = user_790_session
+    label1 = Label790(name="release")
+    label2 = Label790(name="docs")
+    note = Note790(title="orig")
+    other = Note790(title="other")
+    label1.notes["other"] = other
+    session.add_all([label1, label2, note, other])
+    await session.commit()
+    note_id: UUID = note.id
+    label_ids = [label1.id, label2.id]
+
+    await session.refresh(label1, attribute_names=["notes"])
+    await session.refresh(label2, attribute_names=["notes"])
+    assert label1.__dict__["notes"] == {"other": other}
+    assert label2.__dict__["notes"] == {}
+
+    service = NoteService790(session=session)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        updated = await service.update(
+            {"labels": label_ids, "title": "renamed"},
+            note_id,
+            load=[selectinload(Note790.labels)],
+            auto_commit=True,
+        )
+
+    assert not _sa_warnings(caught), [str(w.message) for w in _sa_warnings(caught)]
+    assert updated.title == "renamed"
+    assert updated is note
+    assert label1.__dict__["notes"] == {"other": other, "renamed": note}
+    assert label2.__dict__["notes"] == {"renamed": note}
+
+    async with AsyncSession(session.bind, expire_on_commit=False) as check_session:
+        check = await check_session.get(Note790, note_id)
+        assert check is not None
+        await check_session.refresh(check, attribute_names=["labels"])
+        assert sorted(label.name for label in check.labels) == ["docs", "release"]
+
+
 class UserServiceTransientRelated790(SQLAlchemyAsyncRepositoryService[User790]):
     """Variant of :class:`UserService790` whose hook also assigns a brand-new,
     never-persisted ``Role790`` alongside the resolved ones - the detach

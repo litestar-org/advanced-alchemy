@@ -1180,6 +1180,10 @@ def _detach_transient_backrefs(instance: Any, related_items: Sequence[Any], back
         back_value: Any = related.__dict__.get(back_attr)
         if isinstance(back_value, (list, set)) and instance in back_value:
             cast("Any", back_value).remove(instance)
+        elif isinstance(back_value, Mapping):
+            mapped_back = cast("dict[Any, Any]", back_value)
+            for key in [key for key, value in mapped_back.items() if value is instance]:
+                del mapped_back[key]
         elif back_value is instance:
             setattr(related, back_attr, None)
         else:
