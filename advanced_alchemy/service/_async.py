@@ -1493,6 +1493,9 @@ class SQLAlchemyAsyncRepositoryService(
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             sanity_check: When true, the length of selected instances is compared to the deleted row count
+                when using the select-then-delete fallback (on dialects without ``DELETE ... RETURNING``,
+                for tables with ``implicit_returning=False``, on models with eager relationship loaders, or
+                when ``load`` is provided). Pass ``False`` to skip it when concurrent writes are expected.
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
