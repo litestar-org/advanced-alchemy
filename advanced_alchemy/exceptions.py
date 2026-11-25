@@ -1,7 +1,7 @@
 import re
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Callable, Optional, TypedDict, Union, cast
+from typing import Any, Callable, Optional, TypedDict, Union
 
 from sqlalchemy.exc import IntegrityError as SQLAlchemyIntegrityError
 from sqlalchemy.exc import InvalidRequestError as SQLAlchemyInvalidRequestError
@@ -556,11 +556,7 @@ def _translate_repository_exception(
         translated = _classify_integrity_error(exc, error_messages, dialect_name)
     elif isinstance(exc, SQLAlchemyInvalidRequestError):
         translated = InvalidRequestError(detail="An invalid request was made.")
-    elif isinstance(exc, StatementError):
-        translated = IntegrityError(
-            detail=cast("str", getattr(exc.orig, "detail", "There was an issue processing the statement."))
-        )
-    elif isinstance(exc, SQLAlchemyError):
+    elif isinstance(exc, (StatementError, SQLAlchemyError)):
         msg = (
             _get_error_message(error_messages=error_messages, key="other", exc=exc)
             if error_messages is not None

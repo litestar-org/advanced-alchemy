@@ -12,6 +12,7 @@ from sqlalchemy.exc import (
 )
 from sqlalchemy.exc import (
     MultipleResultsFound,
+    OperationalError,
     SQLAlchemyError,
     StatementError,
 )
@@ -99,8 +100,17 @@ def test_wrap_sqlalchemy_exception_invalid_request_error() -> None:
 
 
 def test_wrap_sqlalchemy_exception_statement_error() -> None:
-    with pytest.raises(IntegrityError), wrap_sqlalchemy_exception():
+    with pytest.raises(RepositoryError) as excinfo, wrap_sqlalchemy_exception():
         raise StatementError("original", None, {}, Exception("original"))  # pyright: ignore[reportArgumentType]
+
+    assert not isinstance(excinfo.value, IntegrityError)
+
+
+def test_wrap_sqlalchemy_exception_operational_error() -> None:
+    with pytest.raises(RepositoryError) as excinfo, wrap_sqlalchemy_exception():
+        raise OperationalError("SELECT 1", {}, RuntimeError("connection refused"))
+
+    assert isinstance(excinfo.value.__cause__, OperationalError)
 
 
 def test_wrap_sqlalchemy_exception_sqlalchemy_error() -> None:
