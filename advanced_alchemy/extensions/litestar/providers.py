@@ -52,7 +52,11 @@ from advanced_alchemy.service import (
     ErrorMessages,
     LoadSpec,
     ServiceGroup,
+    SQLAlchemyAsyncQueryService,
+    SQLAlchemyAsyncRepositoryReadService,
     SQLAlchemyAsyncRepositoryService,
+    SQLAlchemySyncQueryService,
+    SQLAlchemySyncRepositoryReadService,
     SQLAlchemySyncRepositoryService,
 )
 from advanced_alchemy.utils.dependencies import (
@@ -97,8 +101,10 @@ IntOrNone = Optional[int]
 BooleanOrNone = Optional[bool]
 SortOrder = Literal["asc", "desc"]
 SortOrderOrNone = Optional[SortOrder]
-AsyncServiceT_co = TypeVar("AsyncServiceT_co", bound=SQLAlchemyAsyncRepositoryService[Any, Any], covariant=True)
-SyncServiceT_co = TypeVar("SyncServiceT_co", bound=SQLAlchemySyncRepositoryService[Any, Any], covariant=True)
+AsyncServiceT_co = TypeVar("AsyncServiceT_co", bound=SQLAlchemyAsyncRepositoryReadService[Any, Any], covariant=True)
+SyncServiceT_co = TypeVar("SyncServiceT_co", bound=SQLAlchemySyncRepositoryReadService[Any, Any], covariant=True)
+AsyncQueryServiceT_co = TypeVar("AsyncQueryServiceT_co", bound=SQLAlchemyAsyncQueryService, covariant=True)
+SyncQueryServiceT_co = TypeVar("SyncQueryServiceT_co", bound=SQLAlchemySyncQueryService, covariant=True)
 ServiceGroupT = TypeVar("ServiceGroupT", bound=ServiceGroup)
 
 __all__ = (
@@ -119,6 +125,13 @@ __all__ = (
 )
 
 _CACHE_NAMESPACE = "advanced_alchemy.extensions.litestar.providers"
+
+_ASYNC_SERVICE_BASES: tuple[type[Any], ...] = (
+    SQLAlchemyAsyncQueryService,
+    SQLAlchemyAsyncRepositoryReadService,
+    SQLAlchemyAsyncRepositoryService,
+)
+"""Service base classes that require an async dependency provider."""
 
 
 class DependencyDefaults:
@@ -222,9 +235,7 @@ def _is_async_provider_target(
         if isinstance(config, BaseAsyncConfig):
             return True
         return True
-    return (
-        issubclass(service_class, SQLAlchemyAsyncRepositoryService) or service_class is SQLAlchemyAsyncRepositoryService
-    )
+    return issubclass(service_class, _ASYNC_SERVICE_BASES)
 
 
 def _with_dep_defaults_prefix(
@@ -283,6 +294,24 @@ def create_service_provider(
 
 @overload
 def create_service_provider(
+    service_class: type["AsyncQueryServiceT_co"],
+    /,
+    *,
+    config: "Optional[SQLAlchemyAsyncConfig]" = None,
+) -> Callable[..., AsyncGenerator[AsyncQueryServiceT_co, None]]: ...
+
+
+@overload
+def create_service_provider(
+    service_class: type["SyncQueryServiceT_co"],
+    /,
+    *,
+    config: "Optional[SQLAlchemySyncConfig]" = None,
+) -> Callable[..., Generator[SyncQueryServiceT_co, None, None]]: ...
+
+
+@overload
+def create_service_provider(
     service_class: type["ServiceGroupT"],
     /,
     statement: "Optional[Select[Any]]" = None,
@@ -296,7 +325,15 @@ def create_service_provider(
 
 
 def create_service_provider(
-    service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co", "ServiceGroupT"]],
+    service_class: type[
+        Union[
+            "AsyncServiceT_co",
+            "SyncServiceT_co",
+            "AsyncQueryServiceT_co",
+            "SyncQueryServiceT_co",
+            "ServiceGroupT",
+        ]
+    ],
     /,
     statement: "Optional[Select[Any]]" = None,
     config: "Optional[Union[SQLAlchemyAsyncConfig, SQLAlchemySyncConfig]]" = None,
@@ -308,8 +345,8 @@ def create_service_provider(
 ) -> Callable[
     ...,
     Union[
-        "AsyncGenerator[Union[AsyncServiceT_co, ServiceGroupT], None]",
-        "Generator[Union[SyncServiceT_co, ServiceGroupT], None, None]",
+        "AsyncGenerator[Union[AsyncServiceT_co, AsyncQueryServiceT_co, ServiceGroupT], None]",
+        "Generator[Union[SyncServiceT_co, SyncQueryServiceT_co, ServiceGroupT], None, None]",
     ],
 ]:
     """Create a dependency provider for a service or ServiceGroup with a configurable session key.
@@ -331,6 +368,19 @@ def create_service_provider(
     if is_group and (statement is not None or load is not None):
         msg = "Group-wide 'statement' and 'load' options are not supported for ServiceGroup; configure them on individual service classes."
         raise ImproperConfigurationError(msg)
+    if issubclass(service_class, (SQLAlchemyAsyncQueryService, SQLAlchemySyncQueryService)):
+        repository_options = {
+            "statement": statement,
+            "error_messages": None if error_messages is Empty else error_messages,
+            "load": load,
+            "execution_options": execution_options,
+            "uniquify": uniquify,
+            "count_with_window_function": count_with_window_function,
+        }
+        unsupported = [f"'{name}'" for name, value in repository_options.items() if value is not None]
+        if unsupported:
+            msg = f"Repository options {', '.join(unsupported)} are not supported for query services."
+            raise ImproperConfigurationError(msg)
 
     session_dependency_key = config.session_dependency_key if config else "db_session"
     is_async = _is_async_provider_target(service_class, config)
@@ -345,6 +395,18 @@ def create_service_provider(
                 execution_options=execution_options,
                 uniquify=uniquify,
                 count_with_window_function=count_with_window_function,
+            )
+        if issubclass(service_class, SQLAlchemyAsyncQueryService):
+            async_query_cls = cast("type[SQLAlchemyAsyncQueryService]", service_class)
+            return async_query_cls.new(
+                session=db_session,
+                config=cast("Optional[SQLAlchemyAsyncConfig]", config),
+            )
+        if issubclass(service_class, SQLAlchemySyncQueryService):
+            sync_query_cls = cast("type[SQLAlchemySyncQueryService]", service_class)
+            return sync_query_cls.new(
+                session=db_session,
+                config=cast("Optional[SQLAlchemySyncConfig]", config),
             )
         if is_async:
             async_svc_cls = cast("type[SQLAlchemyAsyncRepositoryService[Any, Any]]", service_class)
@@ -456,7 +518,15 @@ def _create_service_group_filter_dependencies(
 
 
 def create_service_dependencies(
-    service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co", "ServiceGroupT"]],
+    service_class: type[
+        Union[
+            "AsyncServiceT_co",
+            "SyncServiceT_co",
+            "AsyncQueryServiceT_co",
+            "SyncQueryServiceT_co",
+            "ServiceGroupT",
+        ]
+    ],
     /,
     key: str,
     statement: "Optional[Select[Any]]" = None,
