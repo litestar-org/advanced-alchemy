@@ -6,7 +6,7 @@ import inspect
 import sys
 import unittest.mock
 import uuid
-from collections.abc import Sequence
+from collections.abc import AsyncGenerator, Callable, Generator, Sequence
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from enum import Enum, IntEnum
@@ -19,8 +19,10 @@ from litestar.di import NamedDependency, Provide
 from litestar.openapi.config import OpenAPIConfig
 from litestar.params import SkipValidation
 from litestar.testing import TestClient
-from sqlalchemy import ForeignKey, FromClause, Integer, String, select
-from sqlalchemy.orm import DeclarativeBase, Mapped, Mapper, mapped_column, relationship
+from sqlalchemy import ForeignKey, FromClause, Integer, String, create_engine, select
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, Mapper, Session, mapped_column, relationship
+from typing_extensions import assert_type
 
 from advanced_alchemy.exceptions import ImproperConfigurationError
 from advanced_alchemy.extensions.litestar import SQLAlchemyAsyncConfig, SQLAlchemyPlugin, SQLAlchemySyncConfig
@@ -61,7 +63,10 @@ from advanced_alchemy.filters import (
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository, SQLAlchemySyncRepository
 from advanced_alchemy.service import (
     ServiceGroup,
+    SQLAlchemyAsyncQueryService,
+    SQLAlchemyAsyncRepositoryReadService,
     SQLAlchemyAsyncRepositoryService,
+    SQLAlchemySyncQueryService,
     SQLAlchemySyncRepositoryService,
 )
 from advanced_alchemy.types.identity import BigIntIdentity
@@ -134,6 +139,25 @@ class MockAsyncService(SQLAlchemyAsyncRepositoryService[DITestModel]):
         model_type = DITestModel
 
     repository_type = Repo
+
+
+class MockAsyncReadService(SQLAlchemyAsyncRepositoryReadService[DITestModel]):
+    """Mock async read service class for testing."""
+
+    class Repo(SQLAlchemyAsyncRepository[DITestModel]):
+        """Mock repo class."""
+
+        model_type = DITestModel
+
+    repository_type = Repo
+
+
+class MockAsyncQueryService(SQLAlchemyAsyncQueryService):
+    """Mock async query service class for testing."""
+
+
+class MockSyncQueryService(SQLAlchemySyncQueryService):
+    """Mock sync query service class for testing."""
 
 
 def test_singleton_pattern() -> None:
@@ -232,6 +256,105 @@ def test_create_sync_service_provider_positional() -> None:
     assert isinstance(svc, MockSyncService)
 
 
+def test_create_sync_query_service_provider() -> None:
+    """Test that the provider yields a sync query service using the supplied session."""
+    session = MagicMock()
+    provider = create_service_provider(MockSyncQueryService)
+    assert_type(provider, Callable[..., Generator[MockSyncQueryService, None, None]])
+
+    svc = next(provider(db_session=session))
+    assert isinstance(svc, MockSyncQueryService)
+    assert svc.repository.session is session
+
+
+@pytest.mark.parametrize("provide_session", [True, False])
+def test_create_sync_query_service_provider_config(provide_session: bool) -> None:
+    """Test configured session lookup and fallback for a sync query service."""
+    engine = create_engine("sqlite://")
+    config = SQLAlchemySyncConfig(engine_instance=engine, session_dependency_key="testing_session")
+    try:
+        with Session(engine) as session:
+            provider = create_service_provider(MockSyncQueryService, config=config)
+            assert list(inspect.signature(provider).parameters) == ["testing_session"]
+
+            svc = next(provider(testing_session=session if provide_session else None))
+            assert isinstance(svc, MockSyncQueryService)
+            if provide_session:
+                assert svc.repository.session is session
+            else:
+                assert svc.repository.session.bind is engine
+    finally:
+        engine.dispose()
+
+
+async def test_create_async_query_service_provider() -> None:
+    """Test that the provider yields an async query service using the supplied session."""
+    session = MagicMock()
+    provider = create_service_provider(MockAsyncQueryService)
+    assert_type(provider, Callable[..., AsyncGenerator[MockAsyncQueryService, None]])
+
+    svc = await anext_(provider(db_session=session))
+    assert isinstance(svc, MockAsyncQueryService)
+    assert svc.repository.session is session
+
+
+@pytest.mark.parametrize("provide_session", [True, False])
+async def test_create_async_query_service_provider_config(provide_session: bool) -> None:
+    """Test configured session lookup and fallback for an async query service."""
+    engine = create_async_engine("sqlite+aiosqlite://")
+    config = SQLAlchemyAsyncConfig(engine_instance=engine, session_dependency_key="testing_session")
+    try:
+        async with AsyncSession(engine) as session:
+            provider = create_service_provider(MockAsyncQueryService, config=config)
+            assert list(inspect.signature(provider).parameters) == ["testing_session"]
+
+            svc = await anext_(provider(testing_session=session if provide_session else None))
+            assert isinstance(svc, MockAsyncQueryService)
+            if provide_session:
+                assert svc.repository.session is session
+            else:
+                assert svc.repository.session.bind is engine
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.parametrize("service_class", [MockAsyncQueryService, MockSyncQueryService])
+@pytest.mark.parametrize(
+    "option",
+    [
+        {"statement": select(DITestModel)},
+        {"error_messages": {"not_found": "Missing"}},
+        {"load": "*"},
+        {"execution_options": {"populate_existing": True}},
+        {"uniquify": True},
+        {"count_with_window_function": False},
+    ],
+    ids=lambda option: next(iter(option)),
+)
+def test_create_query_service_provider_rejects_repository_options(
+    service_class: type[Any], option: dict[str, Any]
+) -> None:
+    """Test that repository-only options are rejected for query services."""
+    with pytest.raises(ImproperConfigurationError, match=f"'{next(iter(option))}'"):
+        create_service_provider(service_class, **option)
+
+
+def test_create_query_service_provider_allows_unset_error_messages() -> None:
+    """Test that ``error_messages=None`` counts as unset for query services."""
+    provider = create_service_provider(MockSyncQueryService, error_messages=None)  # type: ignore[call-overload]
+
+    assert callable(provider)
+
+
+async def test_create_async_read_service_provider() -> None:
+    """Test creating an async read service provider."""
+    provider = create_service_provider(MockAsyncReadService)
+    assert_type(provider, Callable[..., AsyncGenerator[MockAsyncReadService, None]])
+
+    svc = await anext_(provider(db_session=MagicMock()))
+    assert isinstance(svc, MockAsyncReadService)
+
+
 async def test_create_async_service_provider() -> None:
     """Test creating an async service provider."""
     provider = create_service_provider(MockAsyncService)
@@ -282,6 +405,14 @@ def test_create_async_service_dependencies() -> None:
 
         # Verify create_service_provider was called correctly
         mock_create_provider.assert_called_once()
+
+
+async def test_create_async_query_service_dependencies() -> None:
+    """Test creating async query service dependencies."""
+    deps = create_service_dependencies(MockAsyncQueryService, key="reports")
+
+    svc = await anext_(deps["reports"].dependency(db_session=MagicMock()))
+    assert isinstance(svc, MockAsyncQueryService)
 
 
 def test_create_sync_service_dependencies() -> None:
