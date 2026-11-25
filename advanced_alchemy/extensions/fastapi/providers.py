@@ -56,7 +56,8 @@ from advanced_alchemy.service import (
     SQLAlchemyAsyncQueryService,
     SQLAlchemyAsyncRepositoryReadService,
     SQLAlchemyAsyncRepositoryService,
-    SQLAlchemySyncRepositoryService,
+    SQLAlchemySyncQueryService,
+    SQLAlchemySyncRepositoryReadService,
 )
 from advanced_alchemy.utils.dependencies import (
     ChoiceField,
@@ -93,8 +94,10 @@ IntOrNone = Optional[int]
 BooleanOrNone = Optional[bool]
 SortOrder = Literal["asc", "desc"]
 SortOrderOrNone = Optional[SortOrder]
-AsyncServiceT_co = TypeVar("AsyncServiceT_co", bound=SQLAlchemyAsyncRepositoryService[Any, Any], covariant=True)
-SyncServiceT_co = TypeVar("SyncServiceT_co", bound=SQLAlchemySyncRepositoryService[Any, Any], covariant=True)
+AsyncServiceT_co = TypeVar("AsyncServiceT_co", bound=SQLAlchemyAsyncRepositoryReadService[Any, Any], covariant=True)
+SyncServiceT_co = TypeVar("SyncServiceT_co", bound=SQLAlchemySyncRepositoryReadService[Any, Any], covariant=True)
+AsyncQueryServiceT_co = TypeVar("AsyncQueryServiceT_co", bound=SQLAlchemyAsyncQueryService, covariant=True)
+SyncQueryServiceT_co = TypeVar("SyncQueryServiceT_co", bound=SQLAlchemySyncQueryService, covariant=True)
 ServiceGroupT = TypeVar("ServiceGroupT", bound=ServiceGroup)
 
 __all__ = (
@@ -198,6 +201,79 @@ def _is_async_service_target(
     return issubclass(service_class, _ASYNC_SERVICE_BASES)
 
 
+def _validate_service_provider_options(
+    *,
+    is_group: bool,
+    is_query: bool,
+    statement: Optional[Select[Any]],
+    error_messages: Optional[Union[ErrorMessages, EmptyType]],
+    load: Optional[LoadSpec],
+    execution_options: Optional[dict[str, Any]],
+    uniquify: Optional[bool],
+    count_with_window_function: Optional[bool],
+) -> None:
+    """Validate that repository-only options are not supplied for incompatible targets."""
+    if is_group and (statement is not None or load is not None):
+        msg = "ServiceGroup does not support group-level 'statement' or 'load'; set them on each service class."
+        raise ImproperConfigurationError(msg)
+    if is_query:
+        repository_options = {
+            "statement": statement,
+            "error_messages": None if error_messages is Empty else error_messages,
+            "load": load,
+            "execution_options": execution_options,
+            "uniquify": uniquify,
+            "count_with_window_function": count_with_window_function,
+        }
+        unsupported = [f"'{name}'" for name, value in repository_options.items() if value is not None]
+        if unsupported:
+            msg = f"Repository options {', '.join(unsupported)} are not supported for query services."
+            raise ImproperConfigurationError(msg)
+
+
+def _enter_service_target(
+    service_class: type[Any],
+    *,
+    is_group: bool,
+    is_query: bool,
+    db_session: Any,
+    config: Any,
+    statement: Optional[Select[Any]],
+    error_messages: Optional[Union[ErrorMessages, EmptyType]],
+    load: Optional[LoadSpec],
+    execution_options: Optional[dict[str, Any]],
+    uniquify: Optional[bool],
+    count_with_window_function: Optional[bool],
+) -> Any:
+    """Create the context manager for a ServiceGroup, query service, or repository service."""
+    if is_group:
+        return cast("type[ServiceGroup]", service_class).new(
+            session=db_session,
+            error_messages=error_messages,
+            execution_options=execution_options,
+            uniquify=uniquify,
+            count_with_window_function=count_with_window_function,
+        )
+    if is_query:
+        return cast("type[Union[SQLAlchemyAsyncQueryService, SQLAlchemySyncQueryService]]", service_class).new(
+            session=db_session,
+            config=config,
+        )
+    return cast(
+        "type[Union[SQLAlchemyAsyncRepositoryReadService[Any, Any], SQLAlchemySyncRepositoryReadService[Any, Any]]]",
+        service_class,
+    ).new(
+        session=db_session,
+        statement=statement,
+        config=config,
+        error_messages=error_messages,
+        load=load,
+        execution_options=execution_options,
+        uniquify=uniquify,
+        count_with_window_function=count_with_window_function,
+    )
+
+
 @overload
 def provide_service(
     service_class: type["AsyncServiceT_co"],
@@ -230,6 +306,24 @@ def provide_service(
 
 @overload
 def provide_service(
+    service_class: type["AsyncQueryServiceT_co"],
+    /,
+    extension: AdvancedAlchemy,
+    key: Optional[str] = None,
+) -> Callable[..., AsyncGenerator[AsyncQueryServiceT_co, None]]: ...
+
+
+@overload
+def provide_service(
+    service_class: type["SyncQueryServiceT_co"],
+    /,
+    extension: AdvancedAlchemy,
+    key: Optional[str] = None,
+) -> Callable[..., Generator[SyncQueryServiceT_co, None, None]]: ...
+
+
+@overload
+def provide_service(
     service_class: type["ServiceGroupT"],
     /,
     extension: AdvancedAlchemy,
@@ -244,7 +338,15 @@ def provide_service(
 
 
 def provide_service(  # noqa: C901, PLR0915
-    service_class: type[Union["AsyncServiceT_co", "SyncServiceT_co", "ServiceGroupT"]],
+    service_class: type[
+        Union[
+            "AsyncServiceT_co",
+            "SyncServiceT_co",
+            "AsyncQueryServiceT_co",
+            "SyncQueryServiceT_co",
+            "ServiceGroupT",
+        ]
+    ],
     /,
     extension: AdvancedAlchemy,
     key: Optional[str] = None,
@@ -259,6 +361,8 @@ def provide_service(  # noqa: C901, PLR0915
     Union[
         AsyncGenerator[AsyncServiceT_co, None],
         Generator[SyncServiceT_co, None, None],
+        AsyncGenerator[AsyncQueryServiceT_co, None],
+        Generator[SyncQueryServiceT_co, None, None],
         AsyncGenerator[ServiceGroupT, None],
         Generator[ServiceGroupT, None, None],
     ],
@@ -269,9 +373,17 @@ def provide_service(  # noqa: C901, PLR0915
         A generator-based FastAPI dependency provider managing service and session lifecycle.
     """
     is_group = issubclass(service_class, ServiceGroup)
-    if is_group and (statement is not None or load is not None):
-        msg = "ServiceGroup does not support group-level 'statement' or 'load'; set them on each service class."
-        raise ImproperConfigurationError(msg)
+    is_query = issubclass(service_class, (SQLAlchemyAsyncQueryService, SQLAlchemySyncQueryService))
+    _validate_service_provider_options(
+        is_group=is_group,
+        is_query=is_query,
+        statement=statement,
+        error_messages=error_messages,
+        load=load,
+        execution_options=execution_options,
+        uniquify=uniquify,
+        count_with_window_function=count_with_window_function,
+    )
 
     if _is_async_service_target(service_class, extension, key):
         async_config = cast("Optional[SQLAlchemyAsyncConfig]", extension.get_config(key))
@@ -279,34 +391,27 @@ def provide_service(  # noqa: C901, PLR0915
         async def provide_async_service(
             request: Request,
             db_session: AsyncSession = Depends(extension.provide_session(key)),  # noqa: B008
-        ) -> AsyncGenerator[Union[AsyncServiceT_co, ServiceGroupT], None]:
+        ) -> AsyncGenerator[Union[AsyncServiceT_co, AsyncQueryServiceT_co, ServiceGroupT], None]:
             session_key = async_config.session_key if async_config else "db_session"
             setattr(request.state, f"{session_key}_generator_managed", True)
 
             exc_info: Optional[BaseException] = None
             try:
-                context_manager: Any = (
-                    cast("type[ServiceGroup]", service_class).new(
-                        session=db_session,
-                        error_messages=error_messages,
-                        execution_options=execution_options,
-                        uniquify=uniquify,
-                        count_with_window_function=count_with_window_function,
-                    )
-                    if is_group
-                    else cast("type[SQLAlchemyAsyncRepositoryService[Any, Any]]", service_class).new(
-                        session=db_session,
-                        statement=statement,
-                        config=async_config,
-                        error_messages=error_messages,
-                        load=load,
-                        execution_options=execution_options,
-                        uniquify=uniquify,
-                        count_with_window_function=count_with_window_function,
-                    )
+                context_manager: Any = _enter_service_target(
+                    service_class,
+                    is_group=is_group,
+                    is_query=is_query,
+                    db_session=db_session,
+                    config=async_config,
+                    statement=statement,
+                    error_messages=error_messages,
+                    load=load,
+                    execution_options=execution_options,
+                    uniquify=uniquify,
+                    count_with_window_function=count_with_window_function,
                 )
                 async with context_manager as service:
-                    yield cast("Union[AsyncServiceT_co, ServiceGroupT]", service)
+                    yield cast("Union[AsyncServiceT_co, AsyncQueryServiceT_co, ServiceGroupT]", service)
             except BaseException as e:
                 exc_info = e
                 raise
@@ -341,7 +446,7 @@ def provide_service(  # noqa: C901, PLR0915
                 _clear_request_state(request, session_key)
 
         return cast(
-            "Callable[..., Union[AsyncGenerator[AsyncServiceT_co, None], Generator[SyncServiceT_co, None, None], AsyncGenerator[ServiceGroupT, None], Generator[ServiceGroupT, None, None]]]",
+            "Callable[..., Union[AsyncGenerator[AsyncServiceT_co, None], Generator[SyncServiceT_co, None, None], AsyncGenerator[AsyncQueryServiceT_co, None], Generator[SyncQueryServiceT_co, None, None], AsyncGenerator[ServiceGroupT, None], Generator[ServiceGroupT, None, None]]]",
             provide_async_service,
         )
 
@@ -350,34 +455,27 @@ def provide_service(  # noqa: C901, PLR0915
     def provide_sync_service(
         request: Request,
         db_session: Session = Depends(extension.provide_session(key)),  # noqa: B008
-    ) -> Generator[Union[SyncServiceT_co, ServiceGroupT], None, None]:
+    ) -> Generator[Union[SyncServiceT_co, SyncQueryServiceT_co, ServiceGroupT], None, None]:
         session_key = sync_config.session_key if sync_config else "db_session"
         setattr(request.state, f"{session_key}_generator_managed", True)
 
         exc_info: Optional[BaseException] = None
         try:
-            context_manager: Any = (
-                cast("type[ServiceGroup]", service_class).new(
-                    session=db_session,
-                    error_messages=error_messages,
-                    execution_options=execution_options,
-                    uniquify=uniquify,
-                    count_with_window_function=count_with_window_function,
-                )
-                if is_group
-                else cast("type[SQLAlchemySyncRepositoryService[Any, Any]]", service_class).new(
-                    session=db_session,
-                    statement=statement,
-                    config=sync_config,
-                    error_messages=error_messages,
-                    load=load,
-                    execution_options=execution_options,
-                    uniquify=uniquify,
-                    count_with_window_function=count_with_window_function,
-                )
+            context_manager: Any = _enter_service_target(
+                service_class,
+                is_group=is_group,
+                is_query=is_query,
+                db_session=db_session,
+                config=sync_config,
+                statement=statement,
+                error_messages=error_messages,
+                load=load,
+                execution_options=execution_options,
+                uniquify=uniquify,
+                count_with_window_function=count_with_window_function,
             )
             with context_manager as service:
-                yield cast("Union[SyncServiceT_co, ServiceGroupT]", service)
+                yield cast("Union[SyncServiceT_co, SyncQueryServiceT_co, ServiceGroupT]", service)
         except BaseException as e:
             exc_info = e
             raise
@@ -412,7 +510,7 @@ def provide_service(  # noqa: C901, PLR0915
             _clear_request_state(request, session_key)
 
     return cast(
-        "Callable[..., Union[AsyncGenerator[AsyncServiceT_co, None], Generator[SyncServiceT_co, None, None], AsyncGenerator[ServiceGroupT, None], Generator[ServiceGroupT, None, None]]]",
+        "Callable[..., Union[AsyncGenerator[AsyncServiceT_co, None], Generator[SyncServiceT_co, None, None], AsyncGenerator[AsyncQueryServiceT_co, None], Generator[SyncQueryServiceT_co, None, None], AsyncGenerator[ServiceGroupT, None], Generator[ServiceGroupT, None, None]]]",
         provide_sync_service,
     )
 
