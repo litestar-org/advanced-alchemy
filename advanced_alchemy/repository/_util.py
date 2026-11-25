@@ -90,6 +90,7 @@ __all__ = (
 )
 
 _EXPLICIT_NONE_UPDATE_KEY = "_aa_explicit_none_update"
+_EAGER_RELATIONSHIP_LOADERS = frozenset({"joined", "selectin", "subquery", "immediate"})
 
 WhereClauseT = ColumnExpressionArgument[bool]
 SingleLoad: TypeAlias = Union[
@@ -915,6 +916,24 @@ class FilterableRepository(
     """Whether to prefer ANY() over IN() in queries."""
     _dialect: Dialect
     """The SQLAlchemy :class:`sqlalchemy.dialects.Dialect` being used."""
+
+    def _supports_delete_returning(self, loader_options: Optional[Sequence[ExecutableOption]]) -> bool:
+        """Return ``True`` when deleted rows can be read back with ``DELETE ... RETURNING``.
+
+        Relationship loaders cannot run on a DML statement, so models that load
+        relationships eagerly and calls that pass ``load`` select the rows first.
+        """
+        if loader_options or not self._dialect.delete_returning:
+            return False
+        model_cls = getattr(self, "model_type", None)
+        if not isinstance(model_cls, type):
+            return True
+        mapper = cast("Optional[Mapper[Any]]", inspect(model_cls, raiseerr=False))
+        if mapper is None:
+            return True
+        if not getattr(mapper.local_table, "implicit_returning", True):
+            return False
+        return not any(rel.lazy in _EAGER_RELATIONSHIP_LOADERS for rel in mapper.relationships)
 
     @overload
     def _apply_filters(

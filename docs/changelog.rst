@@ -5,6 +5,22 @@
 
 .. changelog:: 1.13.0
 
+    .. change:: use DELETE ... RETURNING for delete_where and delete_many
+        :type: bugfix
+        :pr: 878
+        :issue: 875
+
+        :meth:`~advanced_alchemy.repository.SQLAlchemyAsyncRepository.delete_where`,
+        :meth:`~advanced_alchemy.repository.SQLAlchemySyncRepository.delete_where`,
+        :meth:`~advanced_alchemy.repository.SQLAlchemyAsyncRepository.delete_many`,
+        and :meth:`~advanced_alchemy.repository.SQLAlchemySyncRepository.delete_many`
+        now check ``dialect.delete_returning`` and table ``implicit_returning``
+        instead of ``dialect.delete_executemany_returning``, execute a single
+        ``DELETE ... RETURNING`` statement when no eager relationship loaders apply,
+        and detach returned rows before commit so default sessions with
+        ``expire_on_commit=True`` remain readable. With contributions from
+        `Aariv Patel <https://github.com/draarivpatel-ui>`_.
+
     .. change:: export NO_VALUE and cache region protocols from the cache package
         :type: feature
         :pr: 865

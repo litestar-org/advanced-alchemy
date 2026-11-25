@@ -953,8 +953,9 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
 
         """
         with self._wrap_exceptions(error_messages=error_messages):
+            resolved_bind_group = self._resolve_bind_group(bind_group)
             execution_options = self._get_execution_options(execution_options, bind_group=bind_group)
-            loader_options, _requires_unique = self._get_loader_options(load, uniquify)
+            loader_options, requires_unique = self._get_loader_options(load, uniquify)
             instances: List[ModelT] = []
 
             if self._requires_orm_delete():
@@ -974,6 +975,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
                     chunk_size=chunk_size,
                     loader_options=loader_options,
                     execution_options=execution_options,
+                    uniquify=requires_unique,
                 )
             else:
                 instances = self._delete_many_by_id_attr(
@@ -982,11 +984,12 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
                     chunk_size=chunk_size,
                     loader_options=loader_options,
                     execution_options=execution_options,
+                    uniquify=requires_unique,
                 )
             self._flush_or_commit(auto_commit=auto_commit)
             for instance in instances:
                 self._expunge(instance, auto_expunge=auto_expunge)
-                self._queue_cache_invalidation(self.get_primary_key_value(instance), bind_group)
+                self._queue_cache_invalidation(self.get_primary_key_value(instance), resolved_bind_group)
             return instances
 
     def _build_composite_pk_filter(self, chunk: Sequence[tuple[Any, ...]]) -> ColumnElement[bool]:
@@ -1001,28 +1004,34 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         chunk_size: Optional[int],
         loader_options: Any,
         execution_options: dict[str, Any],
+        uniquify: Optional[bool] = None,
     ) -> List[ModelT]:
         base_chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
         effective_chunk_size = max(1, base_chunk_size // len(self._pk_columns))
         normalized_ids = self._normalize_pk_values_to_tuples(item_ids)
+        supports_returning = self._supports_delete_returning(loader_options)
         instances: List[ModelT] = []
         for idx in range(0, len(normalized_ids), effective_chunk_size):
             chunk = normalized_ids[idx : min(idx + effective_chunk_size, len(normalized_ids))]
             pk_filter = self._build_composite_pk_filter(chunk)
-            if self._dialect.delete_executemany_returning:
+            if supports_returning:
                 returning_delete_stmt = self._get_base_stmt(
                     statement=delete(self.model_type).where(pk_filter),
                     loader_options=None,
                     execution_options=execution_options,
                 ).returning(self.model_type)
-                instances.extend(self.session.scalars(returning_delete_stmt))
+                returned_instances = list(self.session.scalars(returning_delete_stmt))
+                for instance in returned_instances:
+                    self._expunge(instance, auto_expunge=True)
+                instances.extend(returned_instances)
             else:
                 select_stmt: Select[Any] = self._get_base_stmt(
                     statement=select(self.model_type).where(pk_filter),
                     loader_options=loader_options,
                     execution_options=execution_options,
                 )
-                instances.extend(self.session.scalars(select_stmt))
+                result = self._execute(select_stmt, uniquify=uniquify)
+                instances.extend(result.scalars())
                 plain_delete_stmt = self._get_base_stmt(
                     statement=delete(self.model_type).where(pk_filter),
                     loader_options=None,
@@ -1039,6 +1048,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         chunk_size: Optional[int],
         loader_options: Any,
         execution_options: dict[str, Any],
+        uniquify: Optional[bool] = None,
     ) -> List[ModelT]:
         id_attr = get_instrumented_attr(
             self.model_type,
@@ -1047,45 +1057,50 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         if self._prefer_any:
             chunk_size = len(item_ids) + 1
         chunk_size = self._get_insertmanyvalues_max_parameters(chunk_size)
+        supports_returning = self._supports_delete_returning(loader_options)
         instances: List[ModelT] = []
         for idx in range(0, len(item_ids), chunk_size):
             chunk = cast("List[Any]", item_ids[idx : min(idx + chunk_size, len(item_ids))])
-            if self._dialect.delete_executemany_returning:
-                instances.extend(
+            if supports_returning:
+                returned_instances = list(
                     self.session.scalars(
                         self._get_delete_many_statement(
                             statement_type="delete",
                             model_type=self.model_type,
                             id_attribute=id_attr,
                             id_chunk=chunk,
-                            supports_returning=self._dialect.delete_executemany_returning,
-                            loader_options=loader_options,
+                            supports_returning=True,
+                            loader_options=None,
                             execution_options=execution_options,
                         ),
                     ),
                 )
+                for instance in returned_instances:
+                    self._expunge(instance, auto_expunge=True)
+                instances.extend(returned_instances)
             else:
-                instances.extend(
-                    self.session.scalars(
-                        self._get_delete_many_statement(
-                            statement_type="select",
-                            model_type=self.model_type,
-                            id_attribute=id_attr,
-                            id_chunk=chunk,
-                            supports_returning=self._dialect.delete_executemany_returning,
-                            loader_options=loader_options,
-                            execution_options=execution_options,
-                        ),
+                select_stmt = cast(
+                    "Select[Any]",
+                    self._get_delete_many_statement(
+                        statement_type="select",
+                        model_type=self.model_type,
+                        id_attribute=id_attr,
+                        id_chunk=chunk,
+                        supports_returning=False,
+                        loader_options=loader_options,
+                        execution_options=execution_options,
                     ),
                 )
+                result = self._execute(select_stmt, uniquify=uniquify)
+                instances.extend(result.scalars())
                 self.session.execute(
                     self._get_delete_many_statement(
                         statement_type="delete",
                         model_type=self.model_type,
                         id_attribute=id_attr,
                         id_chunk=chunk,
-                        supports_returning=self._dialect.delete_executemany_returning,
-                        loader_options=loader_options,
+                        supports_returning=False,
+                        loader_options=None,
                         execution_options=execution_options,
                     ),
                 )
@@ -1113,6 +1128,10 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
             error_messages: An optional dictionary of templates to use
                 for friendlier error messages to clients
             sanity_check: When true, the length of selected instances is compared to the deleted row count
+                when using the select-then-delete fallback (on dialects without ``DELETE ... RETURNING``,
+                for tables with ``implicit_returning=False``, on models with eager relationship loaders, or
+                when ``load`` is provided). Concurrent writes between the select and delete can cause
+                this check to fail; pass ``False`` to skip it.
             load: Set default relationships to be loaded
             execution_options: Set default execution options
             uniquify: Optionally apply the ``unique()`` method to results before returning.
@@ -1150,13 +1169,16 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
             else:
                 statement = self._get_base_stmt(
                     statement=delete(model_type),
-                    loader_options=loader_options,
+                    loader_options=None,
                     execution_options=execution_options,
                 )
                 statement = self._filter_select_by_kwargs(statement=statement, kwargs=kwargs)
                 statement = self._apply_filters(*filters, statement=statement, apply_pagination=False)
-                if self._dialect.delete_executemany_returning:
-                    instances.extend(self.session.scalars(statement.returning(model_type)))
+                if self._supports_delete_returning(loader_options):
+                    returned_instances = list(self.session.scalars(statement.returning(model_type)))
+                    for instance in returned_instances:
+                        self._expunge(instance, auto_expunge=True)
+                    instances.extend(returned_instances)
                 else:
                     instances.extend(
                         self.get_many(
@@ -2541,9 +2563,10 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
         Note:
             Deleted objects that have been committed are automatically moved to the
             detached state by SQLAlchemy. Objects returned from DELETE...RETURNING
-            statements are initially persistent but become detached after commit.
-            We skip expunge for objects that are already detached or marked for deletion
-            to avoid InvalidRequestError.
+            statements remain persistent in the session identity map and are not
+            detached on commit, so bulk delete callers expunge them before flushing
+            or committing. We skip expunge for objects that are already detached or
+            marked for deletion to avoid InvalidRequestError.
         """
         if auto_expunge is None:
             auto_expunge = self.auto_expunge

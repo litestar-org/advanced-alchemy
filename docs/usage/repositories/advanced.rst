@@ -115,6 +115,8 @@ Call ``delete_where`` to delete matching rows directly by SQL predicate without 
         repo = AdvancedPostRepository(session=db_session)
         return await repo.delete_where(AdvancedPost.published.is_(False))
 
+When the active dialect supports ``DELETE ... RETURNING`` (with ``implicit_returning=True`` on the table) and neither the model nor the ``load`` argument configures eager relationship loading, matching rows are deleted and returned in a single statement. Otherwise ``delete_where`` selects matching rows before deleting them and compares counts when ``sanity_check=True`` (the default); pass ``sanity_check=False`` if concurrent transactions may modify matching rows between the read and delete.
+
 Handling Database Exceptions
 ----------------------------
 

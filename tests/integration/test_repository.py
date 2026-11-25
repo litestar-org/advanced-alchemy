@@ -471,6 +471,64 @@ async def test_repo_delete_method(seeded_test_session_async: "tuple[AsyncSession
     assert author_id not in remaining_ids
 
 
+async def test_repo_delete_where_async(
+    seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]",
+) -> None:
+    """Test async repository delete_where on single-PK and composite-PK models across backends."""
+    session, models = seeded_test_session_async
+    if getattr(getattr(session.bind, "dialect", None), "name", "") == "mock":
+        pytest.skip("Mock engine does not execute SQL DML")
+
+    rule_model = models["rule"]
+    rule_repo = create_repository(session, rule_model)
+    initial_rules = await rule_repo.get_many()
+    target_rule = initial_rules[0]
+
+    deleted_rules = await rule_repo.delete_where(rule_model.id == target_rule.id)
+    assert len(deleted_rules) == 1
+    assert deleted_rules[0].id == target_rule.id
+    assert await rule_repo.count() == len(initial_rules) - 1
+    with pytest.raises(NotFoundError):
+        await rule_repo.get(target_rule.id)
+
+    if "user_role" in models:
+        user_role_model = models["user_role"]
+        user_role_repo = create_repository(session, user_role_model)
+        deleted_roles = await user_role_repo.delete_where(user_role_model.user_id == 1)
+        assert len(deleted_roles) == 2
+        assert {(row.user_id, row.role_id) for row in deleted_roles} == {(1, 10), (1, 20)}
+        assert await user_role_repo.count() == 1
+
+
+def test_repo_delete_where_sync(
+    seeded_test_session_sync: "tuple[Session, dict[str, type]]",
+) -> None:
+    """Test sync repository delete_where on single-PK and composite-PK models across backends."""
+    session, models = seeded_test_session_sync
+    if getattr(getattr(session.bind, "dialect", None), "name", "") == "mock":
+        pytest.skip("Mock engine does not execute SQL DML")
+
+    rule_model = models["rule"]
+    rule_repo = create_repository(session, rule_model)
+    initial_rules = rule_repo.get_many()
+    target_rule = initial_rules[0]
+
+    deleted_rules = rule_repo.delete_where(rule_model.id == target_rule.id)
+    assert len(deleted_rules) == 1
+    assert deleted_rules[0].id == target_rule.id
+    assert rule_repo.count() == len(initial_rules) - 1
+    with pytest.raises(NotFoundError):
+        rule_repo.get(target_rule.id)
+
+    if "user_role" in models:
+        user_role_model = models["user_role"]
+        user_role_repo = create_repository(session, user_role_model)
+        deleted_roles = user_role_repo.delete_where(user_role_model.user_id == 1)
+        assert len(deleted_roles) == 2
+        assert {(row.user_id, row.role_id) for row in deleted_roles} == {(1, 10), (1, 20)}
+        assert user_role_repo.count() == 1
+
+
 async def test_repo_health_check(seeded_test_session_async: "tuple[AsyncSession, dict[str, type]]") -> None:
     """Test repository health check."""
     session, models = seeded_test_session_async

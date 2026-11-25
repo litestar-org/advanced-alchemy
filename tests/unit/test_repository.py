@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import datetime as dt
 import decimal
 import warnings
 from collections.abc import AsyncGenerator, Collection, Generator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union, cast
 from unittest.mock import AsyncMock, MagicMock, PropertyMock
 from uuid import uuid4
@@ -26,14 +28,16 @@ from sqlalchemy import (
     and_,
     column,
     create_engine,
+    event,
     false,
     func,
+    inspect,
     or_,
     select,
     true,
 )
-from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import InvalidRequestError, SAWarning, SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import (
     DeclarativeBase,
     InstrumentedAttribute,
@@ -49,7 +53,7 @@ from sqlalchemy.orm import (
     with_loader_criteria,
 )
 from sqlalchemy.orm.strategy_options import _AbstractLoad
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import NullPool, StaticPool
 from sqlalchemy.sql.selectable import ForUpdateArg
 from sqlalchemy.types import TypeEngine
 
@@ -4523,3 +4527,397 @@ async def test_relationship_collection_renamed_primary_key_sqlite_parity(
     finally:
         repo.__database_clear__()
         engine.dispose()
+
+
+def _create_delete_returning_models() -> dict[str, Any]:
+    """Build an isolated declarative hierarchy for delete returning tests."""
+
+    class DeleteTestBase(DeclarativeBase):
+        pass
+
+    class PlainItem(DeleteTestBase):
+        __tablename__ = "dr_plain_item"
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+        name: Mapped[str] = mapped_column(String(length=50))
+
+    class CompositeItem(DeleteTestBase):
+        __tablename__ = "dr_composite_item"
+        tenant_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+        item_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+        label: Mapped[str] = mapped_column(String(length=50))
+
+    class NoReturningItem(DeleteTestBase):
+        __tablename__ = "dr_no_returning_item"
+        __table_args__ = {"implicit_returning": False}
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+        name: Mapped[str] = mapped_column(String(length=50))
+
+    class JoinedChild(DeleteTestBase):
+        __tablename__ = "dr_joined_child"
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+        parent_id: Mapped[int] = mapped_column(ForeignKey("dr_joined_parent.id", ondelete="CASCADE"))
+
+    class JoinedParent(DeleteTestBase):
+        __tablename__ = "dr_joined_parent"
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+        name: Mapped[str] = mapped_column(String(length=50))
+        children: Mapped[list[JoinedChild]] = relationship(lazy="joined", passive_deletes=True)
+
+    class SelectinChild(DeleteTestBase):
+        __tablename__ = "dr_selectin_child"
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+        parent_id: Mapped[int] = mapped_column(ForeignKey("dr_selectin_parent.id", ondelete="CASCADE"))
+
+    class SelectinParent(DeleteTestBase):
+        __tablename__ = "dr_selectin_parent"
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+        name: Mapped[str] = mapped_column(String(length=50))
+        children: Mapped[list[SelectinChild]] = relationship(lazy="selectin", passive_deletes=True)
+
+    class LazyChild(DeleteTestBase):
+        __tablename__ = "dr_lazy_child"
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+        parent_id: Mapped[int] = mapped_column(ForeignKey("dr_lazy_parent.id", ondelete="CASCADE"))
+
+    class LazyParent(DeleteTestBase):
+        __tablename__ = "dr_lazy_parent"
+        id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+        name: Mapped[str] = mapped_column(String(length=50))
+        children: Mapped[list[LazyChild]] = relationship(passive_deletes=True)
+
+    return {
+        "base": DeleteTestBase,
+        "plain": PlainItem,
+        "composite": CompositeItem,
+        "no_returning": NoReturningItem,
+        "joined_parent": JoinedParent,
+        "joined_child": JoinedChild,
+        "selectin_parent": SelectinParent,
+        "selectin_child": SelectinChild,
+        "lazy_parent": LazyParent,
+        "lazy_child": LazyChild,
+    }
+
+
+def _seed_delete_returning_models(session: Session, models: dict[str, Any]) -> None:
+    """Seed one set of records for delete returning unit tests."""
+    session.add_all(
+        [
+            models["plain"](id=1, name="alpha"),
+            models["plain"](id=2, name="alpha"),
+            models["plain"](id=3, name="beta"),
+            models["composite"](tenant_id=1, item_id=10, label="keep"),
+            models["composite"](tenant_id=1, item_id=20, label="drop"),
+            models["composite"](tenant_id=2, item_id=10, label="drop"),
+            models["no_returning"](id=1, name="alpha"),
+            models["joined_parent"](
+                id=1,
+                name="alpha",
+                children=[models["joined_child"](id=10), models["joined_child"](id=11)],
+            ),
+            models["selectin_parent"](
+                id=1,
+                name="alpha",
+                children=[models["selectin_child"](id=10), models["selectin_child"](id=11)],
+            ),
+            models["lazy_parent"](
+                id=1,
+                name="alpha",
+                children=[models["lazy_child"](id=10)],
+            ),
+        ]
+    )
+    session.commit()
+
+
+def _create_delete_test_engine(mode: str, models: dict[str, Any]) -> tuple[Any, list[str]]:
+    """Create a SQLite sync or async engine with FK enforcement and SQL statement capture."""
+    statements: list[str] = []
+
+    def _enable_fk(dbapi_conn: Any, _: Any) -> None:
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+    def _record_sql(_conn: Any, _cursor: Any, statement: str, *_args: Any) -> None:
+        verb = statement.lstrip().split(" ", 1)[0].upper()
+        if verb in {"SELECT", "DELETE"}:
+            statements.append(verb)
+
+    if mode == "async":
+        engine = create_async_engine("sqlite+aiosqlite://", poolclass=StaticPool)
+        event.listen(engine.sync_engine, "connect", _enable_fk)
+        event.listen(engine.sync_engine, "before_cursor_execute", _record_sql)
+        return engine, statements
+
+    sync_engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+    event.listen(sync_engine, "connect", _enable_fk)
+    event.listen(sync_engine, "before_cursor_execute", _record_sql)
+    models["base"].metadata.create_all(sync_engine)
+    with Session(sync_engine) as session:
+        _seed_delete_returning_models(session, models)
+    return sync_engine, statements
+
+
+async def _prepare_delete_test_session(
+    mode: str,
+    engine: Any,
+    models: dict[str, Any],
+    *,
+    expire_on_commit: bool = True,
+) -> Any:
+    """Create a sync or async session for a prepared test engine."""
+    if mode == "async":
+        async with engine.begin() as conn:
+            await conn.run_sync(models["base"].metadata.create_all)
+        factory = async_sessionmaker(engine, expire_on_commit=expire_on_commit)
+        async with factory() as seed_session:
+            await seed_session.run_sync(_seed_delete_returning_models, models)
+        return factory()
+    return Session(engine, expire_on_commit=expire_on_commit)
+
+
+def _repo_for(
+    mode: str,
+    session: Any,
+    model_type: type[Any],
+    *,
+    auto_expunge: bool = False,
+    uniquify: bool = False,
+) -> Any:
+    """Instantiate the matching sync or async SQL repository."""
+    cls: type[Any] = SQLAlchemyAsyncRepository if mode == "async" else SQLAlchemySyncRepository
+    return cls(session=session, model_type=model_type, auto_expunge=auto_expunge, uniquify=uniquify)
+
+
+@pytest.mark.parametrize("mode", ["sync", "async"])
+@pytest.mark.parametrize("method", ["delete_where", "delete_many_single", "delete_many_composite"])
+async def test_delete_returning_uses_single_delete_statement(mode: str, method: str) -> None:
+    """Verify delete_where and delete_many issue one DELETE ... RETURNING query on SQLite."""
+    models = _create_delete_returning_models()
+    engine, statements = _create_delete_test_engine(mode, models)
+    try:
+        session = await _prepare_delete_test_session(mode, engine, models)
+        try:
+            model_cls = models["composite"] if method == "delete_many_composite" else models["plain"]
+            repo = _repo_for(mode, session, model_cls)
+            assert repo._dialect.delete_returning is True
+            assert repo._dialect.delete_executemany_returning is False
+
+            statements.clear()
+            if method == "delete_where":
+                deleted = await maybe_async(repo.delete_where(model_cls.name == "alpha", auto_commit=True))
+                assert statements == ["DELETE"]
+                assert {row.id for row in deleted} == {1, 2}
+                assert await maybe_async(repo.count()) == 1
+            elif method == "delete_many_single":
+                deleted = await maybe_async(repo.delete_many([1, 2], auto_commit=True))
+                assert statements == ["DELETE"]
+                assert {row.id for row in deleted} == {1, 2}
+                assert await maybe_async(repo.count()) == 1
+            else:
+                deleted = await maybe_async(repo.delete_many([(1, 20), (2, 10)], auto_commit=True))
+                assert statements == ["DELETE"]
+                assert {(row.tenant_id, row.item_id) for row in deleted} == {(1, 20), (2, 10)}
+                assert await maybe_async(repo.count()) == 1
+        finally:
+            await maybe_async(session.close())
+    finally:
+        await maybe_async(engine.dispose())
+
+
+@pytest.mark.parametrize("mode", ["sync", "async"])
+@pytest.mark.parametrize("method", ["delete_where", "delete_many"])
+@pytest.mark.parametrize("auto_expunge", [False, True])
+async def test_delete_returning_default_session_detaches_rows(
+    mode: str,
+    method: str,
+    auto_expunge: bool,
+) -> None:
+    """Verify RETURNING rows detach cleanly before commit under expire_on_commit=True."""
+    models = _create_delete_returning_models()
+    engine, _statements = _create_delete_test_engine(mode, models)
+    try:
+        session = await _prepare_delete_test_session(mode, engine, models, expire_on_commit=True)
+        try:
+            PlainItem = models["plain"]
+            repo = _repo_for(mode, session, PlainItem, auto_expunge=auto_expunge)
+            preloaded = await maybe_async(session.get(PlainItem, 1))
+            assert preloaded is not None
+
+            if method == "delete_where":
+                deleted = await maybe_async(repo.delete_where(PlainItem.name == "alpha", auto_commit=True))
+            else:
+                deleted = await maybe_async(repo.delete_many([1, 2], auto_commit=True))
+
+            assert {(row.id, row.name) for row in deleted} == {(1, "alpha"), (2, "alpha")}
+            assert all(inspect(row).detached for row in deleted)
+            assert await maybe_async(session.get(PlainItem, 1)) is None
+            assert await maybe_async(session.get(PlainItem, 2)) is None
+
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                session.add(PlainItem(id=1, name="recreated"))
+                await maybe_async(session.commit())
+
+            sa_warnings = [w for w in caught if issubclass(w.category, SAWarning)]
+            assert sa_warnings == []
+            recreated = await maybe_async(session.get(PlainItem, 1))
+            assert recreated is not None
+            assert recreated.name == "recreated"
+        finally:
+            await maybe_async(session.close())
+    finally:
+        await maybe_async(engine.dispose())
+
+
+@pytest.mark.parametrize("mode", ["sync", "async"])
+@pytest.mark.parametrize("method", ["delete_where", "delete_many"])
+async def test_delete_returning_rollback_restores_rows(mode: str, method: str) -> None:
+    """Verify rolling back after uncommitted RETURNING deletes restores database rows."""
+    models = _create_delete_returning_models()
+    engine, _statements = _create_delete_test_engine(mode, models)
+    try:
+        session = await _prepare_delete_test_session(mode, engine, models)
+        try:
+            PlainItem = models["plain"]
+            repo = _repo_for(mode, session, PlainItem)
+            deleted = await maybe_async(
+                repo.delete_where(PlainItem.name == "alpha") if method == "delete_where" else repo.delete_many([1, 2])
+            )
+            assert len(deleted) == 2
+            assert all(inspect(row).detached for row in deleted)
+            await maybe_async(session.rollback())
+            assert await maybe_async(repo.count()) == 3
+        finally:
+            await maybe_async(session.close())
+    finally:
+        await maybe_async(engine.dispose())
+
+
+@pytest.mark.parametrize("mode", ["sync", "async"])
+@pytest.mark.parametrize(
+    ("case", "method"),
+    [
+        ("dialect_false", "delete_where"),
+        ("dialect_false", "delete_many_single"),
+        ("dialect_false", "delete_many_composite"),
+        ("implicit_returning_false", "delete_where"),
+        ("implicit_returning_false", "delete_many"),
+        ("lazy_joined_uniquify", "delete_where"),
+        ("lazy_joined_uniquify", "delete_many"),
+        ("lazy_selectin_cascade", "delete_where"),
+        ("lazy_selectin_cascade", "delete_many"),
+        ("explicit_load", "delete_where"),
+        ("explicit_load", "delete_many"),
+    ],
+)
+async def test_delete_returning_fallback_paths(mode: str, case: str, method: str) -> None:
+    """Verify dialects without returning, tables with implicit_returning=False, eager loaders, and load= select first."""
+    models = _create_delete_returning_models()
+    engine, statements = _create_delete_test_engine(mode, models)
+    try:
+        session = await _prepare_delete_test_session(mode, engine, models)
+        try:
+            if case == "dialect_false" and method == "delete_many_composite":
+                model_cls = models["composite"]
+                repo = _repo_for(mode, session, model_cls)
+                repo._dialect.delete_returning = False
+                statements.clear()
+                deleted = await maybe_async(repo.delete_many([(1, 20)], auto_commit=True))
+                assert [(row.tenant_id, row.item_id) for row in deleted] == [(1, 20)]
+                assert "SELECT" in statements
+                assert "DELETE" in statements
+                return
+
+            if case == "dialect_false":
+                model_cls = models["plain"]
+                repo = _repo_for(mode, session, model_cls)
+                repo._dialect.delete_returning = False
+            elif case == "implicit_returning_false":
+                model_cls = models["no_returning"]
+                repo = _repo_for(mode, session, model_cls)
+            elif case == "lazy_joined_uniquify":
+                model_cls = models["joined_parent"]
+                repo = _repo_for(mode, session, model_cls, uniquify=True)
+            elif case == "lazy_selectin_cascade":
+                model_cls = models["selectin_parent"]
+                repo = _repo_for(mode, session, model_cls)
+            else:
+                model_cls = models["lazy_parent"]
+                repo = _repo_for(mode, session, model_cls)
+
+            call_kwargs: dict[str, Any] = {"auto_commit": True}
+            if case == "explicit_load":
+                call_kwargs["load"] = [joinedload(model_cls.children)]
+                call_kwargs["uniquify"] = True
+
+            statements.clear()
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                if method == "delete_where":
+                    deleted = await maybe_async(repo.delete_where(model_cls.name == "alpha", **call_kwargs))
+                else:
+                    target_ids = [1, 2] if case == "dialect_false" else [1]
+                    deleted = await maybe_async(repo.delete_many(target_ids, **call_kwargs))
+
+            dml_warnings = [w for w in caught if "not compatible with DML statements" in str(w.message)]
+            assert dml_warnings == []
+            assert "SELECT" in statements
+            assert "DELETE" in statements
+            assert [row.id for row in deleted] == ([1, 2] if case == "dialect_false" else [1])
+            if case in {"lazy_joined_uniquify", "lazy_selectin_cascade"}:
+                assert len(deleted[0].__dict__["children"]) == 2
+            elif case == "explicit_load":
+                assert len(deleted[0].__dict__["children"]) == 1
+        finally:
+            await maybe_async(session.close())
+    finally:
+        await maybe_async(engine.dispose())
+
+
+def test_supports_delete_returning_handles_unmapped_model_types() -> None:
+    """Verify _supports_delete_returning tolerates non-type and unmapped model_type attributes."""
+
+    class UnmappedModel:
+        pass
+
+    mock_session = MagicMock(spec=Session, bind=MagicMock())
+    repo = SQLAlchemySyncRepository(session=mock_session, model_type=cast("Any", UnmappedModel), statement=MagicMock())
+    repo._dialect.delete_returning = True
+    assert repo._supports_delete_returning(None) is True
+    repo.model_type = cast("Any", MagicMock(__name__="MockOnly"))
+    assert repo._supports_delete_returning(None) is True
+    repo._dialect.delete_returning = False
+    assert repo._supports_delete_returning(None) is False
+
+
+async def test_delete_where_concurrent_sqlite_does_not_fail_sanity_check(tmp_path: Path) -> None:
+    """Verify concurrent delete_where callers on SQLite do not fail the Issue #875 sanity check."""
+    models = _create_delete_returning_models()
+    PlainItem = models["plain"]
+
+    class ConcurrentRepo(SQLAlchemyAsyncRepository[Any]):
+        model_type = PlainItem
+
+    db_path = tmp_path / "concurrent_delete_where.db"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}", poolclass=NullPool)
+    async with engine.begin() as conn:
+        await conn.run_sync(models["base"].metadata.create_all)
+
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def replace(worker_id: int) -> None:
+        async with factory() as session:
+            repo = ConcurrentRepo(session=session)
+            await repo.delete_where(PlainItem.name == "shared")
+            await repo.add_many(
+                [PlainItem(id=(worker_id * 10) + 1, name="shared"), PlainItem(id=(worker_id * 10) + 2, name="shared")],
+                auto_commit=True,
+            )
+
+    try:
+        outcomes = await asyncio.gather(*(replace(idx) for idx in range(6)), return_exceptions=True)
+        assert [outcome for outcome in outcomes if isinstance(outcome, Exception)] == []
+    finally:
+        await engine.dispose()
