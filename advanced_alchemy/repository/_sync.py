@@ -1155,7 +1155,7 @@ class SQLAlchemySyncRepository(FilterableRepository[ModelT], SQLAlchemySyncRepos
                 )
                 statement = self._filter_select_by_kwargs(statement=statement, kwargs=kwargs)
                 statement = self._apply_filters(*filters, statement=statement, apply_pagination=False)
-                if self._dialect.delete_executemany_returning:
+                if self._dialect.delete_returning:
                     instances.extend(self.session.scalars(statement.returning(model_type)))
                 else:
                     instances.extend(

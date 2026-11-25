@@ -33,7 +33,7 @@ from sqlalchemy import (
     true,
 )
 from sqlalchemy.exc import InvalidRequestError, SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import (
     DeclarativeBase,
     InstrumentedAttribute,
@@ -173,6 +173,68 @@ def sync_mock_repo() -> Generator[SQLAlchemySyncRepository[MagicMock], None, Non
 @pytest.fixture(params=[lf("sync_mock_repo"), lf("async_mock_repo")])
 def mock_repo(request: FixtureRequest) -> Generator[SQLAlchemyAsyncRepository[MagicMock], None, None]:
     yield cast(SQLAlchemyAsyncRepository[Any], request.param)
+
+
+def test_delete_where_uses_delete_returning() -> None:
+    # https://github.com/litestar-org/advanced-alchemy/issues/875
+    # A single DELETE WHERE statement needs delete_returning, not
+    # delete_executemany_returning. Dialects such as SQLite support the
+    # former while lacking the latter.
+    class DeleteReturningModel(base.BigIntBase):
+        __tablename__ = "delete_returning_model"
+
+    class DeleteReturningRepo(SQLAlchemySyncRepository[DeleteReturningModel]):
+        pass
+
+    engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+    base.BigIntBase.metadata.create_all(engine)
+    try:
+        with Session(engine, expire_on_commit=False) as session:
+            repo = DeleteReturningRepo(session=session)
+            # SQLite has delete_returning=True but no executemany RETURNING.
+            assert repo._dialect.delete_returning is True
+            assert repo._dialect.delete_executemany_returning is False
+            session.add_all([DeleteReturningModel(id=1), DeleteReturningModel(id=2)])
+            session.commit()
+            # The fallback path calls get_many() first. Force it to fail so
+            # the test only passes when RETURNING is used.
+            repo.get_many = MagicMock(side_effect=AssertionError("fallback used"))  # type: ignore[method-assign]
+            deleted = repo.delete_where(DeleteReturningModel.id > 0, auto_commit=True)
+            assert {d.id for d in deleted} == {1, 2}
+            assert repo.count() == 0
+    finally:
+        base.BigIntBase.metadata.drop_all(engine)
+        engine.dispose()
+
+
+@pytest.mark.asyncio()
+async def test_delete_where_uses_delete_returning_async() -> None:
+    # https://github.com/litestar-org/advanced-alchemy/issues/875
+    class DeleteReturningModelAsync(base.BigIntBase):
+        __tablename__ = "delete_returning_model_async"
+
+    class DeleteReturningAsyncRepo(SQLAlchemyAsyncRepository[DeleteReturningModelAsync]):
+        pass
+
+    engine = create_async_engine("sqlite+aiosqlite://", poolclass=StaticPool)
+    async with engine.begin() as conn:
+        await conn.run_sync(base.BigIntBase.metadata.create_all)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            repo = DeleteReturningAsyncRepo(session=session)
+            assert repo._dialect.delete_returning is True
+            assert repo._dialect.delete_executemany_returning is False
+            session.add_all([DeleteReturningModelAsync(id=1), DeleteReturningModelAsync(id=2)])
+            await session.commit()
+            # The fallback path calls get_many() first. Force it to fail so
+            # the test only passes when RETURNING is used.
+            repo.get_many = AsyncMock(side_effect=AssertionError("fallback used"))  # type: ignore[method-assign]
+            deleted = await repo.delete_where(DeleteReturningModelAsync.id > 0, auto_commit=True)
+            assert {d.id for d in deleted} == {1, 2}
+    finally:
+        async with engine.begin() as conn:
+            await conn.run_sync(base.BigIntBase.metadata.drop_all)
+        await engine.dispose()
 
 
 @pytest.fixture()
