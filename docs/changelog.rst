@@ -5,6 +5,43 @@
 
 .. changelog:: 1.13.0
 
+    .. change:: export NO_VALUE and cache region protocols from the cache package
+        :type: feature
+        :pr: 865
+        :issue: 864
+
+        Re-exports :data:`~advanced_alchemy.cache.NO_VALUE`,
+        :class:`~advanced_alchemy.cache.SyncCacheRegionProtocol`,
+        :class:`~advanced_alchemy.cache.AsyncCacheRegionProtocol`, and
+        :class:`~advanced_alchemy.cache.NullRegion` from ``advanced_alchemy.cache``
+        so custom :class:`~advanced_alchemy.cache.CacheConfig` ``region_factory``
+        implementations no longer need to import from the private
+        ``advanced_alchemy.cache._null`` module. With contributions from
+        `Osama Zuhdi Osama Quttenh <https://github.com/osamaps518>`_.
+
+    .. change:: support query and read-only services in Litestar and FastAPI providers
+        :type: feature
+        :pr: 869 870
+        :issue: 868
+
+        :func:`~advanced_alchemy.extensions.litestar.providers.create_service_provider`,
+        :func:`~advanced_alchemy.extensions.litestar.providers.create_service_dependencies`,
+        :func:`~advanced_alchemy.extensions.fastapi.providers.provide_service`, and
+        :meth:`~advanced_alchemy.extensions.fastapi.AdvancedAlchemy.provide_service`
+        now support standalone
+        :class:`~advanced_alchemy.service.SQLAlchemyAsyncQueryService`,
+        :class:`~advanced_alchemy.service.SQLAlchemySyncQueryService`,
+        :class:`~advanced_alchemy.service.SQLAlchemyAsyncRepositoryReadService`, and
+        :class:`~advanced_alchemy.service.SQLAlchemySyncRepositoryReadService`
+        targets. Query service providers instantiate targets via
+        ``service_class.new(session=..., config=...)`` and raise
+        :class:`~advanced_alchemy.exceptions.ImproperConfigurationError` when
+        repository-only options (``statement``, ``error_messages``, ``load``,
+        ``execution_options``, ``uniquify``, or ``count_with_window_function``) are
+        supplied, with matching static typing overloads across both extensions.
+        With contributions from `Osama Zuhdi Osama Quttenh
+        <https://github.com/osamaps518>`_.
+
     .. change:: refine cursor token encryption, key derivation, and column validation
         :type: bugfix
         :pr: 857 863
