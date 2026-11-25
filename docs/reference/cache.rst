@@ -20,6 +20,36 @@ Configuration & Region Management
     :no-inherited-members:
     :show-inheritance:
 
+Custom Regions
+--------------
+
+Types for building a custom region supplied through
+``CacheConfig(region_factory=...)``.
+
+.. autoclass:: advanced_alchemy.cache.SyncCacheRegionProtocol
+    :no-members:
+    :no-inherited-members:
+    :show-inheritance:
+
+.. autoclass:: advanced_alchemy.cache.AsyncCacheRegionProtocol
+    :no-members:
+    :no-inherited-members:
+    :show-inheritance:
+
+    .. note::
+
+        ``CacheManager`` currently requires a synchronous region, even for its
+        async methods, which run the sync operations in a worker thread.
+
+.. autoclass:: advanced_alchemy.cache.NullRegion
+    :no-inherited-members:
+    :show-inheritance:
+
+.. py:data:: NO_VALUE
+    :type: Any
+
+    Cache-miss sentinel. A custom region returns it from ``get`` on a miss.
+
 Serialization & Listeners
 -------------------------
 
