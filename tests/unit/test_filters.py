@@ -7,6 +7,7 @@ from typing import Any, Literal, Optional
 import pytest
 from sqlalchemy import Column, ColumnElement, ForeignKey, Integer, String, Table, create_engine, func, select
 from sqlalchemy.dialects import sqlite
+from sqlalchemy.dialects.postgresql.base import PGDialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, with_loader_criteria
 
 from advanced_alchemy.filters import (
@@ -208,6 +209,24 @@ def test_collection_and_not_in_collection_relationship_parity(unit_session: Sess
 
     empty_not_in_stmt = NotInCollectionFilter(UnitPost.tags, []).append_to_statement(select(UnitPost), UnitPost)
     assert len(unit_session.scalars(empty_not_in_stmt).all()) == 3
+
+
+def test_not_in_collection_filter_prefer_any_excludes_every_value() -> None:
+    """With ``prefer_any`` NOT IN compiles to ``!= ALL``: ``!= ANY`` keeps a row that matches one of the values."""
+    pg_dialect = PGDialect()  # type: ignore[no-untyped-call]
+    in_sql = str(
+        InCollectionFilter(field_name="name", values=["a", "b"])
+        .append_to_statement(select(UnitTag), UnitTag, prefer_any=True)
+        .compile(dialect=pg_dialect)
+    )
+    not_in_sql = str(
+        NotInCollectionFilter(field_name="name", values=["a", "b"])
+        .append_to_statement(select(UnitTag), UnitTag, prefer_any=True)
+        .compile(dialect=pg_dialect)
+    )
+    assert "= ANY" in in_sql
+    assert "!= ALL" in not_in_sql or "<> ALL" in not_in_sql
+    assert "ANY" not in not_in_sql
 
 
 @pytest.mark.parametrize("filter_cls", [InCollectionFilter, NotInCollectionFilter])

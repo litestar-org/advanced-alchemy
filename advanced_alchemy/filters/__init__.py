@@ -34,6 +34,7 @@ from sqlalchemy import (
     ColumnElement,
     Date,
     Select,
+    all_,
     and_,
     any_,
     exists,
@@ -139,7 +140,7 @@ class FilterMap(TypedDict):
     collection: "type[InCollectionFilter[Any]]"
     """Collection ``IN`` / ``ANY`` membership filter class."""
     not_in_collection: "type[NotInCollectionFilter[Any]]"
-    """Collection ``NOT IN`` / ``!= ANY`` exclusion filter class."""
+    """Collection ``NOT IN`` / ``!= ALL`` exclusion filter class."""
     limit_offset: "type[LimitOffsetFilter]"
     """Limit and offset pagination filter class."""
     null: "type[NullFilter]"
@@ -372,7 +373,7 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
 
     This filter restricts records based on a field's absence in a collection of values.
 
-    The filter supports both ``NOT IN`` and ``!= ANY`` operators for collection exclusion.
+    The filter supports both ``NOT IN`` and ``!= ALL`` operators for collection exclusion.
     Use ``prefer_any=True`` in ``append_to_statement`` to use the ``ANY`` operator.
 
     Args:
@@ -392,12 +393,12 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
         model: type[ModelT],
         prefer_any: bool = False,
     ) -> StatementTypeT:
-        """Apply a WHERE ... NOT IN or WHERE ... != ANY(...) clause to the statement.
+        """Apply a WHERE ... NOT IN or WHERE ... != ALL(...) clause to the statement.
 
         Args:
             statement: The SQLAlchemy statement to modify.
             model: The SQLAlchemy model class.
-            prefer_any: If True, uses the SQLAlchemy :func:`sqlalchemy.any_` operator instead of
+            prefer_any: If True, uses the SQLAlchemy :func:`sqlalchemy.all_` operator instead of
                 :meth:`sqlalchemy.sql.expression.ColumnOperators.notin_` for the filter condition.
 
         Returns:
@@ -410,7 +411,7 @@ class NotInCollectionFilter(InAnyFilter, Generic[T]):
         if rel_statement is not None:
             return rel_statement
         if prefer_any:
-            return cast("StatementTypeT", statement.where(any_(self.values) != field))  # type: ignore[arg-type]
+            return cast("StatementTypeT", statement.where(all_(self.values) != field))  # type: ignore[arg-type]
         return cast("StatementTypeT", statement.where(field.notin_(self.values)))
 
 
