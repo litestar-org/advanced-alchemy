@@ -1560,6 +1560,12 @@ def test_not_in_collection_filter_prefer_any(session: Session, movie_model_sync:
         assert len(results) == 2
         assert {r.title for r in results} == {"The Matrix", "Shawshank Redemption"}
 
+        # Every value must be excluded, not only one of them
+        not_in_collection_filter = NotInCollectionFilter[str](field_name="title", values=["The Hangover", "The Matrix"])
+        statement = not_in_collection_filter.append_to_statement(select(Movie), Movie, prefer_any=True)
+        results = session.execute(statement).scalars().all()
+        assert {r.title for r in results} == {"Shawshank Redemption"}
+
     # Test with empty collection
     not_in_collection_filter = NotInCollectionFilter[str](field_name="title", values=[])
     statement = not_in_collection_filter.append_to_statement(select(Movie), Movie)
