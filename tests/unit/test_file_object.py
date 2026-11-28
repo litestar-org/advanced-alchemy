@@ -16,7 +16,8 @@ from advanced_alchemy._listeners import (
     _register_session_async_task,
     flush_pending_async_listener_tasks,
 )
-from advanced_alchemy.types.file_object import FileObject
+from advanced_alchemy.exceptions import ImproperConfigurationError
+from advanced_alchemy.types.file_object import FileObject, storages
 from advanced_alchemy.types.file_object.base import StorageBackend
 from advanced_alchemy.types.file_object.session_tracker import FileObjectSessionTracker
 from advanced_alchemy.types.mutables import MutableList
@@ -111,27 +112,17 @@ def test_file_object_to_dict() -> None:
         metadata={"category": "test"},
     )
 
-    # Create a mock backend
-    mock_backend = Mock(spec=StorageBackend)
-    mock_backend.key = "mock_backend"  # Set as an attribute, not a property
-
-    # Patch the storages.get_backend method to return our mock backend
-    with patch("advanced_alchemy.types.file_object.storages.get_backend", return_value=mock_backend):
-        # Convert to dict
-        obj_dict = obj.to_dict()
-
-        # Verify the dict contains the expected values
-        assert obj_dict == {
-            "filename": "test.txt",
-            "content_type": "text/plain",
-            "size": 100,
-            "last_modified": 1234567890.0,
-            "checksum": "abc123",
-            "etag": "xyz789",
-            "version_id": "v1",
-            "metadata": {"category": "test"},
-            "backend": "mock_backend",
-        }
+    assert obj.to_dict() == {
+        "filename": "test.txt",
+        "content_type": "text/plain",
+        "size": 100,
+        "last_modified": 1234567890.0,
+        "checksum": "abc123",
+        "etag": "xyz789",
+        "version_id": "v1",
+        "metadata": {"category": "test"},
+        "backend": "mock",
+    }
 
 
 def test_file_object_update_metadata() -> None:
@@ -152,7 +143,6 @@ def test_file_object_update_metadata() -> None:
 
 def test_file_object_repr() -> None:
     """Test __repr__ method of FileObject."""
-    # Create a FileObject with all attributes
     obj = FileObject(
         backend="mock",
         filename="test.txt",
@@ -163,70 +153,52 @@ def test_file_object_repr() -> None:
         version_id="v1",
     )
 
-    # Mock the backend to have a key attribute
-    mock_backend = Mock()
-    mock_backend.key = "mock_backend"
-
-    # Patch the storages.get_backend method to return our mock backend
-    with patch("advanced_alchemy.types.file_object.storages.get_backend", return_value=mock_backend):
-        # Get the string representation
-        repr_str = repr(obj)
-
-        # Verify it contains expected information
-        assert "FileObject" in repr_str
-        assert "filename=test.txt" in repr_str
-        assert "backend=mock_backend" in repr_str
-        assert "size=100" in repr_str
-        assert "content_type=text/plain" in repr_str
-        assert "etag=etag123" in repr_str
-        assert "last_modified=1234567890.0" in repr_str
-        assert "version_id=v1" in repr_str
+    assert repr(obj) == (
+        "FileObject(filename=test.txt, backend=mock, size=100, content_type=text/plain, "
+        "etag=etag123, last_modified=1234567890.0, version_id=v1)"
+    )
 
 
 def test_file_object_equality() -> None:
     """Test __eq__ and __hash__ methods of FileObject."""
-    # Create a basic equality test by using direct instances
     obj1 = FileObject(backend="mock", filename="test.txt")
-
-    # Create a different object with same path
     obj2 = FileObject(backend="mock", filename="test.txt")
-
-    # Create an object with different path
     obj3 = FileObject(backend="mock", filename="other.txt")
 
-    # Test basic __eq__ behavior (two instances with same values)
-    with patch("advanced_alchemy.types.file_object.storages.get_backend") as mock_get_backend:
-        # The first two instances should be equal with same backend and path
-        mock_get_backend.return_value = Mock(spec=StorageBackend, key="same_key")
-        assert obj1 == obj2
-
-        # Test inequality with different paths (same backend)
-        assert obj1 != obj3
-
-        # Compare with a non-FileObject type
-        assert obj1 != "not a file object"
+    assert obj1 == obj2
+    assert hash(obj1) == hash(obj2)
+    assert obj1 != obj3
+    assert obj1 != "not a file object"
 
 
 def test_file_object_equality_different_backends() -> None:
-    """Test equality with different backends."""
-    # Create two FileObjects with the same path but different backends
-    obj1 = FileObject(backend="mock1", filename="test.txt")
-    obj2 = FileObject(backend="mock2", filename="test.txt")
+    """Files with the same path in different backends are not equal."""
+    assert FileObject(backend="mock1", filename="test.txt") != FileObject(backend="mock2", filename="test.txt")
 
-    # Create mocks for backends with different keys
-    mock_backend1 = Mock(spec=StorageBackend)
-    mock_backend1.key = "backend1"
 
-    mock_backend2 = Mock(spec=StorageBackend)
-    mock_backend2.key = "backend2"
+def test_file_object_key_access_does_not_resolve_backend() -> None:
+    """repr, equality, hashing and to_dict work when no backend is registered under the key."""
+    key = "unregistered-file-object-key"
+    assert not storages.is_registered(key)
+    obj = FileObject(backend=key, filename="test.txt")
 
-    # Use a mock dictionary for get_backend
-    mock_backends = {"mock1": mock_backend1, "mock2": mock_backend2}
+    assert f"backend={key}" in repr(obj)
+    assert obj == FileObject(backend=key, filename="test.txt")
+    assert len({obj, FileObject(backend=key, filename="test.txt")}) == 1
+    assert obj.to_dict()["backend"] == key
+    with pytest.raises(ImproperConfigurationError):
+        _ = obj.backend
 
-    # Patch the get_backend method to return the appropriate mock
-    with patch("advanced_alchemy.types.file_object.storages.get_backend", side_effect=lambda key: mock_backends[key]):  # type: ignore
-        # Files with same path but different backends should not be equal
-        assert obj1 != obj2
+
+def test_file_object_key_from_backend_instance() -> None:
+    """A FileObject built from a backend instance reports that backend's key."""
+    backend = Mock(spec=StorageBackend)
+    backend.key = "instance_key"
+    obj = FileObject(backend=backend, filename="test.txt")
+
+    assert "backend=instance_key" in repr(obj)
+    assert obj.to_dict()["backend"] == "instance_key"
+    assert obj == FileObject(backend="instance_key", filename="test.txt")
 
 
 def test_file_object_content_type_guessing() -> None:
@@ -541,14 +513,8 @@ def test_pydantic_serialization() -> None:
     )
     model = FileModel(file=file_obj)
 
-    # Mock backend for serialization
-    mock_backend = Mock(spec=StorageBackend)
-    mock_backend.key = "mock_backend_key"
-    with patch("advanced_alchemy.types.file_object.storages.get_backend", return_value=mock_backend):
-        serialized_data = model.model_dump()
-
-        # Check if the serialized data matches the output of to_dict()
-        expected_dict = {
+    assert model.model_dump() == {
+        "file": {
             "filename": "test.txt",
             "content_type": "text/plain",
             "size": 100,
@@ -557,9 +523,9 @@ def test_pydantic_serialization() -> None:
             "etag": "etag123",
             "version_id": "v1",
             "metadata": {"key": "value"},
-            "backend": "mock_backend_key",  # Expect backend key here
+            "backend": "mock",
         }
-        assert serialized_data == {"file": expected_dict}
+    }
 
 
 @pytest.mark.skipif(not PYDANTIC_INSTALLED, reason="Pydantic v2 not installed")

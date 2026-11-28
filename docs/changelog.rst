@@ -5,6 +5,20 @@
 
 .. changelog:: 1.13.0
 
+    .. change:: read the StoredObject and FileObject backend key without a registry lookup
+        :type: bugfix
+        :pr: 882
+        :issue: 881
+
+        ``repr()`` of :class:`~advanced_alchemy.types.file_object.StoredObject`,
+        :attr:`~advanced_alchemy.types.file_object.StoredObject.storage_key`, and
+        ``repr()``, equality, hashing and ``to_dict()`` of
+        :class:`~advanced_alchemy.types.file_object.FileObject` use the backend key the
+        object was created with instead of looking the backend up in the storage
+        registry. Alembic autogenerate can now render a ``StoredObject`` column, and
+        columns, tables and file objects can be printed, when no backend is registered
+        under that key.
+
     .. change:: use DELETE ... RETURNING for delete_where and delete_many
         :type: bugfix
         :pr: 878

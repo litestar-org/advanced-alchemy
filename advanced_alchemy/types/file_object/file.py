@@ -84,7 +84,7 @@ class FileObject:
 
     def __repr__(self) -> str:
         """Return a string representation of the FileObject."""
-        return f"FileObject(filename={self.path}, backend={self.backend.key}, size={self.size}, content_type={self.content_type}, etag={self.etag}, last_modified={self.last_modified}, version_id={self.version_id})"
+        return f"FileObject(filename={self.path}, backend={self._backend_key}, size={self.size}, content_type={self.content_type}, etag={self.etag}, last_modified={self.last_modified}, version_id={self.version_id})"
 
     def __eq__(self, other: object) -> bool:
         """Check equality based on filename and backend key.
@@ -99,11 +99,11 @@ class FileObject:
         """
         if not isinstance(other, FileObject):
             return False
-        return self.path == other.path and self.backend.key == other.backend.key
+        return self.path == other.path and self._backend_key == other._backend_key
 
     def __hash__(self) -> int:
         """Return a hash based on filename and backend key."""
-        return hash((self.path, self.backend.key))
+        return hash((self.path, self._backend_key))
 
     @property
     def backend(self) -> "StorageBackend":
@@ -195,9 +195,7 @@ class FileObject:
     def to_dict(self) -> "dict[str, Any]":
         """Convert FileObject to a dictionary for storage or serialization.
 
-        Note: The 'backend' attribute is intentionally excluded as it's often
-              not serializable or relevant for storage representations.
-              The 'extra' dict is included.
+        The backend is stored by its registry key.
 
         Returns:
             dict[str, Any]: A dictionary representation of the file information.
@@ -211,7 +209,7 @@ class FileObject:
             "etag": self.etag,
             "version_id": self.version_id,
             "metadata": self.metadata,
-            "backend": self.backend.key,
+            "backend": self._backend_key,
         }
 
     def get_content(self, *, options: "Optional[dict[str, Any]]" = None) -> bytes:
@@ -403,6 +401,10 @@ class FileObject:
         self._pending_source_path = None
 
         return updated_self
+
+    @property
+    def _backend_key(self) -> str:
+        return self._raw_backend if isinstance(self._raw_backend, str) else self._raw_backend.key
 
     @classmethod
     def __get_pydantic_core_schema__(
