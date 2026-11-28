@@ -47,8 +47,8 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
 
     @property
     def storage_key(self) -> str:
-        """Returns the storage key from the resolved backend."""
-        return self.backend.key
+        """Returns the registry key of the storage backend without resolving it."""
+        return self._raw_backend if isinstance(self._raw_backend, str) else self._raw_backend.key
 
     def __init__(
         self,
@@ -72,9 +72,8 @@ class StoredObject(TypeDecorator[OptionalFileObjectOrList]):
 
     def __repr__(self) -> str:
         """Return a string representation of the StoredObject."""
-        if self.multiple:
-            return f"StoredObject(backend='{self.backend.key}', multiple=True)"
-        return f"StoredObject(backend='{self.backend.key}')"
+        suffix = ", multiple=True" if self.multiple else ""
+        return f"StoredObject(backend={self.storage_key!r}{suffix})"
 
     def process_bind_param(
         self,
