@@ -7,6 +7,7 @@
 
     .. change:: read the StoredObject and FileObject backend key without a registry lookup
         :type: bugfix
+        :pr: 882
         :issue: 881
 
         ``repr()`` of :class:`~advanced_alchemy.types.file_object.StoredObject`,
